@@ -1,0 +1,162 @@
+import os
+import numpy as np
+
+from tqdm import tqdm
+from pathlib import Path
+
+from detector import Point
+from track_processor import Track
+from video_io import VideoReader, VideoWriter, get_video_properties
+
+
+class VideoSplicer:
+    """Handles video extraction and individual video generation"""
+
+    def _extract_centered_slice(self, frame: np.ndarray, center: Point, slice_size: tuple[int, int]) -> np.ndarray:
+        """Extract a fixed-size slice centered on the bounding box center
+
+        Args:
+            frame: Input frame
+            center: Center point for extraction
+            slice_size: (width, height) of the output slice
+
+        Returns:
+            Fixed-size slice with black padding if needed
+        """
+        frame_height, frame_width = frame.shape[:2]
+        slice_width, slice_height = slice_size
+
+        # Calculate slice boundaries centered on bbox center
+        slice_x1 = int(center.x - slice_width // 2)
+        slice_y1 = int(center.y - slice_height // 2)
+        slice_x2 = slice_x1 + slice_width
+        slice_y2 = slice_y1 + slice_height
+
+        # Create output slice with black background
+        output_slice = np.zeros((slice_height, slice_width, 3), dtype=np.uint8)
+
+        # Calculate intersection with frame bounds
+        frame_x1 = max(0, slice_x1)
+        frame_y1 = max(0, slice_y1)
+        frame_x2 = min(frame_width, slice_x2)
+        frame_y2 = min(frame_height, slice_y2)
+
+        # Calculate corresponding positions in output slice
+        out_x1 = frame_x1 - slice_x1
+        out_y1 = frame_y1 - slice_y1
+        out_x2 = out_x1 + (frame_x2 - frame_x1)
+        out_y2 = out_y1 + (frame_y2 - frame_y1)
+
+        # Copy the valid region from frame to output slice
+        if frame_x2 > frame_x1 and frame_y2 > frame_y1:
+            output_slice[out_y1:out_y2, out_x1:out_x2] = frame[frame_y1:frame_y2, frame_x1:frame_x2]
+
+        return output_slice
+
+    def generate_individual_videos(
+        self,
+        tracks: dict[int, list[Track]],
+        original_video_path: os.PathLike,
+        output_dir: os.PathLike | str,
+    ) -> None:
+        """Generate individual cropped videos for each track
+
+        Args:
+            tracks: Dictionary of processed track data
+            original_video_path: Path to original high-resolution video
+            output_dir: Directory to save individual videos
+        """
+        if not tracks:
+            print('No tracks found for individual video generation')
+            return
+
+        # Create output directory
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Get input filename without extension for output naming
+        input_name = Path(original_video_path).stem
+
+        # Read original video properties
+        video_properties = get_video_properties(original_video_path)
+        total_frames = video_properties.total_frames
+
+        print(f'Generating individual videos for {len(tracks)} tracks...')
+
+        # Create writers for each track
+        writers: dict[int, VideoWriter] = {}
+        crop_sizes: dict[int, tuple[int, int]] = {}
+
+        for person_number, (track_id, track_data) in enumerate(tracks.items(), 1):
+            # Calculate average bbox size for this track to determine slice size
+            total_width = 0
+            total_height = 0
+
+            for detection in track_data:
+                bbox_width = detection.bbox.width
+                bbox_height = detection.bbox.height
+                total_width += bbox_width
+                total_height += bbox_height
+
+            # Calculate average bbox size
+            avg_width = total_width / len(track_data)
+            avg_height = total_height / len(track_data)
+
+            # Create slice size with generous context
+            context_factor = 1.5
+            slice_width = int(avg_width * context_factor)
+            slice_height = int(avg_height * context_factor)
+
+            # Ensure minimum reasonable size
+            slice_width = max(slice_width, 400)
+            slice_height = max(slice_height, 600)
+
+            # Scale to 1000-2000px range to reduce artifacts
+            current_max = max(slice_width, slice_height)
+            target_size = 1500  # Target for larger dimension
+
+            if current_max < 1000:
+                # Scale up if too small
+                scale_factor = target_size / current_max
+                slice_width = int(slice_width * scale_factor)
+                slice_height = int(slice_height * scale_factor)
+            elif current_max > 2000:
+                # Scale down if too large
+                scale_factor = 2000 / current_max
+                slice_width = int(slice_width * scale_factor)
+                slice_height = int(slice_height * scale_factor)
+
+            # Round up to even numbers for video encoding
+            slice_width = int(np.ceil(slice_width / 2) * 2)
+            slice_height = int(np.ceil(slice_height / 2) * 2)
+            crop_sizes[track_id] = (slice_width, slice_height)
+
+            print(f'Track {track_id} (Person {person_number}): slice size {slice_width}x{slice_height} pixels')
+
+            # Create video writer with sequential numbering
+            output_path = Path(output_dir) / f'{input_name}_person_{person_number}.mp4'
+            writer = VideoWriter(output_path, slice_width, slice_height, video_properties.fps)
+            writer.start_writing()
+            writers[track_id] = writer
+
+        # Process video frame by frame with progress bar
+        with VideoReader(original_video_path) as reader:
+            for frame_idx, frame in tqdm(reader.read_frames(), total=total_frames, desc='Processing frames'):
+                # Check each track for detections at this frame
+                for track_id, track_data in tracks.items():
+                    # Find detection for this frame
+                    detection = None
+                    for det in track_data:
+                        if det.frame_idx == frame_idx:
+                            detection = det
+                            break
+
+                    if detection is not None:
+                        # Extract fixed-size slice centered on bbox
+                        target_size = crop_sizes[track_id]
+                        cropped_frame = self._extract_centered_slice(frame, detection.bbox.center, target_size)
+                        writers[track_id].write_frame(cropped_frame)
+
+        for writer in writers.values():
+            writer.finish_writing()
+
+        print(f'Individual videos saved to: {output_dir}')
