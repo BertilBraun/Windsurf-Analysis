@@ -13,7 +13,7 @@ class VideoInfo:
 
 
 class VideoReader:
-    def __init__(self, video_path: os.PathLike, drop_every_nth: int = 1):
+    def __init__(self, video_path: os.PathLike | str, drop_every_nth: int = 1):
         self.video_path = video_path
         self.drop_every_nth = drop_every_nth
         self.cap = None
@@ -54,13 +54,13 @@ class VideoReader:
             self.frame_index += 1
 
 
-def get_video_properties(video_path: os.PathLike):
+def get_video_properties(video_path: os.PathLike | str) -> VideoInfo:
     with VideoReader(video_path) as reader:
         return reader.get_properties()
 
 
 class VideoWriter:
-    def __init__(self, output_path: os.PathLike, width: int, height: int, fps: int, fourcc: str = 'mp4v'):
+    def __init__(self, output_path: os.PathLike | str, width: int, height: int, fps: int, fourcc: str = 'mp4v'):
         self.output_path = output_path
         self.width = width
         self.height = height

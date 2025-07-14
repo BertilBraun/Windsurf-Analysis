@@ -38,6 +38,12 @@ class BoundingBox:
     x2: int
     y2: int
 
+    def __init__(self, x1: int, y1: int, x2: int, y2: int):
+        self.x1 = int(x1)
+        self.y1 = int(y1)
+        self.x2 = int(x2)
+        self.y2 = int(y2)
+
     @property
     def width(self) -> int:
         return self.x2 - self.x1
@@ -80,7 +86,7 @@ class SurferDetector:
     def __init__(self):
         self.model = YOLO(DEFAULT_MODEL_NAME)
 
-    def detect_and_track_video(self, video_path: os.PathLike) -> Generator[list[Detection], None, None]:
+    def detect_and_track_video(self, video_path: os.PathLike | str) -> Generator[list[Detection], None, None]:
         """Run batched inference on entire video, return generator of (frame, detections)"""
         results = self.model.track(
             str(video_path),
