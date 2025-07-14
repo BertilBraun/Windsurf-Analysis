@@ -20,7 +20,9 @@ class SurferTracker:
     def add_detection(self, frame_idx: int, track_id: int, bbox: BoundingBox, confidence: float):
         self.track_inputs[track_id].append(track_processing.Track(frame_idx, bbox.copy(), confidence))
 
-    def process_tracks(self, original_video_path: os.PathLike, output_dir: os.PathLike | str) -> None:
+    def process_tracks(
+        self, original_video_path: os.PathLike, output_dir: os.PathLike | str
+    ) -> list[os.PathLike | str]:
         """Complete pipeline: process tracks and generate individual videos.
 
         This is the main entry point that coordinates track processing and video generation.
@@ -37,7 +39,7 @@ class SurferTracker:
 
         if not processed_tracks:
             print('No valid tracks found for video generation')
-            return
+            return []
 
         # Print track statistics
         print(f'After processing: {len(processed_tracks)} tracks remaining')
@@ -50,4 +52,4 @@ class SurferTracker:
             )
 
         # Generate individual videos using the video splicing module
-        video_splicing.generate_individual_videos(processed_tracks, original_video_path, output_dir)
+        return video_splicing.generate_individual_videos(processed_tracks, original_video_path, output_dir)

@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from ultralytics import YOLO
 from ultralytics.engine.results import Results
 
-from settings import DEFAULT_MODEL_NAME, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE, SKIP_FRAMES
+from video_io import get_video_properties
+from settings import DEFAULT_MODEL_NAME, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE, MIN_TRACKING_FPS
 
 
 def _to_numpy(tensor_or_array):
@@ -86,21 +87,27 @@ class SurferDetector:
     def __init__(self):
         self.model = YOLO(DEFAULT_MODEL_NAME)
 
-    def detect_and_track_video(self, video_path: os.PathLike | str) -> Generator[list[Detection], None, None]:
+    def detect_and_track_video(
+        self, video_path: os.PathLike | str
+    ) -> Generator[tuple[int, list[Detection]], None, None]:
         """Run batched inference on entire video, return generator of (frame, detections)"""
+
+        video_props = get_video_properties(video_path)
+        skip_frames = video_props.fps // MIN_TRACKING_FPS
+
         results = self.model.track(
             str(video_path),
             iou=IOU_THRESHOLD,
             conf=CONFIDENCE_THRESHOLD,
             batch=BATCH_SIZE,
-            vid_stride=SKIP_FRAMES,
+            vid_stride=skip_frames,
             persist=True,
             stream=True,
             verbose=False,
         )
 
-        for result in results:
-            yield self._extract_detections(result)
+        for frame_index, result in enumerate(results):
+            yield frame_index * skip_frames, self._extract_detections(result)
 
     def _extract_detections(self, result: Results) -> list[Detection]:
         """Extract detection information for further processing"""

@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 
-from collections import defaultdict
 import os
-import argparse
+import json
 import glob
+import argparse
+import traceback
 from pathlib import Path
+from dataclasses import asdict
+from collections import defaultdict
 
 import torch
 from tqdm import tqdm
@@ -13,6 +16,7 @@ from video_io import VideoReader, VideoWriter, get_video_properties
 from detector import Detection, SurferDetector
 from surfer_tracker import SurferTracker
 from annotation_drawer import AnnotationDrawer
+from stabilize import run_stabilization_process
 
 from settings import STANDARD_OUTPUT_DIR
 
@@ -32,7 +36,7 @@ class WindsurfingVideoProcessor:
         all_detections: dict[int, list[Detection]] = defaultdict(list)
 
         for frame_index, detections in tqdm(
-            enumerate(self.detector.detect_and_track_video(input_path)),
+            self.detector.detect_and_track_video(input_path),
             total=props.total_frames,
             desc='Processing video',
         ):
@@ -42,7 +46,10 @@ class WindsurfingVideoProcessor:
 
             all_detections[frame_index] = detections
 
-        surfer_tracker.process_tracks(input_path, output_dir)
+        individual_videos = surfer_tracker.process_tracks(input_path, output_dir)
+        for individual_video in individual_videos:
+            run_stabilization_process(individual_video, individual_video)
+
         self.generate_annotated_video(input_path, all_detections, output_dir)
 
     def generate_annotated_video(
@@ -51,6 +58,7 @@ class WindsurfingVideoProcessor:
         annotation_drawer = AnnotationDrawer()
 
         output_path = Path(output_dir) / f'{Path(input_path).stem}+00_annotated.mp4'
+
         with VideoReader(input_path) as reader:
             video_props = reader.get_properties()
             with VideoWriter(output_path, video_props.width, video_props.height, video_props.fps) as writer:
@@ -58,6 +66,16 @@ class WindsurfingVideoProcessor:
                     writer.write_frame(
                         annotation_drawer.draw_detections_with_trails(frame, detections[frame_index] or [])
                     )
+
+        # dump the detections to a json file
+        with open(Path(output_dir) / f'{Path(input_path).stem}+00_detections.json', 'w') as f:
+            json.dump(
+                {
+                    track_id: [asdict(detection) for detection in detections]
+                    for track_id, detections in detections.items()
+                },
+                f,
+            )
 
 
 def main():
@@ -98,9 +116,8 @@ def main():
             print(f'✓ Completed processing: {video_file}')
         except Exception as e:
             print(f'✗ Error processing {video_file}: {e}')
-            import traceback
-
             print(traceback.format_exc())
+
         print('-' * 60)
 
 

@@ -129,7 +129,7 @@ def generate_individual_videos(
     tracks: dict[int, list[Track]],
     original_video_path: os.PathLike,
     output_dir: os.PathLike | str,
-) -> None:
+) -> list[os.PathLike | str]:
     """Generate individual cropped videos for each track using pure functions.
 
     Args:
@@ -139,7 +139,7 @@ def generate_individual_videos(
     """
     if not tracks:
         print('No tracks found for individual video generation')
-        return
+        return []
 
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
@@ -189,3 +189,5 @@ def generate_individual_videos(
         writer.finish_writing()
 
     print(f'Individual videos saved to: {output_dir}')
+
+    return [writer.output_path for writer in writers.values()]
