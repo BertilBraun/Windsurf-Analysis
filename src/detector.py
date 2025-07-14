@@ -3,6 +3,7 @@ import numpy as np
 from typing import Generator, Iterator
 from dataclasses import dataclass
 
+from tqdm import tqdm
 from ultralytics import YOLO
 from ultralytics.engine.results import Results
 
@@ -86,10 +87,12 @@ class SurferDetector:
 
     def __init__(self):
         self.model = YOLO(DEFAULT_MODEL_NAME)
+        # TODO does the model have to be reset?
+        # TODO does the model have to be moved to the GPU?
 
     def detect_and_track_video(
         self, video_path: os.PathLike | str
-    ) -> Generator[tuple[int, list[Detection]], None, None]:
+    ) -> Generator[tuple[int, np.ndarray, list[Detection]], None, None]:
         """Run batched inference on entire video, return generator of (frame, detections)"""
 
         video_props = get_video_properties(video_path)
@@ -101,13 +104,15 @@ class SurferDetector:
             conf=CONFIDENCE_THRESHOLD,
             batch=BATCH_SIZE,
             vid_stride=skip_frames,
-            persist=True,
+            persist=False,  # TODO True?
             stream=True,
             verbose=False,
         )
 
-        for frame_index, result in enumerate(results):
-            yield frame_index * skip_frames, self._extract_detections(result)
+        for frame_index, result in tqdm(
+            enumerate(results), total=video_props.total_frames // skip_frames, desc='Processing video'
+        ):
+            yield frame_index * skip_frames, result.orig_img, self._extract_detections(result)
 
     def _extract_detections(self, result: Results) -> list[Detection]:
         """Extract detection information for further processing"""

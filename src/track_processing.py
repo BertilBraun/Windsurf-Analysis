@@ -6,7 +6,6 @@ maintaining any state, making it easier to test and reason about.
 """
 
 from dataclasses import dataclass
-from collections import defaultdict
 
 from settings import MIN_FRAME_PERCENTAGE, MAX_MERGE_FRAME_GAP
 from detector import BoundingBox
@@ -22,7 +21,8 @@ class Track:
         return Track(self.frame_idx, self.bbox.copy(), self.confidence)
 
 
-TrackerInput = defaultdict[int, list[Track]]
+TrackId = int | None
+TrackerInput = dict[TrackId, list[Track]]
 
 
 def _tracks_overlap_temporally(track1_data: list[Track], track2_data: list[Track]) -> bool:
@@ -80,7 +80,7 @@ def _calculate_track_distance(track1_data: list[Track], track2_data: list[Track]
     return combined_distance
 
 
-def _find_best_merge_candidates(tracks: dict[int, list[Track]]) -> tuple[tuple[int, int] | None, float]:
+def _find_best_merge_candidates(tracks: TrackerInput) -> tuple[tuple[TrackId, TrackId] | None, float]:
     """Find the pair of tracks that are closest in space and time"""
     best_distance = float('inf')
     best_pair = None
@@ -149,7 +149,7 @@ def _merge_two_tracks(track1_data: list[Track], track2_data: list[Track]) -> lis
     return _interpolate_missing_boxes(merged_detections)
 
 
-def _greedy_merge_tracks(tracks: dict[int, list[Track]]) -> dict[int, list[Track]]:
+def _greedy_merge_tracks(tracks: TrackerInput) -> TrackerInput:
     """Greedy merging: repeatedly find and merge the closest track pair"""
     print(f'Starting greedy merge with {len(tracks)} tracks...')
 
@@ -197,9 +197,7 @@ def _calculate_track_overlap(track1_data: list[Track], track2_data: list[Track])
     return overlap_percentage
 
 
-def _remove_overlapping_tracks(
-    tracks: dict[int, list[Track]], overlap_threshold: float = 0.8
-) -> dict[int, list[Track]]:
+def _remove_overlapping_tracks(tracks: TrackerInput, overlap_threshold: float = 0.8) -> TrackerInput:
     """Remove tracks that overlap significantly with others, keeping the longer one"""
     if len(tracks) <= 1:
         return tracks
@@ -288,12 +286,12 @@ def _smooth_track(track_data: list[Track], window_size: int = 10) -> list[Track]
     return smoothed_track
 
 
-def _smooth_track_centers(tracks: dict[int, list[Track]]) -> dict[int, list[Track]]:
+def _smooth_track_centers(tracks: TrackerInput) -> TrackerInput:
     """Smooth the center positions of all tracks using a rolling window"""
     return {track_id: _smooth_track(track_data) for track_id, track_data in tracks.items()}
 
 
-def _get_valid_tracks(tracks: dict[int, list[Track]], total_frames: int) -> dict[int, list[Track]]:
+def _get_valid_tracks(tracks: TrackerInput, total_frames: int) -> TrackerInput:
     """Get tracks that meet minimum frame percentage requirement"""
     valid_tracks = {}
     min_frames = int(MIN_FRAME_PERCENTAGE / 100 * total_frames)
@@ -322,7 +320,7 @@ def _get_valid_tracks(tracks: dict[int, list[Track]], total_frames: int) -> dict
     return valid_tracks
 
 
-def process_tracks(track_inputs: TrackerInput, total_frames: int) -> dict[int, list[Track]]:
+def process_tracks(track_inputs: TrackerInput, total_frames: int) -> TrackerInput:
     """Complete track processing pipeline: merge, filter, and smooth tracks.
 
     Args:

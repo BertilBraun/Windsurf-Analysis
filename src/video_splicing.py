@@ -11,7 +11,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 from detector import Point
-from track_processing import Track
+from track_processing import Track, TrackId, TrackerInput
 from video_io import VideoReader, VideoWriter, get_video_properties
 
 
@@ -126,9 +126,7 @@ def _find_detection_at_frame(track_data: list[Track], frame_idx: int) -> Track |
 
 
 def generate_individual_videos(
-    tracks: dict[int, list[Track]],
-    original_video_path: os.PathLike,
-    output_dir: os.PathLike | str,
+    tracks: TrackerInput, original_video_path: os.PathLike, output_dir: os.PathLike | str
 ) -> list[os.PathLike | str]:
     """Generate individual cropped videos for each track using pure functions.
 
@@ -154,8 +152,8 @@ def generate_individual_videos(
     print(f'Generating individual videos for {len(tracks)} tracks...')
 
     # Pre-calculate crop sizes and create writers
-    writers: dict[int, VideoWriter] = {}
-    crop_sizes: dict[int, tuple[int, int]] = {}
+    writers: dict[TrackId, VideoWriter] = {}
+    crop_sizes: dict[TrackId, tuple[int, int]] = {}
 
     for person_number, (track_id, track_data) in enumerate(tracks.items(), 1):
         # Calculate optimal crop size for this track

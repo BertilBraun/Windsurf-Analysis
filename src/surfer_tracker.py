@@ -6,8 +6,10 @@ and video splicing modules to provide a simple interface for the complete pipeli
 """
 
 import os
+import numpy as np
+from collections import defaultdict
 
-from detector import BoundingBox
+from detector import Detection
 from video_io import get_video_properties
 import track_processing
 import video_splicing
@@ -15,14 +17,16 @@ import video_splicing
 
 class SurferTracker:
     def __init__(self):
-        self.track_inputs = track_processing.TrackerInput(list)
+        self.track_inputs: track_processing.TrackerInput = defaultdict(list)
 
-    def add_detection(self, frame_idx: int, track_id: int, bbox: BoundingBox, confidence: float):
-        self.track_inputs[track_id].append(track_processing.Track(frame_idx, bbox.copy(), confidence))
+    def add_detection(self, frame_idx: int, detection: Detection, frame: np.ndarray):
+        self.track_inputs[detection.track_id].append(
+            track_processing.Track(frame_idx, detection.bbox.copy(), detection.confidence)
+        )
 
     def process_tracks(
         self, original_video_path: os.PathLike, output_dir: os.PathLike | str
-    ) -> list[os.PathLike | str]:
+    ) -> tuple[track_processing.TrackerInput, list[os.PathLike | str]]:
         """Complete pipeline: process tracks and generate individual videos.
 
         This is the main entry point that coordinates track processing and video generation.
@@ -39,7 +43,7 @@ class SurferTracker:
 
         if not processed_tracks:
             print('No valid tracks found for video generation')
-            return []
+            return {}, []
 
         # Print track statistics
         print(f'After processing: {len(processed_tracks)} tracks remaining')
@@ -52,4 +56,6 @@ class SurferTracker:
             )
 
         # Generate individual videos using the video splicing module
-        return video_splicing.generate_individual_videos(processed_tracks, original_video_path, output_dir)
+        return processed_tracks, video_splicing.generate_individual_videos(
+            processed_tracks, original_video_path, output_dir
+        )

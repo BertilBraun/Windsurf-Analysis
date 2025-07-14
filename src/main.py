@@ -3,19 +3,18 @@
 import os
 import json
 import glob
+import torch
 import argparse
 import traceback
+import track_processing
 from pathlib import Path
 from dataclasses import asdict
-from collections import defaultdict
 
-import torch
-from tqdm import tqdm
 
 from video_io import VideoReader, VideoWriter, get_video_properties
-from detector import Detection, SurferDetector
+from detector import SurferDetector
 from surfer_tracker import SurferTracker
-from annotation_drawer import AnnotationDrawer
+from annotation_drawer import Annotation, AnnotationDrawer
 from stabilize import run_stabilization_process
 
 from settings import STANDARD_OUTPUT_DIR
@@ -33,46 +32,44 @@ class WindsurfingVideoProcessor:
         props = get_video_properties(input_path)
         print(f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.total_frames} frames')
 
-        all_detections: dict[int, list[Detection]] = defaultdict(list)
-
-        for frame_index, detections in tqdm(
-            self.detector.detect_and_track_video(input_path),
-            total=props.total_frames,
-            desc='Processing video',
-        ):
+        for frame_index, frame, detections in self.detector.detect_and_track_video(input_path):
             for detection in detections:
                 if detection.track_id is not None:
-                    surfer_tracker.add_detection(frame_index, detection.track_id, detection.bbox, detection.confidence)
+                    surfer_tracker.add_detection(frame_index, detection, frame)
 
-            all_detections[frame_index] = detections
-
-        individual_videos = surfer_tracker.process_tracks(input_path, output_dir)
+        processed_tracks, individual_videos = surfer_tracker.process_tracks(input_path, output_dir)
         for individual_video in individual_videos:
             run_stabilization_process(individual_video, individual_video)
 
-        self.generate_annotated_video(input_path, all_detections, output_dir)
+        self.generate_annotated_video(input_path, processed_tracks, output_dir)
 
     def generate_annotated_video(
-        self, input_path: os.PathLike, detections: dict[int, list[Detection]], output_dir: os.PathLike | str
+        self, input_path: os.PathLike, tracks: track_processing.TrackerInput, output_dir: os.PathLike | str
     ):
         annotation_drawer = AnnotationDrawer()
 
-        output_path = Path(output_dir) / f'{Path(input_path).stem}+00_annotated.mp4'
+        annotated_video_path = Path(output_dir) / f'{Path(input_path).stem}+00_annotated.mp4'
+        detection_output_path = Path(output_dir) / f'{Path(input_path).stem}+00_detections.json'
 
         with VideoReader(input_path) as reader:
             video_props = reader.get_properties()
-            with VideoWriter(output_path, video_props.width, video_props.height, video_props.fps) as writer:
+            with VideoWriter(annotated_video_path, video_props.width, video_props.height, video_props.fps) as writer:
                 for frame_index, frame in reader.read_frames():
-                    writer.write_frame(
-                        annotation_drawer.draw_detections_with_trails(frame, detections[frame_index] or [])
-                    )
+                    annotations = [
+                        Annotation(track_id, track.bbox, track.confidence)
+                        for track_id, tracks in tracks.items()
+                        for track in tracks
+                        if track.frame_idx == frame_index
+                    ]
+
+                    writer.write_frame(annotation_drawer.draw_detections_with_trails(frame, annotations))
 
         # dump the detections to a json file
-        with open(Path(output_dir) / f'{Path(input_path).stem}+00_detections.json', 'w') as f:
+        with open(detection_output_path, 'w') as f:
             json.dump(
                 {
-                    track_id: [asdict(detection) for detection in detections]
-                    for track_id, detections in detections.items()
+                    track_id: [asdict(annotation) for annotation in annotations]
+                    for track_id, annotations in tracks.items()
                 },
                 f,
             )
