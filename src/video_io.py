@@ -1,3 +1,4 @@
+from typing import Generator
 import cv2
 import os
 from dataclasses import dataclass
@@ -28,7 +29,7 @@ class VideoReader:
         if self.cap:
             self.cap.release()
 
-    def get_properties(self):
+    def get_properties(self) -> VideoInfo:
         """Get video properties"""
         assert self.cap is not None, 'VideoCapture not initialized'
         return VideoInfo(
@@ -38,7 +39,7 @@ class VideoReader:
             total_frames=int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)),
         )
 
-    def read_frames(self):
+    def read_frames(self) -> Generator[tuple[int, cv2.typing.MatLike], None, None]:
         """Generator that yields frames with optional frame dropping"""
         assert self.cap is not None, 'VideoCapture not initialized'
         while True:
@@ -48,9 +49,14 @@ class VideoReader:
 
             # Only yield frame if we're not dropping it
             if self.frame_index % self.drop_every_nth == 0:
-                yield frame, self.frame_index
+                yield self.frame_index, frame
 
             self.frame_index += 1
+
+
+def get_video_properties(video_path: os.PathLike):
+    with VideoReader(video_path) as reader:
+        return reader.get_properties()
 
 
 class VideoWriter:
@@ -62,7 +68,7 @@ class VideoWriter:
         self.fourcc = cv2.VideoWriter.fourcc(*fourcc)
         self.writer = None
 
-    def __enter__(self):
+    def start_writing(self):
         # Create output directory if needed
         output_dir = os.path.dirname(self.output_path)
         if output_dir and not os.path.exists(output_dir):
@@ -73,11 +79,16 @@ class VideoWriter:
         if not self.writer.isOpened():
             raise ValueError(f'Cannot create output video file: {self.output_path}')
 
+    def finish_writing(self):
+        if self.writer:
+            self.writer.release()
+
+    def __enter__(self):
+        self.start_writing()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.writer:
-            self.writer.release()
+        self.finish_writing()
 
     def write_frame(self, frame: cv2.typing.MatLike) -> None:
         """Write a single frame to the video"""
