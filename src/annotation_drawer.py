@@ -48,23 +48,31 @@ class AnnotationDrawer:
                 cv2.polylines(frame, [points], isClosed=False, color=(230, 230, 230), thickness=3)
 
     def _draw_detections_only(self, frame: np.ndarray, annotations: list[Annotation]) -> np.ndarray:
-        """Draw only detection bounding boxes and labels (no trails)"""
+        """Draw diagonal lines to detection centers and track ID labels (no boxes)"""
         annotated_frame = frame.copy()
 
         for annotation in annotations:
             x1, y1, x2, y2 = annotation.bbox
+            center_x = int(annotation.bbox.center.x)
+            center_y = int(annotation.bbox.center.y)
 
-            # Draw bounding box
-            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            # Draw diagonal line from top-left corner to center
+            cv2.line(annotated_frame, (x1, y1), (center_x, center_y), (0, 255, 0), 2)
 
-            # Prepare label text
-            label = f'{annotation.confidence:.2f} ID:{annotation.track_id}'
+            # Prepare label text (just track ID)
+            label = f'ID:{annotation.track_id}'
 
             # Draw label background
             (label_width, label_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-            cv2.rectangle(annotated_frame, (x1, y1 - label_height - 10), (x1 + label_width, y1), (0, 255, 0), -1)
+            cv2.rectangle(
+                annotated_frame,
+                (center_x, center_y - label_height - 10),
+                (center_x + label_width, center_y),
+                (0, 255, 0),
+                -1,
+            )
 
             # Draw label text
-            cv2.putText(annotated_frame, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+            cv2.putText(annotated_frame, label, (center_x, center_y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
         return annotated_frame

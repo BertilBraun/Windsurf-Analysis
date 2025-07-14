@@ -1,12 +1,45 @@
 import multiprocessing
 import os
 
+from queue import Empty
 import tempfile
 import subprocess
 import logging
 
 
-def stabilize_ffmpeg(input_file: os.PathLike | str, output_file: os.PathLike | str) -> bool:
+class Stabilizer:
+    def __init__(self, num_workers: int = 1):
+        self.num_workers = num_workers
+        self.queue = multiprocessing.Queue()
+        self.stop_event = multiprocessing.Event()
+        self.processes: list[multiprocessing.Process] = []
+
+        for _ in range(self.num_workers):
+            process = multiprocessing.Process(target=self._worker)
+            process.start()
+            self.processes.append(process)
+
+    def _worker(self):
+        while True:
+            if self.stop_event.is_set():
+                break
+            try:
+                input_file, output_file = self.queue.get(timeout=1)
+            except Empty | TimeoutError:
+                continue
+            if not _stabilize_ffmpeg(input_file, output_file):
+                logging.error(f'  !! ffmpeg stabilization failed for {input_file}')
+
+    def stabilize(self, input_file: os.PathLike | str, output_file: os.PathLike | str) -> None:
+        self.queue.put((input_file, output_file))
+
+    def stop(self):
+        self.stop_event.set()
+        for process in self.processes:
+            process.join()
+
+
+def _stabilize_ffmpeg(input_file: os.PathLike | str, output_file: os.PathLike | str) -> bool:
     with tempfile.NamedTemporaryFile(suffix='.trf', delete=False, dir=None) as trf_tmp:
         trf_file = trf_tmp.name
 
@@ -52,8 +85,3 @@ def stabilize_ffmpeg(input_file: os.PathLike | str, output_file: os.PathLike | s
             os.remove(trf_file)
         except Exception:
             pass
-
-
-def run_stabilization_process(input_file: os.PathLike | str, output_file: os.PathLike | str) -> None:
-    process = multiprocessing.Process(target=stabilize_ffmpeg, args=(input_file, output_file), daemon=True)
-    process.start()  # start the process and let it run in the background

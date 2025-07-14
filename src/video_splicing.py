@@ -155,22 +155,22 @@ def generate_individual_videos(
     writers: dict[TrackId, VideoWriter] = {}
     crop_sizes: dict[TrackId, tuple[int, int]] = {}
 
-    for person_number, (track_id, track_data) in enumerate(tracks.items(), 1):
+    for person_number, track_data in tracks.items():
         # Calculate optimal crop size for this track
         slice_width, slice_height = _calculate_crop_size(track_data)
-        crop_sizes[track_id] = (slice_width, slice_height)
+        crop_sizes[person_number] = (slice_width, slice_height)
 
-        print(f'Track {track_id} (Person {person_number}): slice size {slice_width}x{slice_height} pixels')
+        print(f'Track {person_number}: slice size {slice_width}x{slice_height} pixels')
 
         # Create video writer with sequential numbering
         output_path = Path(output_dir) / f'{input_name}+{person_number:02d}.mp4'
         writer = VideoWriter(output_path, slice_width, slice_height, video_properties.fps)
         writer.start_writing()
-        writers[track_id] = writer
+        writers[person_number] = writer
 
     # Process video frame by frame with progress bar
     with VideoReader(original_video_path) as reader:
-        for frame_idx, frame in tqdm(reader.read_frames(), total=total_frames, desc='Processing frames'):
+        for frame_idx, frame in tqdm(reader.read_frames(), total=total_frames, desc='Writing individual videos'):
             # Process each track for this frame
             for track_id, track_data in tracks.items():
                 # Find detection for this frame

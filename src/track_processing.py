@@ -6,9 +6,16 @@ maintaining any state, making it easier to test and reason about.
 """
 
 from dataclasses import dataclass
+import math
 
-from settings import MIN_FRAME_PERCENTAGE, MAX_MERGE_FRAME_GAP
+from settings import (
+    HISTOGRAM_SIMILARITY_THRESHOLD,
+    MAX_SPATIAL_DISTANCE_BB,
+    MAX_TEMPORAL_DISTANCE_SECONDS,
+    MIN_FRAME_PERCENTAGE,
+)
 from detector import BoundingBox
+from video_io import VideoInfo
 
 
 @dataclass
@@ -16,9 +23,63 @@ class Track:
     frame_idx: int
     bbox: BoundingBox
     confidence: float
+    hue_histogram: list[float]  # Normalized hue histogram (36 bins, 10° each)
 
     def copy(self) -> 'Track':
-        return Track(self.frame_idx, self.bbox.copy(), self.confidence)
+        return Track(
+            self.frame_idx,
+            self.bbox.copy(),
+            self.confidence,
+            self.hue_histogram.copy(),
+        )
+
+    def histogram_similarity(self, other: 'Track') -> float:
+        """Calculate similarity between two tracks based on their hue histograms.
+
+        Uses Bhattacharyya coefficient for histogram comparison.
+
+        Args:
+            other: Another Track to compare against
+
+        Returns:
+            Similarity score between 0.0 (no similarity) and 1.0 (identical)
+        """
+        if len(self.hue_histogram) != len(other.hue_histogram):
+            raise ValueError('Histograms must have the same number of bins')
+
+        # Bhattacharyya coefficient: sum of sqrt(p_i * q_i) for all bins
+        similarity = sum(
+            math.sqrt(self.hue_histogram[i] * other.hue_histogram[i]) for i in range(len(self.hue_histogram))
+        )
+
+        return similarity
+
+    def interpolate(self, other: 'Track', alpha: float) -> 'Track':
+        """Interpolate between this track and another track.
+
+        Args:
+            other: Target track to interpolate towards
+            alpha: Interpolation factor (0.0 = this track, 1.0 = other track)
+
+        Returns:
+            New Track with interpolated values
+        """
+        # Interpolate frame index
+        interpolated_frame_idx = int((1 - alpha) * self.frame_idx + alpha * other.frame_idx)
+
+        # Interpolate bounding box
+        interpolated_bbox = self.bbox.interpolate(other.bbox, alpha)
+
+        # Interpolate confidence
+        interpolated_confidence = (1 - alpha) * self.confidence + alpha * other.confidence
+        interpolated_confidence *= 0.7  # Reduce confidence for interpolated detections
+
+        # Interpolate hue histogram (bin by bin)
+        interpolated_histogram = [
+            (1 - alpha) * self.hue_histogram[i] + alpha * other.hue_histogram[i] for i in range(len(self.hue_histogram))
+        ]
+
+        return Track(interpolated_frame_idx, interpolated_bbox, interpolated_confidence, interpolated_histogram)
 
 
 TrackId = int | None
@@ -32,80 +93,78 @@ def _tracks_overlap_temporally(track1_data: list[Track], track2_data: list[Track
     return len(track1_frames & track2_frames) > 0
 
 
-def _calculate_track_distance(track1_data: list[Track], track2_data: list[Track]) -> float:
-    """Calculate combined spatial and temporal distance between two tracks"""
-    if _tracks_overlap_temporally(track1_data, track2_data):
-        return float('inf')  # Can't merge overlapping tracks
-
-    # Get sorted frame indices for both tracks
-    track1_frames = sorted([det.frame_idx for det in track1_data])
-    track2_frames = sorted([det.frame_idx for det in track2_data])
-
-    # Calculate temporal gap
-    gap1 = track2_frames[0] - track1_frames[-1]  # track2 comes after track1
-    gap2 = track1_frames[0] - track2_frames[-1]  # track1 comes after track2
-
-    # Determine which track comes first and the temporal gap
-    if gap1 > 0:  # track1 → track2
-        temporal_gap = gap1
-        # Get spatial positions at connection points
-        track1_end = next(det for det in track1_data if det.frame_idx == track1_frames[-1])
-        track2_start = next(det for det in track2_data if det.frame_idx == track2_frames[0])
-        end_bbox = track1_end.bbox
-        start_bbox = track2_start.bbox
-    elif gap2 > 0:  # track2 → track1
-        temporal_gap = gap2
-        # Get spatial positions at connection points
-        track2_end = next(det for det in track2_data if det.frame_idx == track2_frames[-1])
-        track1_start = next(det for det in track1_data if det.frame_idx == track1_frames[0])
-        end_bbox = track2_end.bbox
-        start_bbox = track1_start.bbox
-    else:
-        return float('inf')  # Overlapping tracks
-
+def _calculate_spatial_distance(main_track: list[Track], other_track: list[Track]) -> float:
     # Calculate spatial distance between bbox centers
-    end_center = end_bbox.center
-    start_center = start_bbox.center
+    end = main_track[-1]
+    start = other_track[0]
+
+    end_center = end.bbox.center
+    start_center = start.bbox.center
 
     spatial_distance = end_center.distance_to(start_center)
 
     # Normalize spatial distance by bbox size for scale invariance
-    avg_bbox_size = (end_bbox.width + end_bbox.height + start_bbox.width + start_bbox.height) / 4
+    avg_bbox_size = (end.bbox.width + end.bbox.height + start.bbox.width + start.bbox.height) / 4
     normalized_spatial_distance = spatial_distance / max(avg_bbox_size, 1)
 
-    # Combined distance (weighted sum of temporal and spatial components)
-    # Temporal gap is in frames, spatial is normalized by bbox size
-    combined_distance = temporal_gap + normalized_spatial_distance * 30  # 30 frames weight for spatial
-
-    return combined_distance
+    return normalized_spatial_distance
 
 
-def _find_best_merge_candidates(tracks: TrackerInput) -> tuple[tuple[TrackId, TrackId] | None, float]:
+def _calculate_temporal_distance(main_track: list[Track], other_track: list[Track]) -> float:
+    # TODO if tracks overlap temporally, return inf?
+    return other_track[0].frame_idx - main_track[-1].frame_idx
+
+
+def _find_best_merge_candidates(tracks: TrackerInput, fps: int) -> tuple[TrackId, TrackId] | None:
     """Find the pair of tracks that are closest in space and time"""
-    best_distance = float('inf')
-    best_pair = None
 
-    track_ids = list(tracks.keys())
+    all_candidates: dict[TrackId, list[tuple[TrackId, float]]] = {}
 
-    for i in range(len(track_ids)):
-        for j in range(i + 1, len(track_ids)):
-            track_id1, track_id2 = track_ids[i], track_ids[j]
-            distance = _calculate_track_distance(tracks[track_id1], tracks[track_id2])
+    start_track_ids = list(tracks.keys())
+    start_track_ids.sort(key=lambda x: tracks[x][0].frame_idx)
 
-            if distance < best_distance:
-                best_distance = distance
-                best_pair = (track_id1, track_id2)
+    end_track_ids = list(tracks.keys())
+    end_track_ids.sort(key=lambda x: tracks[x][-1].frame_idx)
 
-    return best_pair, best_distance
+    for track_id1 in start_track_ids:
+        candidates: list[tuple[TrackId, float]] = []
+        for track_id2 in end_track_ids:
+            if track_id1 == track_id2:
+                continue
+
+            track_data1, track_data2 = tracks[track_id1], tracks[track_id2]
+            temporal_distance = _calculate_temporal_distance(track_data1, track_data2)
+            if (
+                temporal_distance < MAX_TEMPORAL_DISTANCE_SECONDS * fps and temporal_distance > 0
+            ):  # TODO aufweichen >= -XXX??
+                spatial_distance = _calculate_spatial_distance(track_data1, track_data2)
+                if spatial_distance < MAX_SPATIAL_DISTANCE_BB:
+                    candidates.append((track_id2, spatial_distance))
+
+        if len(candidates) == 1:
+            return track_id1, candidates[0][0]
+
+        all_candidates[track_id1] = candidates
+
+    for track_id1, candidates in all_candidates.items():
+        end_track = tracks[track_id1][-1]
+
+        def get_histogram_similarity(candidate: tuple[TrackId, float]) -> float:
+            start_track = tracks[candidate[0]][0]
+            return end_track.histogram_similarity(start_track)
+
+        candidates.sort(key=get_histogram_similarity)
+
+        if candidates and get_histogram_similarity(candidates[0]) > HISTOGRAM_SIMILARITY_THRESHOLD:
+            return track_id1, candidates[0][0]
+
+    return None
 
 
 def _interpolate_missing_boxes(track_data: list[Track]) -> list[Track]:
     """Interpolate bounding boxes for missing frames in a track"""
     if len(track_data) < 2:
         return track_data
-
-    # Sort by frame index
-    track_data.sort(key=lambda x: x.frame_idx)
 
     interpolated: list[Track] = []
 
@@ -119,22 +178,13 @@ def _interpolate_missing_boxes(track_data: list[Track]) -> list[Track]:
 
         # Interpolate across any gap size
         for gap_frame in range(1, frame_gap):
-            interp_frame_idx = current.frame_idx + gap_frame
-
             # Linear interpolation factor
             alpha = gap_frame / frame_gap
 
-            # Interpolate bounding box
-            interp_bbox = current.bbox.interpolate(next_detection.bbox, alpha)
-
-            # Interpolate confidence (lower for interpolated)
-            interp_confidence = (1 - alpha) * current.confidence + alpha * next_detection.confidence
-            interp_confidence *= 0.7  # Reduce confidence for interpolated detections
-
-            interpolated.append(Track(interp_frame_idx, interp_bbox, interp_confidence))
+            interpolated.append(current.interpolate(next_detection, alpha))
 
     interpolated.append(track_data[-1])
-    return sorted(interpolated, key=lambda x: x.frame_idx)
+    return list(sorted(interpolated, key=lambda x: x.frame_idx))
 
 
 def _merge_two_tracks(track1_data: list[Track], track2_data: list[Track]) -> list[Track]:
@@ -149,7 +199,7 @@ def _merge_two_tracks(track1_data: list[Track], track2_data: list[Track]) -> lis
     return _interpolate_missing_boxes(merged_detections)
 
 
-def _greedy_merge_tracks(tracks: TrackerInput) -> TrackerInput:
+def _greedy_merge_tracks(tracks: TrackerInput, fps: int) -> TrackerInput:
     """Greedy merging: repeatedly find and merge the closest track pair"""
     print(f'Starting greedy merge with {len(tracks)} tracks...')
 
@@ -161,13 +211,13 @@ def _greedy_merge_tracks(tracks: TrackerInput) -> TrackerInput:
         iteration += 1
 
         # Find the best pair to merge
-        best_pair, best_distance = _find_best_merge_candidates(working_tracks)
+        best_pair = _find_best_merge_candidates(working_tracks, fps)
 
-        if best_pair is None or best_distance > MAX_MERGE_FRAME_GAP:
+        if best_pair is None:
             break
 
         track_id1, track_id2 = best_pair
-        print(f'Iteration {iteration}: Merging tracks {track_id1} and {track_id2} (distance: {best_distance:.1f})')
+        print(f'Iteration {iteration}: Merging tracks {track_id1} and {track_id2}')
 
         # Merge the tracks
         merged_track = _merge_two_tracks(working_tracks[track_id1], working_tracks[track_id2])
@@ -201,6 +251,8 @@ def _remove_overlapping_tracks(tracks: TrackerInput, overlap_threshold: float = 
     """Remove tracks that overlap significantly with others, keeping the longer one"""
     if len(tracks) <= 1:
         return tracks
+
+    overlap_threshold = 10000000  # TODO
 
     print(f'Checking for overlapping tracks (threshold: {overlap_threshold * 100:.0f}%)...')
 
@@ -320,7 +372,7 @@ def _get_valid_tracks(tracks: TrackerInput, total_frames: int) -> TrackerInput:
     return valid_tracks
 
 
-def process_tracks(track_inputs: TrackerInput, total_frames: int) -> TrackerInput:
+def process_tracks(track_inputs: TrackerInput, video_properties: VideoInfo) -> TrackerInput:
     """Complete track processing pipeline: merge, filter, and smooth tracks.
 
     Args:
@@ -330,15 +382,21 @@ def process_tracks(track_inputs: TrackerInput, total_frames: int) -> TrackerInpu
     Returns:
         Dictionary of processed tracks ready for video generation
     """
+
+    # sort all tracks by frame index
+    track_inputs = {
+        track_id: list(sorted(track_data, key=lambda x: x.frame_idx)) for track_id, track_data in track_inputs.items()
+    }
+
     # First, greedily merge ALL tracks based on spatial and temporal proximity
     print(f'Starting with {len(track_inputs)} tracks')
-    merged_tracks = _greedy_merge_tracks(track_inputs)
+    merged_tracks = _greedy_merge_tracks(track_inputs, video_properties.fps)
 
     # Remove tracks that still overlap significantly after merging
     merged_tracks = _remove_overlapping_tracks(merged_tracks)
 
     # Then filter merged tracks for minimum duration requirement
-    valid_tracks = _get_valid_tracks(merged_tracks, total_frames)
+    valid_tracks = _get_valid_tracks(merged_tracks, video_properties.total_frames)
 
     if not valid_tracks:
         print('No merged tracks meet the minimum frame percentage requirement')
@@ -350,4 +408,9 @@ def process_tracks(track_inputs: TrackerInput, total_frames: int) -> TrackerInpu
     print('Smoothing track centers to reduce jittery motion...')
     smoothed_tracks = _smooth_track_centers(valid_tracks)
 
-    return smoothed_tracks
+    # relabel tracks from 1 to n
+    relabeled_tracks: TrackerInput = {}
+    for i, (track_id, track_data) in enumerate(smoothed_tracks.items(), start=1):
+        relabeled_tracks[i] = track_data
+
+    return relabeled_tracks

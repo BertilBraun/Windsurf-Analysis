@@ -104,7 +104,7 @@ class SurferDetector:
             conf=CONFIDENCE_THRESHOLD,
             batch=BATCH_SIZE,
             vid_stride=skip_frames,
-            persist=False,  # TODO True?
+            persist=True,  # TODO True?
             stream=True,
             verbose=False,
         )

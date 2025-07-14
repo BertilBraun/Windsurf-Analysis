@@ -1,60 +1,75 @@
 #!/usr/bin/env python3
 
 import os
-import json
 import glob
+import pickle
 import torch
 import argparse
 import traceback
+
+from tqdm import tqdm
 import track_processing
 from pathlib import Path
 from dataclasses import asdict
 
 
 from video_io import VideoReader, VideoWriter, get_video_properties
-from detector import SurferDetector
+from detector import Detection, SurferDetector
 from surfer_tracker import SurferTracker
 from annotation_drawer import Annotation, AnnotationDrawer
-from stabilize import run_stabilization_process
+from stabilize import Stabilizer
 
 from settings import STANDARD_OUTPUT_DIR
 
 
 class WindsurfingVideoProcessor:
-    def __init__(self):
+    def __init__(self, draw_annotations: bool = False):
         self.detector = SurferDetector()
+        self.stabilizer = Stabilizer()
+        self.draw_annotations = draw_annotations
 
     def process_video(self, input_path: os.PathLike, output_dir: os.PathLike | str):
         """Main video processing pipeline with batched YOLO inference"""
 
-        surfer_tracker = SurferTracker()
+        pickel_file = Path(output_dir) / f'{Path(input_path).stem}.pkl'
+        if pickel_file.exists():
+            surfer_tracker = pickle.load(pickel_file.open('rb'))
+        else:
+            surfer_tracker = SurferTracker()
 
-        props = get_video_properties(input_path)
-        print(f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.total_frames} frames')
+            props = get_video_properties(input_path)
+            print(f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.total_frames} frames')
 
-        for frame_index, frame, detections in self.detector.detect_and_track_video(input_path):
-            for detection in detections:
-                if detection.track_id is not None:
-                    surfer_tracker.add_detection(frame_index, detection, frame)
+            for frame_index, frame, detections in self.detector.detect_and_track_video(input_path):
+                for detection in detections:
+                    if detection.track_id is not None:
+                        surfer_tracker.add_detection(frame_index, detection, frame)
+
+            pickle.dump(surfer_tracker, pickel_file.open('wb'))
 
         processed_tracks, individual_videos = surfer_tracker.process_tracks(input_path, output_dir)
         for individual_video in individual_videos:
-            run_stabilization_process(individual_video, individual_video)
+            self.stabilizer.stabilize(individual_video, individual_video)
 
-        self.generate_annotated_video(input_path, processed_tracks, output_dir)
+        if self.draw_annotations:
+            self.generate_annotated_video(input_path, processed_tracks, output_dir)
 
     def generate_annotated_video(
-        self, input_path: os.PathLike, tracks: track_processing.TrackerInput, output_dir: os.PathLike | str
+        self,
+        input_path: os.PathLike,
+        tracks: track_processing.TrackerInput,
+        output_dir: os.PathLike | str,
     ):
         annotation_drawer = AnnotationDrawer()
 
         annotated_video_path = Path(output_dir) / f'{Path(input_path).stem}+00_annotated.mp4'
-        detection_output_path = Path(output_dir) / f'{Path(input_path).stem}+00_detections.json'
 
         with VideoReader(input_path) as reader:
             video_props = reader.get_properties()
             with VideoWriter(annotated_video_path, video_props.width, video_props.height, video_props.fps) as writer:
-                for frame_index, frame in reader.read_frames():
+                for frame_index, frame in tqdm(
+                    reader.read_frames(), total=video_props.total_frames, desc='Drawing annotations'
+                ):
                     annotations = [
                         Annotation(track_id, track.bbox, track.confidence)
                         for track_id, tracks in tracks.items()
@@ -64,15 +79,8 @@ class WindsurfingVideoProcessor:
 
                     writer.write_frame(annotation_drawer.draw_detections_with_trails(frame, annotations))
 
-        # dump the detections to a json file
-        with open(detection_output_path, 'w') as f:
-            json.dump(
-                {
-                    track_id: [asdict(annotation) for annotation in annotations]
-                    for track_id, annotations in tracks.items()
-                },
-                f,
-            )
+    def finalize(self):
+        self.stabilizer.stop()
 
 
 def main():
@@ -81,6 +89,7 @@ def main():
         'input_pattern', help='Path pattern for input video files (e.g., "videos/*.mp4" or single file)'
     )
     parser.add_argument('--output-dir', help='Directory for individual surfer videos (default: individual_surfers)')
+    parser.add_argument('--draw-annotations', action='store_true', help='Draw annotations on the video')
 
     args = parser.parse_args()
 
@@ -104,7 +113,7 @@ def main():
         print(f'  - {video_file}')
     print()
 
-    processor = WindsurfingVideoProcessor()
+    processor = WindsurfingVideoProcessor(draw_annotations=args.draw_annotations)
 
     for i, video_file in enumerate(video_files, 1):
         print(f'Processing video {i}/{len(video_files)}: {video_file}')
@@ -116,6 +125,8 @@ def main():
             print(traceback.format_exc())
 
         print('-' * 60)
+
+    processor.finalize()
 
 
 if __name__ == '__main__':
