@@ -7,7 +7,7 @@ from pathlib import Path
 from dataclasses import dataclass
 
 from settings import MIN_FRAME_PERCENTAGE, MAX_MERGE_FRAME_GAP
-from detector import BoundingBox
+from detector import BoundingBox, Point
 from video_io import VideoReader, VideoWriter, get_video_properties
 
 
@@ -315,12 +315,11 @@ class SurferTracker:
 
             if duration_frames >= min_frames:
                 # Interpolate missing detections
-                interpolated_track = self._interpolate_missing_boxes(detections)
-                valid_tracks[track_id] = interpolated_track
+                valid_tracks[track_id] = self._interpolate_missing_boxes(detections)
 
         return valid_tracks
 
-    def _extract_centered_slice(self, frame: np.ndarray, bbox: BoundingBox, slice_size: tuple[int, int]) -> np.ndarray:
+    def _extract_centered_slice(self, frame: np.ndarray, center: Point, slice_size: tuple[int, int]) -> np.ndarray:
         """Extract a fixed-size slice centered on the bounding box center
 
         Args:
@@ -334,12 +333,9 @@ class SurferTracker:
         frame_height, frame_width = frame.shape[:2]
         slice_width, slice_height = slice_size
 
-        # Calculate bounding box center
-        center_x, center_y = bbox.center
-
         # Calculate slice boundaries centered on bbox center
-        slice_x1 = int(center_x - slice_width // 2)
-        slice_y1 = int(center_y - slice_height // 2)
+        slice_x1 = int(center.x - slice_width // 2)
+        slice_y1 = int(center.y - slice_height // 2)
         slice_x2 = slice_x1 + slice_width
         slice_y2 = slice_y1 + slice_height
 
@@ -396,13 +392,8 @@ class SurferTracker:
         # Create writers for each track
         writers: dict[int, VideoWriter] = {}
         crop_sizes: dict[int, tuple[int, int]] = {}
-        track_to_number: dict[int, int] = {}  # Map track_id to sequential number
 
-        # Create sequential numbering for tracks
-        for i, track_id in enumerate(sorted(valid_tracks.keys()), 1):
-            track_to_number[track_id] = i
-
-        for track_id, track_data in valid_tracks.items():
+        for person_number, (track_id, track_data) in enumerate(valid_tracks.items(), 1):
             # Calculate average bbox size for this track to determine slice size
             total_width = 0
             total_height = 0
@@ -447,8 +438,6 @@ class SurferTracker:
             slice_height = int(np.ceil(slice_height / 2) * 2)
             crop_sizes[track_id] = (slice_width, slice_height)
 
-            # Get sequential number for this track
-            person_number = track_to_number[track_id]
             print(f'Track {track_id} (Person {person_number}): slice size {slice_width}x{slice_height} pixels')
 
             # Create video writer with new naming convention using sequential number
@@ -472,9 +461,9 @@ class SurferTracker:
                     if detection is not None:
                         # Extract fixed-size slice centered on bbox (no expansion needed)
                         target_size = crop_sizes[track_id]
-                        cropped = self._extract_centered_slice(frame, detection.bbox, target_size)
+                        cropped_frame = self._extract_centered_slice(frame, detection.bbox.center, target_size)
 
-                        writers[track_id].write_frame(cropped)
+                        writers[track_id].write_frame(cropped_frame)
 
         for writer in writers.values():
             writer.finish_writing()
