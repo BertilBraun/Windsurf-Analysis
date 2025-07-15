@@ -72,14 +72,14 @@ class Track:
     frame_idx: int
     bbox: BoundingBox
     confidence: float
-    embedding: list[float]
+    hue_histogram: list[float]
 
     def copy(self) -> Track:
         return Track(
             self.frame_idx,
             self.bbox.copy(),
             self.confidence,
-            self.embedding.copy(),
+            self.hue_histogram.copy(),
         )
 
     def histogram_similarity(self, other: Track) -> float:
@@ -93,11 +93,13 @@ class Track:
         Returns:
             Similarity score between 0.0 (no similarity) and 1.0 (identical)
         """
-        if len(self.embedding) != len(other.embedding):
+        if len(self.hue_histogram) != len(other.hue_histogram):
             raise ValueError('Histograms must have the same number of bins')
 
         # Bhattacharyya coefficient: sum of sqrt(p_i * q_i) for all bins
-        similarity = sum(math.sqrt(self.embedding[i] * other.embedding[i]) for i in range(len(self.embedding)))
+        similarity = sum(
+            math.sqrt(self.hue_histogram[i] * other.hue_histogram[i]) for i in range(len(self.hue_histogram))
+        )
 
         return similarity
 
@@ -123,7 +125,7 @@ class Track:
 
         # Interpolate hue histogram (bin by bin)
         interpolated_histogram = [
-            (1 - alpha) * self.embedding[i] + alpha * other.embedding[i] for i in range(len(self.embedding))
+            (1 - alpha) * self.hue_histogram[i] + alpha * other.hue_histogram[i] for i in range(len(self.hue_histogram))
         ]
 
         return Track(interpolated_frame_idx, interpolated_bbox, interpolated_confidence, interpolated_histogram)

@@ -11,7 +11,6 @@ class Annotation:
     track_id: TrackId
     bbox: BoundingBox
     confidence: float
-    hue_histogram: list[float]
 
 
 class AnnotationDrawer:
@@ -66,8 +65,5 @@ class AnnotationDrawer:
 
             # Draw label text
             cv2.putText(annotated_frame, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-
-            # Draw hue histogram
-            cv2.imshow('Hue Histogram', np.array(annotation.hue_histogram).reshape(1, -1))
 
         return annotated_frame

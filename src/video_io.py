@@ -1,6 +1,9 @@
-from typing import Generator
-import cv2
+from __future__ import annotations
+
 import os
+import cv2
+import time
+from typing import Generator
 from dataclasses import dataclass
 
 
@@ -94,3 +97,78 @@ class VideoWriter:
         """Write a single frame to the video"""
         assert self.writer is not None, 'VideoWriter not initialized'
         self.writer.write(frame)
+
+
+class LiveVideoStreamer:
+    """
+    Context-manager that streams video frames to an OpenCV window at (≈) the
+    requested FPS.  Use exactly as you would a file/video writer:
+
+        with LiveVideoStreamer(w, h, fps) as streamer:
+            streamer.write_frame(frame)
+
+    -- Parameters --
+    width, height : int
+        Expected frame size (frames are auto-resized if they don’t match).
+    fps : float | int
+        Target playback speed.  A value ≤ 0 disables pacing (fast as possible).
+
+    -- Methods --
+    write_frame(frame) -> bool
+        Displays *frame* and returns *True* unless the user pressed “q”.
+        Check the return value if you want to support early quit.
+    """
+
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        fps: float,
+        window_name: str = 'Live Stream',
+        flags: int = cv2.WINDOW_NORMAL,
+    ) -> None:
+        self.width = int(width)
+        self.height = int(height)
+        self.fps = float(fps)
+        self.window_name = window_name
+        self.flags = flags
+
+        self._delay_ms: int = 1 if self.fps <= 0 else max(1, int(1000 / self.fps))
+        self._next_frame_time: float = time.perf_counter()
+
+    # ───────────────────────── context-manager hooks ────────────────────────── #
+
+    def __enter__(self) -> LiveVideoStreamer:
+        cv2.namedWindow(self.window_name, self.flags)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        cv2.destroyWindow(self.window_name)
+
+    # ───────────────────────────── public API ───────────────────────────────── #
+
+    def write_frame(self, frame) -> bool:
+        """
+        Show *frame* and pace playback.  Returns False iff the user pressed “q”.
+        """
+        if frame.shape[1] != self.width or frame.shape[0] != self.height:
+            frame = cv2.resize(frame, (self.width, self.height))
+
+        cv2.imshow(self.window_name, frame)
+
+        # Wait the minimal time so the window can refresh & catch key events
+        key = cv2.waitKey(self._delay_ms) & 0xFF
+        if key == ord('q'):
+            return False
+
+        # If FPS pacing is enabled, sleep until the next tick
+        if self.fps > 0:
+            self._next_frame_time += 1.0 / self.fps
+            now = time.perf_counter()
+            sleep_s = self._next_frame_time - now
+            if sleep_s > 0:
+                time.sleep(sleep_s)
+            else:  # We fell behind; reset reference
+                self._next_frame_time = now
+
+        return True

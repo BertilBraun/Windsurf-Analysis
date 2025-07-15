@@ -1,0 +1,13 @@
+# Computer Vision and Video Processing
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Machine Learning
+ultralytics>=8.0.0
+torch>=2.0.0
+
+# Progress bars and utilities
+tqdm>=4.65.0
+
+# Configuration files
+PyYAML>=6.0

@@ -10,7 +10,7 @@ import numpy as np
 from tqdm import tqdm
 from pathlib import Path
 
-from detector import Point
+from common_types import Point
 from track_processing import Track, TrackId, TrackerInput
 from video_io import VideoReader, VideoWriter, get_video_properties
 

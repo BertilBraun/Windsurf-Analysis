@@ -15,7 +15,7 @@ class SurferDetector:
     """Pure detection and tracking class for surfers in video"""
 
     def __init__(self):
-        self.model = YOLO(DEFAULT_MODEL_NAME)
+        self.model = YOLO(DEFAULT_MODEL_NAME, verbose=True)
         # TODO does the model have to be reset?
         # TODO does the model have to be moved to the GPU?
 
@@ -27,14 +27,17 @@ class SurferDetector:
         video_props = get_video_properties(video_path)
         skip_frames = video_props.fps // MIN_TRACKING_FPS
 
+        # TODO write the yaml here live? Be able to change the parameters :)
+
         results = self.model.track(
             str(video_path),
             iou=IOU_THRESHOLD,
             conf=CONFIDENCE_THRESHOLD,
             batch=BATCH_SIZE,
             vid_stride=skip_frames,
-            tracker='botsort',  # TODO try
-            track_buffer=MIN_TRACKING_FPS * 10,  # 10sec sensible?
+            tracker='botsort.yaml',
+            # track_buffer=MIN_TRACKING_FPS * 10,  # 10sec sensible?
+            # with_reid=True,  # TODO try
             persist=True,  # TODO True?
             stream=True,
             verbose=False,
