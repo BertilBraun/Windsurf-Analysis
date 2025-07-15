@@ -34,14 +34,11 @@ def _calculate_spatial_distance(main_track: list[Track], other_track: list[Track
 
 
 def _calculate_temporal_distance(main_track: list[Track], other_track: list[Track]) -> float:
-    # TODO if tracks overlap temporally, return inf?
     return other_track[0].frame_idx - main_track[-1].frame_idx
 
 
 def _find_best_merge_candidates(tracks: TrackerInput, fps: int) -> tuple[TrackId, TrackId] | None:
     """Find the pair of tracks that are closest in space and time"""
-
-    # TODO based on embedding in the middle of the tracks
 
     all_candidates: dict[TrackId, list[tuple[TrackId, float]]] = {}
 

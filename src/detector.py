@@ -18,8 +18,6 @@ class SurferDetector:
 
     def __init__(self):
         self.model = YOLO(DEFAULT_MODEL_NAME, verbose=True)
-        # TODO does the model have to be reset?
-        # TODO does the model have to be moved to the GPU?
 
     def detect_and_track_video(
         self, video_path: os.PathLike | str
@@ -38,7 +36,6 @@ class SurferDetector:
             batch=BATCH_SIZE,
             vid_stride=skip_frames,
             tracker=str(tracker_config_file),
-            persist=False,  # TODO True?
             stream=True,
             verbose=False,
         )
@@ -68,7 +65,7 @@ class SurferDetector:
                     # ReID model related thresh
                     'proximity_thresh': 0.3,  # minimum IoU for valid match with ReID
                     'appearance_thresh': 0.9,  # minimum appearance similarity for ReID
-                    'with_reid': True,  # TODO try
+                    'with_reid': True,
                     'model': 'auto',  # uses native features if detector is YOLO else yolo11n-cls.pt
                 },
                 f,
