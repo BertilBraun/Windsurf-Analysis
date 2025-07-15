@@ -5,92 +5,15 @@ This module provides pure functions for processing object tracking data without
 maintaining any state, making it easier to test and reason about.
 """
 
-from dataclasses import dataclass
-import math
-
 from settings import (
     HISTOGRAM_SIMILARITY_THRESHOLD,
     MAX_SPATIAL_DISTANCE_BB,
     MAX_TEMPORAL_DISTANCE_SECONDS,
     MIN_FRAME_PERCENTAGE,
+    SMOOTHING_WINDOW_SIZE,
 )
-from detector import BoundingBox
 from video_io import VideoInfo
-
-
-@dataclass
-class Track:
-    frame_idx: int
-    bbox: BoundingBox
-    confidence: float
-    hue_histogram: list[float]  # Normalized hue histogram (36 bins, 10° each)
-
-    def copy(self) -> 'Track':
-        return Track(
-            self.frame_idx,
-            self.bbox.copy(),
-            self.confidence,
-            self.hue_histogram.copy(),
-        )
-
-    def histogram_similarity(self, other: 'Track') -> float:
-        """Calculate similarity between two tracks based on their hue histograms.
-
-        Uses Bhattacharyya coefficient for histogram comparison.
-
-        Args:
-            other: Another Track to compare against
-
-        Returns:
-            Similarity score between 0.0 (no similarity) and 1.0 (identical)
-        """
-        if len(self.hue_histogram) != len(other.hue_histogram):
-            raise ValueError('Histograms must have the same number of bins')
-
-        # Bhattacharyya coefficient: sum of sqrt(p_i * q_i) for all bins
-        similarity = sum(
-            math.sqrt(self.hue_histogram[i] * other.hue_histogram[i]) for i in range(len(self.hue_histogram))
-        )
-
-        return similarity
-
-    def interpolate(self, other: 'Track', alpha: float) -> 'Track':
-        """Interpolate between this track and another track.
-
-        Args:
-            other: Target track to interpolate towards
-            alpha: Interpolation factor (0.0 = this track, 1.0 = other track)
-
-        Returns:
-            New Track with interpolated values
-        """
-        # Interpolate frame index
-        interpolated_frame_idx = int((1 - alpha) * self.frame_idx + alpha * other.frame_idx)
-
-        # Interpolate bounding box
-        interpolated_bbox = self.bbox.interpolate(other.bbox, alpha)
-
-        # Interpolate confidence
-        interpolated_confidence = (1 - alpha) * self.confidence + alpha * other.confidence
-        interpolated_confidence *= 0.7  # Reduce confidence for interpolated detections
-
-        # Interpolate hue histogram (bin by bin)
-        interpolated_histogram = [
-            (1 - alpha) * self.hue_histogram[i] + alpha * other.hue_histogram[i] for i in range(len(self.hue_histogram))
-        ]
-
-        return Track(interpolated_frame_idx, interpolated_bbox, interpolated_confidence, interpolated_histogram)
-
-
-TrackId = int | None
-TrackerInput = dict[TrackId, list[Track]]
-
-
-def _tracks_overlap_temporally(track1_data: list[Track], track2_data: list[Track]) -> bool:
-    """Check if two tracks have any overlapping frames"""
-    track1_frames = set(det.frame_idx for det in track1_data)
-    track2_frames = set(det.frame_idx for det in track2_data)
-    return len(track1_frames & track2_frames) > 0
+from common_types import Track, BoundingBox, TrackId, TrackerInput
 
 
 def _calculate_spatial_distance(main_track: list[Track], other_track: list[Track]) -> float:
@@ -118,6 +41,8 @@ def _calculate_temporal_distance(main_track: list[Track], other_track: list[Trac
 def _find_best_merge_candidates(tracks: TrackerInput, fps: int) -> tuple[TrackId, TrackId] | None:
     """Find the pair of tracks that are closest in space and time"""
 
+    # TODO based on embedding in the middle of the tracks
+
     all_candidates: dict[TrackId, list[tuple[TrackId, float]]] = {}
 
     start_track_ids = list(tracks.keys())
@@ -142,6 +67,7 @@ def _find_best_merge_candidates(tracks: TrackerInput, fps: int) -> tuple[TrackId
                     candidates.append((track_id2, spatial_distance))
 
         if len(candidates) == 1:
+            print(f'  !! Found only one candidate for track {track_id1}: {candidates[0][0]}')
             return track_id1, candidates[0][0]
 
         all_candidates[track_id1] = candidates
@@ -230,66 +156,7 @@ def _greedy_merge_tracks(tracks: TrackerInput, fps: int) -> TrackerInput:
     return working_tracks
 
 
-def _calculate_track_overlap(track1_data: list[Track], track2_data: list[Track]) -> float:
-    """Calculate the percentage of frames that two tracks overlap"""
-    track1_frames = set(det.frame_idx for det in track1_data)
-    track2_frames = set(det.frame_idx for det in track2_data)
-
-    overlap_frames = track1_frames & track2_frames
-
-    if not overlap_frames:
-        return 0.0
-
-    # Calculate overlap as percentage of the smaller track
-    smaller_track_size = min(len(track1_frames), len(track2_frames))
-    overlap_percentage = len(overlap_frames) / smaller_track_size
-
-    return overlap_percentage
-
-
-def _remove_overlapping_tracks(tracks: TrackerInput, overlap_threshold: float = 0.8) -> TrackerInput:
-    """Remove tracks that overlap significantly with others, keeping the longer one"""
-    if len(tracks) <= 1:
-        return tracks
-
-    overlap_threshold = 10000000  # TODO
-
-    print(f'Checking for overlapping tracks (threshold: {overlap_threshold * 100:.0f}%)...')
-
-    track_ids = list(tracks.keys())
-    tracks_to_remove = set()
-
-    for i in range(len(track_ids)):
-        for j in range(i + 1, len(track_ids)):
-            track_id1, track_id2 = track_ids[i], track_ids[j]
-
-            # Skip if either track is already marked for removal
-            if track_id1 in tracks_to_remove or track_id2 in tracks_to_remove:
-                continue
-
-            overlap = _calculate_track_overlap(tracks[track_id1], tracks[track_id2])
-
-            if overlap >= overlap_threshold:
-                # Keep the longer track (more detections)
-                if len(tracks[track_id1]) >= len(tracks[track_id2]):
-                    tracks_to_remove.add(track_id2)
-                    print(f'Removing track {track_id2} (overlaps {overlap * 100:.1f}% with longer track {track_id1})')
-                else:
-                    tracks_to_remove.add(track_id1)
-                    print(f'Removing track {track_id1} (overlaps {overlap * 100:.1f}% with longer track {track_id2})')
-
-    # Remove overlapping tracks
-    filtered_tracks = {
-        track_id: track_data for track_id, track_data in tracks.items() if track_id not in tracks_to_remove
-    }
-
-    if tracks_to_remove:
-        print(f'Removed {len(tracks_to_remove)} overlapping tracks: {len(tracks)} → {len(filtered_tracks)} tracks')
-
-    return filtered_tracks
-
-
-def _smooth_track(track_data: list[Track], window_size: int = 10) -> list[Track]:
+def _smooth_track(track_data: list[Track], window_size: int = SMOOTHING_WINDOW_SIZE) -> list[Track]:
     """Smooth the center positions of a single track using a rolling window"""
     if len(track_data) <= 1:
         return track_data
@@ -297,7 +164,7 @@ def _smooth_track(track_data: list[Track], window_size: int = 10) -> list[Track]
     # Sort by frame index
     track_data.sort(key=lambda x: x.frame_idx)
 
-    smoothed_track = []
+    smoothed_track: list[Track] = []
 
     for i, detection in enumerate(track_data):
         # Calculate original bbox dimensions
@@ -372,6 +239,11 @@ def _get_valid_tracks(tracks: TrackerInput, total_frames: int) -> TrackerInput:
     return valid_tracks
 
 
+def _relabel_tracks(tracks: TrackerInput) -> TrackerInput:
+    """Relabel tracks from 1 to n"""
+    return {i: track_data for i, (track_id, track_data) in enumerate(tracks.items(), start=1)}
+
+
 def process_tracks(track_inputs: TrackerInput, video_properties: VideoInfo) -> TrackerInput:
     """Complete track processing pipeline: merge, filter, and smooth tracks.
 
@@ -392,9 +264,6 @@ def process_tracks(track_inputs: TrackerInput, video_properties: VideoInfo) -> T
     print(f'Starting with {len(track_inputs)} tracks')
     merged_tracks = _greedy_merge_tracks(track_inputs, video_properties.fps)
 
-    # Remove tracks that still overlap significantly after merging
-    merged_tracks = _remove_overlapping_tracks(merged_tracks)
-
     # Then filter merged tracks for minimum duration requirement
     valid_tracks = _get_valid_tracks(merged_tracks, video_properties.total_frames)
 
@@ -409,8 +278,4 @@ def process_tracks(track_inputs: TrackerInput, video_properties: VideoInfo) -> T
     smoothed_tracks = _smooth_track_centers(valid_tracks)
 
     # relabel tracks from 1 to n
-    relabeled_tracks: TrackerInput = {}
-    for i, (track_id, track_data) in enumerate(smoothed_tracks.items(), start=1):
-        relabeled_tracks[i] = track_data
-
-    return relabeled_tracks
+    return _relabel_tracks(smoothed_tracks)

@@ -25,7 +25,7 @@ class Stabilizer:
                 break
             try:
                 input_file, output_file = self.queue.get(timeout=1)
-            except Empty | TimeoutError:
+            except Empty:
                 continue
             if not _stabilize_ffmpeg(input_file, output_file):
                 logging.error(f'  !! ffmpeg stabilization failed for {input_file}')

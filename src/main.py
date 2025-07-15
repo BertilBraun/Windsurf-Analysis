@@ -8,18 +8,17 @@ import argparse
 import traceback
 
 from tqdm import tqdm
-import track_processing
 from pathlib import Path
-from dataclasses import asdict
 
 
 from video_io import VideoReader, VideoWriter, get_video_properties
-from detector import Detection, SurferDetector
+from detector import SurferDetector
 from surfer_tracker import SurferTracker
 from annotation_drawer import Annotation, AnnotationDrawer
 from stabilize import Stabilizer
 
 from settings import STANDARD_OUTPUT_DIR
+from common_types import TrackerInput
 
 
 class WindsurfingVideoProcessor:
@@ -52,12 +51,15 @@ class WindsurfingVideoProcessor:
             self.stabilizer.stabilize(individual_video, individual_video)
 
         if self.draw_annotations:
-            self.generate_annotated_video(input_path, processed_tracks, output_dir)
+            all_tracks = {track_id: tracks for track_id, tracks in processed_tracks.items()}
+            all_tracks.update(surfer_tracker.track_inputs)
+            all_tracks = {track_id: tracks for track_id, tracks in surfer_tracker.track_inputs.items()}
+            self.generate_annotated_video(input_path, all_tracks, output_dir)
 
     def generate_annotated_video(
         self,
         input_path: os.PathLike,
-        tracks: track_processing.TrackerInput,
+        tracks: TrackerInput,
         output_dir: os.PathLike | str,
     ):
         annotation_drawer = AnnotationDrawer()
@@ -71,7 +73,7 @@ class WindsurfingVideoProcessor:
                     reader.read_frames(), total=video_props.total_frames, desc='Drawing annotations'
                 ):
                     annotations = [
-                        Annotation(track_id, track.bbox, track.confidence)
+                        Annotation(track_id, track.bbox, track.confidence, track.embedding)
                         for track_id, tracks in tracks.items()
                         for track in tracks
                         if track.frame_idx == frame_index
