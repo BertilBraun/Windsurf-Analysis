@@ -2,5 +2,9 @@
 **/__pycache__/**
 **/*.pt
 **/*.pkl
+
 train/datasets/**
 train/runs/**
+src/botsort.yaml
+
+!train/models/**

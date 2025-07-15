@@ -1,8 +1,8 @@
 import os
 
 
-DEFAULT_MODEL_NAME = 'yolo11n.pt'
-DEFAULT_MODEL_NAME = '../train/runs/detect/train/weights/best.pt'
+DEFAULT_MODEL_NAME = '../train/models/2025.07.15.pt'
+
 if not os.path.exists(DEFAULT_MODEL_NAME):
     print(f'WARNING: Model {DEFAULT_MODEL_NAME} not found, using default model')
     DEFAULT_MODEL_NAME = 'yolo11n.pt'

@@ -59,15 +59,12 @@ def _find_best_merge_candidates(tracks: TrackerInput, fps: int) -> tuple[TrackId
 
             track_data1, track_data2 = tracks[track_id1], tracks[track_id2]
             temporal_distance = _calculate_temporal_distance(track_data1, track_data2)
-            if (
-                temporal_distance < MAX_TEMPORAL_DISTANCE_SECONDS * fps and temporal_distance > 0
-            ):  # TODO aufweichen >= -XXX??
+            if temporal_distance < MAX_TEMPORAL_DISTANCE_SECONDS * fps and temporal_distance > 0:
                 spatial_distance = _calculate_spatial_distance(track_data1, track_data2)
                 if spatial_distance < MAX_SPATIAL_DISTANCE_BB:
                     candidates.append((track_id2, spatial_distance))
 
         if len(candidates) == 1:
-            print(f'  !! Found only one candidate for track {track_id1}: {candidates[0][0]}')
             return track_id1, candidates[0][0]
 
         all_candidates[track_id1] = candidates
