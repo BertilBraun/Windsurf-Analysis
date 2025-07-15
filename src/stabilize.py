@@ -1,12 +1,14 @@
 import os
-import tempfile
 import subprocess
 import logging
 
+from pathlib import Path
+
 
 def stabilize_ffmpeg(input_file: os.PathLike | str, output_file: os.PathLike | str) -> bool:
-    with tempfile.NamedTemporaryFile(suffix='.trf', delete=False, dir=None) as trf_tmp:
-        trf_file = trf_tmp.name
+    trf_file = Path(input_file).with_suffix('.trf')
+
+    trf_file_str = str(trf_file).replace('\\', '/')
 
     cmd_detect = [
         'ffmpeg',
@@ -16,7 +18,7 @@ def stabilize_ffmpeg(input_file: os.PathLike | str, output_file: os.PathLike | s
         '-i',
         input_file,
         '-vf',
-        f'vidstabdetect=shakiness=5:accuracy=15:result={trf_file}',
+        f'vidstabdetect=shakiness=5:accuracy=15:result={trf_file_str}',
         '-f',
         'null',
         '-',
@@ -30,7 +32,7 @@ def stabilize_ffmpeg(input_file: os.PathLike | str, output_file: os.PathLike | s
         '-i',
         input_file,
         '-vf',
-        f'vidstabtransform=smoothing=30:input={trf_file},unsharp=5:5:0.8:3:3:0.4',
+        f'vidstabtransform=smoothing=30:input={trf_file_str},unsharp=5:5:0.8:3:3:0.4',
         '-c:v',
         'libx264',
         '-c:a',

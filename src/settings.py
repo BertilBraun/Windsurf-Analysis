@@ -1,7 +1,7 @@
 import os
 
 
-DEFAULT_MODEL_NAME = '../train/models/2025.07.15.pt'
+DEFAULT_MODEL_NAME = '../train/models/2025.07.16.pt'
 
 if not os.path.exists(DEFAULT_MODEL_NAME):
     print(f'WARNING: Model {DEFAULT_MODEL_NAME} not found, using default model')
