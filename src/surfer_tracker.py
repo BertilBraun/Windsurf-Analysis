@@ -13,7 +13,6 @@ from collections import defaultdict
 from detector import Detection
 from video_io import get_video_properties
 import track_processing
-import video_splicing
 
 
 class SurferTracker:
@@ -74,9 +73,7 @@ class SurferTracker:
 
         return normalized_hist.tolist()
 
-    def process_tracks(
-        self, original_video_path: os.PathLike, output_dir: os.PathLike | str
-    ) -> tuple[track_processing.TrackerInput, list[os.PathLike | str]]:
+    def process_tracks(self, original_video_path: os.PathLike) -> track_processing.TrackerInput:
         """Complete pipeline: process tracks and generate individual videos.
 
         This is the main entry point that coordinates track processing and video generation.
@@ -93,7 +90,7 @@ class SurferTracker:
 
         if not processed_tracks:
             print('No valid tracks found for video generation')
-            return {}, []
+            return {}
 
         # Print track statistics
         print(f'After processing: {len(processed_tracks)} tracks remaining')
@@ -106,6 +103,4 @@ class SurferTracker:
             )
 
         # Generate individual videos using the video splicing module
-        return processed_tracks, video_splicing.generate_individual_videos(
-            processed_tracks, original_video_path, output_dir
-        )
+        return processed_tracks

@@ -20,10 +20,19 @@ from settings import STANDARD_OUTPUT_DIR
 from common_types import TrackerInput
 from worker_pool import WorkerPool
 
+import video_splicing
 
-def _stabilize_worker_function(args: tuple[os.PathLike | str, os.PathLike | str]) -> None:
-    input_file, output_file = args
-    stabilize_ffmpeg(input_file, output_file)
+
+def _generate_individual_videos_worker_function(args: tuple[TrackerInput, os.PathLike, os.PathLike | str]) -> None:
+    tracks, input_path, output_dir = args
+    individual_videos = video_splicing.generate_individual_videos(tracks, input_path, output_dir)
+
+    for individual_video in individual_videos:
+        output_file = Path(individual_video).with_suffix('.stabilized.mp4')
+        print(f'Stabilizing {individual_video} -> {output_file}')
+        if stabilize_ffmpeg(individual_video, output_file):
+            Path(individual_video).unlink(missing_ok=True)
+            print(f'Stabilized {individual_video} -> {output_file}')
 
 
 def _write_annotated_video_worker_function(args: tuple[TrackerInput, os.PathLike, os.PathLike | str]) -> None:
@@ -51,8 +60,8 @@ def _write_annotated_video_worker_function(args: tuple[TrackerInput, os.PathLike
 class WindsurfingVideoProcessor:
     def __init__(self, draw_annotations: bool, output_dir: os.PathLike | str):
         self.detector = SurferDetector()
-        self.stabilizer = WorkerPool(_stabilize_worker_function, num_workers=1)
-        self.annotated_video_writer = WorkerPool(_write_annotated_video_worker_function, num_workers=1)
+        self.individual_video_generator = WorkerPool(_generate_individual_videos_worker_function, num_workers=1)
+        self.annotated_video_generator = WorkerPool(_write_annotated_video_worker_function, num_workers=1)
         self.draw_annotations = draw_annotations
         self.output_dir = output_dir
 
@@ -69,20 +78,19 @@ class WindsurfingVideoProcessor:
                 if detection.track_id is not None:
                     surfer_tracker.add_detection(frame_index, detection, frame)
 
-        processed_tracks, individual_videos = surfer_tracker.process_tracks(input_path, self.output_dir)
-        for individual_video in individual_videos:
-            self.stabilizer.submit((individual_video, individual_video))
+        processed_tracks = surfer_tracker.process_tracks(input_path)
+        self.individual_video_generator.submit((processed_tracks, input_path, self.output_dir))
 
         if self.draw_annotations:
             all_tracks = {track_id: tracks for track_id, tracks in processed_tracks.items()}
             # YOLO tracks only:
             # all_tracks = {track_id: tracks for track_id, tracks in surfer_tracker.track_inputs.items()}
 
-            self.annotated_video_writer.submit((all_tracks, input_path, self.output_dir))
+            self.annotated_video_generator.submit((all_tracks, input_path, self.output_dir))
 
     def finalize(self):
-        self.stabilizer.stop()
-        self.annotated_video_writer.stop()
+        self.individual_video_generator.stop()
+        self.annotated_video_generator.stop()
 
 
 def main():

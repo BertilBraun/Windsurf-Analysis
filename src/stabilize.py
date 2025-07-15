@@ -4,7 +4,7 @@ import subprocess
 import logging
 
 
-def stabilize_ffmpeg(input_file: os.PathLike | str, output_file: os.PathLike | str) -> None:
+def stabilize_ffmpeg(input_file: os.PathLike | str, output_file: os.PathLike | str) -> bool:
     with tempfile.NamedTemporaryFile(suffix='.trf', delete=False, dir=None) as trf_tmp:
         trf_file = trf_tmp.name
 
@@ -41,8 +41,10 @@ def stabilize_ffmpeg(input_file: os.PathLike | str, output_file: os.PathLike | s
     try:
         subprocess.run(cmd_detect, check=True)
         subprocess.run(cmd_stab, check=True)
+        return True
     except subprocess.CalledProcessError as e:
         logging.error(f'  !! ffmpeg stabilization failed for {input_file}: {e}')
+        return False
     finally:
         try:
             os.remove(trf_file)
