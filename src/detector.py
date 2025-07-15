@@ -38,17 +38,17 @@ class SurferDetector:
             batch=BATCH_SIZE,
             vid_stride=skip_frames,
             tracker=str(tracker_config_file),
-            persist=True,  # TODO True?
+            persist=False,  # TODO True?
             stream=True,
             verbose=False,
         )
-
-        tracker_config_file.unlink()
 
         for frame_index, result in tqdm(
             enumerate(results), total=video_props.total_frames // skip_frames, desc='Processing video'
         ):
             yield frame_index * skip_frames, result.orig_img, self._extract_detections(result)
+
+        tracker_config_file.unlink()
 
     def _write_tracker_config(self) -> Path:
         file_name = Path('botsort.yaml')

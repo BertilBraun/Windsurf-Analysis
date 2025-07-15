@@ -75,9 +75,8 @@ class WindsurfingVideoProcessor:
 
         if self.draw_annotations:
             all_tracks = {track_id: tracks for track_id, tracks in processed_tracks.items()}
-            all_tracks.update(surfer_tracker.track_inputs)
             # YOLO tracks only:
-            all_tracks = {track_id: tracks for track_id, tracks in surfer_tracker.track_inputs.items()}
+            # all_tracks = {track_id: tracks for track_id, tracks in surfer_tracker.track_inputs.items()}
 
             self.annotated_video_writer.submit((all_tracks, input_path, self.output_dir))
 
