@@ -50,19 +50,32 @@ def _find_best_merge_candidates(tracks: TrackerInput, fps: int) -> tuple[TrackId
 
     for track_id1 in start_track_ids:
         candidates: list[tuple[TrackId, float]] = []
+        greedy_candidates: list[tuple[TrackId, float]] = []
+
         for track_id2 in end_track_ids:
             if track_id1 == track_id2:
                 continue
 
             track_data1, track_data2 = tracks[track_id1], tracks[track_id2]
-            temporal_distance = _calculate_temporal_distance(track_data1, track_data2)
-            if temporal_distance < MAX_TEMPORAL_DISTANCE_SECONDS * fps and temporal_distance > 0:
-                spatial_distance = _calculate_spatial_distance(track_data1, track_data2)
-                if spatial_distance < MAX_SPATIAL_DISTANCE_BB:
-                    candidates.append((track_id2, spatial_distance))
+            spatial_distance = _calculate_spatial_distance(track_data1, track_data2)
 
-        if len(candidates) == 1:
-            return track_id1, candidates[0][0]
+            is_close = spatial_distance < MAX_SPATIAL_DISTANCE_BB
+
+            if is_close:
+                temporal_distance = _calculate_temporal_distance(track_data1, track_data2)
+                max_temporal_distance = MAX_TEMPORAL_DISTANCE_SECONDS * fps
+
+                is_within_temporal_distance = temporal_distance < max_temporal_distance and temporal_distance > 0
+                is_within_greedy_temporal_distance = temporal_distance < 0.25 * fps and temporal_distance > 0
+
+                if is_within_temporal_distance:
+                    candidates.append((track_id2, spatial_distance))
+                if is_within_greedy_temporal_distance:
+                    greedy_candidates.append((track_id2, spatial_distance))
+
+        if len(greedy_candidates) == 1:
+            print(f'Found greedy candidate: {track_id1} and {greedy_candidates[0][0]}')
+            return track_id1, greedy_candidates[0][0]
 
         all_candidates[track_id1] = candidates
 

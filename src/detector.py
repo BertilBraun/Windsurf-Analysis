@@ -17,7 +17,8 @@ class SurferDetector:
     """Pure detection and tracking class for surfers in video"""
 
     def __init__(self):
-        self.model = YOLO(DEFAULT_MODEL_NAME, verbose=True)
+        print(f'Using model: {DEFAULT_MODEL_NAME}')
+        self.model = YOLO(DEFAULT_MODEL_NAME, verbose=False)
 
     def detect_and_track_video(
         self, video_path: os.PathLike | str
@@ -60,10 +61,11 @@ class SurferDetector:
                     'match_thresh': 0.8,  # threshold for matching tracks
                     'fuse_score': True,  # Whether to fuse confidence scores with the iou distances before matching
                     # min_box_area: 10  # threshold for min box areas(for tracker evaluation, not used for now)
+                    #
                     # BoT-SORT settings
                     'gmc_method': 'sparseOptFlow',  # method of global motion compensation
                     # ReID model related thresh
-                    'proximity_thresh': 0.3,  # minimum IoU for valid match with ReID
+                    'proximity_thresh': 0.05,  # minimum IoU for valid match with ReID
                     'appearance_thresh': 0.9,  # minimum appearance similarity for ReID
                     'with_reid': True,
                     'model': 'auto',  # uses native features if detector is YOLO else yolo11n-cls.pt

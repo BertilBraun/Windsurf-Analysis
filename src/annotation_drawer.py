@@ -25,12 +25,16 @@ class AnnotationDrawer:
         annotated_frame = frame.copy()
 
         # Draw tracking trails first (so they appear behind boxes)
-        self._draw_tracking_trails(annotated_frame, annotations)
+        annotated_frame = self._draw_tracking_trails(annotated_frame, annotations)
 
-        return self._draw_detections_only(annotated_frame, annotations)
+        annotated_frame = self._draw_detections_only(annotated_frame, annotations)
 
-    def _draw_tracking_trails(self, frame: np.ndarray, annotations: list[Annotation]) -> None:
+        return annotated_frame
+
+    def _draw_tracking_trails(self, frame: np.ndarray, annotations: list[Annotation]) -> np.ndarray:
         """Draw tracking trails for detected objects"""
+        annotated_frame = frame.copy()
+
         for annotation in annotations:
             track = self.track_history[annotation.track_id]
 
@@ -44,7 +48,9 @@ class AnnotationDrawer:
             # Draw tracking trail
             if len(track) > 1:
                 points = np.hstack(track).astype(np.int32).reshape((-1, 1, 2))
-                cv2.polylines(frame, [points], isClosed=False, color=(230, 230, 230), thickness=3)
+                cv2.polylines(annotated_frame, [points], isClosed=False, color=(230, 230, 230), thickness=3)
+
+        return annotated_frame
 
     def _draw_detections_only(self, frame: np.ndarray, annotations: list[Annotation]) -> np.ndarray:
         """Draw only detection bounding boxes and labels (no trails)"""

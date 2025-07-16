@@ -78,9 +78,11 @@ def _calculate_crop_size(track_data: list[Track], min_width: int = 400, min_heig
 
     avg_width = total_width / len(track_data)
     avg_height = total_height / len(track_data)
+    avg_width = max(detection.bbox.width for detection in track_data)
+    avg_height = max(detection.bbox.height for detection in track_data)
 
     # Create slice size with generous context
-    context_factor = 2.5
+    context_factor = 2.0
     slice_width = int(avg_width * context_factor)
     slice_height = int(avg_height * context_factor)
 

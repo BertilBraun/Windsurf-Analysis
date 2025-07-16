@@ -6,6 +6,7 @@
 train/datasets/**
 train/runs/**
 src/botsort.yaml
-src/individual_videos/**
+src/individual_surfers/**
+individual_surfers/**
 
 !train/models/**
