@@ -54,19 +54,19 @@ class SurferDetector:
             yaml.dump(
                 {
                     'tracker_type': 'botsort',
-                    'track_high_thresh': 0.25,  # threshold for the first association
+                    'track_high_thresh': 0.2,  # threshold for the first association
                     'track_low_thresh': 0.1,  # threshold for the second association
-                    'new_track_thresh': 0.25,  # threshold for init new track if the detection does not match any tracks
+                    'new_track_thresh': 0.4,  # threshold for init new track if the detection does not match any tracks
                     'track_buffer': MIN_TRACKING_FPS * 10,  # buffer to calculate the time when to remove tracks
                     'match_thresh': 0.8,  # threshold for matching tracks
-                    'fuse_score': True,  # Whether to fuse confidence scores with the iou distances before matching
+                    'fuse_score': False,  # Whether to fuse confidence scores with the iou distances before matching
                     # min_box_area: 10  # threshold for min box areas(for tracker evaluation, not used for now)
                     #
                     # BoT-SORT settings
                     'gmc_method': 'sparseOptFlow',  # method of global motion compensation
                     # ReID model related thresh
                     'proximity_thresh': 0.05,  # minimum IoU for valid match with ReID
-                    'appearance_thresh': 0.9,  # minimum appearance similarity for ReID
+                    'appearance_thresh': 0.8,  # minimum appearance similarity for ReID
                     'with_reid': True,
                     'model': 'auto',  # uses native features if detector is YOLO else yolo11n-cls.pt
                 },

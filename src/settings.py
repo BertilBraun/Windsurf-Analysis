@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 
-DEFAULT_MODEL_NAME = Path(__file__).parent / '../train/models/50epochs.pt'
+DEFAULT_MODEL_NAME = Path(__file__).parent / '../train/models/100epochs.pt'
 
 if not os.path.exists(DEFAULT_MODEL_NAME):
     print(f'WARNING: Model {DEFAULT_MODEL_NAME} not found, using default model')

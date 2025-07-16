@@ -122,7 +122,7 @@ def main():
     parser.add_argument('--seed', type=int, default=0, help='Random seed for splitting')
 
     # training hyper-parameters
-    parser.add_argument('--epochs', type=int, default=50, help='Training epochs')
+    parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
     parser.add_argument('--imgsz', type=int, default=640, help='Image size')
     parser.add_argument('--batch', type=float, default=0.7, help='Batch-size fraction (0 = auto)')
     parser.add_argument('--device', default='auto', help='GPU id, -1 for CPU, or "auto"')

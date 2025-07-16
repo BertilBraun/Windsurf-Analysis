@@ -4,6 +4,10 @@
 
 Windsurf Analysis is a state-of-the-art AI system that combines custom-trained YOLO models, advanced multi-object tracking algorithms, and professional video processing pipelines to automatically detect, track, and analyze windsurfers in complex marine environments. The system provides end-to-end processing from raw footage to stabilized individual clips with detailed performance analytics.
 
+![example](documentation/processed.gif)
+
+Example of the usage of the system: Input is a raw video of a windsurf session (top left), we process it using AI to detect the surfer and track their movements (bottom left), we then extract the individual surfer videos and stabilize their clips (right).
+
 ## 🔬 Core Technologies
 
 ### 🧠 **Custom YOLO Fine-Tuning Pipeline**
