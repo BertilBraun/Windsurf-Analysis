@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+MPV_VIEWER_SCRIPT="$SCRIPT_DIR/mpv_script_viewer.lua"
+
+# If argument is a directory, find first main file and use that instead
+if [[ $# -eq 1 && -d $1 ]]; then
+    DIR="$(readlink -f "$1")"
+    # Find the first file (not starting with '.', not containing '+'), sorted
+    MAIN_FILE=$(find "$DIR" -maxdepth 1 -type f ! -name '.*' ! -name '*+*' | sort | head -n 1)
+    if [[ -z $MAIN_FILE ]]; then
+        echo "No main file found in directory: $DIR"
+        exit 1
+    fi
+    shift
+    exec mpv --script="$MPV_VIEWER_SCRIPT" "$MAIN_FILE" "$@"
+else
+    exec mpv --script="$MPV_VIEWER_SCRIPT" "$@"
+fi
