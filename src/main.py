@@ -60,7 +60,7 @@ def _write_annotated_video_worker_function(args: tuple[TrackerInput, os.PathLike
 class WindsurfingVideoProcessor:
     def __init__(self, draw_annotations: bool, output_dir: os.PathLike | str):
         self.detector = SurferDetector()
-        self.individual_video_generator = WorkerPool(_generate_individual_videos_worker_function, num_workers=1)
+        self.individual_video_generator = WorkerPool(_generate_individual_videos_worker_function, num_workers=2)
         self.annotated_video_generator = WorkerPool(_write_annotated_video_worker_function, num_workers=1)
         self.draw_annotations = draw_annotations
         self.output_dir = output_dir

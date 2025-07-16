@@ -27,12 +27,14 @@ class WorkerPool:
     def _worker(self):
         """Worker process that continuously pulls and processes items from the queue."""
         while True:
-            if self.stop_event.is_set():
+            if self.stop_event.is_set() and self.queue.empty():
                 break
             try:
                 work_item = self.queue.get(timeout=1)
             except (Empty, BrokenPipeError, EOFError, ConnectionResetError):
                 # Handle various connection/pipe issues gracefully
+                if self.stop_event.is_set():
+                    break
                 continue
             except Exception as e:
                 # Log unexpected queue errors but continue
