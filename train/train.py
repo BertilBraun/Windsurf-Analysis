@@ -60,6 +60,11 @@ def prepare_dataset(src: Path, dst: Path, val_ratio: float = 0.02, seed: int = 0
     for split in splits:
         (dst / 'images' / split).mkdir(parents=True, exist_ok=True)
         (dst / 'labels' / split).mkdir(parents=True, exist_ok=True)
+        # clear the directories
+        for file in (dst / 'images' / split).glob('*'):
+            file.unlink()
+        for file in (dst / 'labels' / split).glob('*'):
+            file.unlink()
 
     for split, split_imgs in splits.items():
         for img_path in split_imgs:

@@ -1,12 +1,12 @@
 import os
-from pathlib import Path
+import yaml
 import numpy as np
+from pathlib import Path
 from typing import Generator
 
 from tqdm import tqdm
 from ultralytics import YOLO
 from ultralytics.engine.results import Results
-import yaml
 
 from video_io import get_video_properties
 from settings import DEFAULT_MODEL_NAME, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE, MIN_TRACKING_FPS
