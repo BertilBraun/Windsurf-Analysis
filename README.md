@@ -141,16 +141,14 @@ python -c "import torch; print(f'CUDA Available: {torch.cuda.is_available()}')"
 #### **Basic Video Analysis**
 
 ```bash
-cd src # cd to the src directory
-
 # Process single video with annotations
-python main.py "path/to/session.mp4" --draw-annotations
+python src/main.py "path/to/session.mp4" --draw-annotations
 
 # Batch process multiple videos
-python main.py "videos/*.mp4"
+python src/main.py "videos/*.mp4"
 
 # Custom output directory
-python main.py "footage.mp4" --output-dir analysis/ --draw-annotations
+python src/main.py "footage.mp4" --output-dir analysis/ --draw-annotations
 ```
 
 #### **Model Training & Fine-tuning**
@@ -188,12 +186,12 @@ HISTOGRAM_SIMILARITY_THRESHOLD = 0.9     # Appearance similarity threshold
 output_directory/
 ├── <input_file_name1>+00_annotated.mp4     # Annotated video with tracking trails
 ├── <input_file_name1>+01.stabilized.mp4    # Stabilized individual video
-├── <input_file_name1>+01.start_time.txt    # Start time of the individual video
+├── <input_file_name1>+01.start_time.json   # Start time of the individual video
 ├── <input_file_name1>+02.stabilized.mp4    # Stabilized individual video
-├── <input_file_name1>+02.start_time.txt    # Start time of the individual video
+├── <input_file_name1>+02.start_time.json   # Start time of the individual video
 |
 ├── <input_file_name2>+00_annotated.mp4     # Annotated video with tracking trails
 ├── <input_file_name2>+01.stabilized.mp4    # Stabilized individual video
-├── <input_file_name2>+01.start_time.txt    # Start time of the individual video
+├── <input_file_name2>+01.start_time.json   # Start time of the individual video
 ...
 ```

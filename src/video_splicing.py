@@ -5,6 +5,7 @@ This module provides pure functions for video processing operations without
 maintaining any state, making it easier to test and reason about.
 """
 
+import json
 import os
 import numpy as np
 from tqdm import tqdm
@@ -163,8 +164,8 @@ def generate_individual_videos(
         writer.start_writing()
         writers[person_number] = writer
 
-        start_time_path = Path(output_dir) / f'{input_name}+{person_number:02d}.start_time.txt'
-        start_time_path.write_text(f'Starting frame: {track_data[0].frame_idx}')
+        start_time_path = Path(output_dir) / f'{input_name}+{person_number:02d}.start_time.json'
+        start_time_path.write_text(json.dumps({'start_time': track_data[0].frame_idx / video_properties.fps}))
 
     # Process video frame by frame with progress bar
     with VideoReader(original_video_path) as reader:

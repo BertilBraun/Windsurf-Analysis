@@ -1,7 +1,8 @@
 import os
+from pathlib import Path
 
 
-DEFAULT_MODEL_NAME = '../train/models/2025.07.16.pt'
+DEFAULT_MODEL_NAME = Path(__file__).parent / '../train/models/2025.07.16.pt'
 
 if not os.path.exists(DEFAULT_MODEL_NAME):
     print(f'WARNING: Model {DEFAULT_MODEL_NAME} not found, using default model')
@@ -25,7 +26,7 @@ MAX_SPATIAL_DISTANCE_BB = 1.5  # One Bounding Box Width
 HISTOGRAM_SIMILARITY_THRESHOLD = 0.9
 
 
-SMOOTHING_WINDOW_SIZE = 6
+SMOOTHING_WINDOW_SIZE = 6  # TODO more or less?
 
 
 STANDARD_OUTPUT_DIR = 'individual_surfers'

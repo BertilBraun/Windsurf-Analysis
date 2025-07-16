@@ -48,7 +48,7 @@ class SurferDetector:
         tracker_config_file.unlink()
 
     def _write_tracker_config(self) -> Path:
-        file_name = Path('botsort.yaml')
+        file_name = Path(__file__).parent / 'botsort.yaml'
         with open(file_name, 'w') as f:
             yaml.dump(
                 {

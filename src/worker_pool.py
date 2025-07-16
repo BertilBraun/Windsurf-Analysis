@@ -31,7 +31,12 @@ class WorkerPool:
                 break
             try:
                 work_item = self.queue.get(timeout=1)
-            except Empty:
+            except (Empty, BrokenPipeError, EOFError, ConnectionResetError):
+                # Handle various connection/pipe issues gracefully
+                continue
+            except Exception as e:
+                # Log unexpected queue errors but continue
+                logging.warning(f'Unexpected queue error: {e}')
                 continue
 
             try:
@@ -41,7 +46,10 @@ class WorkerPool:
 
     def submit(self, work_item: Any) -> None:
         """Submit a work item to be processed by the worker pool."""
-        self.queue.put(work_item)
+        try:
+            self.queue.put(work_item)
+        except Exception as e:
+            logging.warning(f'Unexpected queue submission error: {e}')
 
     def stop(self):
         """Stop all worker processes and wait for them to finish."""
