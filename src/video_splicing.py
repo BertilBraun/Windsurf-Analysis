@@ -168,6 +168,9 @@ def generate_individual_videos(
         writer.start_writing()
         writers[person_number] = writer
 
+        start_time_path = Path(output_dir) / f'{input_name}+{person_number:02d}.start_time.txt'
+        start_time_path.write_text(f'Starting frame: {track_data[0].frame_idx}')
+
     # Process video frame by frame with progress bar
     with VideoReader(original_video_path) as reader:
         for frame_idx, frame in tqdm(reader.read_frames(), total=total_frames, desc='Writing individual videos'):
