@@ -79,7 +79,7 @@ def _calculate_crop_size(track_data: list[Track], min_width: int = 400, min_heig
     avg_height = total_height / len(track_data)
 
     # Create slice size with generous context
-    context_factor = 1.5
+    context_factor = 2.5
     slice_width = int(avg_width * context_factor)
     slice_height = int(avg_height * context_factor)
 
@@ -94,11 +94,6 @@ def _calculate_crop_size(track_data: list[Track], min_width: int = 400, min_heig
     if current_max < 1000:
         # Scale up if too small
         scale_factor = target_size / current_max
-        slice_width = int(slice_width * scale_factor)
-        slice_height = int(slice_height * scale_factor)
-    elif current_max > 2000:
-        # Scale down if too large
-        scale_factor = 2000 / current_max
         slice_width = int(slice_width * scale_factor)
         slice_height = int(slice_height * scale_factor)
 
