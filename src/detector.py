@@ -10,8 +10,18 @@ from ultralytics import YOLO
 from ultralytics.engine.results import Results
 
 from video_io import get_video_properties
+import settings
 from settings import DEFAULT_MODEL_NAME, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE, MIN_TRACKING_FPS
 from common_types import Detection, BoundingBox
+
+
+def log_detection_settings():
+    # settings are UPPER_CASE_AND_UNDERLINE
+    settings_str = "\n".join(
+        f"{k}: {v}" for k, v in settings.__dict__.items() if not k.startswith('__') and not callable(v) and k.isupper()
+    )
+    logging.info(f'Detection settings: \n{settings_str}')
+
 
 
 class SurferDetector:
@@ -21,6 +31,8 @@ class SurferDetector:
         logger = logging.getLogger(__name__)
         logger.info(f'Using model: {DEFAULT_MODEL_NAME}')
         self.model = YOLO(DEFAULT_MODEL_NAME, verbose=False)
+        log_detection_settings()
+        self.tracker_config_file = self._write_tracker_config()
 
     def detect_and_track_video(
         self, video_path: os.PathLike | str
@@ -30,15 +42,13 @@ class SurferDetector:
         video_props = get_video_properties(video_path)
         skip_frames = video_props.fps // MIN_TRACKING_FPS
 
-        tracker_config_file = self._write_tracker_config()
-
         results = self.model.track(
             str(video_path),
             iou=IOU_THRESHOLD,
             conf=CONFIDENCE_THRESHOLD,
             batch=BATCH_SIZE,
             vid_stride=skip_frames,
-            tracker=str(tracker_config_file),
+            tracker=str(self.tracker_config_file),
             stream=True,
             verbose=False,
         )
@@ -48,32 +58,34 @@ class SurferDetector:
         ):
             yield frame_index * skip_frames, result.orig_img, self._extract_detections(result)
 
-        tracker_config_file.unlink()
-
     def _write_tracker_config(self) -> Path:
         file_name = Path(__file__).parent / 'botsort.yaml'
+        yaml_content = {
+            'tracker_type': 'botsort',
+            'track_high_thresh': 0.2,  # threshold for the first association
+            'track_low_thresh': 0.1,  # threshold for the second association
+            'new_track_thresh': 0.4,  # threshold for init new track if the detection does not match any tracks
+            'track_buffer': MIN_TRACKING_FPS * 10,  # buffer to calculate the time when to remove tracks
+            'match_thresh': 0.8,  # threshold for matching tracks
+            'fuse_score': False,  # Whether to fuse confidence scores with the iou distances before matching
+            # min_box_area: 10  # threshold for min box areas(for tracker evaluation, not used for now)
+            #
+            # BoT-SORT settings
+            'gmc_method': 'sparseOptFlow',  # method of global motion compensation
+            # ReID model related thresh
+            'proximity_thresh': 0.05,  # minimum IoU for valid match with ReID
+            'appearance_thresh': 0.8,  # minimum appearance similarity for ReID
+            'with_reid': True,
+            'model': 'auto',  # uses native features if detector is YOLO else yolo11n-cls.pt
+        }
+
+        detection_settings_str = "\n".join(
+            f"{k}: {v}" for k, v in yaml_content.items()
+        )
+        logging.info(f'Trackig Config: \n{detection_settings_str}')
+
         with open(file_name, 'w') as f:
-            yaml.dump(
-                {
-                    'tracker_type': 'botsort',
-                    'track_high_thresh': 0.2,  # threshold for the first association
-                    'track_low_thresh': 0.1,  # threshold for the second association
-                    'new_track_thresh': 0.4,  # threshold for init new track if the detection does not match any tracks
-                    'track_buffer': MIN_TRACKING_FPS * 10,  # buffer to calculate the time when to remove tracks
-                    'match_thresh': 0.8,  # threshold for matching tracks
-                    'fuse_score': False,  # Whether to fuse confidence scores with the iou distances before matching
-                    # min_box_area: 10  # threshold for min box areas(for tracker evaluation, not used for now)
-                    #
-                    # BoT-SORT settings
-                    'gmc_method': 'sparseOptFlow',  # method of global motion compensation
-                    # ReID model related thresh
-                    'proximity_thresh': 0.05,  # minimum IoU for valid match with ReID
-                    'appearance_thresh': 0.8,  # minimum appearance similarity for ReID
-                    'with_reid': True,
-                    'model': 'auto',  # uses native features if detector is YOLO else yolo11n-cls.pt
-                },
-                f,
-            )
+            yaml.dump(yaml_content, f)
         return file_name
 
     def _extract_detections(self, result: Results) -> list[Detection]:

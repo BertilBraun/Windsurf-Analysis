@@ -22,6 +22,7 @@ def setup_logging(output_dir: Path | None = None):
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[logging.StreamHandler(), logging.FileHandler(output_dir / 'windsurf_analysis.log')],
     )
+    logging.info(f"Logging to {output_dir / 'windsurf_analysis.log'}")
     return logging.getLogger(__name__)
 
 
