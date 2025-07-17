@@ -57,20 +57,17 @@ def rotation_vf_string(angle):
 
 def cut_worker_inner(item, done_list):
     seg, src, dst = item
-    print("cutting:", item)
     angle = seg.get("rotate", 0)
 
-    do_cut = not (seg["end"] is None and seg["start"] == 0 and seg["rotate"] == 0)
-    use_temp_file = do_cut
-    if use_temp_file:
-        cut_file = get_tmp_file(suffix=src.suffix)
-    else:
-        cut_file = src
-
+    no_cut = seg["end"] is None and seg["start"] == 0 and seg["rotate"] == 0
+    do_cut = not no_cut
     do_stabilize = seg.get("stabilize", g_apply_stabilized)
+    tmp_file = None
 
     try:
         if do_cut:
+            tmp_file = get_tmp_file(suffix=src.suffix)
+            pre_stabilize_file = tmp_file
             cmd_cut = [
                 "ffmpeg", "-hide_banner", "-loglevel", "error",
                 "-ss", str(seg["start"])
@@ -84,7 +81,7 @@ def cut_worker_inner(item, done_list):
             if vf:
                 cmd_cut += ["-vf", vf]
                 cmd_cut += ["-c:v", "libx264"]
-            cmd_cut += ["-c:a", "copy", cut_file, "-y"]
+            cmd_cut += ["-c:a", "copy", tmp_file, "-y"]
 
             logging.info(f"  ✂ cutting: {shlex.join(cmd_cut)}")
             try:
@@ -92,13 +89,15 @@ def cut_worker_inner(item, done_list):
             except subprocess.CalledProcessError as e:
                 logging.error(f"  !! ffmpeg failed for cut {dst}: {e}")
                 return
+        else:
+            pre_stabilize_file = src
 
         basename = dst.with_suffix('').name
         if g_output_pre_stabilized or not do_stabilize:
             raw_clip = dst.with_name(f"{basename}{dst.suffix}")
             logging.info(f"  📋 copying pre-stabilized to {raw_clip}")
             try:
-                shutil.copy(cut_file, raw_clip)
+                shutil.copy(pre_stabilize_file, raw_clip)
             except Exception as e:
                 logging.error(f"  !! failed to copy pre-stabilized file: {e}")
             done_list.append(raw_clip)
@@ -107,7 +106,7 @@ def cut_worker_inner(item, done_list):
         if do_stabilize:
             stabilized_path = dst.with_name(f"{basename}_stabilized{dst.suffix}")
             logging.info(f"  📈 stabilizing: {stabilized_path}")
-            success = stabilize_ffmpeg(cut_file, stabilized_path)
+            success = stabilize_ffmpeg(pre_stabilize_file, stabilized_path)
             if success:
                 done_list.append(stabilized_path)
             else:
@@ -115,7 +114,7 @@ def cut_worker_inner(item, done_list):
                 logging.warning(f"  !! stabilization failed, copying _no_stabilize to output ({raw_clip})")
                 if not g_output_pre_stabilized:
                     try:
-                        shutil.copy(cut_file, raw_clip)
+                        shutil.copy(pre_stabilize_file, raw_clip)
                     except Exception as e:
                         logging.info(f"  !! failed to copy fallback raw clip: {e}")
                 done_list.append(raw_clip)
@@ -123,9 +122,9 @@ def cut_worker_inner(item, done_list):
             logging.info("  ➡ skipping stabilization.")
 
     finally:
-        if use_temp_file:
+        if tmp_file is not None:
             try:
-                os.remove(cut_file)
+                os.remove(tmp_file)
             except Exception:
                 pass
 

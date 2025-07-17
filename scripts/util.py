@@ -91,9 +91,13 @@ def progress_bar(iterable, **kwargs):
 class MpvIPCTask:
     """A context manager for running mpv with IPC support."""
 
-    def __init__(self, video_path, lua_script_path, socket_dir=None):
-        self.video_path = str(video_path)
-        self.lua_script_path = str(lua_script_path)
+    def __init__(self, video_path: Path | str, lua_script_path: Path | str, socket_dir=None):
+        self.video_path = Path(video_path)
+        self.lua_script_path = Path(lua_script_path)
+        if not self.video_path.exists():
+            raise FileNotFoundError(f"Video file {self.video_path} does not exist")
+        if not self.lua_script_path.exists():
+            raise FileNotFoundError(f"Lua script {self.lua_script_path} does not exist")
         self.socket_path = tempfile.mktemp(prefix="mpv-sock-", dir=socket_dir)
         self.proc = None
         self.sock = None
@@ -111,8 +115,8 @@ class MpvIPCTask:
             "--no-terminal",
             "--keep-open=yes",
             f"--input-ipc-server={self.socket_path}",
-            f"--script={self.lua_script_path}",
-            self.video_path,
+            f"--script={str(self.lua_script_path.resolve())}",
+            str(self.video_path.resolve()),
         ]
         self.proc = subprocess.Popen(mpv_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         # Wait for socket
