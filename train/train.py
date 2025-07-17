@@ -32,6 +32,7 @@ import argparse
 import random
 import shutil
 import sys
+import logging
 from pathlib import Path
 
 import torch
@@ -39,17 +40,31 @@ import yaml
 from ultralytics import YOLO
 
 
+def setup_logging():
+    """Configure logging for the windsurfer training tool."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler(), logging.FileHandler('windsurf_training.log')],
+    )
+    return logging.getLogger(__name__)
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Dataset preparation
 # ────────────────────────────────────────────────────────────────────────────
 def prepare_dataset(src: Path, dst: Path, val_ratio: float = 0.02, seed: int = 0) -> Path:
+    logger = logging.getLogger(__name__)
+
     if not src.exists():
-        sys.exit(f'[!] Source directory {src} does not exist.')
+        logger.error(f'Source directory {src} does not exist.')
+        sys.exit(1)
 
     # Gather *.jpg files that have a matching *.txt
     images = sorted(p for p in src.glob('*.jpg') if (src / f'{p.stem}.txt').exists())
     if not images:
-        sys.exit('[!] No matching .jpg /.txt pairs found in the source directory.')
+        logger.error('No matching .jpg /.txt pairs found in the source directory.')
+        sys.exit(1)
 
     random.Random(seed).shuffle(images)
     n_val = max(1, int(len(images) * val_ratio))
@@ -84,9 +99,9 @@ def prepare_dataset(src: Path, dst: Path, val_ratio: float = 0.02, seed: int = 0
     with open(yaml_path, 'w') as f:
         yaml.safe_dump(yaml_content, f)
 
-    print(f'✓ Dataset prepared at {dst.resolve()}')
-    print(f'✓ YAML written to  {yaml_path.resolve()}')
-    print(f'   Train / Val:    {len(splits["train"])} / {len(splits["val"])} images\n')
+    logger.info(f'✓ Dataset prepared at {dst.resolve()}')
+    logger.info(f'✓ YAML written to  {yaml_path.resolve()}')
+    logger.info(f'   Train / Val:    {len(splits["train"])} / {len(splits["val"])} images')
     return yaml_path
 
 
@@ -94,8 +109,10 @@ def prepare_dataset(src: Path, dst: Path, val_ratio: float = 0.02, seed: int = 0
 # Training
 # ────────────────────────────────────────────────────────────────────────────
 def train_model(yaml_file: Path, epochs: int, imgsz: int, batch: float, device: str):
+    logger = logging.getLogger(__name__)
+
     model = YOLO('yolo11n.pt')  # choose e.g. yolo11s.pt or yolo11m.pt for bigger models
-    print('🚀  Starting training …\n')
+    logger.info('🚀  Starting training …')
 
     if device == 'auto':
         device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -108,13 +125,15 @@ def train_model(yaml_file: Path, epochs: int, imgsz: int, batch: float, device: 
         device=device,
         single_cls=True,
     )
-    print('\n✓ Training finished')
+    logger.info('✓ Training finished')
 
 
 # ────────────────────────────────────────────────────────────────────────────
 # CLI
 # ────────────────────────────────────────────────────────────────────────────
 def main():
+    logger = setup_logging()
+
     parser = argparse.ArgumentParser(description='Prepare windsurfer detection dataset and train YOLO v11.')
     parser.add_argument('--src', type=Path, help='Raw dataset directory')
     parser.add_argument('--dst', type=Path, default=Path('./datasets/windsurfers'), help='Output dataset root')

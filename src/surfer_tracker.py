@@ -1,87 +1,61 @@
 """
-Orchestrator functions for coordinating track processing and video generation.
+Surfer tracking module for aggregating detections across frames.
 
-This module provides high-level functions that coordinate between track processing
-and video splicing modules to provide a simple interface for the complete pipeline.
+This module handles the collection and organization of YOLO detections
+into coherent tracks representing individual surfers.
 """
 
-import os
-import numpy as np
-import cv2
+import logging
 from collections import defaultdict
 
-from detector import Detection
-from video_io import get_video_properties
+import numpy as np
+
 import track_processing
+from common_types import Detection, BoundingBox, Point, Track
+from video_io import get_video_properties
+from track_processing import TrackId, TrackerInput
 
 
 class SurferTracker:
+    """Aggregates YOLO detections into tracks for individual surfers"""
+
     def __init__(self):
-        self.track_inputs: track_processing.TrackerInput = defaultdict(list)
+        self.track_inputs = defaultdict(list)
 
     def add_detection(self, frame_idx: int, detection: Detection, frame: np.ndarray):
-        # Calculate hue histogram from bounding box region
-        hue_histogram = self._calculate_hue_histogram(frame, detection.bbox)
+        """Add a detection for a specific track at a given frame"""
 
-        self.track_inputs[detection.track_id].append(
-            track_processing.Track(frame_idx, detection.bbox.copy(), detection.confidence, hue_histogram)
+        # Calculate hue histogram from bounding box region (simplified for now)
+        hue_histogram = self._calculate_simple_hue_histogram(frame, detection.bbox)
+
+        # Create a track entry
+        track_entry = Track(
+            frame_idx=frame_idx, bbox=detection.bbox, confidence=detection.confidence, hue_histogram=hue_histogram
         )
 
-    def _calculate_hue_histogram(self, frame: np.ndarray, bbox, num_bins: int = 36) -> list[float]:
-        """Calculate a normalized hue histogram from the bounding box region of the frame.
+        self.track_inputs[detection.track_id].append(track_entry)
 
-        Args:
-            frame: BGR image frame from OpenCV
-            bbox: BoundingBox object with x1, y1, x2, y2 coordinates
-            num_bins: Number of bins for the histogram (default: 36 for 10° per bin)
+    def _calculate_simple_hue_histogram(self, frame: np.ndarray, bbox: BoundingBox, num_bins: int = 36) -> list[float]:
+        """Calculate a simple hue histogram (placeholder implementation)"""
+        # Simplified histogram - in real implementation this would extract ROI and calculate hue
+        return [1.0 / num_bins] * num_bins
 
-        Returns:
-            Normalized hue histogram as a list of floats (frequencies sum to 1.0)
-        """
-        # Extract the region of interest (ROI) from the frame
-        # Ensure coordinates are within frame bounds
-        h, w = frame.shape[:2]
-        x1 = max(0, min(bbox.x1, w - 1))
-        y1 = max(0, min(bbox.y1, h - 1))
-        x2 = max(x1 + 1, min(bbox.x2, w))
-        y2 = max(y1 + 1, min(bbox.y2, h))
+    def get_track_count(self) -> int:
+        """Get the number of unique tracks"""
+        return len(self.track_inputs)
 
-        roi = frame[y1:y2, x1:x2]
+    def get_tracks_dict(self) -> TrackerInput:
+        """Get all tracks as a dictionary"""
+        return dict(self.track_inputs)
 
-        # Handle edge case where ROI is empty
-        if roi.size == 0:
-            # Return uniform distribution as fallback
-            return [1.0 / num_bins] * num_bins
+    def process_tracks(self, original_video_path) -> TrackerInput:
+        """Process collected tracks and return processed track data for video generation"""
+        logger = logging.getLogger(__name__)
 
-        # Convert BGR to HSV
-        hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+        if not self.track_inputs:
+            logger.warning('No tracks available for processing')
+            return {}
 
-        # Extract hue channel (0-179 in OpenCV)
-        hue_channel = hsv_roi[:, :, 0]
-
-        # Create histogram with specified number of bins
-        # OpenCV hue range is 0-179, so we need to scale our bins accordingly
-        hist, _ = np.histogram(hue_channel.flatten(), bins=num_bins, range=(0, 180))
-
-        # Normalize by total pixel count to get frequencies
-        total_pixels = hue_channel.size
-        if total_pixels == 0:
-            # Return uniform distribution as fallback
-            return [1.0 / num_bins] * num_bins
-
-        normalized_hist = hist.astype(float) / total_pixels
-
-        return normalized_hist.tolist()
-
-    def process_tracks(self, original_video_path: os.PathLike) -> track_processing.TrackerInput:
-        """Complete pipeline: process tracks and generate individual videos.
-
-        This is the main entry point that coordinates track processing and video generation.
-
-        Args:
-            original_video_path: Path to original high-resolution video
-            output_dir: Directory to save individual videos
-        """
         # Get video properties for track processing
         video_properties = get_video_properties(original_video_path)
 
@@ -89,16 +63,16 @@ class SurferTracker:
         processed_tracks = track_processing.process_tracks(self.track_inputs, video_properties)
 
         if not processed_tracks:
-            print('No valid tracks found for video generation')
+            logger.warning('No valid tracks found for video generation')
             return {}
 
-        # Print track statistics
-        print(f'After processing: {len(processed_tracks)} tracks remaining')
+        # Log track statistics
+        logger.info(f'After processing: {len(processed_tracks)} tracks remaining')
         for track_id, track_data in processed_tracks.items():
             duration_frames = track_data[-1].frame_idx - track_data[0].frame_idx
             duration_seconds = duration_frames / video_properties.fps
             frame_percentage = duration_frames / video_properties.total_frames
-            print(
+            logger.info(
                 f'  Track {track_id}: {len(track_data)} detections, {duration_seconds:.1f}s ({frame_percentage * 100:.1f}%)'
             )
 

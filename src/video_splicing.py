@@ -7,6 +7,7 @@ maintaining any state, making it easier to test and reason about.
 
 import json
 import os
+import logging
 import numpy as np
 from tqdm import tqdm
 from pathlib import Path
@@ -124,17 +125,19 @@ def _find_detection_at_frame(track_data: list[Track], frame_idx: int) -> Track |
 
 
 def generate_individual_videos(
-    tracks: TrackerInput, original_video_path: os.PathLike, output_dir: os.PathLike | str
-) -> list[os.PathLike | str]:
-    """Generate individual cropped videos for each track using pure functions.
+    tracks: TrackerInput, original_video_path: os.PathLike | str, output_dir: os.PathLike | str
+) -> list[os.PathLike]:
+    """Generate individual MP4 videos for each tracked person with centered, fixed-size crops.
 
     Args:
         tracks: Dictionary of processed track data
         original_video_path: Path to original high-resolution video
         output_dir: Directory to save individual videos
     """
+    logger = logging.getLogger(__name__)
+
     if not tracks:
-        print('No tracks found for individual video generation')
+        logger.warning('No tracks found for individual video generation')
         return []
 
     # Create output directory
@@ -147,7 +150,7 @@ def generate_individual_videos(
     video_properties = get_video_properties(original_video_path)
     total_frames = video_properties.total_frames
 
-    print(f'Generating individual videos for {len(tracks)} tracks...')
+    logger.info(f'Generating individual videos for {len(tracks)} tracks...')
 
     # Pre-calculate crop sizes and create writers
     writers: dict[TrackId, VideoWriter] = {}
@@ -158,7 +161,7 @@ def generate_individual_videos(
         slice_width, slice_height = _calculate_crop_size(track_data)
         crop_sizes[person_number] = (slice_width, slice_height)
 
-        print(f'Track {person_number}: slice size {slice_width}x{slice_height} pixels')
+        logger.info(f'Track {person_number}: slice size {slice_width}x{slice_height} pixels')
 
         # Create video writer with sequential numbering
         output_path = Path(output_dir) / f'{input_name}+{person_number:02d}.mp4'
@@ -187,6 +190,6 @@ def generate_individual_videos(
     for writer in writers.values():
         writer.finish_writing()
 
-    print(f'Individual videos saved to: {output_dir}')
+    logger.info(f'Individual videos saved to: {output_dir}')
 
-    return [writer.output_path for writer in writers.values()]
+    return [Path(writer.output_path) for writer in writers.values()]

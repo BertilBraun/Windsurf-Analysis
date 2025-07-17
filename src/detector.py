@@ -1,4 +1,5 @@
 import os
+import logging
 import yaml
 import numpy as np
 from pathlib import Path
@@ -17,7 +18,8 @@ class SurferDetector:
     """Pure detection and tracking class for surfers in video"""
 
     def __init__(self):
-        print(f'Using model: {DEFAULT_MODEL_NAME}')
+        logger = logging.getLogger(__name__)
+        logger.info(f'Using model: {DEFAULT_MODEL_NAME}')
         self.model = YOLO(DEFAULT_MODEL_NAME, verbose=False)
 
     def detect_and_track_video(

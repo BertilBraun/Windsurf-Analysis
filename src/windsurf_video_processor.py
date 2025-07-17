@@ -1,4 +1,5 @@
 import os
+import logging
 
 from tqdm import tqdm
 from pathlib import Path
@@ -17,20 +18,23 @@ import video_splicing
 
 
 class WindsurfingVideoProcessor:
-    def __init__(self, draw_annotations: bool, output_dir: os.PathLike | str):
+    """Main video processing orchestrator"""
+
+    def __init__(self, draw_annotations: bool = False, output_dir: str = 'individual_surfers'):
         self.detector = SurferDetector()
-        self.individual_video_generator = WorkerPool(_generate_individual_videos_worker_function, num_workers=1)
-        self.annotated_video_generator = WorkerPool(_write_annotated_video_worker_function, num_workers=1)
+        self.individual_video_generator = WorkerPool(_generate_individual_videos_worker_function, 1)
+        self.annotated_video_generator = WorkerPool(_generate_annotated_video_worker_function, 1)
         self.draw_annotations = draw_annotations
         self.output_dir = output_dir
 
     def process_video(self, input_path: os.PathLike):
         """Main video processing pipeline with batched YOLO inference"""
+        logger = logging.getLogger(__name__)
 
         surfer_tracker = SurferTracker()
 
         props = get_video_properties(input_path)
-        print(f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.total_frames} frames')
+        logger.info(f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.total_frames} frames')
 
         for frame_index, frame, detections in self.detector.detect_and_track_video(input_path):
             for detection in detections:
@@ -53,10 +57,11 @@ class WindsurfingVideoProcessor:
 
 
 def _stabilize_individual_video_worker_function(args: tuple[os.PathLike, os.PathLike]) -> None:
+    logger = logging.getLogger(__name__)
     input_file, output_file = args
-    print(f'Stabilizing {input_file} -> {output_file}')
+    logger.info(f'Stabilizing {input_file} -> {output_file}')
     if stabilize_ffmpeg(input_file, output_file):
-        print(f'Stabilized {input_file} -> {output_file}')
+        logger.info(f'Stabilized {input_file} -> {output_file}')
         os.unlink(input_file)
 
 
@@ -70,7 +75,7 @@ def _generate_individual_videos_worker_function(args: tuple[TrackerInput, os.Pat
             stabilizer.submit((individual_video, output_file))
 
 
-def _write_annotated_video_worker_function(args: tuple[TrackerInput, os.PathLike, os.PathLike | str]) -> None:
+def _generate_annotated_video_worker_function(args: tuple[TrackerInput, os.PathLike, os.PathLike | str]) -> None:
     tracks, input_path, output_dir = args
     annotation_drawer = AnnotationDrawer()
 

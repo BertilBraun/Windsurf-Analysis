@@ -5,6 +5,8 @@ This module provides pure functions for processing object tracking data without
 maintaining any state, making it easier to test and reason about.
 """
 
+import logging
+
 from settings import (
     HISTOGRAM_SIMILARITY_THRESHOLD,
     MAX_SPATIAL_DISTANCE_BB,
@@ -74,7 +76,8 @@ def _find_best_merge_candidates(tracks: TrackerInput, fps: int) -> tuple[TrackId
                     greedy_candidates.append((track_id2, spatial_distance))
 
         if len(greedy_candidates) == 1:
-            print(f'Found greedy candidate: {track_id1} and {greedy_candidates[0][0]}')
+            logger = logging.getLogger(__name__)
+            logger.debug(f'Found greedy candidate: {track_id1} and {greedy_candidates[0][0]}')
             return track_id1, greedy_candidates[0][0]
 
         all_candidates[track_id1] = candidates
@@ -134,7 +137,8 @@ def _merge_two_tracks(track1_data: list[Track], track2_data: list[Track]) -> lis
 
 def _greedy_merge_tracks(tracks: TrackerInput, fps: int) -> TrackerInput:
     """Greedy merging: repeatedly find and merge the closest track pair"""
-    print(f'Starting greedy merge with {len(tracks)} tracks...')
+    logger = logging.getLogger(__name__)
+    logger.info(f'Starting greedy merge with {len(tracks)} tracks...')
 
     # Convert to working copy
     working_tracks = {track_id: track_data.copy() for track_id, track_data in tracks.items()}
@@ -150,7 +154,7 @@ def _greedy_merge_tracks(tracks: TrackerInput, fps: int) -> TrackerInput:
             break
 
         track_id1, track_id2 = best_pair
-        print(f'Iteration {iteration}: Merging tracks {track_id1} and {track_id2}')
+        logger.info(f'Iteration {iteration}: Merging tracks {track_id1} and {track_id2}')
 
         # Merge the tracks
         merged_track = _merge_two_tracks(working_tracks[track_id1], working_tracks[track_id2])
@@ -159,7 +163,7 @@ def _greedy_merge_tracks(tracks: TrackerInput, fps: int) -> TrackerInput:
         del working_tracks[track_id2]
         working_tracks[track_id1] = merged_track
 
-    print(f'Greedy merge complete after {iteration - 1} merges: {len(tracks)} → {len(working_tracks)} tracks')
+    logger.info(f'Greedy merge complete after {iteration - 1} merges: {len(tracks)} → {len(working_tracks)} tracks')
     return working_tracks
 
 
@@ -219,13 +223,14 @@ def _smooth_track_centers(tracks: TrackerInput) -> TrackerInput:
 
 def _get_valid_tracks(tracks: TrackerInput, total_frames: int) -> TrackerInput:
     """Get tracks that meet minimum frame percentage requirement"""
+    logger = logging.getLogger(__name__)
     valid_tracks = {}
     min_frames = int(MIN_FRAME_PERCENTAGE / 100 * total_frames)
 
-    print(
+    logger.info(
         f'Track analysis (min_frames required: {min_frames} out of {total_frames} total frames, {MIN_FRAME_PERCENTAGE}%):'
     )
-    print(f'Total tracks found: {len(tracks)}')
+    logger.info(f'Total tracks found: {len(tracks)}')
 
     for track_id, detections in tracks.items():
         if len(detections) == 0:
@@ -256,11 +261,12 @@ def process_tracks(track_inputs: TrackerInput, video_properties: VideoInfo) -> T
 
     Args:
         track_inputs: TrackerInput object containing the tracks to process
-        total_frames: Total number of frames in the video
+        video_properties: Video properties including total frames and fps
 
     Returns:
         Dictionary of processed tracks ready for video generation
     """
+    logger = logging.getLogger(__name__)
 
     # sort all tracks by frame index
     track_inputs = {
@@ -268,20 +274,20 @@ def process_tracks(track_inputs: TrackerInput, video_properties: VideoInfo) -> T
     }
 
     # First, greedily merge ALL tracks based on spatial and temporal proximity
-    print(f'Starting with {len(track_inputs)} tracks')
+    logger.info(f'Starting with {len(track_inputs)} tracks')
     merged_tracks = _greedy_merge_tracks(track_inputs, video_properties.fps)
 
     # Then filter merged tracks for minimum duration requirement
     valid_tracks = _get_valid_tracks(merged_tracks, video_properties.total_frames)
 
     if not valid_tracks:
-        print('No merged tracks meet the minimum frame percentage requirement')
+        logger.warning('No merged tracks meet the minimum frame percentage requirement')
         return {}
 
-    print(f'Found {len(valid_tracks)} valid tracks with duration >= {MIN_FRAME_PERCENTAGE}% of total frames')
+    logger.info(f'Found {len(valid_tracks)} valid tracks with duration >= {MIN_FRAME_PERCENTAGE}% of total frames')
 
     # Apply smoothing to reduce jittery motion
-    print('Smoothing track centers to reduce jittery motion...')
+    logger.info('Smoothing track centers to reduce jittery motion...')
     smoothed_tracks = _smooth_track_centers(valid_tracks)
 
     # relabel tracks from 1 to n
