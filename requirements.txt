@@ -3,7 +3,8 @@ opencv-python>=4.8.0
 numpy>=1.24.0
 
 # Machine Learning
-ultralytics>=8.0.0
+# Exports features and modifies tracker
+git+https://github.com/Mo0dy/ultralytics.git@main
 torch>=2.0.0
 
 # Progress bars and utilities

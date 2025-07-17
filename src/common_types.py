@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import numpy as np
 
 from dataclasses import dataclass
 from typing import Iterator
@@ -65,6 +66,7 @@ class Detection:
     class_id: int
     class_name: str
     track_id: int | None
+    feat: np.ndarray | None
 
 
 @dataclass

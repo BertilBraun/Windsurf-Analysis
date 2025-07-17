@@ -93,6 +93,7 @@ class SurferDetector:
             boxes = _to_numpy(result.boxes.xyxy)
             confidences = _to_numpy(result.boxes.conf)
             class_ids = _to_numpy(result.boxes.cls)
+            feats = _to_numpy(result.feats) if hasattr(result, 'feats') else None
 
             track_ids = None
             if result.boxes.id is not None:
@@ -110,6 +111,7 @@ class SurferDetector:
                     class_id=int(class_ids[i]),
                     class_name=result.names[int(class_ids[i])],
                     track_id=int(track_ids[i]) if track_ids is not None else None,
+                    feat=feats[i] if feats is not None else None
                 )
                 detections.append(detection)
 
