@@ -33,6 +33,7 @@ def main():
     )
     parser.add_argument('--output-dir', help='Directory for individual surfer videos (default: individual_surfers)')
     parser.add_argument('--draw-annotations', action='store_true', help='Draw annotations on the video')
+    parser.add_argument('--dry-run', action='store_true', help='Run without rendering individual videos (for testing purposes)')
 
     args = parser.parse_args()
 
@@ -65,6 +66,7 @@ def main():
     processor = WindsurfingVideoProcessor(
         draw_annotations=args.draw_annotations,
         output_dir=args.output_dir or STANDARD_OUTPUT_DIR,
+        dry_run=args.dry_run,
     )
 
     for i, video_file in enumerate(video_files, 1):

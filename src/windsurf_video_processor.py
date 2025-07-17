@@ -20,12 +20,18 @@ import video_splicing
 class WindsurfingVideoProcessor:
     """Main video processing orchestrator"""
 
-    def __init__(self, draw_annotations: bool = False, output_dir: str = 'individual_surfers'):
+    def __init__(
+            self,
+            draw_annotations: bool = False,
+            output_dir: str = 'individual_surfers',
+            dry_run: bool = False
+    ):
         self.detector = SurferDetector()
         self.individual_video_generator = WorkerPool(_generate_individual_videos_worker_function, 1)
         self.annotated_video_generator = WorkerPool(_generate_annotated_video_worker_function, 1)
         self.draw_annotations = draw_annotations
         self.output_dir = output_dir
+        self.dry_run = dry_run
 
     def process_video(self, input_path: os.PathLike):
         """Main video processing pipeline with batched YOLO inference"""
@@ -42,7 +48,8 @@ class WindsurfingVideoProcessor:
                     surfer_tracker.add_detection(frame_index, detection, frame)
 
         processed_tracks = surfer_tracker.process_tracks(input_path)
-        self.individual_video_generator.submit((processed_tracks, input_path, self.output_dir))
+        if not self.dry_run:
+            self.individual_video_generator.submit((processed_tracks, input_path, self.output_dir))
 
         if self.draw_annotations:
             all_tracks = {track_id: tracks for track_id, tracks in processed_tracks.items()}
