@@ -116,20 +116,21 @@ class SurferDetector:
                 )
                 track_detections.append(detection)
 
-            det_boxes = _to_numpy(result.det_boxes.xyxy)
+            det_boxes = _to_numpy(result.det_boxes.xyxy) if hasattr(result, "det_boxes") else None
             det_feats = _to_numpy(result.det_feats) if hasattr(result, "det_feats") else None
 
-            for i in range(len(det_boxes)):
-                detection = Detection(
-                    bbox=BoundingBox(
-                        x1=det_boxes[i][0],
-                        y1=det_boxes[i][1],
-                        x2=det_boxes[i][2],
-                        y2=det_boxes[i][3],
-                    ),
-                    feat=det_feats[i] if det_feats is not None else None,
-                )
-                detections.append(detection)
+            if det_boxes is not None:
+                for i in range(len(det_boxes)):
+                    detection = Detection(
+                        bbox=BoundingBox(
+                            x1=det_boxes[i][0],
+                            y1=det_boxes[i][1],
+                            x2=det_boxes[i][2],
+                            y2=det_boxes[i][3],
+                        ),
+                        feat=det_feats[i] if det_feats is not None else None,
+                    )
+                    detections.append(detection)
 
         return (track_detections, detections)
 
