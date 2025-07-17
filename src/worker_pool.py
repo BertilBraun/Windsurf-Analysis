@@ -66,4 +66,4 @@ def _worker(worker_function: Callable[[Any], Any], stop_event, queue: multiproce
         try:
             worker_function(work_item)
         except Exception as e:
-            logging.error(f'Worker function failed for {work_item}: {e}')
+            logging.error(f'Worker function failed: {e}')
