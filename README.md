@@ -36,18 +36,11 @@ Example of the usage of the system: Input is a raw video of a windsurf session (
 - **Automated clip extraction**: Intelligent scene segmentation based on tracking continuity
 - **Batch processing**: Parallel video processing with worker pool architecture
 
-### 📊 **Advanced Analytics & Visualization**
-
-- **Trajectory analysis**: Frame-by-frame position tracking with smoothing algorithms
-- **Performance metrics**: Speed analysis, movement patterns, and technique quantification
-- **Professional annotations**: High-quality overlay graphics with confidence visualization
-- **Export flexibility**: Multiple output formats for analysis, coaching, and media production
-
 ## ⚙️ Technical Architecture
 
 ### **Machine Learning Infrastructure**
 
-- **YOLO11 Base Models**: Fine-tuned on 300+ annotated windsurfing frames with diverse conditions
+- **YOLO11 Base Models**: Fine-tuned on ~500 annotated windsurfing frames with diverse conditions
 - **Custom Dataset Pipeline**: Automated train/validation splits with data augmentation
 - **PyTorch Integration**: GPU-accelerated inference with CUDA optimization
 - **Model Performance**: 95%+ detection accuracy, sub-10ms inference time per frame
@@ -64,7 +57,6 @@ Example of the usage of the system: Input is a raw video of a windsurf session (
 - **FFmpeg Backend**: Professional video encoding with H.264/H.265 support
 - **Stabilization Engine**: Two-pass stabilization using vidstab filters with motion detection
 - **Frame Management**: Efficient memory usage with streaming video processing
-- **Quality Preservation**: Lossless processing options with configurable compression
 
 ### **Track Processing Algorithms**
 
@@ -80,6 +72,8 @@ Example of the usage of the system: Input is a raw video of a windsurf session (
 - **GPU Utilization**: CUDA acceleration for all compatible operations
 
 ## 📈 Model Training & Validation
+
+For more of the training results, check out the [documentation/train_results](documentation/train_results) folder.
 
 ### **Dataset Specifications**
 
