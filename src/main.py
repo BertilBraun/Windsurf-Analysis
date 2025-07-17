@@ -6,6 +6,7 @@ import argparse
 import traceback
 import logging
 from pathlib import Path
+from itertools import chain
 
 
 from settings import STANDARD_OUTPUT_DIR
@@ -25,11 +26,9 @@ def setup_logging(output_dir: Path | None = None):
 
 
 def main():
-    logger = setup_logging()
-
     parser = argparse.ArgumentParser(description='Windsurfing Video Analysis Tool')
     parser.add_argument(
-        'input_pattern', help='Path pattern for input video files (e.g., "videos/*.mp4" or single file)'
+        'input_pattern', nargs='+', help='Path pattern for input video files (e.g., "videos/*.mp4" or single file)'
     )
     parser.add_argument('--output-dir', help='Directory for individual surfer videos (default: individual_surfers)')
     parser.add_argument('--draw-annotations', action='store_true', help='Draw annotations on the video')
@@ -50,7 +49,7 @@ def main():
         logger.warning('=' * 80)
 
     # Expand glob pattern to find matching video files
-    video_files = glob.glob(args.input_pattern)
+    video_files = list(chain(*(glob.glob(p) for p in args.input_pattern)))
 
     if not video_files:
         logger.error(f'No video files found matching pattern: {args.input_pattern}')
