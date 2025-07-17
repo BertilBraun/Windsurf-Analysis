@@ -6,7 +6,7 @@ Windsurf Analysis is a state-of-the-art AI system that combines custom-trained Y
 
 ![example](documentation/processed.gif)
 
-Example of the usage of the system: Input is a raw video of a windsurf session (top left), we process it using AI to detect the surfer and track their movements (bottom left), we then extract the individual surfer videos and stabilize their clips (right).
+Example of the usage of the system: Input is a raw video of a windsurf session (top left), we process it using AI to detect the surfer and track their movements (bottom left), we then extract the individual surfer videos, making sure, that the surfer is always in the center of the frame and stabilize their clips (right).
 
 ## 🔬 Core Technologies
 
