@@ -11,8 +11,9 @@ from surfer_tracker import SurferTracker
 from annotation_drawer import Annotation, AnnotationDrawer
 from stabilize import stabilize_ffmpeg
 
-from common_types import TrackerInput
+from common_types import Track, TrackerInput, Detection
 from worker_pool import WorkerPool
+from debug_drawer import generate_debug_videokworker_function
 
 import video_splicing
 
@@ -29,6 +30,7 @@ class WindsurfingVideoProcessor:
         self.detector = SurferDetector()
         self.individual_video_generator = WorkerPool(_generate_individual_videos_worker_function, 1)
         self.annotated_video_generator = WorkerPool(_generate_annotated_video_worker_function, 1)
+        self.debug_video_generator = WorkerPool(generate_debug_videokworker_function, 1)
         self.draw_annotations = draw_annotations
         self.output_dir = output_dir
         self.dry_run = dry_run
@@ -57,8 +59,11 @@ class WindsurfingVideoProcessor:
             all_tracks = {track_id: tracks for track_id, tracks in processed_tracks.items()}
             # YOLO tracks only:
             all_tracks = {track_id: tracks for track_id, tracks in surfer_tracker.track_inputs.items()}
+            tracks = (Track(frame_idx, d.bbox, 0, []) for (frame_idx, detections) in surfer_tracker.detections.items() for d in detections)
+            all_tracks = {i: [t] for i, t in enumerate(tracks)}
 
-            self.annotated_video_generator.submit((all_tracks, input_path, self.output_dir))
+            # self.annotated_video_generator.submit((all_tracks, input_path, self.output_dir))
+            self.debug_video_generator.submit((surfer_tracker.detections, input_path, self.output_dir))
 
     def finalize(self):
         self.individual_video_generator.stop()
