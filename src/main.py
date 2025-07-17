@@ -5,18 +5,21 @@ import torch
 import argparse
 import traceback
 import logging
+from pathlib import Path
 
 
 from settings import STANDARD_OUTPUT_DIR
 from windsurf_video_processor import WindsurfingVideoProcessor
 
 
-def setup_logging():
+def setup_logging(output_dir: Path | None = None):
     """Configure logging for the windsurfing video analysis tool."""
+    if output_dir is None:
+        output_dir = Path(STANDARD_OUTPUT_DIR)
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[logging.StreamHandler(), logging.FileHandler('windsurf_analysis.log')],
+        handlers=[logging.StreamHandler(), logging.FileHandler(output_dir / 'windsurf_analysis.log')],
     )
     return logging.getLogger(__name__)
 
@@ -32,6 +35,13 @@ def main():
     parser.add_argument('--draw-annotations', action='store_true', help='Draw annotations on the video')
 
     args = parser.parse_args()
+
+    output_dir_path = Path(args.output_dir) if args.output_dir else None
+
+    if output_dir_path:
+        output_dir_path.mkdir(parents=True, exist_ok=True)
+
+    logger = setup_logging(output_dir_path)
 
     if not torch.cuda.is_available():
         logger.warning('=' * 80)
