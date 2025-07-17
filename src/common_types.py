@@ -31,6 +31,7 @@ class BoundingBox:
         self.y1 = int(y1)
         self.x2 = int(x2)
         self.y2 = int(y2)
+        assert x1 < x2 and y1 < y2, "Bounding boxes do not intersect"
 
     @property
     def width(self) -> int:
@@ -57,6 +58,23 @@ class BoundingBox:
             int((1 - alpha) * self.x2 + alpha * other.x2),
             int((1 - alpha) * self.y2 + alpha * other.y2),
         )
+
+    def iou(self, other: BoundingBox) -> float:
+        """Calculate Intersection over Union (IoU) with another bounding box."""
+        x1 = max(self.x1, other.x1)
+        y1 = max(self.y1, other.y1)
+        x2 = min(self.x2, other.x2)
+        y2 = min(self.y2, other.y2)
+
+        intersection_area = max(0, x2 - x1) * max(0, y2 - y1)
+        if intersection_area == 0:
+            return 0.0
+
+        self_area = self.width * self.height
+        other_area = other.width * other.height
+        union_area = self_area + other_area - intersection_area
+
+        return intersection_area / union_area if union_area > 0 else 0.0
 
 
 @dataclass

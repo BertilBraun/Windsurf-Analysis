@@ -4,7 +4,7 @@ User-driven features:
 - Frames scaled 0.5× and stacked vertically: **current** frame on top, **previous** frame below.
 - Bounding boxes drawn (white = current, light gray = previous).
 - All-to-all connector lines current→previous.
-- Metrics per connector: cosine similarity, pixel center distance, IoU distance (1 - IoU).
+- Metrics per connector: cosine similarity, pixel center distance, IoU
 - Stable color cycling for connector lines from a 30‑color seeded palette.
 - **Collision-aware label placement with per-color cached preferred position:**
   - Each palette color has a cached fractional line position `t` (init 0.25).
@@ -31,81 +31,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-# ---------------------------------------------------------------------------
-# Expected external project types -------------------------------------------------
-# Replace these fallback stubs with your project imports.
-try:  # pragma: no cover - developer convenience
-    from common_types import Detection, BoundingBox  # type: ignore
-except Exception:  # lightweight stubs for type checking only
-    @dataclass
-    class BoundingBox:  # minimal stub; replace with project version
-        x1: int; y1: int; x2: int; y2: int
-        def __iter__(self) -> Iterator[int]:
-            return iter((self.x1, self.y1, self.x2, self.y2))
-        @property
-        def width(self) -> int: return self.x2 - self.x1
-        @property
-        def height(self) -> int: return self.y2 - self.y1
-
-    @dataclass
-    class Detection:  # minimal stub; replace with project version
-        bbox: BoundingBox
-        confidence: float | None = None
-        class_id: int | None = None
-        class_name: str | None = None
-        track_id: int | None = None
-        embedding: Optional[np.ndarray] = None
-
-
-# ---------------------------------------------------------------------------
-# Utility metric functions --------------------------------------------------
-
-def _bbox_center(b: BoundingBox) -> Tuple[float, float]:
-    return ((b.x1 + b.x2) * 0.5, (b.y1 + b.y2) * 0.5)
-
-
-def _iou(b1: BoundingBox, b2: BoundingBox) -> float:
-    ix1 = max(b1.x1, b2.x1)
-    iy1 = max(b1.y1, b2.y1)
-    ix2 = min(b1.x2, b2.x2)
-    iy2 = min(b1.y2, b2.y2)
-    iw = max(0, ix2 - ix1)
-    ih = max(0, iy2 - iy1)
-    inter = iw * ih
-    if inter <= 0:
-        return 0.0
-    area1 = max(0, b1.width) * max(0, b1.height)
-    area2 = max(0, b2.width) * max(0, b2.height)
-    denom = area1 + area2 - inter
-    if denom <= 0:
-        return 0.0
-    return inter / denom
-
-
-def _cosine(a: np.ndarray, b: np.ndarray) -> float:
-    if a.size == 0 or b.size == 0:
-        return float("nan")
-    denom = float(np.linalg.norm(a) * np.linalg.norm(b))
-    if denom == 0:
-        return float("nan")
-    return float(np.dot(a.ravel(), b.ravel()) / denom)
-
-
-def _get_embedding(det: Detection) -> Optional[np.ndarray]:
-    # Try a few common attribute names; extend as needed.
-    for attr in ("embedding", "embed", "feat", "feats", "reid_feat", "reid_embedding"):
-        if hasattr(det, attr):
-            v = getattr(det, attr)
-            if v is None:
-                continue
-            arr = np.asarray(v, dtype=np.float32).ravel()
-            if arr.size:
-                return arr
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Color helpers --------------------------------------------------------------
+from common_types import Detection, BoundingBox, cosine_similarity
 
 # Fixed box colors (BGR)
 BOX_COLOR_CUR = (255, 255, 255)   # white
@@ -273,7 +199,7 @@ def _draw_line_with_metrics(img: np.ndarray, p1: Tuple[int, int], p2: Tuple[int,
     cos_s = f"{cos:.2f}" if cos is not None and not math.isnan(cos) else "n/a"
     dist_s = f"{dist:.0f}" if dist is not None and not math.isnan(dist) else "n/a"
     iou_s = f"{iou_dist:.2f}" if iou_dist is not None and not math.isnan(iou_dist) else "n/a"
-    txt = f"c={cos_s} d={dist_s} iou={iou_s}"
+    txt = f"c={cos_s} iou={iou_s} d={dist_s}"
     org, new_t = _choose_label_org_for_line_cached(img, txt, p1, p2, label_positions,
                                                    base_t, rng, font_scale=0.35)
     rect = _draw_text(img, txt, org, color, font_scale=0.35)
@@ -365,45 +291,34 @@ def generate_debug_videokworker_function(
                 # Draw current boxes (top)
                 cur_centers: list[Tuple[int, int]] = []
                 for det in cur_dets:
-                    # label: track_id preferred, else conf
-                    label = None
-                    if hasattr(det, "track_id") and det.track_id is not None:
-                        label = str(det.track_id)
-                    elif hasattr(det, "confidence") and det.confidence is not None:
-                        label = f"{det.confidence:.2f}"
-                    c = _draw_box(canvas, det.bbox, BOX_COLOR_CUR, label, label_positions,
+                    c = _draw_box(canvas, det.bbox, BOX_COLOR_CUR, None, label_positions,
                                   scale_x=0.5, scale_y=0.5, y_offset=0)
                     cur_centers.append(c)
 
                 # Draw prev boxes (bottom)
                 prev_centers: list[Tuple[int, int]] = []
                 for det in last_dets:
-                    label = None
-                    if hasattr(det, "track_id") and det.track_id is not None:
-                        label = str(det.track_id)
-                    elif hasattr(det, "confidence") and det.confidence is not None:
-                        label = f"{det.confidence:.2f}"
-                    c = _draw_box(canvas, det.bbox, BOX_COLOR_PREV, label, label_positions,
+                    c = _draw_box(canvas, det.bbox, BOX_COLOR_PREV, None, label_positions,
                                   scale_x=0.5, scale_y=0.5, y_offset=scaled_h)
                     prev_centers.append(c)
 
                 # Pairwise metrics lines current(top) -> prev(bottom)
                 if cur_dets and last_dets:
                     for i, det_cur in enumerate(cur_dets):
-                        emb_c = _get_embedding(det_cur)
+                        emb_c = det_cur.feat
                         bc = det_cur.bbox
                         c_center = cur_centers[i]
                         for j, det_prev in enumerate(last_dets):
-                            emb_p = _get_embedding(det_prev)
+                            emb_p = det_prev.feat
                             bp = det_prev.bbox
                             p_center = prev_centers[j]
 
                             # metrics
-                            cos = _cosine(emb_c, emb_p) if (emb_c is not None and emb_p is not None) else float("nan")
-                            cx1, cy1 = _bbox_center(bc)
-                            cx2, cy2 = _bbox_center(bp)
+                            cos = cosine_similarity(emb_c, emb_p) if (emb_c is not None and emb_p is not None) else float("nan")
+                            cx1, cy1 = bc.center
+                            cx2, cy2 = bp.center
                             dist = math.hypot(cx2 - cx1, cy2 - cy1)
-                            iou = _iou(bc, bp)
+                            iou = bc.iou(bp)
 
                             # color + draw
                             color_idx = line_counter % len(palette)
@@ -413,7 +328,7 @@ def generate_debug_videokworker_function(
                             def _upd(new_t: float, idx=color_idx):
                                 label_t_cache[idx] = new_t
 
-                            _draw_line_with_metrics(canvas, c_center, p_center, cos, dist, 1 - iou,
+                            _draw_line_with_metrics(canvas, c_center, p_center, cos, dist, iou,
                                                     color, label_positions, rng,
                                                     base_t=base_t, cache_update_cb=_upd)
                             line_counter += 1
@@ -425,6 +340,4 @@ def generate_debug_videokworker_function(
                 prev_frame_scaled = cur_scaled
                 prev_dets = cur_dets
                 prev_idx = frame_index
-
-    # done
     return None

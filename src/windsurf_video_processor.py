@@ -68,6 +68,7 @@ class WindsurfingVideoProcessor:
     def finalize(self):
         self.individual_video_generator.stop()
         self.annotated_video_generator.stop()
+        self.debug_video_generator.stop()
 
 
 def _stabilize_individual_video_worker_function(args: tuple[os.PathLike, os.PathLike]) -> None:
