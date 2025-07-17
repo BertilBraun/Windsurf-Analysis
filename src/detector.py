@@ -11,7 +11,7 @@ from ultralytics.engine.results import Results
 
 from video_io import get_video_properties
 import settings
-from common_types import Detection, BoundingBox
+from common_types import TrackDetection, BoundingBox, Detection
 
 
 def log_detection_settings():
@@ -37,7 +37,7 @@ class SurferDetector:
 
     def detect_and_track_video(
         self, video_path: os.PathLike | str
-    ) -> Generator[tuple[int, np.ndarray, list[Detection]], None, None]:
+    ) -> Generator[tuple[int, np.ndarray, tuple[list[TrackDetection], list[Detection]]], None, None]:
         """Run batched inference on entire video, return generator of (frame, detections)"""
 
         video_props = get_video_properties(video_path)
@@ -84,8 +84,9 @@ class SurferDetector:
             yaml.dump(yaml_content, f)
         return file_name
 
-    def _extract_detections(self, result: Results) -> list[Detection]:
+    def _extract_detections(self, result: Results) -> tuple[list[TrackDetection], list[Detection]]:
         """Extract detection information for further processing"""
+        track_detections: list[TrackDetection] = []
         detections: list[Detection] = []
 
         if result.boxes is not None:
@@ -100,7 +101,7 @@ class SurferDetector:
                 track_ids = _to_numpy(result.boxes.id)
 
             for i in range(len(boxes)):
-                detection = Detection(
+                detection = TrackDetection(
                     bbox=BoundingBox(
                         x1=boxes[i][0],
                         y1=boxes[i][1],
@@ -113,9 +114,24 @@ class SurferDetector:
                     track_id=int(track_ids[i]) if track_ids is not None else None,
                     feat=feats[i] if feats is not None else None
                 )
+                track_detections.append(detection)
+
+            det_boxes = _to_numpy(result.det_boxes.xyxy)
+            det_feats = _to_numpy(result.det_feats) if hasattr(result, "det_feats") else None
+
+            for i in range(len(det_boxes)):
+                detection = Detection(
+                    bbox=BoundingBox(
+                        x1=det_boxes[i][0],
+                        y1=det_boxes[i][1],
+                        x2=det_boxes[i][2],
+                        y2=det_boxes[i][3],
+                    ),
+                    feat=det_feats[i] if det_feats is not None else None,
+                )
                 detections.append(detection)
 
-        return detections
+        return (track_detections, detections)
 
 
 def _to_numpy(tensor_or_array):

@@ -42,10 +42,12 @@ class WindsurfingVideoProcessor:
         props = get_video_properties(input_path)
         logger.info(f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.total_frames} frames')
 
-        for frame_index, frame, detections in self.detector.detect_and_track_video(input_path):
-            for detection in detections:
-                if detection.track_id is not None:
-                    surfer_tracker.add_detection(frame_index, detection, frame)
+        for frame_index, frame, (track_detections, detections) in self.detector.detect_and_track_video(input_path):
+            for track_detection in track_detections:
+                if track_detection.track_id is not None:
+                    surfer_tracker.add_track_detection(frame_index, track_detection, frame)
+            for d in detections:
+                surfer_tracker.add_detection(frame_index, d)
 
         processed_tracks = surfer_tracker.process_tracks(input_path)
         if not self.dry_run:

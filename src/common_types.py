@@ -60,13 +60,19 @@ class BoundingBox:
 
 
 @dataclass
-class Detection:
+class TrackDetection:
     bbox: BoundingBox
     confidence: float
     class_id: int
     class_name: str
     track_id: int | None
     feat: np.ndarray | None
+
+@dataclass
+class Detection:
+    bbox: BoundingBox
+    feat: np.ndarray | None
+
 
 
 @dataclass

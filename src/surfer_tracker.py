@@ -11,9 +11,10 @@ from collections import defaultdict
 import numpy as np
 
 import track_processing
-from common_types import Detection, BoundingBox, Point, Track
+from common_types import Detection, TrackDetection, BoundingBox, Point, Track
 from video_io import get_video_properties
 from track_processing import TrackId, TrackerInput
+
 
 
 class SurferTracker:
@@ -21,8 +22,13 @@ class SurferTracker:
 
     def __init__(self):
         self.track_inputs = defaultdict(list)
+        # from frame idx to detections
+        self.detections: dict[int, list[Detection]] = defaultdict(list)
 
-    def add_detection(self, frame_idx: int, detection: Detection, frame: np.ndarray):
+    def add_detection(self, frame_idx: int, detection: Detection):
+        self.detections[frame_idx].append(detection)
+
+    def add_track_detection(self, frame_idx: int, detection: TrackDetection, frame: np.ndarray):
         """Add a detection for a specific track at a given frame"""
 
         # Calculate hue histogram from bounding box region (simplified for now)
