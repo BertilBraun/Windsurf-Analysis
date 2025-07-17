@@ -4,6 +4,11 @@
 
 Windsurf Analysis is a state-of-the-art AI system that combines custom-trained YOLO models, advanced multi-object tracking algorithms, and professional video processing pipelines to automatically detect, track, and analyze windsurfers in complex marine environments. The system provides end-to-end processing from raw footage to stabilized individual clips with detailed performance analytics.
 
+- **Technique Analysis**: Review your own technique with frame-by-frame analysis - analyze successful and unsuccessful maneuvers and identify areas for improvement
+- **Progress Tracking**: Compare improvement over time with consistent metrics
+- **Efficient Review**: Quickly isolate specific maneuvers or problem areas
+- **Demonstration Tools**: Create annotated examples for teaching
+
 ![example](documentation/processed.gif)
 
 Example of the usage of the system: Input is a raw video of a windsurf session (top left), we process it using AI to detect the surfer and track their movements (bottom left), we then extract the individual surfer videos, making sure, that the surfer is always in the center of the frame and stabilize their clips (right).
@@ -37,22 +42,6 @@ Example of the usage of the system: Input is a raw video of a windsurf session (
 - **Performance metrics**: Speed analysis, movement patterns, and technique quantification
 - **Professional annotations**: High-quality overlay graphics with confidence visualization
 - **Export flexibility**: Multiple output formats for analysis, coaching, and media production
-
-## 🎯 Use Cases
-
-### 🏆 **For Coaches & Instructors**
-
-- **Technique Analysis**: Break down student performance frame-by-frame
-- **Progress Tracking**: Compare improvement over time with consistent metrics
-- **Efficient Review**: Quickly isolate specific maneuvers or problem areas
-- **Demonstration Tools**: Create annotated examples for teaching
-
-### 🏄‍♂️ **For Athletes & Competitors**
-
-- **Self-Analysis**: Review your own technique with objective tracking data
-- **Competition Prep**: Analyze successful maneuvers and identify areas for improvement
-- **Training Optimization**: Focus practice time on specific technical elements
-- **Performance Documentation**: Build a library of your best rides and progressions
 
 ## ⚙️ Technical Architecture
 
@@ -94,7 +83,7 @@ Example of the usage of the system: Input is a raw video of a windsurf session (
 
 ### **Dataset Specifications**
 
-- **Training Dataset**: 300+ professionally annotated frames across diverse conditions
+- **Training Dataset**: ~500 professionally annotated frames across diverse conditions
 - **Athlete Diversity**: Multiple skill levels from recreational to professional competition
 - **Scenario Coverage**: Jibes, rides, transitions, crashes, and multi-surfer interactions
 - **Environmental Conditions**: Various wind conditions, lighting scenarios, and water states
@@ -105,17 +94,9 @@ Example of the usage of the system: Input is a raw video of a windsurf session (
 
 - **Base Model**: YOLO11n architecture with transfer learning
 - **Training Parameters**: Configurable epochs, batch size, image resolution (640px default)
-- **Validation Split**: Automated 2% validation set with stratified sampling
+- **Validation Split**: Automated validation set with stratified sampling
 - **Data Augmentation**: Standard Ultralytics augmentation pipeline
 - **Hardware Requirements**: CUDA-compatible GPU for training acceleration
-
-### **Performance Metrics**
-
-- **Detection Precision**: 95%+ accuracy in optimal lighting conditions
-- **Tracking Continuity**: 90%+ identity preservation across challenging sequences
-- **False Positive Rate**: <2% in complex multi-surfer scenarios
-- **Processing Speed**: Real-time capability on modern GPU hardware
-- **Robustness**: Consistent performance across weather and lighting variations
 
 ## 🚀 System Requirements & Installation
 
