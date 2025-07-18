@@ -1,19 +1,14 @@
-from common_types import Detection, FrameIndex, Track
+from vidstab import VidStab
+
 from video_io import VideoInfo
-from track_processing import TrackerInput
+from common_types import Detection, Track
 
 
-def process_detections(detections: dict[FrameIndex, list[Detection]], video_properties: VideoInfo) -> TrackerInput:
-    return {
-        1: [
-            Track(
-                bbox=detection.bbox,
-                confidence=detection.confidence,
-                track_id=None,
-                feat=detection.feat,
-                frame_idx=frame_idx,
-            )
-            for frame_idx, detections in detections.items()
-            for detection in detections
-        ]
-    }
+def process_detections(detections: list[Detection], video_properties: VideoInfo, stabilizer: VidStab) -> list[Track]:
+    return [
+        Track(
+            track_id=None,
+            sorted_detections=[detection],
+        )
+        for detection in detections
+    ]

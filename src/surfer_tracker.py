@@ -5,53 +5,47 @@ This module handles the collection and organization of YOLO detections
 into coherent tracks representing individual surfers.
 """
 
-import logging
-from collections import defaultdict
 import os
+import logging
 
 import tracking
 import track_processing
-from common_types import Detection, FrameIndex, TrackerInput
+from vidstab import VidStab
+
+from common_types import Detection, Track
 from video_io import get_video_properties
 
 
-class SurferTracker:
-    """Aggregates YOLO detections into tracks for individual surfers"""
+def process_detections_into_tracks(
+    original_video_path: os.PathLike | str, detections: list[Detection], stabilizer: VidStab
+) -> list[Track]:
+    """Process collected tracks and return processed track data for video generation"""
+    logger = logging.getLogger(__name__)
 
-    def __init__(self):
-        self.detections: dict[FrameIndex, list[Detection]] = defaultdict(list)
+    if not detections:
+        logger.warning('No tracks available for processing')
+        return []
 
-    def add_detection(self, frame_idx: FrameIndex, detection: Detection):
-        self.detections[frame_idx].append(detection)
+    # Get video properties for track processing
+    video_properties = get_video_properties(original_video_path)
 
-    def process_tracks(self, original_video_path: os.PathLike | str) -> TrackerInput:
-        """Process collected tracks and return processed track data for video generation"""
-        logger = logging.getLogger(__name__)
+    processed_tracks = tracking.process_detections(detections, video_properties, stabilizer)
 
-        if not self.detections:
-            logger.warning('No tracks available for processing')
-            return {}
+    # Process tracks using the track processing module
+    processed_tracks = track_processing.tracks_filtering_smoothing_relabeling(processed_tracks, video_properties)
 
-        # Get video properties for track processing
-        video_properties = get_video_properties(original_video_path)
+    if not processed_tracks:
+        logger.warning('No valid tracks found for video generation')
+        return []
 
-        processed_tracks = tracking.process_detections(self.detections, video_properties)
+    # Log track statistics
+    logger.info(f'After processing: {len(processed_tracks)} tracks remaining')
+    for track in processed_tracks:
+        duration_frames = track.sorted_detections[-1].frame_idx - track.sorted_detections[0].frame_idx
+        duration_seconds = duration_frames / video_properties.fps
+        frame_percentage = duration_frames / video_properties.total_frames
+        logger.info(
+            f'  Track {track.track_id}: {len(track.sorted_detections)} detections, {duration_seconds:.1f}s ({frame_percentage * 100:.1f}%)'
+        )
 
-        # Process tracks using the track processing module
-        processed_tracks = track_processing.process_tracks(processed_tracks, video_properties)
-
-        if not processed_tracks:
-            logger.warning('No valid tracks found for video generation')
-            return {}
-
-        # Log track statistics
-        logger.info(f'After processing: {len(processed_tracks)} tracks remaining')
-        for track_id, track_data in processed_tracks.items():
-            duration_frames = track_data[-1].frame_idx - track_data[0].frame_idx
-            duration_seconds = duration_frames / video_properties.fps
-            frame_percentage = duration_frames / video_properties.total_frames
-            logger.info(
-                f'  Track {track_id}: {len(track_data)} detections, {duration_seconds:.1f}s ({frame_percentage * 100:.1f}%)'
-            )
-
-        return processed_tracks
+    return processed_tracks

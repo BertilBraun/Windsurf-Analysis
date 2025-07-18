@@ -84,57 +84,38 @@ class Detection:
     confidence: float
     frame_idx: FrameIndex
 
-
-FrameIndex = int
-
-
-@dataclass
-class Track(Detection):
-    track_id: int | None
-
-    def copy(self) -> Track:
-        return Track(
+    def copy(self) -> Detection:
+        return Detection(
             bbox=self.bbox.copy(),
+            feat=self.feat.copy(),
             confidence=self.confidence,
-            track_id=self.track_id,
-            feat=self.feat,
             frame_idx=self.frame_idx,
         )
 
-    def interpolate(self, other: Track, alpha: float) -> Track:
-        """Interpolate between this track and another track.
+    def interpolate(self, other: Detection, alpha: float) -> Detection:
+        new_bbox = self.bbox.interpolate(other.bbox, alpha)
+        new_feat = (1 - alpha) * self.feat + alpha * other.feat
+        new_confidence = (1 - alpha) * self.confidence + alpha * other.confidence
+        new_frame_idx = int((1 - alpha) * self.frame_idx + alpha * other.frame_idx)
 
-        Args:
-            other: Target track to interpolate towards
-            alpha: Interpolation factor (0.0 = this track, 1.0 = other track)
-
-        Returns:
-            New Track with interpolated values
-        """
-        # Interpolate frame index
-        interpolated_frame_idx = int((1 - alpha) * self.frame_idx + alpha * other.frame_idx)
-
-        # Interpolate bounding box
-        interpolated_bbox = self.bbox.interpolate(other.bbox, alpha)
-
-        # Interpolate confidence
-        interpolated_confidence = (1 - alpha) * self.confidence + alpha * other.confidence
-        interpolated_confidence *= 0.7  # Reduce confidence for interpolated detections
-
-        # Interpolate feature
-        interpolated_feat = (1 - alpha) * self.feat + alpha * other.feat
-
-        return Track(
-            frame_idx=interpolated_frame_idx,
-            bbox=interpolated_bbox,
-            confidence=interpolated_confidence,
-            track_id=self.track_id,
-            feat=interpolated_feat,
-        )
+        return Detection(bbox=new_bbox, feat=new_feat, confidence=new_confidence, frame_idx=new_frame_idx)
 
 
+FrameIndex = int
 TrackId = int | None
-TrackerInput = dict[TrackId, list[Track]]
+
+
+@dataclass
+class Track:
+    track_id: TrackId
+    sorted_detections: list[Detection]
+
+    def copy(self) -> Track:
+        new_sorted_detections = [d.copy() for d in self.sorted_detections]
+        return Track(
+            track_id=self.track_id,
+            sorted_detections=new_sorted_detections,
+        )
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:

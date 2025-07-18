@@ -15,10 +15,10 @@ from settings import (
     SMOOTHING_WINDOW_SIZE,
 )
 from video_io import VideoInfo
-from common_types import Track, BoundingBox, TrackId, TrackerInput, cosine_similarity
+from common_types import Detection, Track, BoundingBox, TrackId, cosine_similarity
 
 
-def _calculate_spatial_distance(main_track: list[Track], other_track: list[Track]) -> float:
+def _calculate_spatial_distance(main_track: list[Detection], other_track: list[Detection]) -> float:
     # Calculate spatial distance between bbox centers
     end = main_track[-1]
     start = other_track[0]
@@ -35,77 +35,16 @@ def _calculate_spatial_distance(main_track: list[Track], other_track: list[Track
     return normalized_spatial_distance
 
 
-def _calculate_temporal_distance(main_track: list[Track], other_track: list[Track]) -> float:
+def _calculate_temporal_distance(main_track: list[Detection], other_track: list[Detection]) -> float:
     return other_track[0].frame_idx - main_track[-1].frame_idx
 
 
-def _find_best_merge_candidates(tracks: TrackerInput, fps: int) -> tuple[TrackId, TrackId] | None:
-    """Find the pair of tracks that are closest in space and time"""
-
-    all_candidates: dict[TrackId, list[tuple[TrackId, float]]] = {}
-
-    start_track_ids = list(tracks.keys())
-    start_track_ids.sort(key=lambda x: tracks[x][0].frame_idx)
-
-    end_track_ids = list(tracks.keys())
-    end_track_ids.sort(key=lambda x: tracks[x][-1].frame_idx)
-
-    for track_id1 in start_track_ids:
-        candidates: list[tuple[TrackId, float]] = []
-        greedy_candidates: list[tuple[TrackId, float]] = []
-
-        for track_id2 in end_track_ids:
-            if track_id1 == track_id2:
-                continue
-
-            track_data1, track_data2 = tracks[track_id1], tracks[track_id2]
-            spatial_distance = _calculate_spatial_distance(track_data1, track_data2)
-
-            is_close = spatial_distance < MAX_SPATIAL_DISTANCE_BB
-
-            if is_close:
-                temporal_distance = _calculate_temporal_distance(track_data1, track_data2)
-                max_temporal_distance = MAX_TEMPORAL_DISTANCE_SECONDS * fps
-
-                is_within_temporal_distance = temporal_distance < max_temporal_distance and temporal_distance > 0
-                is_within_greedy_temporal_distance = temporal_distance < 0.25 * fps and temporal_distance > 0
-
-                if is_within_temporal_distance:
-                    candidates.append((track_id2, spatial_distance))
-                if is_within_greedy_temporal_distance:
-                    greedy_candidates.append((track_id2, spatial_distance))
-
-        if len(greedy_candidates) == 1:
-            logger = logging.getLogger(__name__)
-            logger.debug(f'Found greedy candidate: {track_id1} and {greedy_candidates[0][0]}')
-            return track_id1, greedy_candidates[0][0]
-
-        all_candidates[track_id1] = candidates
-
-    for track_id1, candidates in all_candidates.items():
-        if len(candidates) == 0 or len(tracks[track_id1]) == 0:
-            continue
-
-        end_track = tracks[track_id1][-1]
-
-        def get_cosine_similarity(candidate: tuple[TrackId, float]) -> float:
-            start_track = tracks[candidate[0]][0]
-            return cosine_similarity(end_track.feat, start_track.feat)
-
-        max_candidate = max(candidates, key=get_cosine_similarity)
-
-        if max_candidate[1] > HISTOGRAM_SIMILARITY_THRESHOLD:
-            return track_id1, max_candidate[0]
-
-    return None
-
-
-def _interpolate_missing_boxes(track_data: list[Track]) -> list[Track]:
+def _interpolate_missing_boxes(track_data: list[Detection]) -> list[Detection]:
     """Interpolate bounding boxes for missing frames in a track"""
     if len(track_data) < 2:
         return track_data
 
-    interpolated: list[Track] = []
+    interpolated: list[Detection] = []
 
     for i in range(len(track_data) - 1):
         current = track_data[i]
@@ -126,51 +65,7 @@ def _interpolate_missing_boxes(track_data: list[Track]) -> list[Track]:
     return list(sorted(interpolated, key=lambda x: x.frame_idx))
 
 
-def _merge_two_tracks(track1_data: list[Track], track2_data: list[Track]) -> list[Track]:
-    """Merge two tracks by combining their detections and interpolating between endpoints"""
-    # Combine all detections
-    merged_detections = track1_data + track2_data
-
-    # Sort by frame index
-    merged_detections.sort(key=lambda x: x.frame_idx)
-
-    # Apply interpolation to fill gaps
-    return _interpolate_missing_boxes(merged_detections)
-
-
-def _greedy_merge_tracks(tracks: TrackerInput, fps: int) -> TrackerInput:
-    """Greedy merging: repeatedly find and merge the closest track pair"""
-    logger = logging.getLogger(__name__)
-    logger.info(f'Starting greedy merge with {len(tracks)} tracks...')
-
-    # Convert to working copy
-    working_tracks = {track_id: track_data.copy() for track_id, track_data in tracks.items()}
-
-    iteration = 0
-    while True:
-        iteration += 1
-
-        # Find the best pair to merge
-        best_pair = _find_best_merge_candidates(working_tracks, fps)
-
-        if best_pair is None:
-            break
-
-        track_id1, track_id2 = best_pair
-        logger.info(f'Iteration {iteration}: Merging tracks {track_id1} and {track_id2}')
-
-        # Merge the tracks
-        merged_track = _merge_two_tracks(working_tracks[track_id1], working_tracks[track_id2])
-
-        # Remove the individual tracks and add the merged one
-        del working_tracks[track_id2]
-        working_tracks[track_id1] = merged_track
-
-    logger.info(f'Greedy merge complete after {iteration - 1} merges: {len(tracks)} → {len(working_tracks)} tracks')
-    return working_tracks
-
-
-def _smooth_track(track_data: list[Track], window_size: int = SMOOTHING_WINDOW_SIZE) -> list[Track]:
+def _smooth_track(track_data: list[Detection], window_size: int = SMOOTHING_WINDOW_SIZE) -> list[Detection]:
     """Smooth the center positions of a single track using a rolling window"""
     if len(track_data) <= 1:
         return track_data
@@ -178,7 +73,7 @@ def _smooth_track(track_data: list[Track], window_size: int = SMOOTHING_WINDOW_S
     # Sort by frame index
     track_data.sort(key=lambda x: x.frame_idx)
 
-    smoothed_track: list[Track] = []
+    smoothed_track: list[Detection] = []
 
     for i, detection in enumerate(track_data):
         # Calculate original bbox dimensions
@@ -219,15 +114,15 @@ def _smooth_track(track_data: list[Track], window_size: int = SMOOTHING_WINDOW_S
     return smoothed_track
 
 
-def _smooth_track_centers(tracks: TrackerInput) -> TrackerInput:
+def _smooth_track_centers(tracks: list[Track]) -> list[Track]:
     """Smooth the center positions of all tracks using a rolling window"""
-    return {track_id: _smooth_track(track_data) for track_id, track_data in tracks.items()}
+    return [Track(track.track_id, _smooth_track(track.sorted_detections)) for track in tracks]
 
 
-def _get_valid_tracks(tracks: TrackerInput, total_frames: int) -> TrackerInput:
+def _get_valid_tracks(tracks: list[Track], total_frames: int) -> list[Track]:
     """Get tracks that meet minimum frame percentage requirement"""
     logger = logging.getLogger(__name__)
-    valid_tracks = {}
+    valid_tracks: list[Track] = []
     min_frames = int(MIN_FRAME_PERCENTAGE / 100 * total_frames)
 
     logger.info(
@@ -235,31 +130,28 @@ def _get_valid_tracks(tracks: TrackerInput, total_frames: int) -> TrackerInput:
     )
     logger.info(f'Total tracks found: {len(tracks)}')
 
-    for track_id, detections in tracks.items():
-        if len(detections) == 0:
+    for track in tracks:
+        if len(track.sorted_detections) == 0:
             continue
 
-        # Sort detections by frame
-        detections.sort(key=lambda x: x.frame_idx)
-
         # Calculate track duration in frames
-        first_frame = detections[0].frame_idx
-        last_frame = detections[-1].frame_idx
+        first_frame = track.sorted_detections[0].frame_idx
+        last_frame = track.sorted_detections[-1].frame_idx
         duration_frames = last_frame - first_frame
 
         if duration_frames >= min_frames:
             # Interpolate missing detections
-            valid_tracks[track_id] = _interpolate_missing_boxes(detections)
+            valid_tracks.append(Track(track.track_id, _interpolate_missing_boxes(track.sorted_detections)))
 
     return valid_tracks
 
 
-def _relabel_tracks(tracks: TrackerInput) -> TrackerInput:
+def _relabel_tracks(tracks: list[Track]) -> list[Track]:
     """Relabel tracks from 1 to n"""
-    return {i: track_data for i, (track_id, track_data) in enumerate(tracks.items(), start=1)}
+    return [Track(i, track.sorted_detections) for i, track in enumerate(tracks, start=1)]
 
 
-def process_tracks(track_inputs: TrackerInput, video_properties: VideoInfo) -> TrackerInput:
+def tracks_filtering_smoothing_relabeling(track_inputs: list[Track], video_properties: VideoInfo) -> list[Track]:
     """Complete track processing pipeline: merge, filter, and smooth tracks.
 
     Args:
@@ -272,20 +164,20 @@ def process_tracks(track_inputs: TrackerInput, video_properties: VideoInfo) -> T
     logger = logging.getLogger(__name__)
 
     # sort all tracks by frame index
-    track_inputs = {
-        track_id: list(sorted(track_data, key=lambda x: x.frame_idx)) for track_id, track_data in track_inputs.items()
-    }
+    track_inputs = [
+        Track(track.track_id, list(sorted(track.sorted_detections, key=lambda x: x.frame_idx)))
+        for track in track_inputs
+    ]
 
     # First, greedily merge ALL tracks based on spatial and temporal proximity
     logger.info(f'Starting with {len(track_inputs)} tracks')
-    merged_tracks = _greedy_merge_tracks(track_inputs, video_properties.fps)  # TODO disable
 
     # Then filter merged tracks for minimum duration requirement
-    valid_tracks = _get_valid_tracks(merged_tracks, video_properties.total_frames)
+    valid_tracks = _get_valid_tracks(track_inputs, video_properties.total_frames)
 
     if not valid_tracks:
         logger.warning('No merged tracks meet the minimum frame percentage requirement')
-        return {}
+        return []
 
     logger.info(f'Found {len(valid_tracks)} valid tracks with duration >= {MIN_FRAME_PERCENTAGE}% of total frames')
 

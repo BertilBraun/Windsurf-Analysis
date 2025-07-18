@@ -12,8 +12,8 @@ import numpy as np
 from tqdm import tqdm
 from pathlib import Path
 
-from common_types import Point
-from track_processing import Track, TrackId, TrackerInput
+from common_types import Detection, Point
+from common_types import Track, TrackId
 from video_io import VideoReader, VideoWriter, get_video_properties
 
 
@@ -59,7 +59,7 @@ def _extract_centered_slice(frame: np.ndarray, center: Point, slice_size: tuple[
     return output_slice
 
 
-def _calculate_crop_size(track_data: list[Track], min_width: int = 400, min_height: int = 600) -> tuple[int, int]:
+def _calculate_crop_size(track_data: list[Detection], min_width: int = 400, min_height: int = 600) -> tuple[int, int]:
     """Calculate optimal crop size for a track based on average bbox dimensions.
 
     Args:
@@ -108,7 +108,7 @@ def _calculate_crop_size(track_data: list[Track], min_width: int = 400, min_heig
     return slice_width, slice_height
 
 
-def _find_detection_at_frame(track_data: list[Track], frame_idx: int) -> Track | None:
+def _find_detection_at_frame(track_data: list[Detection], frame_idx: int) -> Detection | None:
     """Find the detection at a specific frame index in track data.
 
     Args:
@@ -125,7 +125,7 @@ def _find_detection_at_frame(track_data: list[Track], frame_idx: int) -> Track |
 
 
 def generate_individual_videos(
-    tracks: TrackerInput, original_video_path: os.PathLike | str, output_dir: os.PathLike | str
+    tracks: list[Track], original_video_path: os.PathLike | str, output_dir: os.PathLike | str
 ) -> list[os.PathLike]:
     """Generate individual MP4 videos for each tracked person with centered, fixed-size crops.
 
@@ -156,35 +156,37 @@ def generate_individual_videos(
     writers: dict[TrackId, VideoWriter] = {}
     crop_sizes: dict[TrackId, tuple[int, int]] = {}
 
-    for person_number, track_data in tracks.items():
+    for track in tracks:
         # Calculate optimal crop size for this track
-        slice_width, slice_height = _calculate_crop_size(track_data)
-        crop_sizes[person_number] = (slice_width, slice_height)
+        slice_width, slice_height = _calculate_crop_size(track.sorted_detections)
+        crop_sizes[track.track_id] = (slice_width, slice_height)
 
-        logger.info(f'Track {person_number}: slice size {slice_width}x{slice_height} pixels')
+        logger.info(f'Track {track.track_id}: slice size {slice_width}x{slice_height} pixels')
 
         # Create video writer with sequential numbering
-        output_path = Path(output_dir) / f'{input_name}+{person_number:02d}.mp4'
+        output_path = Path(output_dir) / f'{input_name}+{track.track_id:02d}.mp4'
         writer = VideoWriter(output_path, slice_width, slice_height, video_properties.fps)
         writer.start_writing()
-        writers[person_number] = writer
+        writers[track.track_id] = writer
 
-        start_time_path = Path(output_dir) / f'{input_name}+{person_number:02d}.start_time.json'
-        start_time_path.write_text(json.dumps({'start_time': track_data[0].frame_idx / video_properties.fps}))
+        start_time_path = Path(output_dir) / f'{input_name}+{track.track_id:02d}.start_time.json'
+        start_time_path.write_text(
+            json.dumps({'start_time': track.sorted_detections[0].frame_idx / video_properties.fps})
+        )
 
     # Process video frame by frame with progress bar
     with VideoReader(original_video_path) as reader:
         for frame_idx, frame in tqdm(reader.read_frames(), total=total_frames, desc='Writing individual videos'):
             # Process each track for this frame
-            for track_id, track_data in tracks.items():
+            for track in tracks:
                 # Find detection for this frame
-                detection = _find_detection_at_frame(track_data, frame_idx)
+                detection = _find_detection_at_frame(track.sorted_detections, frame_idx)
 
                 if detection is not None:
                     # Extract fixed-size slice centered on bbox
-                    target_size = crop_sizes[track_id]
+                    target_size = crop_sizes[track.track_id]
                     cropped_frame = _extract_centered_slice(frame, detection.bbox.center, target_size)
-                    writers[track_id].write_frame(cropped_frame)
+                    writers[track.track_id].write_frame(cropped_frame)
 
     # Clean up writers
     for writer in writers.values():

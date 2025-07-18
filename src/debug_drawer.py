@@ -35,14 +35,13 @@ from tqdm import tqdm
 from vidstab import VidStab
 
 from common_types import Detection, BoundingBox, cosine_similarity
-from helpers import log_and_reraise
 
 # ---------------------------------------------------------------------------
 # Basic configuration --------------------------------------------------------
 
-BOX_COLOR_CUR = (255, 255, 255)      # white
-BOX_COLOR_PREV = (170, 170, 170)     # light grey
-aLPHA_OVERLAY = 0.5                  # translucency for stabilised preview
+BOX_COLOR_CUR = (255, 255, 255)  # white
+BOX_COLOR_PREV = (170, 170, 170)  # light grey
+aLPHA_OVERLAY = 0.5  # translucency for stabilised preview
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 
 # ---------------------------------------------------------------------------
@@ -53,7 +52,7 @@ def _generate_palette(n: int = 30, seed: int = 0) -> List[Tuple[int, int, int]]:
     """Return *n* bright BGR colours with deterministic shuffling."""
     colours: List[Tuple[int, int, int]] = []
     for i in range(n):
-        h = int((i / n) * 179)          # OpenCV hue range [0, 179]
+        h = int((i / n) * 179)  # OpenCV hue range [0, 179]
         s, v = 200, 255
         hsv = np.uint8([[[h, s, v]]])
         bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)[0, 0].tolist()
@@ -61,6 +60,7 @@ def _generate_palette(n: int = 30, seed: int = 0) -> List[Tuple[int, int, int]]:
     rng = np.random.default_rng(seed)
     rng.shuffle(colours)
     return colours
+
 
 # ---------------------------------------------------------------------------
 # Text & bounding‑box helpers ------------------------------------------------
@@ -75,8 +75,14 @@ def _measure_text(text: str, font_scale: float = 0.4, thickness: int = 1) -> Tup
 def _rects_overlap(a: Tuple[int, int, int, int], b: Tuple[int, int, int, int], margin: int = 2) -> bool:
     ax1, ay1, ax2, ay2 = a
     bx1, by1, bx2, by2 = b
-    ax1 -= margin; ay1 -= margin; ax2 += margin; ay2 += margin
-    bx1 -= margin; by1 -= margin; bx2 += margin; by2 += margin
+    ax1 -= margin
+    ay1 -= margin
+    ax2 += margin
+    ay2 += margin
+    bx1 -= margin
+    by1 -= margin
+    bx2 += margin
+    by2 += margin
     return not (ax2 < bx1 or bx2 < ax1 or ay2 < by1 or by2 < ay1)
 
 
@@ -240,9 +246,11 @@ def _draw_line_with_metrics(
     cache_update_cb,
 ):
     cv2.line(img, p1, p2, color, 1, cv2.LINE_AA)
-    txt = f"c={cos if cos is not None and not math.isnan(cos) else 'n/a':.2f} " \
-          f"iou={iou if iou is not None and not math.isnan(iou) else 'n/a':.2f} " \
-          f"d={dist if dist is not None and not math.isnan(dist) else 'n/a':.0f}"
+    txt = (
+        f'c={cos if cos is not None and not math.isnan(cos) else "n/a":.2f} '
+        f'iou={iou if iou is not None and not math.isnan(iou) else "n/a":.2f} '
+        f'd={dist if dist is not None and not math.isnan(dist) else "n/a":.0f}'
+    )
     org, new_t = _choose_label_org_for_line_cached(img, txt, p1, p2, label_positions, base_t, rng)
     rect = _draw_text(img, txt, org, color, font_scale=0.35)
     label_positions.append(rect)
@@ -275,10 +283,10 @@ def _draw_stabilised_prev_boxes(
     for det in prev_dets:
         box = det.bbox
         shifted = BoundingBox(
-            x1=box.x1 + dx,
-            y1=box.y1 + dy,
-            x2=box.x2 + dx,
-            y2=box.y2 + dy,
+            x1=int(box.x1 + dx),
+            y1=int(box.y1 + dy),
+            x2=int(box.x2 + dx),
+            y2=int(box.y2 + dy),
         )
         _draw_box(
             overlay,
@@ -297,20 +305,19 @@ def _draw_stabilised_prev_boxes(
 # Main worker ----------------------------------------------------------------
 
 
-@log_and_reraise
 def generate_debug_video_worker_function(
     args: tuple[
-        List[Detection],         # all detections (flat list)           ┐
-        VidStab | None,                # stabiliser instance                   │ legacy order preserved
-        os.PathLike,            # input video path                      │
-        os.PathLike             # output directory                      ┘
-    ]
+        List[Detection],  # all detections (flat list)
+        VidStab,  # stabilizer instance
+        os.PathLike,  # input video path
+        os.PathLike | str,  # output directory
+    ],
 ) -> None:
     """Multiprocessing worker that writes the debug video to disk."""
 
-    detections, stabiliser, input_path, output_dir = args
-    transforms = stabiliser.transforms if stabiliser is not None else None
-    logging.info(f"Generating debug video for {input_path} with {len(detections)} detections")
+    detections, stabilizer, input_path, output_dir = args
+    transforms = stabilizer.transforms
+    logging.info(f'Generating debug video for {input_path} with {len(detections)} detections')
     det_map = defaultdict(list)
     for det in detections:
         det_map[det.frame_idx].append(det)
@@ -318,7 +325,7 @@ def generate_debug_video_worker_function(
     input_path = Path(input_path)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    out_path = output_dir / f"{input_path.stem}+00_debug.mp4"
+    out_path = output_dir / f'{input_path.stem}+00_debug.mp4'
 
     # Project‑specific reader/writer
     from video_io import VideoReader, VideoWriter  # type: ignore
@@ -338,7 +345,7 @@ def generate_debug_video_worker_function(
             prev_dets: List[Detection] = []
             line_counter = 0
 
-            for f_idx, frame in tqdm(reader.read_frames(), total=props.total_frames, desc="Debug render"):
+            for f_idx, frame in tqdm(reader.read_frames(), total=props.total_frames, desc='Debug render'):
                 label_positions: List[Tuple[int, int, int, int]] = []
 
                 cur_scaled = _scale_frame(frame)
@@ -346,34 +353,42 @@ def generate_debug_video_worker_function(
 
                 canvas = np.zeros((dbg_h, dbg_w, 3), dtype=cur_scaled.dtype)
                 canvas[0:sh] = cur_scaled
-                canvas[sh:sh * 2] = bottom
+                canvas[sh : sh * 2] = bottom
 
                 # Frame index labels
-                label_positions.append(_draw_text(canvas, f"t={f_idx}", (5, 15), (0, 255, 0), bg=True))
+                label_positions.append(_draw_text(canvas, f't={f_idx}', (5, 15), (0, 255, 0), bg=True))
                 if prev_scaled is not None:
-                    label_positions.append(_draw_text(canvas, f"t={f_idx-1}", (5, sh + 15), (0, 255, 0), bg=True))
+                    label_positions.append(_draw_text(canvas, f't={f_idx - 1}', (5, sh + 15), (0, 255, 0), bg=True))
 
                 # Draw detections
                 cur_dets = det_map.get(f_idx, [])
-                cur_centres = _annotate_detections(canvas, cur_dets, BOX_COLOR_CUR, label_positions,
-                                                   scale_x=0.5, scale_y=0.5, y_offset=0)
-                prev_centres = _annotate_detections(canvas, prev_dets, BOX_COLOR_PREV, label_positions,
-                                                    scale_x=0.5, scale_y=0.5, y_offset=sh)
+                cur_centres = _annotate_detections(
+                    canvas, cur_dets, BOX_COLOR_CUR, label_positions, scale_x=0.5, scale_y=0.5, y_offset=0
+                )
+                prev_centres = _annotate_detections(
+                    canvas, prev_dets, BOX_COLOR_PREV, label_positions, scale_x=0.5, scale_y=0.5, y_offset=sh
+                )
 
                 # Optional stabilised overlay (prev → current)
                 transform = None
                 if transforms is not None and f_idx > 0 and len(transforms) >= f_idx:
                     transform = transforms[f_idx - 1]
-                _draw_stabilised_prev_boxes(canvas, prev_dets, transform, label_positions,
-                                            scale_x=0.5, scale_y=0.5, y_offset=0)
+                _draw_stabilised_prev_boxes(
+                    canvas, prev_dets, transform, label_positions, scale_x=0.5, scale_y=0.5, y_offset=0
+                )
 
                 # Connector lines with metrics
                 if cur_dets and prev_dets:
                     for i, det_c in enumerate(cur_dets):
                         for j, det_p in enumerate(prev_dets):
-                            cos = cosine_similarity(det_c.feat, det_p.feat) if det_c.feat is not None and det_p.feat is not None else float('nan')
-                            dist = math.hypot(det_c.bbox.center.x - det_p.bbox.center.x,
-                                              det_c.bbox.center.y - det_p.bbox.center.y)
+                            cos = (
+                                cosine_similarity(det_c.feat, det_p.feat)
+                                if det_c.feat is not None and det_p.feat is not None
+                                else float('nan')
+                            )
+                            dist = math.hypot(
+                                det_c.bbox.center.x - det_p.bbox.center.x, det_c.bbox.center.y - det_p.bbox.center.y
+                            )
                             iou = det_c.bbox.iou(det_p.bbox)
 
                             colour_idx = line_counter % len(palette)

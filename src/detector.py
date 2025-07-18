@@ -33,9 +33,7 @@ class SurferDetector:
 
         log_detection_settings()
 
-    def detect_and_track_video(
-        self, video_path: os.PathLike | str
-    ) -> Generator[Detection, None, None]:
+    def run_object_detection_on_video(self, video_path: os.PathLike | str) -> Generator[Detection, None, None]:
         """Run batched inference on entire video, return generator of (frame, detections)"""
 
         video_props = get_video_properties(video_path)
