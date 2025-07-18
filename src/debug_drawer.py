@@ -32,7 +32,8 @@ import logging
 import cv2
 import numpy as np
 from tqdm import tqdm
-from vidstab import VidStab
+from stabilize import VidStabWithoutVideoCapture
+from vidstab.vidstab_utils import build_transformation_matrix
 
 from common_types import Detection, BoundingBox, cosine_similarity
 
@@ -41,6 +42,8 @@ from common_types import Detection, BoundingBox, cosine_similarity
 
 BOX_COLOR_CUR = (255, 255, 255)  # white
 BOX_COLOR_PREV = (170, 170, 170)  # light grey
+BOX_COLOR_PREV_TRANSFORMED = (120, 120, 170)  # grayish blue
+BOX_COLOR_PREV_TRANSFORMED = (0, 0, 255)  # grayish blue
 aLPHA_OVERLAY = 0.5  # translucency for stabilised preview
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -278,20 +281,26 @@ def _draw_stabilised_prev_boxes(
     """
     if transform is None:
         return
-    dx, dy = transform[0], transform[1]
+    transform_matrix = build_transformation_matrix(transform)
+    # homogenious coordinates
+    transform_matrix = np.vstack((transform_matrix, [0, 0, 1]))
+    inverse = np.linalg.inv(transform_matrix)
+    # dx, dy = transform[0], transform[1]
     overlay = canvas.copy()
     for det in prev_dets:
         box = det.bbox
+        center = box.center
+        new_center = np.dot(inverse, np.array([center.x, center.y, 1]))
         shifted = BoundingBox(
-            x1=int(box.x1 + dx),
-            y1=int(box.y1 + dy),
-            x2=int(box.x2 + dx),
-            y2=int(box.y2 + dy),
+            x1=int(new_center[0] - box.width // 2),
+            y1=int(new_center[1] - box.height // 2),
+            x2=int(new_center[0] + box.width // 2),
+            y2=int(new_center[1] + box.height // 2),
         )
         _draw_box(
             overlay,
             shifted,
-            BOX_COLOR_PREV,
+            BOX_COLOR_PREV_TRANSFORMED,
             label_positions,
             scale_x=scale_x,
             scale_y=scale_y,
@@ -299,6 +308,31 @@ def _draw_stabilised_prev_boxes(
         )
     # Blend overlay into canvas
     cv2.addWeighted(overlay, aLPHA_OVERLAY, canvas, 1 - aLPHA_OVERLAY, 0, dst=canvas)
+
+
+def _draw_prev_boxes(
+    canvas: np.ndarray,
+    prev_dets: Sequence[Detection],
+    label_positions: List[Tuple[int, int, int, int]],
+    *,
+    scale_x: float,
+    scale_y: float,
+    y_offset: int = 0,
+) -> None:
+    """Draws previous detections into the current frame with high translucency."""
+    """Draw *prev_dets* on *canvas*; return list of box centres."""
+    for det in prev_dets:
+        _draw_box(
+            canvas,
+            det.bbox,
+            BOX_COLOR_PREV,
+            label_positions,
+            scale_x=scale_x,
+            scale_y=scale_y,
+            y_offset=y_offset,
+        )
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -374,8 +408,11 @@ def generate_debug_video_worker_function(
                 transform = None
                 if transforms is not None and f_idx > 0 and len(transforms) >= f_idx:
                     transform = transforms[f_idx - 1]
-                _draw_stabilised_prev_boxes(
-                    canvas, prev_dets, transform, label_positions, scale_x=0.5, scale_y=0.5, y_offset=0
+                # _draw_stabilised_prev_boxes(
+                #     canvas, prev_dets, transform, label_positions, scale_x=0.5, scale_y=0.5, y_offset=0
+                # )
+                _draw_prev_boxes(
+                    canvas, prev_dets, label_positions, scale_x=0.5, scale_y=0.5, y_offset=0
                 )
 
                 # Connector lines with metrics
