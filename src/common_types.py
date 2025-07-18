@@ -121,6 +121,18 @@ class Track:
             sorted_detections=new_sorted_detections,
         )
 
+    def end(self) -> Detection:
+        """Return the last detection in the track."""
+        if not self.sorted_detections:
+            raise ValueError("Track has no detections.")
+        return self.sorted_detections[-1]
+
+    def start(self) -> Detection:
+        """Return the first detection in the track."""
+        if not self.sorted_detections:
+            raise ValueError("Track has no detections.")
+        return self.sorted_detections[0]
+
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))

@@ -35,6 +35,8 @@ from collections import defaultdict
 from typing import Dict, List
 from video_io import VideoInfo
 import logging
+from enum import Enum
+from typing import Tuple, List
 
 import z3
 import numpy as np
@@ -63,6 +65,10 @@ class UnsatisfiableException(Exception):
     """Raised when the Z3 solver finds the problem unsatisfiable."""
     pass
 
+class _ComparisonResult(Enum):
+    MATCH = "match"
+    MAY_MATCH = "may_match"
+    NO_MATCH = "no_match"
 
 class DiscreteOptimizationTracker(Tracker):
     """Track objects by solving an assignment problem with *Z3*.
@@ -73,6 +79,96 @@ class DiscreteOptimizationTracker(Tracker):
         Maximum number of tracks that may exist in the scene.  Must be ≥ the
         maximum number of detections observed in any single frame.
     """
+    def __init__(
+            self,
+            greedy_min_iou: float = 0.8,
+            greedy_min_cosine_similarity: float = 0.5,
+            greddy_max_frame_distance: int = 5,
+            greedy_min_iou_matches_single_track: float = 0.2
+        ):
+        self.greedy_min_iou = greedy_min_iou
+        self.greedy_min_cosine_similarity = greedy_min_cosine_similarity
+        self.greedy_max_frame_distance = greddy_max_frame_distance
+        self.min_iou_matches_single_track = greedy_min_iou_matches_single_track
+
+    def compare_track_to_detection(
+            self,
+            track: Track,
+            detection: Detection,
+    ) -> Tuple[_ComparisonResult, float]:
+        iou = track.end().bbox.iou(detection.bbox)
+        if iou < self.min_iou_matches_single_track:
+            return (_ComparisonResult.NO_MATCH, 0)
+        sim = cosine_similarity(track.end().feat, detection.feat)
+        if iou >= self.greedy_min_iou and sim >= self.greedy_min_cosine_similarity:
+            return (_ComparisonResult.MATCH, min(iou, sim))
+        return (_ComparisonResult.MAY_MATCH, min(iou, sim))
+
+    def _preprocess_detections(
+            self,
+            detections: list[Detection],
+    ) -> List[Track]:
+        """Greedily stiches detections onto tracks as long as both IOU and consine similarity are high."""
+
+        # We match greedily if:
+        # the bounding box of a detection overlaps only with a single active track
+        # or both iou and cosine similarity are high enough to continue the track.
+        #
+        # We only match against active tracks. Stracks become stale if they are too old or if they have been considered for a match but ot chosen
+
+        # Sort detections by frame index to process them in order.
+        detections = sorted(detections, key=lambda d: d.frame_idx)
+
+        # these tracks have been detected but can't match further detections
+        stale_tracks: List[Track] = []
+
+        active_tracks: List[Track] = []
+        next_active_tracks: List[Track] = []
+        for det in detections:
+            # only keep continued tracks or tracks that were not considered
+            clean_matches = []
+            mby_matches = []
+            for track in active_tracks:
+                if track.end().frame_idx + self.greedy_max_frame_distance < det.frame_idx:
+                    continue  # remove old tracks
+                comparison_result, sim = self.compare_track_to_detection(track, det)
+                if comparison_result == _ComparisonResult.MATCH:
+                    # Track matches the detection, continue it
+                    clean_matches.append((track, sim))
+                elif comparison_result == _ComparisonResult.MAY_MATCH:
+                    mby_matches.append((track, sim))
+                elif comparison_result == _ComparisonResult.NO_MATCH:
+                    next_active_tracks.append(track)
+
+            if len(clean_matches) == 1:
+                track, _ = clean_matches[0]
+                track.sorted_detections.append(det)
+                next_active_tracks.append(track)
+                # we can keep bad matches if we have a clean one
+                for mby_track, _ in mby_matches:
+                    # if there is a match, we can remove the may be matches
+                    next_active_tracks.append(mby_track)
+            elif len(clean_matches) == 0 and len(mby_matches) == 1:
+                track, _ = mby_matches[0]
+                track.sorted_detections.append(det)
+                next_active_tracks.append(track)
+            else:
+                # no match found
+                # create a new track for this detection
+                new_track = Track(
+                    track_id=len(active_tracks) + len(stale_tracks),
+                    sorted_detections=[det],
+                )
+                next_active_tracks.append(new_track)
+
+            # update stale / active tracks
+            for track in active_tracks:
+                if track not in next_active_tracks:
+                    stale_tracks.append(track)
+            active_tracks = next_active_tracks
+            next_active_tracks = []
+        return stale_tracks + active_tracks
+
 
     def _track_detections_inner(
             self,
@@ -186,6 +282,9 @@ class DiscreteOptimizationTracker(Tracker):
         )
         max_detections = count_max_simultaneous_detections(detections)
         logging.info(f"Max simultaneous detections: {max_detections}")
+
+        preprocessed_tracks = self._preprocess_detections(detections)
+        return preprocessed_tracks
 
         # TODO: increase detections to check if there might be a better solution
         # penalize new tracks
