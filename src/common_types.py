@@ -76,6 +76,10 @@ class BoundingBox:
 
         return intersection_area / union_area if union_area > 0 else 0.0
 
+    def overlaps(self, other):
+        """Check if this bounding box overlaps with another."""
+        return not (self.x2 < other.x1 or self.x1 > other.x2 or self.y2 < other.y1 or self.y1 > other.y2)
+
 
 @dataclass
 class Detection:

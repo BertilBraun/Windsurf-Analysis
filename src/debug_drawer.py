@@ -1,55 +1,72 @@
-"""Refactored debug‐video renderer
-=================================
-
-Key improvements
-----------------
-1. **Modular frame preparation & annotation** – Current‑ and previous‑frame drawing logic
-   is isolated in helper functions so it can be unit‑tested or reused in other
-   pipelines.
-2. **Optional stabilised overlay** – Previous‑frame detections can be projected into
-   the current frame using VidStab motion estimates.  The overlay is drawn in a
-   translucent grey (α = 0.5) so that users can visually judge the effect of
-   stabilisation.
-3. **Slimmer main loop** – The worker now focuses on I/O and orchestration;
-   all drawing happens in helpers that accept simple, declarative arguments.
-4. **Backwards compatible** – If no `transforms` array is supplied the overlay is
-   simply skipped and the behaviour matches the original implementation.
-
-To integrate, either import the helper functions you need or call the
-`generate_debug_video_worker_function` directly (its signature has one extra
-parameter – see below).
-"""
-
 from __future__ import annotations
 
-from pathlib import Path
-from typing import List, Tuple, Optional, Sequence
+from progress.bar import color
+
+"""Debug‑rendering helpers
+===========================
+
+This module introduces two high‑level classes that act as the backbone for the
+new debug‑video renderer:
+
+* **`DebugCanvas`** – Owns the *whole* output image and is responsible for any
+  drawing that requires global knowledge, e.g. collision‑free label placement
+  or connector lines that span multiple sub‑views.
+* **`DebugView`** – A lightweight façade that represents a *rectangular region*
+  of the canvas (for example “current frame”, “previous frame”, a single cell
+  in a 4×4 grid, …).  It handles coordinate transforms and delegates the actual
+  drawing to its parent `DebugCanvas`.
+
+Importantly all coordinates are in *canvas* coordinates of the original frame.
+They will be converted to canvas coordinates of the debug view late, just before drawing using primitives.
+
+The public API is intentionally minimal yet composable so that callers can
+re‑use existing helper functions almost unchanged while gaining the flexibility
+of an arbitrarily complex layout.
+
+Example
+-------
+```python
+canvas_img = np.zeros((2 * h, w, 3), np.uint8)
+canvas = DebugCanvas(canvas_img)
+
+cur_view  = canvas.create_view(0,      0, w, h, scale_x=0.5, scale_y=0.5)
+prev_view = canvas.create_view(0,      h, w, h, scale_x=0.5, scale_y=0.5)
+
+cur_centres  = cur_view.annotate_detections(cur_dets, BOX_COLOR_CUR)
+prev_centres = prev_view.annotate_detections(prev_dets, BOX_COLOR_PREV)
+
+canvas.draw_line_with_metrics(cur_centres, prev_centres, cur_dets, prev_dets)
+cv2.imwrite("preview.png", canvas_img)
+```
+
+The snippet above recreates the classic two‑row layout without any of the old
+special‑case code paths.  Switching to a 4×4 grid is as easy as adding more
+`create_view` calls.
+"""
+
 from collections import defaultdict
 import math
-import os
 import logging
+from pathlib import Path
+from typing import List, Optional, Sequence, Tuple
+import os
+from stabilize import VidStabWithoutVideoCapture
 
 import cv2
 import numpy as np
 from tqdm import tqdm
-from stabilize import VidStabWithoutVideoCapture
-from vidstab.vidstab_utils import build_transformation_matrix
 
-from common_types import Detection, BoundingBox, cosine_similarity
-
-# ---------------------------------------------------------------------------
-# Basic configuration --------------------------------------------------------
+from common_types import BoundingBox, Detection, cosine_similarity
 
 BOX_COLOR_CUR = (255, 255, 255)  # white
 BOX_COLOR_PREV = (170, 170, 170)  # light grey
 BOX_COLOR_PREV_TRANSFORMED = (120, 120, 170)  # grayish blue
-BOX_COLOR_PREV_TRANSFORMED = (0, 0, 255)  # grayish blue
-aLPHA_OVERLAY = 0.5  # translucency for stabilised preview
+ALPHA_OVERLAY = 0.5  # translucency for stabilised preview
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 
-# ---------------------------------------------------------------------------
-# Colour utilities -----------------------------------------------------------
-
+def _clamp(value: int, min_v: int, max_v: int) -> int:
+    """Clamp *value* between *min_v* and *max_v*."""
+    return max(min_v, min(max_v, value))
 
 def _generate_palette(n: int = 30, seed: int = 0) -> List[Tuple[int, int, int]]:
     """Return *n* bright BGR colours with deterministic shuffling."""
@@ -64,279 +81,247 @@ def _generate_palette(n: int = 30, seed: int = 0) -> List[Tuple[int, int, int]]:
     rng.shuffle(colours)
     return colours
 
-
-# ---------------------------------------------------------------------------
-# Text & bounding‑box helpers ------------------------------------------------
-
-
-def _measure_text(text: str, font_scale: float = 0.4, thickness: int = 1) -> Tuple[int, int, int]:
-    (size, base) = cv2.getTextSize(text, _FONT, font_scale, thickness)
-    w, h = size
-    return w, h, base
-
-
-def _rects_overlap(a: Tuple[int, int, int, int], b: Tuple[int, int, int, int], margin: int = 2) -> bool:
-    ax1, ay1, ax2, ay2 = a
-    bx1, by1, bx2, by2 = b
-    ax1 -= margin
-    ay1 -= margin
-    ax2 += margin
-    ay2 += margin
-    bx1 -= margin
-    by1 -= margin
-    bx2 += margin
-    by2 += margin
-    return not (ax2 < bx1 or bx2 < ax1 or ay2 < by1 or by2 < ay1)
-
-
-def _draw_text(
-    img: np.ndarray,
-    text: str,
-    org: Tuple[int, int],
-    color=(255, 255, 255),
-    font_scale: float = 0.4,
-    thickness: int = 1,
-    bg: bool = True,
-) -> Tuple[int, int, int, int]:
-    """Draw *text* on *img* and return its rectangle (x1, y1, x2, y2)."""
-    tw, th, base = _measure_text(text, font_scale, thickness)
-    x, y = org
-    tl, br = (x, y - th - base), (x + tw, y + base)
-    if bg:
-        cv2.rectangle(img, tl, br, (0, 0, 0), -1)
-    cv2.putText(img, text, (x, y), _FONT, font_scale, color, thickness, cv2.LINE_AA)
-    return tl[0], tl[1], br[0], br[1]
-
-
-# ---------------------------------------------------------------------------
-# Frame‑level helpers --------------------------------------------------------
-
-
-def _scale_frame(frame: np.ndarray, scale: float = 0.5) -> np.ndarray:
-    """Return *frame* resized isotropically by *scale*."""
-    h, w = frame.shape[:2]
-    return cv2.resize(frame, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-
-
-def _draw_box(
-    img: np.ndarray,
-    box: BoundingBox,
-    color: Tuple[int, int, int],
-    label_positions: List[Tuple[int, int, int, int]],
-    *,
-    label: Optional[str] = None,
-    scale_x: float = 1.0,
-    scale_y: float = 1.0,
-    y_offset: int = 0,
-) -> Tuple[int, int]:
-    """Draw a bounding box and optional label; return its centre in *img* coords."""
-    x1 = int(box.x1 * scale_x)
-    y1 = int(box.y1 * scale_y) + y_offset
-    x2 = int(box.x2 * scale_x)
-    y2 = int(box.y2 * scale_y) + y_offset
-    cv2.rectangle(img, (x1, y1), (x2, y2), color, 1, cv2.LINE_AA)
-    if label:
-        rect = _draw_text(img, label, (x1, max(y1 - 2, 0)), color)
-        label_positions.append(rect)
-    return x1 + (x2 - x1) // 2, y1 + (y2 - y1) // 2
-
-
-def _annotate_detections(
-    canvas: np.ndarray,
-    detections: Sequence[Detection],
-    box_color: Tuple[int, int, int],
-    label_positions: List[Tuple[int, int, int, int]],
-    *,
-    scale_x: float,
-    scale_y: float,
-    y_offset: int,
-) -> List[Tuple[int, int]]:
-    """Draw *detections* on *canvas*; return list of box centres."""
-    centres: List[Tuple[int, int]] = []
-    for det in detections:
-        centres.append(
-            _draw_box(
-                canvas,
-                det.bbox,
-                box_color,
-                label_positions,
-                scale_x=scale_x,
-                scale_y=scale_y,
-                y_offset=y_offset,
-            )
-        )
-    return centres
-
-
-# ---------------------------------------------------------------------------
-# Connector‑line helpers (unchanged logic, now packaged) ---------------------
-
+def _measure_text(text: str, font_scale: float, thickness: int) -> Tuple[int, int]:
+    size, _ = cv2.getTextSize(text, _FONT, font_scale, thickness)
+    tw, th = size
+    return (tw, th)
+    
 
 def _point_along_line(p1: Tuple[int, int], p2: Tuple[int, int], t: float) -> Tuple[int, int]:
     return int(round(p1[0] + t * (p2[0] - p1[0]))), int(round(p1[1] + t * (p2[1] - p1[1])))
 
+class DebugCanvas:
+    """Owns the global image and collision‑aware drawing primitives.
 
-def _clamp_label_org(
-    img: np.ndarray,
-    text: str,
-    x: int,
-    y: int,
-    font_scale: float,
-    thickness: int,
-):
-    h, w = img.shape[:2]
-    tw, th, base = _measure_text(text, font_scale, thickness)
-    ox = int(round(x - tw / 2))
-    oy = int(round(y + th / 2))
-    ox = max(0, min(ox, w - tw))
-    oy = max(th + base, min(oy, h - 1))
-    return (ox, oy - th - base, ox + tw, oy + base, (ox, oy))
+    Draw calls are in debug_view coordinates."""
+
+    def __init__(self, canvas: np.ndarray, feed_w, feed_h, *, seed: int | None = None):
+        self.canvas = canvas  # uint8 H×W×3 array
+        self.h, self.w = canvas.shape[:2]
+        # size of the original video feed
+        self.feed_w, self.feed_h = feed_w, feed_h
+        # placed labels in debug view coordinates --> used to avoid collision.
+        self.label_positions: list[BoundingBox] = []  # placed labels (global)
+
+        # Colour palette used by connector lines
+        self._seed = int(seed) if seed is not None else 0
+        self.palette: List[Tuple[int, int, int]] = _generate_palette(30, self._seed)
+        self._rng = np.random.default_rng(self._seed ^ 0xA5A5A5A5)
+
+    def create_view(
+        self,
+        x: int,
+        y: int,
+        w: int,
+        h: int,
+    ) -> "DebugView":
+        """Return a new view covering *rect* (x, y, w, h) in canvas coords."""
+        return DebugView(self, x, y, w, h)
+
+    # ---------------------------------------------------------------------
+    # Global drawing ops ---------------------------------------------------
+
+    def draw_text(
+        self,
+        text: str,
+        origin_bl: Tuple[int, int],
+        color: Tuple[int, int, int] = (255, 255, 255),
+        font_scale: float = 0.4,
+        thickness: int = 1,
+        bg: bool = True,
+    ) -> BoundingBox:
+        tw, th = _measure_text(text, font_scale, thickness)
+        x, y = origin_bl
+        text_bb = BoundingBox(
+            x, y - th, x + tw, y
+        )
+        if bg:
+            cv2.rectangle(
+                self.canvas,
+                (text_bb.x1, text_bb.y1),
+                (text_bb.x2, text_bb.y2),
+                (40, 40, 40),
+                -1
+            )
+        cv2.putText(self.canvas, text, (x, y), _FONT, font_scale, color, thickness, cv2.LINE_AA)
+        return text_bb
+
+    def draw_label(
+            self,
+            text: str,
+            origin_bl: Tuple[int, int],
+            color: Tuple[int, int, int],
+            font_scale: float = 0.4,
+            thickness: int = 1,
+            bg: bool = True,
+    ):
+        """Draws text and reserves space to avoid overwriting."""
+        bbox_text = self.draw_text(
+            text,
+            origin_bl,
+            color,
+            font_scale=font_scale,
+            thickness=thickness,
+            bg=bg,
+        )
+        self.label_positions.append(bbox_text)
 
 
-def _choose_label_org_for_line_cached(
-    img: np.ndarray,
-    text: str,
-    p1: Tuple[int, int],
-    p2: Tuple[int, int],
-    existing: List[Tuple[int, int, int, int]],
-    base_t: float,
-    rng: np.random.Generator,
-    *,
-    font_scale: float = 0.35,
-    thickness: int = 1,
-    step: float = 0.1,
-) -> Tuple[Tuple[int, int], float]:
-    """Collision‑aware label placement with cached preferred *t*."""
-    cands: List[float] = [t for t in (base_t,) if 0.0 <= t <= 1.0]
-    k, up_done, dn_done = 1, False, False
-    while not (up_done and dn_done):
-        tu, td = base_t + step * k, base_t - step * k
-        if tu > 1.0:
-            up_done = True
-        else:
-            cands.append(tu)
-        if td < 0.0:
-            dn_done = True
-        else:
-            cands.append(td)
-        k += 1
-        if k > 20:
-            break
-    for t in cands:
+    def draw_box(
+        self,
+        bbox: BoundingBox,
+        color: Tuple[int, int, int],
+        label: Optional[str] = None,
+    ):
+        cv2.rectangle(
+            self.canvas,
+            (bbox.x1, bbox.y1),
+            (bbox.x2, bbox.y2),
+            color,
+            1,
+            cv2.LINE_AA,
+        )
+        if label:
+            self.draw_label(
+                label, (bbox.x1, max(bbox.y1 - 2, 0)), color
+            )
+
+    def _choose_label_org_for_line_cached(
+        self,
+        text: str,
+        p1: Tuple[int, int],
+        p2: Tuple[int, int],
+        font_scale: float = 0.35,
+        thickness: int = 1,
+        step: float = 0.1,
+    ) -> Tuple[int, int]:
+        base_t = 0.25
+        cands: List[float] = [t for t in (base_t,) if 0.0 <= t <= 1.0]
+        k, up_done, dn_done = 1, False, False
+        while not (up_done and dn_done):
+            tu, td = base_t + step * k, base_t - step * k
+            if tu > 1.0:
+                up_done = True
+            else:
+                cands.append(tu)
+            if td < 0.0:
+                dn_done = True
+            else:
+                cands.append(td)
+            k += 1
+            if k > 20:
+                break
+        for t in cands:
+            cx, cy = _point_along_line(p1, p2, t)
+            org, bb_text = self._clamp_label_origin(text, cx, cy, font_scale, thickness)
+            if not any(bb.overlaps(bb_text) for bb in self.label_positions):
+                return org
+        # fallback random
+        t = float(self._rng.random())
         cx, cy = _point_along_line(p1, p2, t)
-        rx1, ry1, rx2, ry2, org = _clamp_label_org(img, text, cx, cy, font_scale, thickness)
-        if not any(_rects_overlap((rx1, ry1, rx2, ry2), e) for e in existing):
-            return org, t
-    # fallback random
-    t = float(rng.random())
-    cx, cy = _point_along_line(p1, p2, t)
-    _, _, _, _, org = _clamp_label_org(img, text, cx, cy, font_scale, thickness)
-    return org, t
+        org, _ = self._clamp_label_origin(text, cx, cy, font_scale, thickness)
+        return org
 
-
-def _draw_line_with_metrics(
-    img: np.ndarray,
-    p1: Tuple[int, int],
-    p2: Tuple[int, int],
-    cos: float | None,
-    dist: float | None,
-    iou: float | None,
-    color: Tuple[int, int, int],
-    label_positions: List[Tuple[int, int, int, int]],
-    rng: np.random.Generator,
-    *,
-    base_t: float,
-    cache_update_cb,
-):
-    cv2.line(img, p1, p2, color, 1, cv2.LINE_AA)
-    txt = (
-        f'c={cos if cos is not None and not math.isnan(cos) else "n/a":.2f} '
-        f'iou={iou if iou is not None and not math.isnan(iou) else "n/a":.2f} '
-        f'd={dist if dist is not None and not math.isnan(dist) else "n/a":.0f}'
-    )
-    org, new_t = _choose_label_org_for_line_cached(img, txt, p1, p2, label_positions, base_t, rng)
-    rect = _draw_text(img, txt, org, color, font_scale=0.35)
-    label_positions.append(rect)
-    cache_update_cb(new_t)
-
-
-# ---------------------------------------------------------------------------
-# Stabilised overlay helper --------------------------------------------------
-
-
-def _draw_stabilised_prev_boxes(
-    canvas: np.ndarray,
-    prev_dets: Sequence[Detection],
-    transform: Sequence[float] | None,
-    label_positions: List[Tuple[int, int, int, int]],
-    *,
-    scale_x: float,
-    scale_y: float,
-    y_offset: int = 0,
-) -> None:
-    """Project *prev_dets* into current‑frame coordinates and draw translucently.
-
-    Only translation (dx, dy) is applied; rotation (da) is ignored for simplicity.
-    Set `transform=None` to skip overlay (e.g. at frame 0).
-    """
-    if transform is None:
-        return
-    transform_matrix = build_transformation_matrix(transform)
-    # homogenious coordinates
-    transform_matrix = np.vstack((transform_matrix, [0, 0, 1]))
-    inverse = np.linalg.inv(transform_matrix)
-    # dx, dy = transform[0], transform[1]
-    overlay = canvas.copy()
-    for det in prev_dets:
-        box = det.bbox
-        center = box.center
-        new_center = np.dot(inverse, np.array([center.x, center.y, 1]))
-        shifted = BoundingBox(
-            x1=int(new_center[0] - box.width // 2),
-            y1=int(new_center[1] - box.height // 2),
-            x2=int(new_center[0] + box.width // 2),
-            y2=int(new_center[1] + box.height // 2),
+    def _clamp_label_origin(
+        self,
+        text: str,
+        x: int,
+        y: int,
+        font_scale: float,
+        thickness: int,
+    ) -> tuple[tuple[int, int], BoundingBox]:
+        """Clamp label origin to canvas bounds and return the text bounding box."""
+        assert x >= 0 and y >= 0
+        tw, th = _measure_text(text, font_scale, thickness)
+        top = max(0, y - th)
+        right = min(self.w, x + tw)
+        left = right - tw
+        bottom = min(self.h, y)
+        assert left >= 0 and bottom >= 0
+        org = (left, bottom)
+        bbox = BoundingBox(
+            left, top, right, bottom
         )
-        _draw_box(
-            overlay,
-            shifted,
-            BOX_COLOR_PREV_TRANSFORMED,
-            label_positions,
-            scale_x=scale_x,
-            scale_y=scale_y,
-            y_offset=y_offset,
-        )
-    # Blend overlay into canvas
-    cv2.addWeighted(overlay, aLPHA_OVERLAY, canvas, 1 - aLPHA_OVERLAY, 0, dst=canvas)
+        return org, bbox
+
+    def draw_line_with_label(
+            self,
+            start: Tuple[int, int],
+            end: Tuple[int, int],
+            text: str,
+            color: Tuple[int, int, int]
+    ) -> None:
+        """Draw a line between *start* and *end* with a label at the midpoint."""
+        cv2.line(self.canvas, start, end, color, 1, cv2.LINE_AA)
+        org = self._choose_label_org_for_line_cached(text, start, end)
+        self.draw_label(text, org, color)
 
 
-def _draw_prev_boxes(
-    canvas: np.ndarray,
-    prev_dets: Sequence[Detection],
-    label_positions: List[Tuple[int, int, int, int]],
-    *,
-    scale_x: float,
-    scale_y: float,
-    y_offset: int = 0,
-) -> None:
-    """Draws previous detections into the current frame with high translucency."""
-    """Draw *prev_dets* on *canvas*; return list of box centres."""
-    for det in prev_dets:
-        _draw_box(
-            canvas,
-            det.bbox,
-            BOX_COLOR_PREV,
-            label_positions,
-            scale_x=scale_x,
-            scale_y=scale_y,
-            y_offset=y_offset,
+class DebugView:
+    """Represents a rectangular sub‑region of a `DebugCanvas`. It is assumed that this region is associated with one display of the original video feed.
+
+    Draw calls are made in detection coordinates. I.e. coordinates of the original video feed."""
+
+    def __init__(
+        self,
+        canvas: DebugCanvas,
+        # coordinates in DebugCanvas
+        x: int,
+        y: int,
+        w: int,
+        h: int,
+    ) -> None:
+        self._c = canvas
+        self.x, self.y, self.w, self.h = map(int, (x, y, w, h))
+
+    def _feed_to_global(self, feed_x: int, feed_y: int) -> Tuple[int, int]:
+        """Feed‑space → debug-canvas‑space."""
+        x_f = feed_x * self.w / self._c.feed_w + self.x
+        y_f = feed_y * self.h / self._c.feed_h + self.y
+        return (
+            _clamp(int(round(x_f)), 0, self._c.w),
+            _clamp(int(round(y_f)), 0, self._c.h)
         )
 
+    def _feed_bb_to_global(self, bbox: BoundingBox) -> BoundingBox:
+        """Feed‑space BoundingBox → debug-canvas‑space BoundingBox."""
+        x1, y1 = self._feed_to_global(bbox.x1, bbox.y1)
+        x2, y2 = self._feed_to_global(bbox.x2, bbox.y2)
+        return BoundingBox(x1, y1, x2, y2)
 
+    def draw_box(
+        self,
+        bbox: BoundingBox,
+        color: Tuple[int, int, int],
+        label: Optional[str] = None,
+    ):
+        bb_transformed = self._feed_bb_to_global(bbox)
+        self._c.draw_box(bb_transformed, color, label)
 
+    def draw_label(
+        self,
+        text: str,
+        origin_tl: Tuple[int, int],
+        color: Tuple[int, int, int],
+        font_scale: float = 0.4,
+        thickness: int = 1,
+        bg: bool = True,
+    ):
+        """Draws text and reserves space to avoid overwriting."""
+        org = self._feed_to_global(*origin_tl)
+        self._c.draw_label(text, org, color, font_scale=font_scale, thickness=thickness, bg=bg)
 
-# ---------------------------------------------------------------------------
-# Main worker ----------------------------------------------------------------
+    def draw_text(
+        self,
+        text: str,
+        origin_tl: Tuple[int, int],
+        color: Tuple[int, int, int],
+        font_scale: float = 0.4,
+        thickness: int = 1,
+        bg: bool = True,
+    ):
+        org = self._feed_to_global(*origin_tl)
+        self._c.draw_text(text, org, color, font_scale=font_scale, thickness=thickness, bg=bg)
 
 
 def generate_debug_video_worker_function(
@@ -347,7 +332,7 @@ def generate_debug_video_worker_function(
         os.PathLike | str,  # output directory
     ],
 ) -> None:
-    """Multiprocessing worker that writes the debug video to disk."""
+    """Multiprocessing worker that writes the debug video to disk using the DebugCanvas API."""
 
     detections, stabilizer_in, input_path, output_dir = args
     if stabilizer_in is not None:
@@ -365,95 +350,75 @@ def generate_debug_video_worker_function(
     out_path = output_dir / f'{input_path.stem}+00_debug.mp4'
     logging.info(f'Generating debug video for {input_path} with {len(detections)} detections. Writing to {out_path}')
 
-    # Project‑specific reader/writer
     from video_io import VideoReader, VideoWriter  # type: ignore
 
     seed = abs(hash(str(input_path)))
-    palette = _generate_palette(30, seed)
-    rng = np.random.default_rng(seed ^ 0xA5A5A5A5)
-    label_t_cache = [0.25] * len(palette)
 
     with VideoReader(input_path) as reader:
         props = reader.get_properties()  # width, height, fps, total_frames
-        sw, sh = max(1, props.width // 2), max(1, props.height // 2)
+        feed_w, feed_h = props.width, props.height
+        sw, sh = max(1, feed_w // 2), max(1, feed_h // 2)
         dbg_w, dbg_h = sw, sh * 2
 
         with VideoWriter(out_path, dbg_w, dbg_h, props.fps) as writer:
             prev_scaled: Optional[np.ndarray] = None
             prev_dets: List[Detection] = []
-            line_counter = 0
 
             for f_idx, frame in tqdm(reader.read_frames(), total=props.total_frames, desc='Debug render'):
-                label_positions: List[Tuple[int, int, int, int]] = []
-
-                cur_scaled = _scale_frame(frame)
+                cur_scaled = cv2.resize(frame, (sw, sh), interpolation=cv2.INTER_LINEAR)
                 bottom = prev_scaled if prev_scaled is not None else np.zeros_like(cur_scaled)
 
-                canvas = np.zeros((dbg_h, dbg_w, 3), dtype=cur_scaled.dtype)
-                canvas[0:sh] = cur_scaled
-                canvas[sh : sh * 2] = bottom
+                # Create canvas and views
+                canvas_img = np.zeros((dbg_h, dbg_w, 3), dtype=cur_scaled.dtype)
+                canvas_img[0:sh] = cur_scaled
+                canvas_img[sh:sh * 2] = bottom
+
+                canvas = DebugCanvas(canvas_img, feed_w, feed_h, seed=seed)
+                cur_view = canvas.create_view(0, 0, sw, sh)
+                prev_view = canvas.create_view(0, sh, sw, sh)
 
                 # Frame index labels
-                label_positions.append(_draw_text(canvas, f't={f_idx}', (5, 15), (0, 255, 0), bg=True))
+                canvas.draw_text(f't={f_idx}', (5, 15), color=(0, 255, 0), bg=True)
                 if prev_scaled is not None:
-                    label_positions.append(_draw_text(canvas, f't={f_idx - 1}', (5, sh + 15), (0, 255, 0), bg=True))
+                    canvas.draw_text(f't={f_idx-1}', (5, sh + 15), color=(0, 255, 0), bg=True)
 
                 # Draw detections
                 cur_dets = det_map.get(f_idx, [])
-                cur_centres = _annotate_detections(
-                    canvas, cur_dets, BOX_COLOR_CUR, label_positions, scale_x=0.5, scale_y=0.5, y_offset=0
-                )
-                prev_centres = _annotate_detections(
-                    canvas, prev_dets, BOX_COLOR_PREV, label_positions, scale_x=0.5, scale_y=0.5, y_offset=sh
-                )
+                for d in cur_dets:
+                    cur_view.draw_box(d.bbox, BOX_COLOR_CUR, label=f'{d.confidence:.2f}')
+                prev_dets = det_map.get(f_idx - 1, [])
+                if prev_dets is not None:
+                    for d in prev_dets:
+                        prev_view.draw_box(d.bbox, BOX_COLOR_CUR, label=f'{d.confidence:.2f}')
+                        cur_view.draw_box(d.bbox, BOX_COLOR_PREV)
 
-                # Optional stabilised overlay (prev → current)
-                transform = None
-                if transforms is not None and f_idx > 0 and len(transforms) >= f_idx:
-                    transform = transforms[f_idx - 1]
-                # _draw_stabilised_prev_boxes(
-                #     canvas, prev_dets, transform, label_positions, scale_x=0.5, scale_y=0.5, y_offset=0
-                # )
-                _draw_prev_boxes(
-                    canvas, prev_dets, label_positions, scale_x=0.5, scale_y=0.5, y_offset=0
-                )
+                for det_c in cur_dets:
+                    cur_c_global = cur_view._feed_to_global(*det_c.bbox.center)
+                    for det_p in prev_dets:
+                        prev_c_global = prev_view._feed_to_global(*det_p.bbox.center)
+                        cos = (
+                            cosine_similarity(det_c.feat, det_p.feat)
+                            if det_c.feat is not None and det_p.feat is not None
+                            else float("nan")
+                        )
+                        dist = math.hypot(
+                            det_c.bbox.center.x - det_p.bbox.center.x,
+                            det_c.bbox.center.y - det_p.bbox.center.y,
+                        )
+                        iou = det_c.bbox.iou(det_p.bbox)
+                        txt = (
+                            f"c={cos if cos is not None and not math.isnan(cos) else 'n/a':.2f} "
+                            f"iou={iou if iou is not None and not math.isnan(iou) else 'n/a':.2f} "
+                            f"d={dist if dist is not None and not math.isnan(dist) else 'n/a':.0f}"
+                        )
+                        canvas.draw_line_with_label(
+                            cur_c_global,
+                            prev_c_global,
+                            text=txt,
+                            color=BOX_COLOR_CUR,
+                        )
 
-                # Connector lines with metrics
-                if cur_dets and prev_dets:
-                    for i, det_c in enumerate(cur_dets):
-                        for j, det_p in enumerate(prev_dets):
-                            cos = (
-                                cosine_similarity(det_c.feat, det_p.feat)
-                                if det_c.feat is not None and det_p.feat is not None
-                                else float('nan')
-                            )
-                            dist = math.hypot(
-                                det_c.bbox.center.x - det_p.bbox.center.x, det_c.bbox.center.y - det_p.bbox.center.y
-                            )
-                            iou = det_c.bbox.iou(det_p.bbox)
-
-                            colour_idx = line_counter % len(palette)
-                            colour = palette[colour_idx]
-                            base_t = label_t_cache[colour_idx]
-
-                            _draw_line_with_metrics(
-                                canvas,
-                                cur_centres[i],
-                                prev_centres[j],
-                                cos,
-                                dist,
-                                iou,
-                                colour,
-                                label_positions,
-                                rng,
-                                base_t=base_t,
-                                cache_update_cb=lambda new_t, idx=colour_idx: label_t_cache.__setitem__(idx, new_t),
-                            )
-                            line_counter += 1
-
-                writer.write_frame(canvas)
-
-                # Update prev‑state
-                prev_scaled, prev_dets = cur_scaled, cur_dets
+                writer.write_frame(canvas_img)
+                prev_scaled = cur_scaled
 
     return None
