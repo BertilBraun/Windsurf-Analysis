@@ -51,12 +51,13 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 import os
 from stabilize import VidStabWithoutVideoCapture
+from itertools import chain
 
 import cv2
 import numpy as np
 from tqdm import tqdm
 
-from common_types import BoundingBox, Detection, cosine_similarity
+from common_types import BoundingBox, Detection, cosine_similarity, Track
 
 BOX_COLOR_CUR = (255, 255, 255)  # white
 BOX_COLOR_PREV = (170, 170, 170)  # light grey
@@ -325,8 +326,9 @@ class DebugView:
 
 
 def generate_debug_video_worker_function(
-    args: tuple[
+    args: Tuple[
         List[Detection],  # all detections (flat list)
+        List[Track],
         VidStabWithoutVideoCapture | None,  # stabilizer instance
         os.PathLike,  # input video path
         os.PathLike | str,  # output directory
@@ -334,7 +336,7 @@ def generate_debug_video_worker_function(
 ) -> None:
     """Multiprocessing worker that writes the debug video to disk using the DebugCanvas API."""
 
-    detections, stabilizer_in, input_path, output_dir = args
+    detections, tracks, stabilizer_in, input_path, output_dir = args
     if stabilizer_in is not None:
         stabilizer = stabilizer_in.get_vid_stab(input_path)
         transforms = stabilizer.transforms
@@ -343,6 +345,12 @@ def generate_debug_video_worker_function(
     det_map = defaultdict(list)
     for det in detections:
         det_map[det.frame_idx].append(det)
+
+
+    track_detections_per_frame: dict[int, list[Tuple[int, Detection]]] = defaultdict(list)
+    for track in tracks:
+        for d in track.sorted_detections:
+            track_detections_per_frame[d.frame_idx].append((track.track_id, d))
 
     input_path = Path(input_path)
     output_dir = Path(output_dir)
@@ -362,7 +370,7 @@ def generate_debug_video_worker_function(
 
         with VideoWriter(out_path, dbg_w, dbg_h, props.fps) as writer:
             prev_scaled: Optional[np.ndarray] = None
-            prev_dets: List[Detection] = []
+            prev_dets: List[Tuple[int, Detection]] = []
 
             for f_idx, frame in tqdm(reader.read_frames(), total=props.total_frames, desc='Debug render'):
                 cur_scaled = cv2.resize(frame, (sw, sh), interpolation=cv2.INTER_LINEAR)
@@ -386,15 +394,15 @@ def generate_debug_video_worker_function(
                 cur_dets = det_map.get(f_idx, [])
                 for d in cur_dets:
                     cur_view.draw_box(d.bbox, BOX_COLOR_CUR, label=f'{d.confidence:.2f}')
-                prev_dets = det_map.get(f_idx - 1, [])
+                prev_dets = track_detections_per_frame.get(f_idx - 1, [])
                 if prev_dets is not None:
-                    for d in prev_dets:
-                        prev_view.draw_box(d.bbox, BOX_COLOR_CUR, label=f'{d.confidence:.2f}')
+                    for t_id, d in prev_dets:
+                        prev_view.draw_box(d.bbox, BOX_COLOR_CUR, label=f'{t_id}')
                         cur_view.draw_box(d.bbox, BOX_COLOR_PREV)
 
                 for det_c in cur_dets:
                     cur_c_global = cur_view._feed_to_global(*det_c.bbox.center)
-                    for det_p in prev_dets:
+                    for _t_id, det_p in prev_dets:
                         prev_c_global = prev_view._feed_to_global(*det_p.bbox.center)
                         cos = (
                             cosine_similarity(det_c.feat, det_p.feat)

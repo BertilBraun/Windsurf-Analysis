@@ -70,7 +70,7 @@ class WindsurfingVideoProcessor:
             # f.result()
 
             self.submit_low_priority_task(
-                generate_debug_video_worker_function, (detections, None, input_path, self.output_dir)
+                generate_debug_video_worker_function, (detections, processed_tracks, None, input_path, self.output_dir)
             )
 
     def finalize(self):
