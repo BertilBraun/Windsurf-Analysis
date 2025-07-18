@@ -4,26 +4,13 @@ import glob
 import torch
 import argparse
 import traceback
-import logging
 from pathlib import Path
 from itertools import chain
+from helpers import setup_logging
 
 
 from settings import STANDARD_OUTPUT_DIR
 from windsurf_video_processor import WindsurfingVideoProcessor
-
-
-def setup_logging(output_dir: Path | None = None):
-    """Configure logging for the windsurfing video analysis tool."""
-    if output_dir is None:
-        output_dir = Path(STANDARD_OUTPUT_DIR)
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[logging.StreamHandler(), logging.FileHandler(output_dir / 'windsurf_analysis.log', encoding='utf-8')],
-    )
-    logging.info(f'Logging to {output_dir / "windsurf_analysis.log"}')
-    return logging.getLogger(__name__)
 
 
 def main():

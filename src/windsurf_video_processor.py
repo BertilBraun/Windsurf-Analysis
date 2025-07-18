@@ -7,6 +7,7 @@ from pathlib import Path
 from debug_drawer import generate_debug_video_worker_function
 from helpers import log_and_reraise
 from stabilize import compute_vidstab_transforms
+import logging
 
 
 from video_io import VideoReader, VideoWriter, get_video_properties
@@ -45,7 +46,7 @@ class WindsurfingVideoProcessor:
         logger.info(f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.total_frames} frames')
 
         # start stabilizer computation in background
-        stabilizer_future = self.priority_mp_executor.submit(compute_vidstab_transforms, input_path)
+        stabilizer_future = self.submit_high_priority_task(compute_vidstab_transforms, input_path)
 
         # run detection and tracking
         detections = list(self.surf_detector.run_object_detection_on_video(input_path))
@@ -61,9 +62,10 @@ class WindsurfingVideoProcessor:
             )
 
         if self.draw_annotations:
-            self.submit_low_priority_task(
+            f = self.submit_low_priority_task(
                 _generate_annotated_video_worker_function, (processed_tracks, input_path, self.output_dir)
             )
+            # f.result()
 
             self.submit_low_priority_task(
                 generate_debug_video_worker_function, (detections, stabilizer, input_path, self.output_dir)
@@ -73,8 +75,12 @@ class WindsurfingVideoProcessor:
         self.high_mp_executor.shutdown(wait=True)
         self.priority_mp_executor.shutdown(wait=True)
 
-    def submit_low_priority_task(self, func: Callable[[P], R], args: P) -> None:
-        self.high_mp_executor.submit(log_and_reraise(func), args)
+    def submit_low_priority_task(self, func: Callable[[P], R], *args, **kwargs):
+        return self.high_mp_executor.submit(log_and_reraise, func, *args, helpers_log_and_reraise_output_dir=self.output_dir, **kwargs)
+
+    def submit_high_priority_task(self, func: Callable[[P], R], *args, **kwargs):
+        return self.priority_mp_executor.submit(log_and_reraise, func, *args, helpers_log_and_reraise_output_dir=self.output_dir, **kwargs)
+
 
 
 def _stabilize_individual_video_worker_function(args: tuple[os.PathLike, os.PathLike]) -> None:
@@ -101,6 +107,7 @@ def _generate_annotated_video_worker_function(args: tuple[list[Track], os.PathLi
     annotation_drawer = AnnotationDrawer()
 
     annotated_video_path = Path(output_dir) / f'{Path(input_path).stem}+00_annotated.mp4'
+    logging.info(f'Writing annotated video to {annotated_video_path}')
 
     with VideoReader(input_path) as reader:
         video_props = reader.get_properties()

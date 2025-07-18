@@ -308,16 +308,16 @@ def _draw_stabilised_prev_boxes(
 def generate_debug_video_worker_function(
     args: tuple[
         List[Detection],  # all detections (flat list)
-        VidStab,  # stabilizer instance
+        VidStabWithoutVideoCapture:,  # stabilizer instance
         os.PathLike,  # input video path
         os.PathLike | str,  # output directory
     ],
 ) -> None:
     """Multiprocessing worker that writes the debug video to disk."""
 
-    detections, stabilizer, input_path, output_dir = args
+    detections, stabilizer_in, input_path, output_dir = args
+    stabilizer = stabilizer_in.get_vid_stab(input_path)
     transforms = stabilizer.transforms
-    logging.info(f'Generating debug video for {input_path} with {len(detections)} detections')
     det_map = defaultdict(list)
     for det in detections:
         det_map[det.frame_idx].append(det)
@@ -326,6 +326,7 @@ def generate_debug_video_worker_function(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / f'{input_path.stem}+00_debug.mp4'
+    logging.info(f'Generating debug video for {input_path} with {len(detections)} detections. Writing to {out_path}')
 
     # Project‑specific reader/writer
     from video_io import VideoReader, VideoWriter  # type: ignore

@@ -2,11 +2,34 @@ import os
 
 from pathlib import Path
 from vidstab import VidStab
+from vidstab.frame_queue import FrameQueue
+import cv2
 
 from video_io import get_video_properties
+from copy import deepcopy
 
 
-def compute_vidstab_transforms(input_video: str | os.PathLike) -> VidStab:
+class VidStabWithoutVideoCapture:
+    def __init__(self, vid_stab: VidStab):
+        """A VidStab without the video capture can be send to other processes.
+
+        Args:
+            vid_stab (VidStab): The VidStab object to be used for stabilization will be modified.
+        """
+        fq = vid_stab.frame_queue
+        vid_stab.frame_queue = FrameQueue()
+        self.vid_stab = deepcopy(vid_stab)
+        vid_stab.frame_queue = fq
+
+    def get_vid_stab(self, video_path: Path) -> VidStab:
+        """Get the VidStab object."""
+        vid_stab = deepcopy(self.vid_stab)
+        vid_stab.frame_queue = FrameQueue()
+        vid_stab.frame_queue.set_frame_source(cv2.VideoCapture(str(Path(video_path).resolve())))
+        return vid_stab
+
+
+def compute_vidstab_transforms(input_video: str | os.PathLike) -> VidStabWithoutVideoCapture:
     """
     Compute stabilization transforms for a video (in memory).
     Returns:
@@ -17,14 +40,14 @@ def compute_vidstab_transforms(input_video: str | os.PathLike) -> VidStab:
     stabilizer = VidStab()
     stabilizer.gen_transforms(input_path=input_video, smoothing_window=min(30, video_properties.total_frames - 1))
 
-    return stabilizer
+    return VidStabWithoutVideoCapture(stabilizer)
 
 
-def stabilize_with_transforms(input_video: str | os.PathLike, output_video: str | os.PathLike, stabilizer: VidStab):
+def stabilize_with_transforms(input_video: str | os.PathLike, output_video: str | os.PathLike, stabilizer: VidStabWithoutVideoCapture):
     """
     Apply given transforms to input video, write stabilized video to output path.
     """
-    stabilizer.stabilize(
+    stabilizer.get_vid_stab(Path(input_video)).stabilize(
         input_path=input_video,
         output_path=output_video,
     )
