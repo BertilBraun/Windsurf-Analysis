@@ -5,6 +5,7 @@ from tqdm import tqdm
 from pathlib import Path
 import numpy as np
 from vidstab import VidStab
+from debug_drawer import generate_debug_video_worker_function
 from stabilize import compute_vidstab_transforms
 
 
@@ -25,7 +26,7 @@ def _detector_mp_init_surf_detector():
     surf_detector = SurferDetector()
 
 
-def _run_detect(video_path: os.PathLike) -> list[tuple[int, np.ndarray, list[Detection]]]:
+def _run_detect(video_path: os.PathLike) -> list[Detection]:
     """Run detection and tracking on a video file"""
     global surf_detector
     logger = logging.getLogger(__name__)
@@ -63,9 +64,8 @@ class WindsurfingVideoProcessor:
         detections = detector_future.result()
         stabilizer = stabilizer_future.result()
 
-        for frame_index, _, detections in detections:
-            for detection in detections:
-                surfer_tracker.add_detection(frame_index, detection)
+        for detection in detections:
+            surfer_tracker.add_detection(detection.frame_idx, detection)
 
         processed_tracks = surfer_tracker.process_tracks(input_path)
 
@@ -79,7 +79,7 @@ class WindsurfingVideoProcessor:
             all_tracks = {track_id: tracks for track_id, tracks in processed_tracks.items()}
             # YOLO tracks only:
             tracks = (
-                Track(detection.bbox, detection.feat, detection.confidence, None, frame_idx)
+                Track(detection.bbox, detection.feat, detection.confidence, frame_idx, None)
                 for (frame_idx, detections) in surfer_tracker.detections.items()
                 for detection in detections
             )
@@ -89,6 +89,12 @@ class WindsurfingVideoProcessor:
                 _generate_annotated_video_worker_function,
                 (all_tracks, input_path, self.output_dir)
             )
+
+            self.high_mp_executor.submit(
+                generate_debug_video_worker_function,
+                (detections, input_path, self.output_dir)
+            )
+
 
             # self.annotated_video_generator.submit((all_tracks, input_path, self.output_dir))
             # self.debug_video_generator.submit((surfer_tracker.detections, input_path, self.output_dir))

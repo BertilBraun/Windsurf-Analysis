@@ -82,6 +82,7 @@ class Detection:
     bbox: BoundingBox
     feat: np.ndarray
     confidence: float
+    frame_idx: FrameIndex
 
 
 FrameIndex = int
@@ -90,7 +91,6 @@ FrameIndex = int
 @dataclass
 class Track(Detection):
     track_id: int | None
-    frame_idx: FrameIndex
 
     def copy(self) -> Track:
         return Track(

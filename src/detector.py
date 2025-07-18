@@ -35,7 +35,7 @@ class SurferDetector:
 
     def detect_and_track_video(
         self, video_path: os.PathLike | str
-    ) -> Generator[tuple[int, np.ndarray, list[Detection]], None, None]:
+    ) -> Generator[Detection, None, None]:
         """Run batched inference on entire video, return generator of (frame, detections)"""
 
         video_props = get_video_properties(video_path)
@@ -54,9 +54,9 @@ class SurferDetector:
         for frame_index, result in tqdm(
             enumerate(results), total=video_props.total_frames // skip_frames, desc='Processing video'
         ):
-            yield frame_index * skip_frames, result.orig_img, self._extract_detections(result)
+            yield from self._extract_detections(result, frame_index * skip_frames)
 
-    def _extract_detections(self, result: Results) -> list[Detection]:
+    def _extract_detections(self, result: Results, frame_idx: int) -> list[Detection]:
         """Extract detection information for further processing"""
         detections: list[Detection] = []
 
@@ -76,6 +76,7 @@ class SurferDetector:
                     ),
                     feat=feats[i],
                     confidence=confidences[i],
+                    frame_idx=frame_idx,
                 )
                 detections.append(detection)
 

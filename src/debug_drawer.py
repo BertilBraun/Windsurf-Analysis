@@ -29,6 +29,7 @@ from typing import List, Tuple, Optional
 import cv2
 import numpy as np
 from tqdm import tqdm
+from collections import defaultdict
 
 from common_types import Detection, BoundingBox, cosine_similarity
 
@@ -249,7 +250,7 @@ def _draw_line_with_metrics(
 # Main worker -----------------------------------------------------------------
 
 
-def generate_debug_video_worker_function(args: tuple[dict[int, list[Detection]], os.PathLike, os.PathLike]) -> None:
+def generate_debug_video_worker_function(args: tuple[list[Detection], os.PathLike, os.PathLike]) -> None:
     """Multiprocessing worker to render a debug video.
 
     Parameters
@@ -260,7 +261,10 @@ def generate_debug_video_worker_function(args: tuple[dict[int, list[Detection]],
         input_path: source video.
         output_dir: directory to write `<stem>+00_debug.mp4`.
     """
-    det_map, input_path, output_dir = args
+    detections, input_path, output_dir = args
+    det_map = defaultdict(list)
+    for det in detections:
+        det_map[det.frame_idx].append(det)
 
     input_path = Path(input_path)
     output_dir = Path(output_dir)
