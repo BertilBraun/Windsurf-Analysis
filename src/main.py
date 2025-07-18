@@ -20,9 +20,9 @@ def setup_logging(output_dir: Path | None = None):
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[logging.StreamHandler(), logging.FileHandler(output_dir / 'windsurf_analysis.log')],
+        handlers=[logging.StreamHandler(), logging.FileHandler(output_dir / 'windsurf_analysis.log', encoding='utf-8')],
     )
-    logging.info(f"Logging to {output_dir / 'windsurf_analysis.log'}")
+    logging.info(f'Logging to {output_dir / "windsurf_analysis.log"}')
     return logging.getLogger(__name__)
 
 
@@ -33,7 +33,9 @@ def main():
     )
     parser.add_argument('--output-dir', help='Directory for individual surfer videos (default: individual_surfers)')
     parser.add_argument('--draw-annotations', action='store_true', help='Draw annotations on the video')
-    parser.add_argument('--dry-run', action='store_true', help='Run without rendering individual videos (for testing purposes)')
+    parser.add_argument(
+        '--dry-run', action='store_true', help='Run without rendering individual videos (for testing purposes)'
+    )
 
     args = parser.parse_args()
 
