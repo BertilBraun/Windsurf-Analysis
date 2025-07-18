@@ -17,7 +17,7 @@ from annotation_drawer import Annotation, AnnotationDrawer
 from stabilize import stabilize
 from concurrent.futures import ProcessPoolExecutor
 
-from tracking import DummyTracker
+from discrete_opt_tracker import DiscreteOptimizationTracker
 
 from common_types import Track
 
@@ -56,7 +56,7 @@ class WindsurfingVideoProcessor:
         # wait for stabilizer computation to finish
         # stabilizer = stabilizer_future.result()
 
-        processed_tracks = process_detections_into_tracks(input_path, detections, DummyTracker())
+        processed_tracks = process_detections_into_tracks(input_path, detections, DiscreteOptimizationTracker())
 
         if not self.dry_run:
             self.submit_low_priority_task(
