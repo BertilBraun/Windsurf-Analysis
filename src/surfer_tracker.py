@@ -10,14 +10,15 @@ import logging
 
 import tracking
 import track_processing
-from vidstab import VidStab
+from tracking import Tracker
 
 from common_types import Detection, Track
 from video_io import get_video_properties
 
 
 def process_detections_into_tracks(
-    original_video_path: os.PathLike | str, detections: list[Detection], stabilizer: VidStab
+    original_video_path: os.PathLike | str, detections: list[Detection],
+    tracker: Tracker
 ) -> list[Track]:
     """Process collected tracks and return processed track data for video generation"""
     logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ def process_detections_into_tracks(
     # Get video properties for track processing
     video_properties = get_video_properties(original_video_path)
 
-    processed_tracks = tracking.process_detections(detections, video_properties, stabilizer)
+    processed_tracks = tracker.track_detections(detections, video_properties)
 
     # Process tracks using the track processing module
     processed_tracks = track_processing.tracks_filtering_smoothing_relabeling(processed_tracks, video_properties)

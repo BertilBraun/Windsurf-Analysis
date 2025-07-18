@@ -17,6 +17,8 @@ from annotation_drawer import Annotation, AnnotationDrawer
 from stabilize import stabilize
 from concurrent.futures import ProcessPoolExecutor
 
+from tracking import DummyTracker
+
 from common_types import Track
 
 import video_splicing
@@ -46,15 +48,15 @@ class WindsurfingVideoProcessor:
         logger.info(f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.total_frames} frames')
 
         # start stabilizer computation in background
-        stabilizer_future = self.submit_high_priority_task(compute_vidstab_transforms, input_path)
+        # stabilizer_future = self.submit_high_priority_task(compute_vidstab_transforms, input_path)
 
         # run detection and tracking
         detections = list(self.surf_detector.run_object_detection_on_video(input_path))
 
         # wait for stabilizer computation to finish
-        stabilizer = stabilizer_future.result()
+        # stabilizer = stabilizer_future.result()
 
-        processed_tracks = process_detections_into_tracks(input_path, detections, stabilizer)
+        processed_tracks = process_detections_into_tracks(input_path, detections, DummyTracker())
 
         if not self.dry_run:
             self.submit_low_priority_task(
@@ -68,7 +70,7 @@ class WindsurfingVideoProcessor:
             # f.result()
 
             self.submit_low_priority_task(
-                generate_debug_video_worker_function, (detections, stabilizer, input_path, self.output_dir)
+                generate_debug_video_worker_function, (detections, None, input_path, self.output_dir)
             )
 
     def finalize(self):

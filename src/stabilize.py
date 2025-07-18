@@ -21,7 +21,7 @@ class VidStabWithoutVideoCapture:
         self.vid_stab = deepcopy(vid_stab)
         vid_stab.frame_queue = fq
 
-    def get_vid_stab(self, video_path: Path) -> VidStab:
+    def get_vid_stab(self, video_path: os.PathLike | str) -> VidStab:
         """Get the VidStab object."""
         vid_stab = deepcopy(self.vid_stab)
         vid_stab.frame_queue = FrameQueue()
