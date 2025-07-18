@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 from vidstab import VidStab
 from debug_drawer import generate_debug_video_worker_function
+from helpers import log_and_reraise
 from stabilize import compute_vidstab_transforms
 
 
@@ -92,18 +93,15 @@ class WindsurfingVideoProcessor:
 
             self.high_mp_executor.submit(
                 generate_debug_video_worker_function,
-                (detections, input_path, self.output_dir)
+                (detections, stabilizer, input_path, self.output_dir)
             )
-
-
-            # self.annotated_video_generator.submit((all_tracks, input_path, self.output_dir))
-            # self.debug_video_generator.submit((surfer_tracker.detections, input_path, self.output_dir))
 
     def finalize(self):
         self.high_mp_executor.shutdown(wait=True)
         self.detector_mp.shutdown(wait=True)
 
 
+@log_and_reraise
 def _stabilize_individual_video_worker_function(args: tuple[os.PathLike, os.PathLike]) -> None:
     logger = logging.getLogger(__name__)
     input_file, output_file = args
@@ -113,6 +111,7 @@ def _stabilize_individual_video_worker_function(args: tuple[os.PathLike, os.Path
         os.unlink(input_file)
 
 
+@log_and_reraise
 def _generate_individual_videos_worker_function(args: tuple[TrackerInput, os.PathLike, os.PathLike | str]) -> None:
     tracks, input_path, output_dir = args
     individual_videos = video_splicing.generate_individual_videos(tracks, input_path, output_dir)
@@ -125,6 +124,7 @@ def _generate_individual_videos_worker_function(args: tuple[TrackerInput, os.Pat
             )
 
 
+@log_and_reraise
 def _generate_annotated_video_worker_function(args: tuple[TrackerInput, os.PathLike, os.PathLike | str]) -> None:
     tracks, input_path, output_dir = args
     annotation_drawer = AnnotationDrawer()
