@@ -1,8 +1,6 @@
 import os
 import logging
-import yaml
 import numpy as np
-from pathlib import Path
 from typing import Generator
 
 from tqdm import tqdm
@@ -11,45 +9,44 @@ from ultralytics.engine.results import Results
 
 from video_io import get_video_properties
 import settings
-from common_types import TrackDetection, BoundingBox, Detection
+from common_types import BoundingBox, Detection
 
 
 def log_detection_settings():
-    settings_str = "\n".join(
-        f"{k}: {v}" for k, v in settings.__dict__.items() if not k.startswith('__') and not callable(v) and k.isupper()
+    settings_str = '\n'.join(
+        f'{k}: {v}' for k, v in settings.__dict__.items() if not k.startswith('__') and not callable(v) and k.isupper()
     )
     logging.info(f'Detection settings: \n{settings_str}')
-
 
 
 class SurferDetector:
     """Pure detection and tracking class for surfers in video"""
 
     def __init__(self):
-        logger = logging.getLogger(__name__)
-        logger.info(f'Using model: {settings.YOLO_MODEL_PATH}')
-        model_path = Path(settings.YOLO_MODEL_PATH)
-        if not model_path.exists():
-            logging.warning(f'Model {model_path} not found, using default model')
+        logging.info(f'Using model: {settings.YOLO_MODEL_PATH}')
+        if not settings.YOLO_MODEL_PATH.exists():
+            raise FileNotFoundError(f'Model {settings.YOLO_MODEL_PATH} not found')
+
         self.model = YOLO(settings.YOLO_MODEL_PATH, verbose=False)
+
+        self.model.add_callback('on_predict_start', self._on_predict_start)
+
         log_detection_settings()
-        self.tracker_config_file = self._write_tracker_config()
 
     def detect_and_track_video(
         self, video_path: os.PathLike | str
-    ) -> Generator[tuple[int, np.ndarray, tuple[list[TrackDetection], list[Detection]]], None, None]:
+    ) -> Generator[tuple[int, np.ndarray, list[Detection]], None, None]:
         """Run batched inference on entire video, return generator of (frame, detections)"""
 
         video_props = get_video_properties(video_path)
         skip_frames = video_props.fps // settings.MIN_TRACKING_FPS
 
-        results = self.model.track(
+        results = self.model.predict(
             str(video_path),
             iou=settings.IOU_THRESHOLD,
             conf=settings.CONFIDENCE_THRESHOLD,
             batch=settings.BATCH_SIZE,
             vid_stride=skip_frames,
-            tracker=str(self.tracker_config_file),
             stream=True,
             verbose=False,
         )
@@ -59,80 +56,44 @@ class SurferDetector:
         ):
             yield frame_index * skip_frames, result.orig_img, self._extract_detections(result)
 
-    def _write_tracker_config(self) -> Path:
-        file_name = Path(__file__).parent / 'botsort.yaml'
-        yaml_content = {
-            'tracker_type': 'botsort',
-            'track_high_thresh': settings.BOTS_TRACK_HIGH_THRESH,  # threshold for the first association
-            'track_low_thresh': settings.BOTS_TRACK_LOW_THRESH,  # threshold for the second association
-            'new_track_thresh': settings.BOTS_NEW_TRACK_THRESH,  # threshold for init new track if the detection does not match any tracks
-            'track_buffer': settings.BOTS_TRACK_BUFFER,  # buffer to calculate the time when to remove tracks
-            'match_thresh': settings.BOTS_MATCH_THRESH,  # threshold for matching tracks
-            'fuse_score': settings.BOTS_FUSE_SCORE,  # Whether to fuse confidence scores with the iou distances before matching
-            # min_box_area: 10  # threshold for min box areas(for tracker evaluation, not used for now)
-            #
-            # BoT-SORT settings
-            'gmc_method': settings.BOTS_GMC_METHOD,  # method of global motion compensation
-            # ReID model related thresh
-            'proximity_thresh': settings.BOTS_PROXIMITY_THRESH,  # minimum IoU for valid match with ReID
-            'appearance_thresh': settings.BOTS_APPEARANCE_THRESH,  # minimum appearance similarity for ReID
-            'with_reid': settings.BOTS_WITH_REID,
-            'model': settings.BOTS_MODEL,  # uses native features if detector is YOLO else yolo11n-cls.pt
-        }
-
-        with open(file_name, 'w') as f:
-            yaml.dump(yaml_content, f)
-        return file_name
-
-    def _extract_detections(self, result: Results) -> tuple[list[TrackDetection], list[Detection]]:
+    def _extract_detections(self, result: Results) -> list[Detection]:
         """Extract detection information for further processing"""
-        track_detections: list[TrackDetection] = []
         detections: list[Detection] = []
 
         if result.boxes is not None:
             # Convert tensors to numpy arrays using utility function
             boxes = _to_numpy(result.boxes.xyxy)
             confidences = _to_numpy(result.boxes.conf)
-            class_ids = _to_numpy(result.boxes.cls)
-            feats = _to_numpy(result.feats) if hasattr(result, 'feats') else None
-
-            track_ids = None
-            if result.boxes.id is not None:
-                track_ids = _to_numpy(result.boxes.id)
+            feats = _to_numpy(result.feats)
 
             for i in range(len(boxes)):
-                detection = TrackDetection(
+                detection = Detection(
                     bbox=BoundingBox(
                         x1=boxes[i][0],
                         y1=boxes[i][1],
                         x2=boxes[i][2],
                         y2=boxes[i][3],
                     ),
-                    confidence=float(confidences[i]),
-                    class_id=int(class_ids[i]),
-                    class_name=result.names[int(class_ids[i])],
-                    track_id=int(track_ids[i]) if track_ids is not None else None,
-                    feat=feats[i] if feats is not None else None
+                    feat=feats[i],
+                    confidence=confidences[i],
                 )
-                track_detections.append(detection)
+                detections.append(detection)
 
-            det_boxes = _to_numpy(result.det_boxes.xyxy) if hasattr(result, "det_boxes") else None
-            det_feats = _to_numpy(result.det_feats) if hasattr(result, "det_feats") else None
+        return detections
 
-            if det_boxes is not None:
-                for i in range(len(det_boxes)):
-                    detection = Detection(
-                        bbox=BoundingBox(
-                            x1=det_boxes[i][0],
-                            y1=det_boxes[i][1],
-                            x2=det_boxes[i][2],
-                            y2=det_boxes[i][3],
-                        ),
-                        feat=det_feats[i] if det_feats is not None else None,
-                    )
-                    detections.append(detection)
+    def _on_predict_start(self, predictor: object) -> None:
+        """Initialize trackers for object tracking during prediction.
 
-        return (track_detections, detections)
+        Args:
+            predictor (ultralytics.engine.predictor.BasePredictor): The predictor object to initialize trackers for.
+        """
+        predictor._feats = None  # type: ignore  # reset in case used earlier
+
+        # Register hook to extract input of Detect layer
+        def pre_hook(module, input):
+            predictor._feats = list(input[0])  # type: ignore  # unroll to new list to avoid mutation in forward
+
+        predictor._hook = predictor.model.model.model[-1].register_forward_pre_hook(pre_hook)  # type: ignore
 
 
 def _to_numpy(tensor_or_array):

@@ -15,7 +15,7 @@ from settings import (
     SMOOTHING_WINDOW_SIZE,
 )
 from video_io import VideoInfo
-from common_types import Track, BoundingBox, TrackId, TrackerInput
+from common_types import Track, BoundingBox, TrackId, TrackerInput, cosine_similarity
 
 
 def _calculate_spatial_distance(main_track: list[Track], other_track: list[Track]) -> float:
@@ -83,16 +83,19 @@ def _find_best_merge_candidates(tracks: TrackerInput, fps: int) -> tuple[TrackId
         all_candidates[track_id1] = candidates
 
     for track_id1, candidates in all_candidates.items():
+        if len(candidates) == 0 or len(tracks[track_id1]) == 0:
+            continue
+
         end_track = tracks[track_id1][-1]
 
-        def get_histogram_similarity(candidate: tuple[TrackId, float]) -> float:
+        def get_cosine_similarity(candidate: tuple[TrackId, float]) -> float:
             start_track = tracks[candidate[0]][0]
-            return end_track.histogram_similarity(start_track)
+            return cosine_similarity(end_track.feat, start_track.feat)
 
-        candidates.sort(key=get_histogram_similarity)
+        max_candidate = max(candidates, key=get_cosine_similarity)
 
-        if candidates and get_histogram_similarity(candidates[0]) > HISTOGRAM_SIMILARITY_THRESHOLD:
-            return track_id1, candidates[0][0]
+        if max_candidate[1] > HISTOGRAM_SIMILARITY_THRESHOLD:
+            return track_id1, max_candidate[0]
 
     return None
 
@@ -275,7 +278,7 @@ def process_tracks(track_inputs: TrackerInput, video_properties: VideoInfo) -> T
 
     # First, greedily merge ALL tracks based on spatial and temporal proximity
     logger.info(f'Starting with {len(track_inputs)} tracks')
-    merged_tracks = _greedy_merge_tracks(track_inputs, video_properties.fps)
+    merged_tracks = _greedy_merge_tracks(track_inputs, video_properties.fps)  # TODO disable
 
     # Then filter merged tracks for minimum duration requirement
     valid_tracks = _get_valid_tracks(merged_tracks, video_properties.total_frames)

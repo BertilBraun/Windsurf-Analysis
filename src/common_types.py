@@ -27,11 +27,11 @@ class BoundingBox:
     y2: int
 
     def __init__(self, x1: int, y1: int, x2: int, y2: int):
+        assert int(x1) <= int(x2) and int(y1) <= int(y2), f'Bounding boxes must be valid ({x1}<={x2}, {y1}<={y2})'
         self.x1 = int(x1)
         self.y1 = int(y1)
         self.x2 = int(x2)
         self.y2 = int(y2)
-        assert x1 < x2 and y1 < y2, "Bounding boxes do not intersect"
 
     @property
     def width(self) -> int:
@@ -78,56 +78,28 @@ class BoundingBox:
 
 
 @dataclass
-class TrackDetection:
-    bbox: BoundingBox
-    confidence: float
-    class_id: int
-    class_name: str
-    track_id: int | None
-    feat: np.ndarray | None
-
-@dataclass
 class Detection:
     bbox: BoundingBox
-    feat: np.ndarray | None
+    feat: np.ndarray
+    confidence: float
 
+
+FrameIndex = int
 
 
 @dataclass
-class Track:
-    frame_idx: int
-    bbox: BoundingBox
-    confidence: float
-    hue_histogram: list[float]
+class Track(Detection):
+    track_id: int | None
+    frame_idx: FrameIndex
 
     def copy(self) -> Track:
         return Track(
-            self.frame_idx,
-            self.bbox.copy(),
-            self.confidence,
-            self.hue_histogram.copy(),
+            bbox=self.bbox.copy(),
+            confidence=self.confidence,
+            track_id=self.track_id,
+            feat=self.feat,
+            frame_idx=self.frame_idx,
         )
-
-    def histogram_similarity(self, other: Track) -> float:
-        """Calculate similarity between two tracks based on their hue histograms.
-
-        Uses Bhattacharyya coefficient for histogram comparison.
-
-        Args:
-            other: Another Track to compare against
-
-        Returns:
-            Similarity score between 0.0 (no similarity) and 1.0 (identical)
-        """
-        if len(self.hue_histogram) != len(other.hue_histogram):
-            raise ValueError('Histograms must have the same number of bins')
-
-        # Bhattacharyya coefficient: sum of sqrt(p_i * q_i) for all bins
-        similarity = sum(
-            math.sqrt(self.hue_histogram[i] * other.hue_histogram[i]) for i in range(len(self.hue_histogram))
-        )
-
-        return similarity
 
     def interpolate(self, other: Track, alpha: float) -> Track:
         """Interpolate between this track and another track.
@@ -149,12 +121,16 @@ class Track:
         interpolated_confidence = (1 - alpha) * self.confidence + alpha * other.confidence
         interpolated_confidence *= 0.7  # Reduce confidence for interpolated detections
 
-        # Interpolate hue histogram (bin by bin)
-        interpolated_histogram = [
-            (1 - alpha) * self.hue_histogram[i] + alpha * other.hue_histogram[i] for i in range(len(self.hue_histogram))
-        ]
+        # Interpolate feature
+        interpolated_feat = (1 - alpha) * self.feat + alpha * other.feat
 
-        return Track(interpolated_frame_idx, interpolated_bbox, interpolated_confidence, interpolated_histogram)
+        return Track(
+            frame_idx=interpolated_frame_idx,
+            bbox=interpolated_bbox,
+            confidence=interpolated_confidence,
+            track_id=self.track_id,
+            feat=interpolated_feat,
+        )
 
 
 TrackId = int | None

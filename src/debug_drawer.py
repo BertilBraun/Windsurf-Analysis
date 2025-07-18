@@ -15,7 +15,7 @@ User-driven features:
   - Label text color matches the connector line color.
 - All label rectangles (boxes + metrics text) tracked per output frame to avoid overlaps.
 
-Integrate by importing this file or copying the `_generate_debug_videokworker_function` into your pipeline.
+Integrate by importing this file or copying the `_generate_debug_video_worker_function` into your pipeline.
 
 """
 
@@ -24,8 +24,7 @@ from __future__ import annotations
 import os
 import math
 from pathlib import Path
-from dataclasses import dataclass
-from typing import Dict, List, Tuple, Iterator, Iterable, Any, Optional
+from typing import List, Tuple, Optional
 
 import cv2
 import numpy as np
@@ -34,7 +33,7 @@ from tqdm import tqdm
 from common_types import Detection, BoundingBox, cosine_similarity
 
 # Fixed box colors (BGR)
-BOX_COLOR_CUR = (255, 255, 255)   # white
+BOX_COLOR_CUR = (255, 255, 255)  # white
 BOX_COLOR_PREV = (170, 170, 170)  # light gray
 
 
@@ -72,13 +71,26 @@ def _measure_text(text: str, font_scale: float = 0.4, thickness: int = 1) -> Tup
 def _rects_overlap(a: Tuple[int, int, int, int], b: Tuple[int, int, int, int], margin: int = 2) -> bool:
     ax1, ay1, ax2, ay2 = a
     bx1, by1, bx2, by2 = b
-    ax1 -= margin; ay1 -= margin; ax2 += margin; ay2 += margin
-    bx1 -= margin; by1 -= margin; bx2 += margin; by2 += margin
+    ax1 -= margin
+    ay1 -= margin
+    ax2 += margin
+    ay2 += margin
+    bx1 -= margin
+    by1 -= margin
+    bx2 += margin
+    by2 += margin
     return not (ax2 < bx1 or bx2 < ax1 or ay2 < by1 or by2 < ay1)
 
 
-def _draw_text(img: np.ndarray, text: str, org: Tuple[int, int], color=(255, 255, 255),
-               font_scale: float = 0.4, thickness: int = 1, bg: bool = True) -> Tuple[int, int, int, int]:
+def _draw_text(
+    img: np.ndarray,
+    text: str,
+    org: Tuple[int, int],
+    color=(255, 255, 255),
+    font_scale: float = 0.4,
+    thickness: int = 1,
+    bg: bool = True,
+) -> Tuple[int, int, int, int]:
     """Draw text and return bounding rect (x1,y1,x2,y2)."""
     tw, th, base = _measure_text(text, font_scale, thickness)
     x, y = org
@@ -94,9 +106,18 @@ def _draw_text(img: np.ndarray, text: str, org: Tuple[int, int], color=(255, 255
 # ---------------------------------------------------------------------------
 # Box drawing (records label rect if provided) --------------------------------
 
-def _draw_box(img: np.ndarray, box: BoundingBox, color: Tuple[int, int, int], label: Optional[str],
-              label_positions: List[Tuple[int, int, int, int]], *,
-              scale_x: float = 1.0, scale_y: float = 1.0, y_offset: int = 0) -> Tuple[int, int]:
+
+def _draw_box(
+    img: np.ndarray,
+    box: BoundingBox,
+    color: Tuple[int, int, int],
+    label: Optional[str],
+    label_positions: List[Tuple[int, int, int, int]],
+    *,
+    scale_x: float = 1.0,
+    scale_y: float = 1.0,
+    y_offset: int = 0,
+) -> Tuple[int, int]:
     x1 = int(box.x1 * scale_x)
     y1 = int(box.y1 * scale_y) + y_offset
     x2 = int(box.x2 * scale_x)
@@ -111,12 +132,14 @@ def _draw_box(img: np.ndarray, box: BoundingBox, color: Tuple[int, int, int], la
 # ---------------------------------------------------------------------------
 # Line annotation (metrics) w/ cached + collision-aware placement -------------
 
+
 def _point_along_line(p1: Tuple[int, int], p2: Tuple[int, int], t: float) -> Tuple[int, int]:
     return (int(round(p1[0] + t * (p2[0] - p1[0]))), int(round(p1[1] + t * (p2[1] - p1[1]))))
 
 
-def _clamp_label_org(img: np.ndarray, text: str, x: int, y: int,
-                     font_scale: float, thickness: int) -> Tuple[int, int, int, int, Tuple[int, int]]:
+def _clamp_label_org(
+    img: np.ndarray, text: str, x: int, y: int, font_scale: float, thickness: int
+) -> Tuple[int, int, int, int, Tuple[int, int]]:
     """Given a desired anchor (x,y) ~ label center, clamp & return rect + org."""
     h, w = img.shape[:2]
     tw, th, base = _measure_text(text, font_scale, thickness)
@@ -129,12 +152,18 @@ def _clamp_label_org(img: np.ndarray, text: str, x: int, y: int,
     return rect[0], rect[1], rect[2], rect[3], (org_x, org_y)
 
 
-def _choose_label_org_for_line_cached(img: np.ndarray, text: str,
-                                      p1: Tuple[int, int], p2: Tuple[int, int],
-                                      existing: List[Tuple[int, int, int, int]],
-                                      base_t: float, rng: np.random.Generator,
-                                      font_scale: float = 0.35, thickness: int = 1,
-                                      step: float = 0.1) -> Tuple[Tuple[int, int], float]:
+def _choose_label_org_for_line_cached(
+    img: np.ndarray,
+    text: str,
+    p1: Tuple[int, int],
+    p2: Tuple[int, int],
+    existing: List[Tuple[int, int, int, int]],
+    base_t: float,
+    rng: np.random.Generator,
+    font_scale: float = 0.35,
+    thickness: int = 1,
+    step: float = 0.1,
+) -> Tuple[Tuple[int, int], float]:
     """Choose label origin along line using cached t + expanding ±step search.
 
     Returns (org, chosen_t). Does *not* mutate cache; caller updates.
@@ -177,11 +206,20 @@ def _choose_label_org_for_line_cached(img: np.ndarray, text: str,
     return org, t
 
 
-def _draw_line_with_metrics(img: np.ndarray, p1: Tuple[int, int], p2: Tuple[int, int],
-                            cos: float | None, dist: float | None, iou_dist: float | None,
-                            color: Tuple[int, int, int], label_positions: List[Tuple[int, int, int, int]],
-                            rng: np.random.Generator, *,
-                            base_t: float, cache_update_cb) -> float:
+def _draw_line_with_metrics(
+    img: np.ndarray,
+    p1: Tuple[int, int],
+    p2: Tuple[int, int],
+    cos: float | None,
+    dist: float | None,
+    iou_dist: float | None,
+    color: Tuple[int, int, int],
+    label_positions: List[Tuple[int, int, int, int]],
+    rng: np.random.Generator,
+    *,
+    base_t: float,
+    cache_update_cb,
+) -> float:
     """Draw connector line + metrics label.
 
     Parameters
@@ -196,12 +234,11 @@ def _draw_line_with_metrics(img: np.ndarray, p1: Tuple[int, int], p2: Tuple[int,
     new_t used for placement (same as passed to callback).
     """
     cv2.line(img, p1, p2, color, 1, cv2.LINE_AA)
-    cos_s = f"{cos:.2f}" if cos is not None and not math.isnan(cos) else "n/a"
-    dist_s = f"{dist:.0f}" if dist is not None and not math.isnan(dist) else "n/a"
-    iou_s = f"{iou_dist:.2f}" if iou_dist is not None and not math.isnan(iou_dist) else "n/a"
-    txt = f"c={cos_s} iou={iou_s} d={dist_s}"
-    org, new_t = _choose_label_org_for_line_cached(img, txt, p1, p2, label_positions,
-                                                   base_t, rng, font_scale=0.35)
+    cos_s = f'{cos:.2f}' if cos is not None and not math.isnan(cos) else 'n/a'
+    dist_s = f'{dist:.0f}' if dist is not None and not math.isnan(dist) else 'n/a'
+    iou_s = f'{iou_dist:.2f}' if iou_dist is not None and not math.isnan(iou_dist) else 'n/a'
+    txt = f'c={cos_s} iou={iou_s} d={dist_s}'
+    org, new_t = _choose_label_org_for_line_cached(img, txt, p1, p2, label_positions, base_t, rng, font_scale=0.35)
     rect = _draw_text(img, txt, org, color, font_scale=0.35)
     label_positions.append(rect)
     cache_update_cb(new_t)
@@ -211,9 +248,8 @@ def _draw_line_with_metrics(img: np.ndarray, p1: Tuple[int, int], p2: Tuple[int,
 # ---------------------------------------------------------------------------
 # Main worker -----------------------------------------------------------------
 
-def generate_debug_videokworker_function(
-    args: tuple[dict[int, list[Detection]], os.PathLike, os.PathLike]
-) -> None:
+
+def generate_debug_video_worker_function(args: tuple[dict[int, list[Detection]], os.PathLike, os.PathLike]) -> None:
     """Multiprocessing worker to render a debug video.
 
     Parameters
@@ -229,7 +265,7 @@ def generate_debug_videokworker_function(
     input_path = Path(input_path)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    annotated_video_path = output_dir / f"{input_path.stem}+00_debug.mp4"
+    annotated_video_path = output_dir / f'{input_path.stem}+00_debug.mp4'
 
     # Lazy imports of project-specific reader/writer
     from video_io import VideoReader, VideoWriter  # type: ignore
@@ -258,7 +294,7 @@ def generate_debug_videokworker_function(
             line_counter = 0  # increments per drawn connector line (drives color + cache index)
 
             for frame_index, frame in tqdm(
-                reader.read_frames(), total=video_props.total_frames, desc="Drawing annotations"
+                reader.read_frames(), total=video_props.total_frames, desc='Drawing annotations'
             ):
                 # Reset label collision registry for this output frame
                 label_positions: List[Tuple[int, int, int, int]] = []
@@ -275,13 +311,13 @@ def generate_debug_videokworker_function(
                 # Compose debug canvas (top current, bottom prev)
                 canvas = np.zeros((debug_h, debug_w, 3), dtype=cur_scaled.dtype)
                 canvas[0:scaled_h, :, :] = cur_scaled
-                canvas[scaled_h:scaled_h * 2, :, :] = bottom
+                canvas[scaled_h : scaled_h * 2, :, :] = bottom
 
                 # Draw frame indices
-                rect = _draw_text(canvas, f"t={frame_index}", (5, 15), (0, 255, 0), bg=True)
+                rect = _draw_text(canvas, f't={frame_index}', (5, 15), (0, 255, 0), bg=True)
                 label_positions.append(rect)
                 if prev_idx is not None:
-                    rect = _draw_text(canvas, f"t={prev_idx}", (5, scaled_h + 15), (0, 255, 0), bg=True)
+                    rect = _draw_text(canvas, f't={prev_idx}', (5, scaled_h + 15), (0, 255, 0), bg=True)
                     label_positions.append(rect)
 
                 # Get detections for current/prev frames
@@ -291,15 +327,24 @@ def generate_debug_videokworker_function(
                 # Draw current boxes (top)
                 cur_centers: list[Tuple[int, int]] = []
                 for det in cur_dets:
-                    c = _draw_box(canvas, det.bbox, BOX_COLOR_CUR, None, label_positions,
-                                  scale_x=0.5, scale_y=0.5, y_offset=0)
+                    c = _draw_box(
+                        canvas, det.bbox, BOX_COLOR_CUR, None, label_positions, scale_x=0.5, scale_y=0.5, y_offset=0
+                    )
                     cur_centers.append(c)
 
                 # Draw prev boxes (bottom)
                 prev_centers: list[Tuple[int, int]] = []
                 for det in last_dets:
-                    c = _draw_box(canvas, det.bbox, BOX_COLOR_PREV, None, label_positions,
-                                  scale_x=0.5, scale_y=0.5, y_offset=scaled_h)
+                    c = _draw_box(
+                        canvas,
+                        det.bbox,
+                        BOX_COLOR_PREV,
+                        None,
+                        label_positions,
+                        scale_x=0.5,
+                        scale_y=0.5,
+                        y_offset=scaled_h,
+                    )
                     prev_centers.append(c)
 
                 # Pairwise metrics lines current(top) -> prev(bottom)
@@ -314,7 +359,11 @@ def generate_debug_videokworker_function(
                             p_center = prev_centers[j]
 
                             # metrics
-                            cos = cosine_similarity(emb_c, emb_p) if (emb_c is not None and emb_p is not None) else float("nan")
+                            cos = (
+                                cosine_similarity(emb_c, emb_p)
+                                if (emb_c is not None and emb_p is not None)
+                                else float('nan')
+                            )
                             cx1, cy1 = bc.center
                             cx2, cy2 = bp.center
                             dist = math.hypot(cx2 - cx1, cy2 - cy1)
@@ -328,9 +377,19 @@ def generate_debug_videokworker_function(
                             def _upd(new_t: float, idx=color_idx):
                                 label_t_cache[idx] = new_t
 
-                            _draw_line_with_metrics(canvas, c_center, p_center, cos, dist, iou,
-                                                    color, label_positions, rng,
-                                                    base_t=base_t, cache_update_cb=_upd)
+                            _draw_line_with_metrics(
+                                canvas,
+                                c_center,
+                                p_center,
+                                cos,
+                                dist,
+                                iou,
+                                color,
+                                label_positions,
+                                rng,
+                                base_t=base_t,
+                                cache_update_cb=_upd,
+                            )
                             line_counter += 1
 
                 # Write frame
