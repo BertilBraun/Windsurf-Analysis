@@ -1,17 +1,22 @@
 from vidstab import VidStab
 from pathlib import Path
 import os
+import logging
 
 
-def compute_vidstab_transforms(input_video: str | os.PathLike) -> VidStab:
+def compute_vidstab_transforms(input_video: str | os.PathLike) -> VidStab | None:
     """
     Compute stabilization transforms for a video (in memory).
     Returns:
         VidStab object with computed transforms.
     """
-    stabilizer = VidStab()
-    stabilizer.gen_transforms(input_path=input_video)
-    return stabilizer
+    # TODO: Make this work for short videos
+    try:
+        stabilizer = VidStab()
+        stabilizer.gen_transforms(input_path=input_video)
+    except ValueError as e:
+        logging.error(f"Error computing transforms for {input_video}: {e}")
+    return None
 
 
 def stabilize_with_transforms(input_video: str | os.PathLike, output_video: str | os.PathLike, stabilizer: VidStab):
@@ -36,4 +41,6 @@ def stabilize(input_video: str | os.PathLike, output_video: str | os.PathLike | 
         output_video = input_video.with_name(f"{input_video.stem}_stabilized{input_video.suffix}")
 
     stabilizer = compute_vidstab_transforms(input_video)
+    if stabilizer is None:
+        return
     stabilize_with_transforms(input_video, output_video, stabilizer)
