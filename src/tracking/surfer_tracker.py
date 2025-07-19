@@ -8,8 +8,9 @@ into coherent tracks representing individual surfers.
 import os
 import logging
 
-import track_processing
-from tracking import Tracker
+from visualization.track_graph_viz import visualize_tracks
+from tracking.track_processing import tracks_filtering_smoothing_relabeling
+from .tracking import Tracker
 
 from common_types import Detection, Track
 from video_io import get_video_properties
@@ -30,8 +31,10 @@ def process_detections_into_tracks(
 
     processed_tracks = tracker.track_detections(detections, video_properties)
 
+    # visualize_tracks(processed_tracks, str(original_video_path))
+
     # Process tracks using the track processing module
-    # TODO: reenable processed_tracks = track_processing.tracks_filtering_smoothing_relabeling(processed_tracks, video_properties)
+    # TODO: reenable processed_tracks = tracks_filtering_smoothing_relabeling(processed_tracks, video_properties)
 
     if not processed_tracks:
         logger.warning('No valid tracks found for video generation')

@@ -40,11 +40,11 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Literal, Optional, overload
 
 from video_io import VideoInfo
-from common_types import Detection, FrameIndex, Track, TrackId, cosine_similarity
-from greedy_preprocessor import GreedyPreprocessor
+from common_types import Detection, Track, cosine_similarity
+from tracking.preprocessing.greedy_preprocessor import GreedyPreprocessor
 
 
 @dataclass
@@ -55,7 +55,7 @@ class _FragMeta:
     start_det: Detection
     end_det: Detection
     first_vel: Optional[tuple[float, float]]  # (dx, dy) between first two detections
-    last_vel: Optional[tuple[float, float]]   # (dx, dy) between last two detections
+    last_vel: Optional[tuple[float, float]]  # (dx, dy) between last two detections
 
 
 class BranchAndBoundFragmentTracker:
@@ -65,13 +65,13 @@ class BranchAndBoundFragmentTracker:
         w_app: float = 1.0,
         w_gap: float = 0.01,
         w_birth: float = 10.0,
-        w_momentum: float = 0.5,          # weight for momentum change penalty (0 disables)
-        momentum_mode: str = "edge",       # 'edge' or 'predict'
+        w_momentum: float = 0.5,  # weight for momentum change penalty (0 disables)
+        momentum_mode: str = 'edge',  # 'edge' or 'predict'
         max_stitch_gap_frames: int = 5 * 30,  # 5 seconds @ 30fps
-        gap_normalization: str = "linear",   # 'linear' | 'sqrt' | 'log'
+        gap_normalization: str = 'linear',  # 'linear' | 'sqrt' | 'log'
         best_first: bool = True,
         use_preprocessor: bool = True,
-        debug_costs: bool = True,          # if True, log per-edge term contributions and global breakdown
+        debug_costs: bool = True,  # if True, log per-edge term contributions and global breakdown
     ) -> None:
         self.w_iou = w_iou
         self.w_app = w_app
@@ -84,19 +84,16 @@ class BranchAndBoundFragmentTracker:
         self.best_first = best_first
         self.use_preprocessor = use_preprocessor
         self.debug_costs = debug_costs
-        self._edge_cost_cache: dict[tuple[int,int,int], dict] = {}  # (fa, fb, gap) -> term breakdown
+        self._edge_cost_cache: dict[tuple[int, int, int], dict] = {}  # (fa, fb, gap) -> term breakdown
 
     # ------------------------------ Public API ------------------------------
-    def track_detections(
-        self,
-        detections: List[Detection],
-        video_properties: VideoInfo | None = None,
-    ) -> List[Track]:
-        logging.info("Branch & Bound Fragment Tracker: tracking %d detections", len(detections))
+    def track_detections(self, detections: list[Detection], video_properties: VideoInfo | None = None) -> list[Track]:
+        logging.info('Branch & Bound Fragment Tracker: tracking %d detections', len(detections))
         if not detections:
             return []
         if self.use_preprocessor:
             fragments = GreedyPreprocessor().track_detections(detections, video_properties)
+            return fragments
         else:
             # Treat every detection as a singleton fragment
             fragments = [
@@ -105,23 +102,19 @@ class BranchAndBoundFragmentTracker:
             ]
 
         # Build fragment metadata including representative velocities
-        metas: List[_FragMeta] = []
+        metas: list[_FragMeta] = []
         for i, f in enumerate(fragments):
-            dets = f.sorted_detections
-            if len(dets) >= 2:
+            detections = f.sorted_detections
+            if len(detections) >= 2:
                 # First velocity
-                d0, d1 = dets[0], dets[1]
-                x0 = 0.5 * (d0.bbox.x1 + d0.bbox.x2)
-                y0 = 0.5 * (d0.bbox.y1 + d0.bbox.y2)
-                x1p = 0.5 * (d1.bbox.x1 + d1.bbox.x2)
-                y1p = 0.5 * (d1.bbox.y1 + d1.bbox.y2)
+                d0, d1 = detections[0], detections[1]
+                x0, y0 = d0.bbox.center
+                x1p, y1p = d1.bbox.center
                 first_vel = (x1p - x0, y1p - y0)
                 # Last velocity
-                d_lm1, d_l = dets[-2], dets[-1]
-                xl1 = 0.5 * (d_lm1.bbox.x1 + d_lm1.bbox.x2)
-                yl1 = 0.5 * (d_lm1.bbox.y1 + d_lm1.bbox.y2)
-                xl = 0.5 * (d_l.bbox.x1 + d_l.bbox.x2)
-                yl = 0.5 * (d_l.bbox.y1 + d_l.bbox.y2)
+                d_lm1, d_l = detections[-2], detections[-1]
+                xl1, yl1 = d_lm1.bbox.center
+                xl, yl = d_l.bbox.center
                 last_vel = (xl - xl1, yl - yl1)
             else:
                 first_vel = None
@@ -129,10 +122,10 @@ class BranchAndBoundFragmentTracker:
             metas.append(
                 _FragMeta(
                     idx=i,
-                    start_frame=dets[0].frame_idx,
-                    end_frame=dets[-1].frame_idx,
-                    start_det=dets[0],
-                    end_det=dets[-1],
+                    start_frame=detections[0].frame_idx,
+                    end_frame=detections[-1].frame_idx,
+                    start_det=detections[0],
+                    end_det=detections[-1],
                     first_vel=first_vel,
                     last_vel=last_vel,
                 )
@@ -153,9 +146,9 @@ class BranchAndBoundFragmentTracker:
                 gap = mj.start_frame - mi.end_frame - 1
                 if gap > self.max_stitch_gap_frames:
                     continue
-                edge_cost = self._edge_cost(mi, mj, gap)
+                edge_cost = self._edge_cost(mi, mj, gap, return_terms=False)
                 predecessors[j].append((i, edge_cost))
-            predecessors[j].sort(key=lambda x: x[1])
+            predecessors[j].sort(key=lambda x: x[1])  # sort by edge cost
 
         best_incoming = [min([c for _, c in preds], default=self.w_birth) for preds in predecessors]
 
@@ -266,11 +259,11 @@ class BranchAndBoundFragmentTracker:
                     agg['gap'] += terms['gap_term']
                     agg['momentum'] += terms['momentum_term']
                     agg['total'] += terms['total']
-            logging.debug("GLOBAL COST BREAKDOWN: %s", agg)
+            logging.debug('GLOBAL COST BREAKDOWN: %s', agg)
             for root in births:
-                chain=[]
-                cur=root
-                chain_iou=chain_app=chain_gap=chain_mom=0.0
+                chain = []
+                cur = root
+                chain_iou = chain_app = chain_gap = chain_mom = 0.0
                 while cur is not None:
                     nxt = best_solution['succ'][cur]
                     if nxt is not None:
@@ -283,18 +276,21 @@ class BranchAndBoundFragmentTracker:
                     chain.append(cur)
                     cur = nxt
                 logging.debug(
-                    "TRACK root_frag=%d chain=%s cost: birth=%.3f iou=%.3f app=%.3f gap=%.3f momentum=%.3f total=%.3f",
-                    root, chain, self.w_birth, chain_iou, chain_app, chain_gap, chain_mom,
+                    'TRACK root_frag=%d chain=%s cost: birth=%.3f iou=%.3f app=%.3f gap=%.3f momentum=%.3f total=%.3f',
+                    root,
+                    chain,
+                    self.w_birth,
+                    chain_iou,
+                    chain_app,
+                    chain_gap,
+                    chain_mom,
                     self.w_birth + chain_iou + chain_app + chain_gap + chain_mom,
                 )
 
         # Reconstruct tracks
         if best_solution['succ'] is None:
-            logging.warning("Branch&Bound failed; returning identity mapping.")
-            return [
-                Track(track_id=i, sorted_detections=fragments[i].sorted_detections)
-                for i in range(len(fragments))
-            ]
+            logging.warning('Branch&Bound failed; returning identity mapping.')
+            return [Track(track_id=i, sorted_detections=fragments[i].sorted_detections) for i in range(len(fragments))]
 
         final_tracks: List[Track] = []
         visited = [False] * n
@@ -307,15 +303,26 @@ class BranchAndBoundFragmentTracker:
                     chain.append(cur)
                     visited[cur] = True
                     cur = best_solution['succ'][cur]
-                dets = []
+                detections = []
                 for idx in chain:
-                    dets.extend(fragments[idx].sorted_detections)
-                final_tracks.append(Track(track_id=track_id, sorted_detections=dets))
+                    detections.extend(fragments[idx].sorted_detections)
+                final_tracks.append(Track(track_id=track_id, sorted_detections=detections))
                 track_id += 1
         return final_tracks
 
+    @overload
+    def _edge_cost(
+        self, fa: _FragMeta, fb: _FragMeta, gap: int, *, return_terms: Literal[True], log_edge: bool = True
+    ) -> dict[str, float]: ...
+    @overload
+    def _edge_cost(
+        self, fa: _FragMeta, fb: _FragMeta, gap: int, *, return_terms: Literal[False], log_edge: bool = True
+    ) -> float: ...
+
     # Edge cost between fragment A and fragment B (A end -> B start)
-    def _edge_cost(self, fa: _FragMeta, fb: _FragMeta, gap: int, *, return_terms: bool = False, log_edge: bool = True):
+    def _edge_cost(
+        self, fa: _FragMeta, fb: _FragMeta, gap: int, *, return_terms: bool = False, log_edge: bool = True
+    ) -> float | dict[str, float]:
         """Compute edge cost and optionally return per-term breakdown.
 
         Parameters
@@ -342,7 +349,9 @@ class BranchAndBoundFragmentTracker:
         elif self.gap_normalization == 'sqrt':
             gap_norm = math.sqrt(gap / self.max_stitch_gap_frames) if self.max_stitch_gap_frames > 0 else 0.0
         elif self.gap_normalization == 'log':
-            gap_norm = math.log1p(gap) / math.log1p(self.max_stitch_gap_frames) if self.max_stitch_gap_frames > 0 else 0.0
+            gap_norm = (
+                math.log1p(gap) / math.log1p(self.max_stitch_gap_frames) if self.max_stitch_gap_frames > 0 else 0.0
+            )
         else:
             gap_norm = 0.0
         gap_term = gap_norm * self.w_gap
@@ -394,8 +403,18 @@ class BranchAndBoundFragmentTracker:
         self._edge_cost_cache[(fa.idx, fb.idx, gap)] = terms
         if self.debug_costs and log_edge:
             logging.debug(
-                "EDGE fa=%d->fb=%d gap=%d iou=%.3f iou_term=%.3f cos=%.3f app_term=%.3f gap_norm=%.3f gap_term=%.3f momentum_term=%.3f total=%.3f",
-                fa.idx, fb.idx, gap, iou, iou_term, cos, app_term, gap_norm, gap_term, momentum_term, total
+                'EDGE fa=%d->fb=%d gap=%d iou=%.3f iou_term=%.3f cos=%.3f app_term=%.3f gap_norm=%.3f gap_term=%.3f momentum_term=%.3f total=%.3f',
+                fa.idx,
+                fb.idx,
+                gap,
+                iou,
+                iou_term,
+                cos,
+                app_term,
+                gap_norm,
+                gap_term,
+                momentum_term,
+                total,
             )
         if return_terms:
             return terms
