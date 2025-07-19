@@ -143,7 +143,11 @@ class DiscreteOptimizationTracker:
         # the bounding box of a detection overlaps only with a single active track
         # or both iou and cosine similarity are high enough to continue the track.
         #
-        # We only match against active tracks. Stracks become stale if they are too old or if they have been considered for a match but ot chosen
+        # We only match against active tracks.
+        # Tracks become stale if they:
+        # - are too old
+        # - have been considered for a match but ot chosen
+        # - have been matched by multiple detections in the same frame
 
         # Sort detections by frame index to process them in order.
         sorted_frame_indices = sorted(detections_by_frame.keys())
@@ -157,6 +161,7 @@ class DiscreteOptimizationTracker:
         stale_track_ids: set[TrackId] = set()
 
         for frame_idx in sorted_frame_indices:
+            matches_this_frame = []
             for detection in detections_by_frame[frame_idx]:
                 clean_matches: list[Track] = []
                 mby_matches: list[Track] = []
@@ -170,15 +175,24 @@ class DiscreteOptimizationTracker:
                         mby_matches.append(track)
 
                 if len(clean_matches) == 1:
-                    track = clean_matches[0]
-                    track.sorted_detections.append(detection)
+                    matches_this_frame.append(
+                        (clean_matches[0], detection)
+                    )
+                    # track = clean_matches[0]
+                    # track.sorted_detections.append(detection)
                 elif len(clean_matches) == 0 and len(mby_matches) == 1:
-                    track = mby_matches[0]
-                    track.sorted_detections.append(detection)
+                    # track = mby_matches[0]
+                    # track.sorted_detections.append(detection)
+                    matches_this_frame.append(
+                        (mby_matches[0], detection)
+                    )
                 else:
                     # no clear match found, create a new track for this detection
-                    new_track = Track(track_id=next_track_id, sorted_detections=[detection])
-                    active_tracks.append(new_track)
+                    new_track = Track(track_id=next_track_id, sorted_detections=[])
+                    matches_this_frame.append(
+                        (new_track, detection)
+                    )
+                    # active_tracks.append(new_track)
                     next_track_id += 1
 
                     # all clean and mby matches are stale because we couldn't cleanly match them
@@ -186,6 +200,26 @@ class DiscreteOptimizationTracker:
                         if track.track_id not in stale_track_ids:
                             stale_track_ids.add(track.track_id)
                             stale_tracks.append(track)
+            # now we construct tracks for any match that is not a duplicate. Tracks that are matched by multiple detections will become stale (the detections will be assigned to the new track).
+            detections_per_track = defaultdict(list)
+            tracks_per_track_id = {}
+            for track, detection in matches_this_frame:
+                detections_per_track[track.track_id].append(detection)
+                tracks_per_track_id[track.track_id] = track
+            for track_id, dets in detections_per_track.items():
+                track = tracks_per_track_id[track_id]
+                if len(dets) > 1:
+                    stale_track_ids.add(track_id)
+                    stale_tracks.append(track)
+                    for detection in dets:
+                        active_tracks.append(Track(track_id=next_track_id, sorted_detections=[detection]))
+                        next_track_id += 1
+                else:
+                    assert len(dets) == 1
+                    track.sorted_detections.append(dets[0])
+                    # JANK
+                    if track not in active_tracks:
+                        active_tracks.append(track)
 
             # Too old tracks are stale
             for track in active_tracks:
