@@ -114,6 +114,13 @@ class Track:
     track_id: TrackId
     sorted_detections: list[Detection]
 
+    def __init__(self, track_id: TrackId, sorted_detections: list[Detection]):
+        self.track_id = track_id
+        self.sorted_detections = sorted(sorted_detections, key=lambda d: d.frame_idx)
+        self.detections_by_frame: dict[FrameIndex, Detection] = {
+            detection.frame_idx: detection for detection in self.sorted_detections
+        }
+
     def copy(self) -> Track:
         new_sorted_detections = [d.copy() for d in self.sorted_detections]
         return Track(
