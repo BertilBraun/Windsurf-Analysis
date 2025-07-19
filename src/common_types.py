@@ -83,6 +83,15 @@ class BoundingBox:
         """Check if this bounding box overlaps with another."""
         return not (self.x2 < other.x1 or self.x1 > other.x2 or self.y2 < other.y1 or self.y1 > other.y2)
 
+    def scale(self, scale_factor: float) -> BoundingBox:
+        cx, cy = self.center
+        return BoundingBox(
+            int(cx - self.width * scale_factor / 2),
+            int(cy - self.height * scale_factor / 2),
+            int(cx + self.width * scale_factor / 2),
+            int(cy + self.height * scale_factor / 2),
+        )
+
 
 @dataclass
 class Detection:

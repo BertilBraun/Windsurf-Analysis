@@ -4,26 +4,24 @@ from typing import Callable, TypeVar
 
 from tqdm import tqdm
 from pathlib import Path
-from branch_and_bound_tracker import BranchAndBoundFragmentTracker
-from debug_drawer import generate_debug_video_worker_function, debug_track_similarities
-from greedy_preprocessor import GreedyPreprocessor
+from visualization.debug_drawer import generate_debug_video_worker_function, debug_track_similarities
+from tracking.greedy_tracker import GreedyTracker
 from helpers import log_and_reraise
-from stabilize import compute_vidstab_transforms
-import logging
+from visualization.stabilize import compute_vidstab_transforms
 
 
 from video_io import VideoReader, VideoWriter, get_video_properties
 from detector import SurferDetector
-from surfer_tracker import process_detections_into_tracks
-from annotation_drawer import Annotation, AnnotationDrawer
-from stabilize import stabilize
+from tracking.surfer_tracker import process_detections_into_tracks
+from visualization.annotation_drawer import Annotation, AnnotationDrawer
+from visualization.stabilize import stabilize
 from concurrent.futures import ProcessPoolExecutor
 
-from discrete_opt_tracker import DiscreteOptimizationTracker
+from tracking.discrete_opt_tracker import DiscreteOptimizationTracker
 
 from common_types import Track
 
-import video_splicing
+from visualization.video_splicing import generate_individual_videos
 
 
 P = TypeVar('P')
@@ -58,8 +56,11 @@ class WindsurfingVideoProcessor:
         # wait for stabilizer computation to finish
         # stabilizer = stabilizer_future.result()
 
-        # @Bertil use your processor here
-        processed_tracks = process_detections_into_tracks(input_path, detections, GreedyPreprocessor())
+        processed_tracks = process_detections_into_tracks(
+            input_path,
+            detections,
+            # GreedyTracker(),
+        )  # BranchAndBoundFragmentTracker())
 
         if not self.dry_run:
             self.submit_low_priority_task(
@@ -106,7 +107,7 @@ def _stabilize_individual_video_worker_function(args: tuple[os.PathLike, os.Path
 
 def _generate_individual_videos_worker_function(args: tuple[list[Track], os.PathLike, os.PathLike | str]) -> None:
     tracks, input_path, output_dir = args
-    individual_videos = video_splicing.generate_individual_videos(tracks, input_path, output_dir)
+    individual_videos = generate_individual_videos(tracks, input_path, output_dir)
 
     with ProcessPoolExecutor(max_workers=4) as executor:
         for individual_video in individual_videos:
