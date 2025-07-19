@@ -17,7 +17,7 @@ def setup_logging(output_dir: Path | None = None, log_file_name=None):
         log_file_name = 'windsurf_analysis.log'
     log_file_path = output_dir / log_file_name
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[logging.StreamHandler(), logging.FileHandler(log_file_path, encoding='utf-8')],
     )

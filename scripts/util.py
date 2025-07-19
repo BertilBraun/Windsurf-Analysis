@@ -39,7 +39,7 @@ def setup_logging(log_file=None, notify_on_error=False):
         handlers.append(logging.FileHandler(log_file, mode='a', encoding='utf-8'))
     if notify_on_error:
         handlers.append(NotifySendHandler())
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s', handlers=handlers)
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s', handlers=handlers)
 
 
 def get_tmp_file(suffix):
