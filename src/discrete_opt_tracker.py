@@ -38,17 +38,15 @@ IMPORTANT ASSUMPTIONS
   slow, restrict to a temporal window or subsample pairs.
 """
 
-from collections import defaultdict
-from typing import Dict, List, Iterable, Tuple
-from video_io import VideoInfo
-import logging
-from enum import Enum
-
 import z3
-import numpy as np
+import logging
 
-from common_types import *  # noqa: F401,F403 (Detection, Track, cosine_similarity ...)
-from tracking import Tracker
+from enum import Enum
+from collections import defaultdict
+
+
+from video_io import VideoInfo
+from common_types import Detection, FrameIndex, Track, TrackId, cosine_similarity
 
 MAX_TRACKS = 6
 TIMEOUT_S = 30
@@ -76,25 +74,28 @@ def count_max_simultaneous_detections(
 
 
 class TimeoutException(Exception):
-    pass
+    """Raised when the Z3 solver times out."""
 
 
 class UnsatisfiableException(Exception):
-    pass
+    """Raised when the Z3 solver finds the problem unsatisfiable."""
+
 
 
 class _ComparisonResult(Enum):
-    MATCH = "match"
-    MAY_MATCH = "may_match"
-    NO_MATCH = "no_match"
+    MATCH = 'match'
+    MAY_MATCH = 'may_match'
+    NO_MATCH = 'no_match'
 
 
-class DiscreteOptimizationTracker(Tracker):
+class DiscreteOptimizationTracker:
+    """Track objects by solving an assignment problem with *Z3*."""
+
     def __init__(
         self,
         greedy_min_iou: float = 0.8,
         greedy_min_cosine_similarity: float = 0.5,
-        greddy_max_frame_distance: int = 5,
+        greedy_max_frame_distance: int = 5,
         greedy_min_iou_matches_single_track: float = 0.2,
         use_fragment_linking: bool = True,
         max_link_gap: int = 30,
@@ -107,7 +108,7 @@ class DiscreteOptimizationTracker(Tracker):
     ):
         self.greedy_min_iou = greedy_min_iou
         self.greedy_min_cosine_similarity = greedy_min_cosine_similarity
-        self.greedy_max_frame_distance = greddy_max_frame_distance
+        self.greedy_max_frame_distance = greedy_max_frame_distance
         self.greedy_min_iou_matches_single_track = greedy_min_iou_matches_single_track
         # Fragment linking config
         self.use_fragment_linking = use_fragment_linking
@@ -120,67 +121,81 @@ class DiscreteOptimizationTracker(Tracker):
         self.w_start = w_start
         self.min_iou_matches_single_track = greedy_min_iou_matches_single_track
 
-    # ------------------------------------------------------------------
-    # Greedy pre‑processing producing must‑link groups
-    # ------------------------------------------------------------------
-
-    def compare_track_to_detection(
-        self,
-        track: Track,
-        detection: Detection,
-    ) -> Tuple[_ComparisonResult, float]:
+    def _compare_detection_to_track(self, track: Track, detection: Detection) -> _ComparisonResult:
         iou = track.end().bbox.iou(detection.bbox)
+
         if iou < self.min_iou_matches_single_track:
-            return (_ComparisonResult.NO_MATCH, 0)
-        sim = cosine_similarity(track.end().feat, detection.feat)
-        if iou >= self.greedy_min_iou and sim >= self.greedy_min_cosine_similarity:
-            return (_ComparisonResult.MATCH, min(iou, sim))
-        return (_ComparisonResult.MAY_MATCH, min(iou, sim))
+            return _ComparisonResult.NO_MATCH
 
-    def _preprocess_detections(
-        self,
-        detections: list[Detection],
-    ) -> List[Track]:
-        detections = sorted(detections, key=lambda d: d.frame_idx)
-        stale_tracks: List[Track] = []
-        active_tracks: List[Track] = []
-        next_active_tracks: List[Track] = []
-        for det in detections:
-            clean_matches: list[tuple[Track, float]] = []
-            mby_matches: list[tuple[Track, float]] = []
-            for track in active_tracks:
-                if track.end().frame_idx + self.greedy_max_frame_distance < det.frame_idx:
-                    continue
-                comparison_result, sim = self.compare_track_to_detection(track, det)
-                if comparison_result == _ComparisonResult.MATCH:
-                    clean_matches.append((track, sim))
-                elif comparison_result == _ComparisonResult.MAY_MATCH:
-                    mby_matches.append((track, sim))
+        # TODO cosine similarity to more than just one frame?
+        n = len(track.sorted_detections)
+        average_sim = sum(cosine_similarity(d.feat, detection.feat) for d in track.sorted_detections) / n
+
+        if iou >= self.greedy_min_iou and average_sim >= self.greedy_min_cosine_similarity:
+            return _ComparisonResult.MATCH
+
+        return _ComparisonResult.MAY_MATCH
+
+    def _preprocess_detections(self, detections_by_frame: dict[int, list[Detection]]) -> list[Track]:
+        """Greedily stiches detections onto tracks as long as both IOU and cosine similarity are high."""
+
+        # We match greedily if:
+        # the bounding box of a detection overlaps only with a single active track
+        # or both iou and cosine similarity are high enough to continue the track.
+        #
+        # We only match against active tracks. Stracks become stale if they are too old or if they have been considered for a match but ot chosen
+
+        # Sort detections by frame index to process them in order.
+        sorted_frame_indices = sorted(detections_by_frame.keys())
+
+        next_track_id = 1
+
+        # these tracks have been detected and can be matched to further detections
+        active_tracks: list[Track] = []
+        # these tracks have been detected but can't match further detections
+        stale_tracks: list[Track] = []
+        stale_track_ids: set[TrackId] = set()
+
+        for frame_idx in sorted_frame_indices:
+            for detection in detections_by_frame[frame_idx]:
+                clean_matches: list[Track] = []
+                mby_matches: list[Track] = []
+
+                for track in active_tracks:
+                    comparison_result = self._compare_detection_to_track(track, detection)
+                    if comparison_result == _ComparisonResult.MATCH:
+                        # Track matches the detection, continue it
+                        clean_matches.append(track)
+                    elif comparison_result == _ComparisonResult.MAY_MATCH:
+                        mby_matches.append(track)
+
+                if len(clean_matches) == 1:
+                    track = clean_matches[0]
+                    track.sorted_detections.append(detection)
+                elif len(clean_matches) == 0 and len(mby_matches) == 1:
+                    track = mby_matches[0]
+                    track.sorted_detections.append(detection)
                 else:
-                    next_active_tracks.append(track)
+                    # no clear match found, create a new track for this detection
+                    new_track = Track(track_id=next_track_id, sorted_detections=[detection])
+                    active_tracks.append(new_track)
+                    next_track_id += 1
 
-            if len(clean_matches) == 1:
-                track, _ = clean_matches[0]
-                track.sorted_detections.append(det)
-                next_active_tracks.append(track)
-                for mby_track, _ in mby_matches:
-                    next_active_tracks.append(mby_track)
-            elif len(clean_matches) == 0 and len(mby_matches) == 1:
-                track, _ = mby_matches[0]
-                track.sorted_detections.append(det)
-                next_active_tracks.append(track)
-            else:
-                new_track = Track(
-                    track_id=len(active_tracks) + len(stale_tracks),
-                    sorted_detections=[det],
-                )
-                next_active_tracks.append(new_track)
+                    # all clean and mby matches are stale because we couldn't cleanly match them
+                    for track in clean_matches + mby_matches:
+                        if track.track_id not in stale_track_ids:
+                            stale_track_ids.add(track.track_id)
+                            stale_tracks.append(track)
 
+            # Too old tracks are stale
             for track in active_tracks:
-                if track not in next_active_tracks:
-                    stale_tracks.append(track)
-            active_tracks = next_active_tracks
-            next_active_tracks = []
+                if track.end().frame_idx + self.greedy_max_frame_distance < frame_idx:
+                    if track.track_id not in stale_track_ids:
+                        stale_track_ids.add(track.track_id)
+                        stale_tracks.append(track)
+            # update stale / active tracks once per frame
+            active_tracks = [track for track in active_tracks if track not in stale_tracks]
+
         return stale_tracks + active_tracks
 
     def _link_cost(
@@ -314,7 +329,7 @@ class DiscreteOptimizationTracker(Tracker):
         num_det = len(detections)
         det_index = {id(det): idx for idx, det in enumerate(detections)}
 
-        frame_to_indices: Dict[int, List[int]] = defaultdict(list)
+        frame_index_to_assignment_indices: dict[FrameIndex, list[int]] = defaultdict(list)
         for idx, det in enumerate(detections):
             frame_to_indices[det.frame_idx].append(idx)
         frames_sorted = sorted(frame_to_indices.keys())
@@ -448,9 +463,13 @@ class DiscreteOptimizationTracker(Tracker):
     ) -> list[Track]:
         logging.info(
             f"{'=' * 80} Running discrete optimization tracker with {len(detections)} detections {'=' * 80}")
+        detections_by_frame: dict[FrameIndex, list[Detection]] = defaultdict(list)
+        for det in detections:
+            detections_by_frame[det.frame_idx].append(det)
         max_detections = count_max_simultaneous_detections(detections)
         logging.info(f"Max simultaneous detections: {max_detections}")
-        fragments = self._preprocess_detections(detections)
+        fragments = self._preprocess_detections(detections_by_frame)
+        return fragments
         return self._optimize_fragments(fragments, None)
 
 

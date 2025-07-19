@@ -2,12 +2,14 @@ from video_io import VideoInfo
 from common_types import Detection, Track
 
 
-class Tracker:
-    def track_detections(self, detections: list[Detection], video_properties: VideoInfo) -> list[Track]:
-        raise NotImplementedError("Subclasses should implement this method.")
+from typing import Protocol
 
 
-class DummyTracker(Tracker):
+class Tracker(Protocol):
+    def track_detections(self, detections: list[Detection], video_properties: VideoInfo) -> list[Track]: ...
+
+
+class DummyTracker:
     def track_detections(self, detections: list[Detection], video_properties: VideoInfo) -> list[Track]:
         return [
             Track(

@@ -32,8 +32,8 @@ class WindsurfingVideoProcessor:
     """Main video processing orchestrator"""
 
     def __init__(self, draw_annotations: bool = False, output_dir: str = 'individual_surfers', dry_run: bool = False):
-        # TODO: parameterize
         self.surf_detector = SurferDetector()
+        # TODO: parameterize
         self.priority_mp_executor = ProcessPoolExecutor(max_workers=1)
         self.high_mp_executor = ProcessPoolExecutor(max_workers=4)
         self.draw_annotations = draw_annotations
@@ -64,10 +64,9 @@ class WindsurfingVideoProcessor:
             )
 
         if self.draw_annotations:
-            f = self.submit_low_priority_task(
+            self.submit_low_priority_task(
                 _generate_annotated_video_worker_function, (processed_tracks, input_path, self.output_dir)
             )
-            # f.result()
 
             self.submit_low_priority_task(
                 generate_debug_video_worker_function, (detections, processed_tracks, None, input_path, self.output_dir)
@@ -77,12 +76,15 @@ class WindsurfingVideoProcessor:
         self.high_mp_executor.shutdown(wait=True)
         self.priority_mp_executor.shutdown(wait=True)
 
-    def submit_low_priority_task(self, func: Callable[[P], R], *args, **kwargs):
-        return self.high_mp_executor.submit(log_and_reraise, func, *args, helpers_log_and_reraise_output_dir=self.output_dir, **kwargs)
+    def submit_low_priority_task(self, func: Callable[[P], R], args: P, **kwargs):
+        return self.high_mp_executor.submit(
+            log_and_reraise, func, args, helpers_log_and_reraise_output_dir=self.output_dir, **kwargs
+        )
 
-    def submit_high_priority_task(self, func: Callable[[P], R], *args, **kwargs):
-        return self.priority_mp_executor.submit(log_and_reraise, func, *args, helpers_log_and_reraise_output_dir=self.output_dir, **kwargs)
-
+    def submit_high_priority_task(self, func: Callable[[P], R], args: P, **kwargs):
+        return self.priority_mp_executor.submit(
+            log_and_reraise, func, args, helpers_log_and_reraise_output_dir=self.output_dir, **kwargs
+        )
 
 
 def _stabilize_individual_video_worker_function(args: tuple[os.PathLike, os.PathLike]) -> None:

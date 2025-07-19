@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from progress.bar import color
-
 """Debug‑rendering helpers
 ===========================
 
@@ -44,20 +42,20 @@ special‑case code paths.  Switching to a 4×4 grid is as easy as adding more
 `create_view` calls.
 """
 
-from collections import defaultdict
+import os
+import cv2
 import math
 import logging
-from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
-import os
-from stabilize import VidStabWithoutVideoCapture
-from itertools import chain
-
-import cv2
 import numpy as np
-from tqdm import tqdm
 
-from common_types import BoundingBox, Detection, cosine_similarity, Track
+from tqdm import tqdm
+from pathlib import Path
+from typing import List, Optional, Tuple
+from collections import defaultdict
+from stabilize import VidStabWithoutVideoCapture
+
+
+from common_types import BoundingBox, Detection, FrameIndex, Point, TrackId, cosine_similarity, Track
 
 BOX_COLOR_CUR = (255, 255, 255)  # white
 BOX_COLOR_PREV = (170, 170, 170)  # light grey
@@ -65,9 +63,11 @@ BOX_COLOR_PREV_TRANSFORMED = (120, 120, 170)  # grayish blue
 ALPHA_OVERLAY = 0.5  # translucency for stabilised preview
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 
+
 def _clamp(value: int, min_v: int, max_v: int) -> int:
     """Clamp *value* between *min_v* and *max_v*."""
     return max(min_v, min(max_v, value))
+
 
 def _generate_palette(n: int = 30, seed: int = 0) -> List[Tuple[int, int, int]]:
     """Return *n* bright BGR colours with deterministic shuffling."""
@@ -82,14 +82,6 @@ def _generate_palette(n: int = 30, seed: int = 0) -> List[Tuple[int, int, int]]:
     rng.shuffle(colours)
     return colours
 
-def _measure_text(text: str, font_scale: float, thickness: int) -> Tuple[int, int]:
-    size, _ = cv2.getTextSize(text, _FONT, font_scale, thickness)
-    tw, th = size
-    return (tw, th)
-    
-
-def _point_along_line(p1: Tuple[int, int], p2: Tuple[int, int], t: float) -> Tuple[int, int]:
-    return int(round(p1[0] + t * (p2[0] - p1[0]))), int(round(p1[1] + t * (p2[1] - p1[1])))
 
 class DebugCanvas:
     """Owns the global image and collision‑aware drawing primitives.
@@ -109,14 +101,8 @@ class DebugCanvas:
         self.palette: List[Tuple[int, int, int]] = _generate_palette(30, self._seed)
         self._rng = np.random.default_rng(self._seed ^ 0xA5A5A5A5)
 
-    def create_view(
-        self,
-        x: int,
-        y: int,
-        w: int,
-        h: int,
-    ) -> "DebugView":
-        """Return a new view covering *rect* (x, y, w, h) in canvas coords."""
+    def create_view(self, x: int, y: int, w: int, h: int) -> DebugView:
+        """Return a new view covering *rect* (x, y, w, h) in canvas coords."""
         return DebugView(self, x, y, w, h)
 
     # ---------------------------------------------------------------------
@@ -125,36 +111,28 @@ class DebugCanvas:
     def draw_text(
         self,
         text: str,
-        origin_bl: Tuple[int, int],
+        origin_bl: Point,
         color: Tuple[int, int, int] = (255, 255, 255),
         font_scale: float = 0.4,
         thickness: int = 1,
         bg: bool = True,
     ) -> BoundingBox:
-        tw, th = _measure_text(text, font_scale, thickness)
+        (tw, th), _ = cv2.getTextSize(text, _FONT, font_scale, thickness)
         x, y = origin_bl
-        text_bb = BoundingBox(
-            x, y - th, x + tw, y
-        )
+        text_bb = BoundingBox(x, y - th, x + tw, y)
         if bg:
-            cv2.rectangle(
-                self.canvas,
-                (text_bb.x1, text_bb.y1),
-                (text_bb.x2, text_bb.y2),
-                (40, 40, 40),
-                -1
-            )
+            cv2.rectangle(self.canvas, (text_bb.x1, text_bb.y1), (text_bb.x2, text_bb.y2), (40, 40, 40), -1)
         cv2.putText(self.canvas, text, (x, y), _FONT, font_scale, color, thickness, cv2.LINE_AA)
         return text_bb
 
     def draw_label(
-            self,
-            text: str,
-            origin_bl: Tuple[int, int],
-            color: Tuple[int, int, int],
-            font_scale: float = 0.4,
-            thickness: int = 1,
-            bg: bool = True,
+        self,
+        text: str,
+        origin_bl: Point,
+        color: Tuple[int, int, int],
+        font_scale: float = 0.4,
+        thickness: int = 1,
+        bg: bool = True,
     ):
         """Draws text and reserves space to avoid overwriting."""
         bbox_text = self.draw_text(
@@ -166,7 +144,6 @@ class DebugCanvas:
             bg=bg,
         )
         self.label_positions.append(bbox_text)
-
 
     def draw_box(
         self,
@@ -183,19 +160,17 @@ class DebugCanvas:
             cv2.LINE_AA,
         )
         if label:
-            self.draw_label(
-                label, (bbox.x1, max(bbox.y1 - 2, 0)), color
-            )
+            self.draw_label(label, Point(bbox.x1, max(bbox.y1 - 2, 0)), color)
 
     def _choose_label_org_for_line_cached(
         self,
         text: str,
-        p1: Tuple[int, int],
-        p2: Tuple[int, int],
+        p1: Point,
+        p2: Point,
         font_scale: float = 0.35,
         thickness: int = 1,
         step: float = 0.1,
-    ) -> Tuple[int, int]:
+    ) -> Point:
         base_t = 0.25
         cands: List[float] = [t for t in (base_t,) if 0.0 <= t <= 1.0]
         k, up_done, dn_done = 1, False, False
@@ -213,13 +188,13 @@ class DebugCanvas:
             if k > 20:
                 break
         for t in cands:
-            cx, cy = _point_along_line(p1, p2, t)
+            cx, cy = p1.interpolate(p2, t)
             org, bb_text = self._clamp_label_origin(text, cx, cy, font_scale, thickness)
             if not any(bb.overlaps(bb_text) for bb in self.label_positions):
                 return org
         # fallback random
         t = float(self._rng.random())
-        cx, cy = _point_along_line(p1, p2, t)
+        cx, cy = p1.interpolate(p2, t)
         org, _ = self._clamp_label_origin(text, cx, cy, font_scale, thickness)
         return org
 
@@ -230,30 +205,22 @@ class DebugCanvas:
         y: int,
         font_scale: float,
         thickness: int,
-    ) -> tuple[tuple[int, int], BoundingBox]:
+    ) -> tuple[Point, BoundingBox]:
         """Clamp label origin to canvas bounds and return the text bounding box."""
         assert x >= 0 and y >= 0
-        tw, th = _measure_text(text, font_scale, thickness)
+        (tw, th), _ = cv2.getTextSize(text, _FONT, font_scale, thickness)
         top = max(0, y - th)
         right = min(self.w, x + tw)
         left = right - tw
         bottom = min(self.h, y)
         assert left >= 0 and bottom >= 0
-        org = (left, bottom)
-        bbox = BoundingBox(
-            left, top, right, bottom
-        )
+        org = Point(left, bottom)
+        bbox = BoundingBox(left, top, right, bottom)
         return org, bbox
 
-    def draw_line_with_label(
-            self,
-            start: Tuple[int, int],
-            end: Tuple[int, int],
-            text: str,
-            color: Tuple[int, int, int]
-    ) -> None:
+    def draw_line_with_label(self, start: Point, end: Point, text: str, color: Tuple[int, int, int]) -> None:
         """Draw a line between *start* and *end* with a label at the midpoint."""
-        cv2.line(self.canvas, start, end, color, 1, cv2.LINE_AA)
+        cv2.line(self.canvas, (start.x, start.y), (end.x, end.y), color, 1, cv2.LINE_AA)
         org = self._choose_label_org_for_line_cached(text, start, end)
         self.draw_label(text, org, color)
 
@@ -275,14 +242,11 @@ class DebugView:
         self._c = canvas
         self.x, self.y, self.w, self.h = map(int, (x, y, w, h))
 
-    def _feed_to_global(self, feed_x: int, feed_y: int) -> Tuple[int, int]:
+    def _feed_to_global(self, feed_x: int, feed_y: int) -> Point:
         """Feed‑space → debug-canvas‑space."""
         x_f = feed_x * self.w / self._c.feed_w + self.x
         y_f = feed_y * self.h / self._c.feed_h + self.y
-        return (
-            _clamp(int(round(x_f)), 0, self._c.w),
-            _clamp(int(round(y_f)), 0, self._c.h)
-        )
+        return Point(_clamp(int(round(x_f)), 0, self._c.w), _clamp(int(round(y_f)), 0, self._c.h))
 
     def _feed_bb_to_global(self, bbox: BoundingBox) -> BoundingBox:
         """Feed‑space BoundingBox → debug-canvas‑space BoundingBox."""
@@ -302,7 +266,7 @@ class DebugView:
     def draw_label(
         self,
         text: str,
-        origin_tl: Tuple[int, int],
+        origin_tl: Point,
         color: Tuple[int, int, int],
         font_scale: float = 0.4,
         thickness: int = 1,
@@ -315,7 +279,7 @@ class DebugView:
     def draw_text(
         self,
         text: str,
-        origin_tl: Tuple[int, int],
+        origin_tl: Point,
         color: Tuple[int, int, int],
         font_scale: float = 0.4,
         thickness: int = 1,
@@ -346,8 +310,7 @@ def generate_debug_video_worker_function(
     for det in detections:
         det_map[det.frame_idx].append(det)
 
-
-    track_detections_per_frame: dict[int, list[Tuple[int, Detection]]] = defaultdict(list)
+    track_detections_per_frame: dict[FrameIndex, list[Tuple[TrackId, Detection]]] = defaultdict(list)
     for track in tracks:
         for d in track.sorted_detections:
             track_detections_per_frame[d.frame_idx].append((track.track_id, d))
@@ -370,7 +333,7 @@ def generate_debug_video_worker_function(
 
         with VideoWriter(out_path, dbg_w, dbg_h, props.fps) as writer:
             prev_scaled: Optional[np.ndarray] = None
-            prev_dets: List[Tuple[int, Detection]] = []
+            prev_dets: List[Tuple[TrackId, Detection]] = []
 
             for f_idx, frame in tqdm(reader.read_frames(), total=props.total_frames, desc='Debug render'):
                 cur_scaled = cv2.resize(frame, (sw, sh), interpolation=cv2.INTER_LINEAR)
@@ -379,16 +342,16 @@ def generate_debug_video_worker_function(
                 # Create canvas and views
                 canvas_img = np.zeros((dbg_h, dbg_w, 3), dtype=cur_scaled.dtype)
                 canvas_img[0:sh] = cur_scaled
-                canvas_img[sh:sh * 2] = bottom
+                canvas_img[sh : sh * 2] = bottom
 
                 canvas = DebugCanvas(canvas_img, feed_w, feed_h, seed=seed)
                 cur_view = canvas.create_view(0, 0, sw, sh)
                 prev_view = canvas.create_view(0, sh, sw, sh)
 
                 # Frame index labels
-                canvas.draw_text(f't={f_idx}', (5, 15), color=(0, 255, 0), bg=True)
+                canvas.draw_text(f't={f_idx}', Point(5, 15), color=(0, 255, 0), bg=True)
                 if prev_scaled is not None:
-                    canvas.draw_text(f't={f_idx-1}', (5, sh + 15), color=(0, 255, 0), bg=True)
+                    canvas.draw_text(f't={f_idx - 1}', Point(5, sh + 15), color=(0, 255, 0), bg=True)
 
                 # Draw detections
                 cur_dets = det_map.get(f_idx, [])
@@ -407,7 +370,7 @@ def generate_debug_video_worker_function(
                         cos = (
                             cosine_similarity(det_c.feat, det_p.feat)
                             if det_c.feat is not None and det_p.feat is not None
-                            else float("nan")
+                            else float('nan')
                         )
                         dist = math.hypot(
                             det_c.bbox.center.x - det_p.bbox.center.x,
@@ -415,9 +378,9 @@ def generate_debug_video_worker_function(
                         )
                         iou = det_c.bbox.iou(det_p.bbox)
                         txt = (
-                            f"c={cos if cos is not None and not math.isnan(cos) else 'n/a':.2f} "
-                            f"iou={iou if iou is not None and not math.isnan(iou) else 'n/a':.2f} "
-                            f"d={dist if dist is not None and not math.isnan(dist) else 'n/a':.0f}"
+                            f'c={cos if cos is not None and not math.isnan(cos) else "n/a":.2f} '
+                            f'iou={iou if iou is not None and not math.isnan(iou) else "n/a":.2f} '
+                            f'd={dist if dist is not None and not math.isnan(dist) else "n/a":.0f}'
                         )
                         canvas.draw_line_with_label(
                             cur_c_global,
