@@ -133,6 +133,14 @@ class Track:
             raise ValueError("Track has no detections.")
         return self.sorted_detections[0]
 
+    def start_frame(self) -> int:
+        """Return the frame index of the first detection in the track."""
+        return self.start().frame_idx
+
+    def end_frame(self) -> int:
+        """Return the frame index of the last detection in the track."""
+        return self.end().frame_idx
+
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
