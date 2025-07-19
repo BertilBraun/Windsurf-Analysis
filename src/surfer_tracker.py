@@ -8,7 +8,6 @@ into coherent tracks representing individual surfers.
 import os
 import logging
 
-import tracking
 import track_processing
 from tracking import Tracker
 
@@ -17,8 +16,7 @@ from video_io import get_video_properties
 
 
 def process_detections_into_tracks(
-    original_video_path: os.PathLike | str, detections: list[Detection],
-    tracker: Tracker
+    original_video_path: os.PathLike | str, detections: list[Detection], tracker: Tracker
 ) -> list[Track]:
     """Process collected tracks and return processed track data for video generation"""
     logger = logging.getLogger(__name__)

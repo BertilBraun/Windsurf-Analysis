@@ -93,22 +93,6 @@ def stabilize_ffmpeg(input_file: os.PathLike, output_file: os.PathLike) -> bool:
             pass
 
 
-def progress_bar(iterable, **kwargs):
-    """
-    Yields from iterable, wrapping with tqdm if available, else prints a fallback progress bar.
-    """
-    # tqdm replacment if it does not exist
-    total = kwargs.get('total', len(iterable))
-    desc = kwargs.get('desc', '')
-    print(f'{desc} [', end='')
-    for i in range(total):
-        print('=', end='', flush=True)
-        yield iterable[i]
-        print('>', end='', flush=True)
-    print('] Done')
-    return iterable
-
-
 class MpvIPCTask:
     """A context manager for running mpv with IPC support."""
 
