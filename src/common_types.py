@@ -18,6 +18,9 @@ class Point:
     def distance_to(self, other: Point) -> float:
         return math.sqrt((self.x - other.x) ** 2 + (self.y - other.y) ** 2)
 
+    def interpolate(self, other: Point, alpha: float) -> Point:
+        return Point(int((1 - alpha) * self.x + alpha * other.x), int((1 - alpha) * self.y + alpha * other.y))
+
 
 @dataclass
 class BoundingBox:
@@ -124,13 +127,13 @@ class Track:
     def end(self) -> Detection:
         """Return the last detection in the track."""
         if not self.sorted_detections:
-            raise ValueError("Track has no detections.")
+            raise ValueError('Track has no detections.')
         return self.sorted_detections[-1]
 
     def start(self) -> Detection:
         """Return the first detection in the track."""
         if not self.sorted_detections:
-            raise ValueError("Track has no detections.")
+            raise ValueError('Track has no detections.')
         return self.sorted_detections[0]
 
 
