@@ -57,6 +57,8 @@ from stabilize import VidStabWithoutVideoCapture
 
 from common_types import BoundingBox, Detection, FrameIndex, Point, TrackId, cosine_similarity, Track
 
+from dataclasses import dataclass
+
 BOX_COLOR_CUR = (255, 255, 255)  # white
 BOX_COLOR_PREV = (170, 170, 170)  # light grey
 BOX_COLOR_PREV_TRANSFORMED = (120, 120, 170)  # grayish blue
@@ -162,6 +164,21 @@ class DebugCanvas:
         if label:
             self.draw_label(label, Point(bbox.x1, max(bbox.y1 - 2, 0)), color)
 
+    def draw_image(
+        self,
+        image: np.ndarray,
+        pos: Point,
+        size: Tuple[int, int] | None
+    ):
+        if size is not None:
+            image = cv2.resize(image, size, interpolation=cv2.INTER_LINEAR)
+        x, y = pos
+        h, w = image.shape[:2]
+        if x < 0 or y < 0 or x + w > self.w or y + h > self.h:
+            raise ValueError(f'Image position {pos} with size {size} is out of bounds for canvas size {self.canvas.shape}')
+        self.canvas[y : y + h, x : x + w] = image
+
+
     def _choose_label_org_for_line_cached(
         self,
         text: str,
@@ -233,7 +250,7 @@ class DebugView:
     def __init__(
         self,
         canvas: DebugCanvas,
-        # coordinates in DebugCanvas
+        # coordinates in DebugCanvas of the top-left corner
         x: int,
         y: int,
         w: int,
@@ -253,6 +270,14 @@ class DebugView:
         x1, y1 = self._feed_to_global(bbox.x1, bbox.y1)
         x2, y2 = self._feed_to_global(bbox.x2, bbox.y2)
         return BoundingBox(x1, y1, x2, y2)
+
+    def write_frame(self, frame: np.ndarray):
+        """Write the given frame to the global canvas, filling the view rectangle."""
+        self._c.draw_image(
+            frame,
+            pos=Point(self.x, self.y),
+            size=(self.w, self.h),
+        )
 
     def draw_box(
         self,
@@ -392,4 +417,162 @@ def generate_debug_video_worker_function(
                 writer.write_frame(canvas_img)
                 prev_scaled = cur_scaled
 
+    return None
+
+
+@dataclass
+class DebugSimSettings:
+    frame_history: int = 5 * 30 # 5 seconds
+
+
+def get_tracks_active_at_frame(
+        tracks: List[Track],
+        frame_idx: FrameIndex,
+    ) -> List[Track]:
+    """Return all tracks that are active at the given frame index."""
+    return [t for t in tracks if t.alive_at_frame(frame_idx)]
+
+
+def get_tracks_ended_in_last_n_frames(
+        tracks: List[Track],
+        frame_idx: FrameIndex,
+        n_frames: int
+    ) -> List[Track]:
+    """Return all tracks that ended in the last *n_frames* frames."""
+    return [t for t in tracks if t.end_frame() >= frame_idx - n_frames and t.end_frame() < frame_idx]
+
+
+def debug_track_similarities(
+    args: Tuple[
+        List[Track],
+        os.PathLike,  # input video path
+        os.PathLike | str,  # output directory
+        DebugSimSettings | None,  # settings for debug similarity video
+    ],
+) -> None:
+    """Shows similarity measures between the active tracks and """
+
+    tracks, input_path, output_dir, settings = args
+    if settings is None:
+        settings = DebugSimSettings()
+
+    input_path = Path(input_path)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    out_path = output_dir / f'{input_path.stem}+00_debug_sim.mp4'
+
+    from video_io import VideoReader, VideoWriter  # type: ignore
+
+    seed = abs(hash(str(input_path)))
+
+    with VideoReader(input_path) as reader:
+        props = reader.get_properties()  # width, height, fps, total_frames
+        feed_w, feed_h = props.width, props.height
+        center_w, center_h = max(1, feed_w // 2), max(1, feed_h // 2)
+
+        frames = [f[1] for f in reader.read_frames()]
+
+        with VideoWriter(out_path, feed_w, feed_h, props.fps) as writer:
+            for f_idx, frame in tqdm(enumerate(frames), total=props.total_frames, desc='Debug render'):
+                cur_scaled = cv2.resize(frame, (center_w, center_h), interpolation=cv2.INTER_LINEAR)
+
+                # Create canvas and views
+                canvas_img = np.zeros((feed_h, feed_w, 3), dtype=cur_scaled.dtype)
+                canvas = DebugCanvas(canvas_img, feed_w, feed_h, seed=seed)
+
+                center_view = canvas.create_view(
+                    (feed_w - center_w) // 2,
+                    (feed_h - center_h) // 2,
+                    center_w,
+                    center_h,
+                )
+
+                center_view.write_frame(cur_scaled)
+
+                canvas.draw_text(
+                    f't={f_idx}',
+                    Point(5, 15),
+                    color=(0, 255, 0),
+                    bg=True,
+                    font_scale=0.4,
+                )
+
+                active_tracks = get_tracks_active_at_frame(tracks, f_idx)
+                for t in active_tracks:
+                    most_recent_det = t.get_most_recent_detection_at_frame(f_idx)
+                    center_view.draw_box(
+                        most_recent_det.bbox,
+                        BOX_COLOR_CUR,
+                        label=f'T{t.track_id}',
+                    )
+
+                past_tracks: List[Track] = get_tracks_ended_in_last_n_frames(tracks, f_idx, settings.frame_history)
+
+                cnt = 0
+                if past_tracks:
+                    past_tracks = sorted(past_tracks, key=lambda t: t.end_frame(), reverse=True)
+
+                    n_past_tracks = len(past_tracks)
+
+                    # at least two cols so the view does not become too large.
+                    n_cols = max(n_past_tracks // 2, 2)
+                    width = center_w // n_cols
+                    height = int(round(width * center_h / center_w))
+                    for i, t in enumerate(past_tracks):
+                        last_frame = t.end_frame()
+                        # of row is 0 it is above the center view if it is 1 it is below.
+                        row = i // n_cols
+                        col = i % n_cols
+                        x = center_view.x + col * width
+                        y = center_view.y - height if row == 0 else center_view.y + center_h
+                        view = canvas.create_view(x, y, width, height)
+                        view.write_frame(frames[last_frame])
+                        canvas.draw_text(
+                            f't={last_frame}',
+                            Point(5 + x, 15 + y),
+                            color=(0, 255, 0),
+                            bg=True,
+                            font_scale=0.6,
+                        )
+                        bbox = t.get_most_recent_detection_at_frame(last_frame).bbox
+                        view.draw_box(
+                            bbox,
+                            BOX_COLOR_CUR,
+                            label=f'{t.track_id}',
+                        )
+
+                        # ======================================================================
+                        # Draw similarity measures
+                        # ======================================================================
+                        bbox_center_global = view._feed_to_global(*bbox.center)
+                        for active_track in active_tracks:
+                            if active_track.start_frame() <= last_frame:
+                                # we would not consider these tracks for merging anyways since the active track has started before
+                                # the past track ended.
+                                continue
+                            most_recent_det = active_track.get_most_recent_detection_at_frame(f_idx)
+                            assert most_recent_det is not None
+                            bbox_active = most_recent_det.bbox
+                            bbox_active_global = center_view._feed_to_global(*bbox_active.center)
+
+                            color = canvas.palette[cnt % len(canvas.palette)]
+                            cnt += 1
+
+                            # @BERTIL Add !TRACK! similarities here (for both tracks use global similarities)
+                            # For this example I just use the first detection in the track
+                            cos = cosine_similarity(active_track.start().feat, t.end().feat)
+                            iou = bbox.iou(bbox_active)
+                            txt = (
+                                f'c={cos if cos is not None and not math.isnan(cos) else "n/a":.2f} '
+                                f'iou={iou if iou is not None and not math.isnan(iou) else "n/a":.2f} '
+                            )
+                            canvas.draw_line_with_label(
+                                bbox_center_global,
+                                bbox_active_global,
+                                text=txt,
+                                color=color,
+                            )
+
+
+                writer.write_frame(canvas_img)
     return None

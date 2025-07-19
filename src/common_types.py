@@ -120,9 +120,12 @@ class Track:
     def __init__(self, track_id: TrackId, sorted_detections: list[Detection]):
         self.track_id = track_id
         self.sorted_detections = sorted(sorted_detections, key=lambda d: d.frame_idx)
-        self.detections_by_frame: dict[FrameIndex, Detection] = {
-            detection.frame_idx: detection for detection in self.sorted_detections
-        }
+
+    # @Perf Because sorted_detections is not static. Leave this until it becomes an issue (simple > perf)
+    @property
+    def detections_by_frame(self) -> dict[FrameIndex, Detection]:
+        return {d.frame_idx: d for d in self.sorted_detections}
+
 
     def copy(self) -> Track:
         new_sorted_detections = [d.copy() for d in self.sorted_detections]
@@ -150,6 +153,19 @@ class Track:
     def end_frame(self) -> int:
         """Return the frame index of the last detection in the track."""
         return self.end().frame_idx
+
+    def alive_at_frame(self, frame_idx: FrameIndex) -> bool:
+        """Check if the track has a detection at the given frame index."""
+        return frame_idx >= self.start_frame() and frame_idx <= self.end_frame()
+
+    def get_most_recent_detection_at_frame(self, frame_idx: FrameIndex) -> Detection:
+        """Get the most recent detection at the given frame index."""
+        if not self.alive_at_frame(frame_idx):
+            raise ValueError(f'Track {self.track_id} is not alive at frame {frame_idx}.')
+        for i in range(frame_idx, self.start_frame() - 1, -1):
+            if i in self.detections_by_frame:
+                return self.detections_by_frame[i]
+        assert False
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:

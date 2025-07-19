@@ -5,7 +5,8 @@ from typing import Callable, TypeVar
 from tqdm import tqdm
 from pathlib import Path
 from branch_and_bound_tracker import BranchAndBoundFragmentTracker
-from debug_drawer import generate_debug_video_worker_function
+from debug_drawer import generate_debug_video_worker_function, debug_track_similarities
+from greedy_preprocessor import GreedyPreprocessor
 from helpers import log_and_reraise
 from stabilize import compute_vidstab_transforms
 import logging
@@ -57,7 +58,8 @@ class WindsurfingVideoProcessor:
         # wait for stabilizer computation to finish
         # stabilizer = stabilizer_future.result()
 
-        processed_tracks = process_detections_into_tracks(input_path, detections, BranchAndBoundFragmentTracker())
+        # @Bertil use your processor here
+        processed_tracks = process_detections_into_tracks(input_path, detections, GreedyPreprocessor())
 
         if not self.dry_run:
             self.submit_low_priority_task(
@@ -69,8 +71,13 @@ class WindsurfingVideoProcessor:
                 _generate_annotated_video_worker_function, (processed_tracks, input_path, self.output_dir)
             )
 
+            # self.submit_low_priority_task(
+            #     generate_debug_video_worker_function,
+            #     (detections, processed_tracks, None, input_path, self.output_dir)
+            # )
             self.submit_low_priority_task(
-                generate_debug_video_worker_function, (detections, processed_tracks, None, input_path, self.output_dir)
+                debug_track_similarities,
+                (processed_tracks, input_path, self.output_dir, None)
             )
 
     def finalize(self):
