@@ -59,7 +59,7 @@ class WindsurfingVideoProcessor:
         processed_tracks = process_detections_into_tracks(
             input_path,
             detections,
-            # GreedyTracker(),
+            GreedyTracker(),
         )  # BranchAndBoundFragmentTracker())
 
         if not self.dry_run:

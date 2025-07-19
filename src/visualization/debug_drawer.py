@@ -56,6 +56,7 @@ from .stabilize import VidStabWithoutVideoCapture
 
 
 from common_types import BoundingBox, Detection, FrameIndex, Point, TrackId, cosine_similarity, Track
+from tracking.preprocessing.greedy_preprocessor import pariwise_cosine_similarity, mean_embedding_cosine_similarity, pairwise_sqaured_cosine_similarity, prop_embeddings_sim
 
 from dataclasses import dataclass
 
@@ -118,14 +119,28 @@ class DebugCanvas:
         font_scale: float = 0.4,
         thickness: int = 1,
         bg: bool = True,
+        dry_run: bool = False,
     ) -> BoundingBox:
-        (tw, th), _ = cv2.getTextSize(text, _FONT, font_scale, thickness)
+        # make color a bit ligher (so black text looks good)
+        color = tuple(min(255, int(c * 1.4)) for c in color)
+
+        lines = text.split('\n')
+        sx, sy = origin_bl
+        max_x, max_y = sx, sy
+        min_y = sy
         x, y = origin_bl
-        text_bb = BoundingBox(x, y - th, x + tw, y)
-        if bg:
-            cv2.rectangle(self.canvas, (text_bb.x1, text_bb.y1), (text_bb.x2, text_bb.y2), (40, 40, 40), -1)
-        cv2.putText(self.canvas, text, (x, y), _FONT, font_scale, color, thickness, cv2.LINE_AA)
-        return text_bb
+        for l in lines:
+            (tw, th), _ = cv2.getTextSize(l, _FONT, font_scale, thickness)
+            text_bb = BoundingBox(x, y - th, x + tw, y)
+            if not dry_run:
+                if bg:
+                    cv2.rectangle(self.canvas, (text_bb.x1, text_bb.y1), (text_bb.x2, text_bb.y2 + 4), color, -1)
+                cv2.putText(self.canvas, l, (x, y), _FONT, font_scale, (0, 0, 0), thickness, cv2.LINE_AA)
+            max_x = max(max_x, text_bb.x2)
+            min_y = min(min_y, text_bb.y1)
+            max_y = max(max_y, text_bb.y2)
+            y += th + 4
+        return BoundingBox(sx, min_y, max_x, max_y)
 
     def draw_label(
         self,
@@ -188,22 +203,7 @@ class DebugCanvas:
         thickness: int = 1,
         step: float = 0.1,
     ) -> Point:
-        base_t = 0.25
-        cands: List[float] = [t for t in (base_t,) if 0.0 <= t <= 1.0]
-        k, up_done, dn_done = 1, False, False
-        while not (up_done and dn_done):
-            tu, td = base_t + step * k, base_t - step * k
-            if tu > 1.0:
-                up_done = True
-            else:
-                cands.append(tu)
-            if td < 0.0:
-                dn_done = True
-            else:
-                cands.append(td)
-            k += 1
-            if k > 20:
-                break
+        cands = [t / 20.0 for t in range(21)]
         for t in cands:
             cx, cy = p1.interpolate(p2, t)
             org, bb_text = self._clamp_label_origin(text, cx, cy, font_scale, thickness)
@@ -225,7 +225,9 @@ class DebugCanvas:
     ) -> tuple[Point, BoundingBox]:
         """Clamp label origin to canvas bounds and return the text bounding box."""
         assert x >= 0 and y >= 0
-        (tw, th), _ = cv2.getTextSize(text, _FONT, font_scale, thickness)
+        bbox = self.draw_text(text, Point(x, y), dry_run=True)
+        tw = bbox.x2 - bbox.x1
+        th = bbox.y2 - bbox.y1
         top = max(0, y - th)
         right = min(self.w, x + tw)
         left = right - tw
@@ -558,13 +560,22 @@ def debug_track_similarities(
                             color = canvas.palette[cnt % len(canvas.palette)]
                             cnt += 1
 
-                            # @BERTIL Add !TRACK! similarities here (for both tracks use global similarities)
-                            # For this example I just use the first detection in the track
-                            cos = cosine_similarity(active_track.start().feat, t.end().feat)
+                            cos_end_start = cosine_similarity(active_track.start().feat, t.end().feat)
                             iou = bbox.iou(bbox_active)
+                            pw_cos = pariwise_cosine_similarity(active_track, t)
+                            mean_emb_cos = mean_embedding_cosine_similarity(active_track, t)
+                            pw_cos2 = pairwise_sqaured_cosine_similarity(active_track, t)
+                            min_sim = 0.5
+                            prop_gt_min_sim = prop_embeddings_sim(active_track, t, min_sim=min_sim)
+
+
                             txt = (
-                                f'c={cos if cos is not None and not math.isnan(cos) else "n/a":.2f} '
-                                f'iou={iou if iou is not None and not math.isnan(iou) else "n/a":.2f} '
+                                f'c_se={cos_end_start:.2f}\n'
+                                f'iou={iou:.2f}\n'
+                                f'pw_cos={pw_cos:.2f}\n'
+                                f'mean_emb_cos={mean_emb_cos:.2f}\n'
+                                f'pw_cos2={pw_cos2:.2f}\n'
+                                f'prop>{min_sim}={prop_gt_min_sim:.2f}'
                             )
                             canvas.draw_line_with_label(
                                 bbox_center_global,

@@ -8,11 +8,59 @@ from tracking.preprocessing.filter_non_surfers import filter_non_surfers_from_tr
 from video_io import VideoInfo
 from common_types import Detection, FrameIndex, Track, TrackId, cosine_similarity
 
+from typing import Callable
+import numpy as np
 
 class _ComparisonResult(Enum):
     MATCH = 'match'
     MAY_MATCH = 'may_match'
     NO_MATCH = 'no_match'
+
+
+def _calc_pairwise(a: Track, b: Track, metric: Callable[[Detection, Detection], float]) -> float:
+    """Calculate pairwise metric between all detections in two tracks."""
+    total = 0
+    count = 0
+    for da in a.sorted_detections:
+        for db in b.sorted_detections:
+            total += metric(da, db)
+            count += 1
+    return total / count if count > 0 else 0.0
+
+
+def _mean_embedding(t: Track) -> np.ndarray:
+    """Calculate the mean embedding of a track."""
+    return np.mean([d.feat for d in t.sorted_detections], axis=0)
+
+
+def pariwise_cosine_similarity(a: Track, b: Track) -> float:
+    """Calculate pairwise cosine similarity between all detections in two tracks."""
+    return _calc_pairwise(a, b, lambda a, b: cosine_similarity(a.feat, b.feat))
+
+
+def mean_embedding_cosine_similarity(a: Track, b: Track) -> float:
+    """Calculate cosine similarity between mean embeddings of two tracks."""
+    return cosine_similarity(
+        _mean_embedding(a),
+        _mean_embedding(b),
+    )
+
+
+def pairwise_sqaured_cosine_similarity(a: Track, b: Track) -> float:
+    """Calculate pairwise squared cosine similarity between all detections in two tracks."""
+    return _calc_pairwise(a, b, lambda a, b: cosine_similarity(a.feat, b.feat) ** 2)
+
+
+def prop_embeddings_sim(a: Track, b: Track, min_sim: float = 0.5) -> float:
+    """Count how many embeddings in two tracks have cosine similarity above a threshold."""
+    count = 0
+    cnt = 0
+    for da in a.sorted_detections:
+        for db in b.sorted_detections:
+            cnt += 1
+            if cosine_similarity(da.feat, db.feat) >= min_sim:
+                count += 1
+    return count / cnt if cnt > 0 else 0.0
 
 
 class GreedyPreprocessor:
