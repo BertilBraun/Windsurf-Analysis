@@ -4,6 +4,7 @@ from typing import Callable, TypeVar
 
 from tqdm import tqdm
 from pathlib import Path
+from branch_and_bound_tracker import BranchAndBoundFragmentTracker
 from debug_drawer import generate_debug_video_worker_function
 from helpers import log_and_reraise
 from stabilize import compute_vidstab_transforms
@@ -56,7 +57,7 @@ class WindsurfingVideoProcessor:
         # wait for stabilizer computation to finish
         # stabilizer = stabilizer_future.result()
 
-        processed_tracks = process_detections_into_tracks(input_path, detections, DiscreteOptimizationTracker())
+        processed_tracks = process_detections_into_tracks(input_path, detections, BranchAndBoundFragmentTracker())
 
         if not self.dry_run:
             self.submit_low_priority_task(
