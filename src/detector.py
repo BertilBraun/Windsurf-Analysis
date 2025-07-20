@@ -12,6 +12,9 @@ import settings
 from common_types import BoundingBox, Detection, compute_color_histogram
 
 
+from ultralytics.trackers.bot_sort import ReID
+
+
 def log_detection_settings():
     settings_str = '\n'.join(
         f'{k}: {v}' for k, v in settings.__dict__.items() if not k.startswith('__') and not callable(v) and k.isupper()
@@ -32,6 +35,11 @@ class SurferDetector:
         self.model.add_callback('on_predict_start', self._on_predict_start)
 
         log_detection_settings()
+
+        self.encoder = (
+            # (lambda feats, s: [f.cpu().numpy() for f in feats])  # native features do not require any model
+            ReID('yolo11n-cls.pt')
+        )
 
     def run_object_detection_on_video(self, video_path: os.PathLike | str) -> Generator[Detection, None, None]:
         """Run batched inference on entire video, return generator of (frame, detections)"""
@@ -62,10 +70,12 @@ class SurferDetector:
             # Convert tensors to numpy arrays using utility function
             boxes = _to_numpy(result.boxes.xyxy)
             confidences = _to_numpy(result.boxes.conf)
-            feats = _to_numpy(result.feats)
+            feats = _to_numpy(result.feats)  # Embeddings in non normalized space
 
             # Get the original frame data for histogram computation
             orig_img = result.orig_img
+
+            feats = self.encoder(result.orig_img, _to_numpy(result.boxes.xywh))
 
             for i in range(len(boxes)):
                 bbox = BoundingBox(
@@ -75,12 +85,14 @@ class SurferDetector:
                     y2=boxes[i][3],
                 )
 
+                embedding = feats[i] / np.linalg.norm(feats[i])
+
                 # Compute color histogram for this detection
                 color_histogram = compute_color_histogram(orig_img, bbox)
 
                 detection = Detection(
                     bbox=bbox,
-                    feat=feats[i],
+                    feat=embedding,
                     confidence=confidences[i],
                     frame_idx=frame_idx,
                     color_histogram=color_histogram,

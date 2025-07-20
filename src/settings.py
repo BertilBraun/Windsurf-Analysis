@@ -6,8 +6,8 @@ STANDARD_OUTPUT_DIR = 'individual_surfers'
 # YOLO settings
 YOLO_MODEL_PATH = Path(__file__).parent / '../train/models/100epochs.pt'
 IOU_THRESHOLD = 0.2
-CONFIDENCE_THRESHOLD = 0.1
 BATCH_SIZE = 32
+CONFIDENCE_THRESHOLD = 0.2
 
 # Tracking preprocessing settings
 MIN_TRACKING_FPS = 25
