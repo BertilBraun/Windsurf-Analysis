@@ -5,6 +5,7 @@ STANDARD_OUTPUT_DIR = 'individual_surfers'
 
 # YOLO settings
 YOLO_MODEL_PATH = Path(__file__).parent / '../train/models/100epochs.pt'
+REID_MODEL_PATH = Path(__file__).parent / 'weights/osnet_ain_x1_0_msmt17.pth'
 IOU_THRESHOLD = 0.2
 BATCH_SIZE = 32
 CONFIDENCE_THRESHOLD = 0.2

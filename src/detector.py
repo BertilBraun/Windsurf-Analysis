@@ -10,9 +10,7 @@ from ultralytics.engine.results import Results
 from video_io import get_video_properties
 import settings
 from common_types import BoundingBox, Detection, compute_color_histogram
-
-
-from ultralytics.trackers.bot_sort import ReID
+from reid import ReID
 
 
 def log_detection_settings():
@@ -31,8 +29,9 @@ class SurferDetector:
             raise FileNotFoundError(f'Model {settings.YOLO_MODEL_PATH} not found')
 
         self.model = YOLO(settings.YOLO_MODEL_PATH, verbose=False)
-
         self.model.add_callback('on_predict_start', self._on_predict_start)
+        self.reid_model = ReID(model_path=settings.REID_MODEL_PATH, device="cpu", half=False)
+
 
         log_detection_settings()
 
@@ -65,10 +64,12 @@ class SurferDetector:
             # Convert tensors to numpy arrays using utility function
             boxes = _to_numpy(result.boxes.xyxy)
             confidences = _to_numpy(result.boxes.conf)
-            feats = _to_numpy(result.feats)  # Embeddings in non normalized space
+            # feats = _to_numpy(result.feats)  # Embeddings in non normalized space
 
             # Get the original frame data for histogram computation
             orig_img = result.orig_img
+
+            reid_feats = self.reid_model.get_features(boxes, orig_img)
 
             for i in range(len(boxes)):
                 bbox = BoundingBox(
@@ -78,7 +79,8 @@ class SurferDetector:
                     y2=boxes[i][3],
                 )
 
-                embedding = feats[i] / np.linalg.norm(feats[i])
+                # embedding = feats[i] / np.linalg.norm(feats[i])
+                embedding = reid_feats[i] # already normalized
 
                 # Compute color histogram for this detection
                 color_histogram = compute_color_histogram(orig_img, bbox)
