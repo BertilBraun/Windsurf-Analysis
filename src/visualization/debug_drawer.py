@@ -228,16 +228,12 @@ class DebugCanvas:
     ) -> tuple[Point, BoundingBox]:
         """Clamp label origin to canvas bounds and return the text bounding box."""
         assert x >= 0 and y >= 0
+        (tw, th), _ = cv2.getTextSize(text, _FONT, font_scale, thickness)
+
         bbox = self.draw_text(text, Point(x, y), dry_run=True)
-        tw = bbox.x2 - bbox.x1
-        th = bbox.y2 - bbox.y1
-        top = max(0, y - th)
-        right = min(self.w, x + tw)
-        left = right - tw
-        bottom = min(self.h, y)
-        assert left >= 0 and bottom >= 0
-        org = Point(left, bottom)
-        bbox = BoundingBox(left, top, right, bottom)
+
+        org = Point(bbox.x1, bbox.y1 + th)
+
         return org, bbox
 
     def draw_line_with_label(self, start: Point, end: Point, text: str, color: Tuple[int, int, int]) -> None:
@@ -564,7 +560,7 @@ def debug_track_similarities(
                             pw_cos = pairwise_cosine_similarity(active_track, t)
                             pw_hist_sim = pairwise_histogram_similarity(active_track, t)
                             mean_emb_cos = mean_embedding_cosine_similarity(active_track, t)
-                            mean_emb_hist_sim = mean_embedding_histogram_similarity(active_track, t)
+                            mean_hist_sim = mean_embedding_histogram_similarity(active_track, t)
                             pw_cos2 = pairwise_squared_cosine_similarity(active_track, t)
                             min_sim = 0.5
                             prop_gt_min_sim = prop_embeddings_sim(active_track, t, min_sim=min_sim)
@@ -575,7 +571,7 @@ def debug_track_similarities(
                                 f'pw_cos={pw_cos:.2f}\n'
                                 f'pw_hist_sim={pw_hist_sim:.2f}\n'
                                 f'mean_emb_cos={mean_emb_cos:.2f}\n'
-                                f'mean_emb_hist_sim={mean_emb_hist_sim:.2f}\n'
+                                f'mean_hist_sim={mean_hist_sim:.2f}\n'
                                 f'pw_cos2={pw_cos2:.2f}\n'
                                 f'prop>{min_sim}={prop_gt_min_sim:.2f}'
                             )
