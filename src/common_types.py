@@ -10,14 +10,14 @@ from typing import Iterator
 
 def compute_color_histogram(image: np.ndarray, bbox: BoundingBox) -> np.ndarray:
     """
-    Compute HSV color histogram for a bounding box region.
+    Compute HSV color histogram for a bounding box region, relative to the entire image.
 
     Args:
         image: BGR image array (H, W, 3)
         bbox: BoundingBox object defining the region
 
     Returns:
-        Concatenated HSV histogram with 256 bins each for H, S, V (768 total values)
+        Difference histogram (bbox_hist - image_hist) with 256+16+8 = 280 total values
     """
     # Extract the region of interest
     roi = image[bbox.y1 : bbox.y2, bbox.x1 : bbox.x2]
@@ -26,28 +26,61 @@ def compute_color_histogram(image: np.ndarray, bbox: BoundingBox) -> np.ndarray:
     if roi.size == 0:
         return np.zeros(256 + 16 + 8)
 
-    # Convert BGR to HSV
+    # Convert both ROI and full image to HSV
     hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+    hsv_full = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-    # Compute histograms for each HSV channel with 256 bins
-    hist_h = cv2.calcHist([hsv_roi], [0], None, [256], [0, 256])
-    hist_s = cv2.calcHist([hsv_roi], [1], None, [16], [0, 16])
-    hist_v = cv2.calcHist([hsv_roi], [2], None, [8], [0, 8])
+    # Compute histograms for ROI
+    hist_h_roi = cv2.calcHist([hsv_roi], [0], None, [256], [0, 256])
+    hist_s_roi = cv2.calcHist([hsv_roi], [1], None, [16], [0, 256])
+    hist_v_roi = cv2.calcHist([hsv_roi], [2], None, [8], [0, 256])
 
-    # Normalize histograms to [0, 1] range, handle empty histograms
-    hist_h = hist_h.flatten()
-    hist_s = hist_s.flatten()
-    hist_v = hist_v.flatten()
+    # Compute histograms for full image
+    hist_h_full = cv2.calcHist([hsv_full], [0], None, [256], [0, 256])
+    hist_s_full = cv2.calcHist([hsv_full], [1], None, [16], [0, 256])
+    hist_v_full = cv2.calcHist([hsv_full], [2], None, [8], [0, 256])
 
-    if hist_h.sum() > 0:
-        hist_h = hist_h / hist_h.sum()
-    if hist_s.sum() > 0:
-        hist_s = hist_s / hist_s.sum()
-    if hist_v.sum() > 0:
-        hist_v = hist_v / hist_v.sum()
+    # Normalize histograms to [0, 1] range
+    hist_h_roi = hist_h_roi.flatten()
+    hist_s_roi = hist_s_roi.flatten()
+    hist_v_roi = hist_v_roi.flatten()
 
-    # Concatenate all histograms into a single feature vector
-    return np.concatenate([hist_h, hist_s, hist_v])
+    hist_h_full = hist_h_full.flatten()
+    hist_s_full = hist_s_full.flatten()
+    hist_v_full = hist_v_full.flatten()
+
+    # Normalize ROI histograms
+    if hist_h_roi.sum() > 0:
+        hist_h_roi = hist_h_roi / hist_h_roi.sum()
+    if hist_s_roi.sum() > 0:
+        hist_s_roi = hist_s_roi / hist_s_roi.sum()
+    if hist_v_roi.sum() > 0:
+        hist_v_roi = hist_v_roi / hist_v_roi.sum()
+
+    # Normalize full image histograms
+    if hist_h_full.sum() > 0:
+        hist_h_full = hist_h_full / hist_h_full.sum()
+    if hist_s_full.sum() > 0:
+        hist_s_full = hist_s_full / hist_s_full.sum()
+    if hist_v_full.sum() > 0:
+        hist_v_full = hist_v_full / hist_v_full.sum()
+
+    # Compute difference histograms (ROI - full image)
+    hist_h_diff = hist_h_roi - hist_h_full
+    hist_s_diff = hist_s_roi - hist_s_full
+    hist_v_diff = hist_v_roi - hist_v_full
+
+    # Normalize difference histograms
+    if hist_h_diff.sum() > 0:
+        hist_h_diff = hist_h_diff / hist_h_diff.sum()
+    if hist_s_diff.sum() > 0:
+        hist_s_diff = hist_s_diff / hist_s_diff.sum()
+    if hist_v_diff.sum() > 0:
+        hist_v_diff = hist_v_diff / hist_v_diff.sum()
+
+    # Concatenate all difference histograms into a single feature vector
+    return np.concatenate([hist_h_diff])  # TODO , hist_s_diff, hist_v_diff])
+    return np.concatenate([hist_h_diff, hist_s_diff, hist_v_diff])
 
 
 @dataclass
@@ -145,7 +178,7 @@ class Detection:
     feat: np.ndarray
     confidence: float
     frame_idx: FrameIndex
-    color_histogram: np.ndarray  # HSV histogram with 256 buckets each for H, S, V (768 total)
+    color_histogram: np.ndarray  # HSV difference histogram: 256(H) + 16(S) + 8(V) = 280 total values
 
     def copy(self) -> Detection:
         return Detection(
