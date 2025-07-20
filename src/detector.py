@@ -9,7 +9,7 @@ from ultralytics.engine.results import Results
 
 from video_io import get_video_properties
 import settings
-from common_types import BoundingBox, Detection
+from common_types import BoundingBox, Detection, compute_color_histogram
 
 
 def log_detection_settings():
@@ -64,17 +64,26 @@ class SurferDetector:
             confidences = _to_numpy(result.boxes.conf)
             feats = _to_numpy(result.feats)
 
+            # Get the original frame data for histogram computation
+            orig_img = result.orig_img
+
             for i in range(len(boxes)):
+                bbox = BoundingBox(
+                    x1=boxes[i][0],
+                    y1=boxes[i][1],
+                    x2=boxes[i][2],
+                    y2=boxes[i][3],
+                )
+
+                # Compute color histogram for this detection
+                color_histogram = compute_color_histogram(orig_img, bbox)
+
                 detection = Detection(
-                    bbox=BoundingBox(
-                        x1=boxes[i][0],
-                        y1=boxes[i][1],
-                        x2=boxes[i][2],
-                        y2=boxes[i][3],
-                    ),
+                    bbox=bbox,
                     feat=feats[i],
                     confidence=confidences[i],
                     frame_idx=frame_idx,
+                    color_histogram=color_histogram,
                 )
                 detections.append(detection)
 

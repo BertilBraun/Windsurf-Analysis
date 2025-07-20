@@ -10,3 +10,6 @@ src/individual_surfers/**
 individual_surfers/**
 
 !train/models/**
+
+run.bat
+test_outputs/**

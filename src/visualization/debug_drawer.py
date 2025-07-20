@@ -56,7 +56,14 @@ from .stabilize import VidStabWithoutVideoCapture
 
 
 from common_types import BoundingBox, Detection, FrameIndex, Point, TrackId, cosine_similarity, Track
-from tracking.preprocessing.greedy_preprocessor import pariwise_cosine_similarity, mean_embedding_cosine_similarity, pairwise_sqaured_cosine_similarity, prop_embeddings_sim
+from tracking.preprocessing.greedy_preprocessor import (
+    mean_embedding_histogram_similarity,
+    pairwise_cosine_similarity,
+    mean_embedding_cosine_similarity,
+    pairwise_histogram_similarity,
+    pairwise_squared_cosine_similarity,
+    prop_embeddings_sim,
+)
 
 from dataclasses import dataclass
 
@@ -179,20 +186,16 @@ class DebugCanvas:
         if label:
             self.draw_label(label, Point(bbox.x1, max(bbox.y1 - 2, 0)), color)
 
-    def draw_image(
-        self,
-        image: np.ndarray,
-        pos: Point,
-        size: Tuple[int, int] | None
-    ):
+    def draw_image(self, image: np.ndarray, pos: Point, size: Tuple[int, int] | None):
         if size is not None:
             image = cv2.resize(image, size, interpolation=cv2.INTER_LINEAR)
         x, y = pos
         h, w = image.shape[:2]
         if x < 0 or y < 0 or x + w > self.w or y + h > self.h:
-            raise ValueError(f'Image position {pos} with size {size} is out of bounds for canvas size {self.canvas.shape}')
+            raise ValueError(
+                f'Image position {pos} with size {size} is out of bounds for canvas size {self.canvas.shape}'
+            )
         self.canvas[y : y + h, x : x + w] = image
-
 
     def _choose_label_org_for_line_cached(
         self,
@@ -424,22 +427,18 @@ def generate_debug_video_worker_function(
 
 @dataclass
 class DebugSimSettings:
-    frame_history: int = 5 * 30 # 5 seconds
+    frame_history: int = 5 * 30  # 5 seconds
 
 
 def get_tracks_active_at_frame(
-        tracks: List[Track],
-        frame_idx: FrameIndex,
-    ) -> List[Track]:
+    tracks: List[Track],
+    frame_idx: FrameIndex,
+) -> List[Track]:
     """Return all tracks that are active at the given frame index."""
     return [t for t in tracks if t.alive_at_frame(frame_idx)]
 
 
-def get_tracks_ended_in_last_n_frames(
-        tracks: List[Track],
-        frame_idx: FrameIndex,
-        n_frames: int
-    ) -> List[Track]:
+def get_tracks_ended_in_last_n_frames(tracks: List[Track], frame_idx: FrameIndex, n_frames: int) -> List[Track]:
     """Return all tracks that ended in the last *n_frames* frames."""
     return [t for t in tracks if t.end_frame() >= frame_idx - n_frames and t.end_frame() < frame_idx]
 
@@ -452,7 +451,7 @@ def debug_track_similarities(
         DebugSimSettings | None,  # settings for debug similarity video
     ],
 ) -> None:
-    """Shows similarity measures between the active tracks and """
+    """Shows similarity measures between the active tracks and"""
 
     tracks, input_path, output_dir, settings = args
     if settings is None:
@@ -562,18 +561,21 @@ def debug_track_similarities(
 
                             cos_end_start = cosine_similarity(active_track.start().feat, t.end().feat)
                             iou = bbox.iou(bbox_active)
-                            pw_cos = pariwise_cosine_similarity(active_track, t)
+                            pw_cos = pairwise_cosine_similarity(active_track, t)
+                            pw_hist_sim = pairwise_histogram_similarity(active_track, t)
                             mean_emb_cos = mean_embedding_cosine_similarity(active_track, t)
-                            pw_cos2 = pairwise_sqaured_cosine_similarity(active_track, t)
+                            mean_emb_hist_sim = mean_embedding_histogram_similarity(active_track, t)
+                            pw_cos2 = pairwise_squared_cosine_similarity(active_track, t)
                             min_sim = 0.5
                             prop_gt_min_sim = prop_embeddings_sim(active_track, t, min_sim=min_sim)
-
 
                             txt = (
                                 f'c_se={cos_end_start:.2f}\n'
                                 f'iou={iou:.2f}\n'
                                 f'pw_cos={pw_cos:.2f}\n'
+                                f'pw_hist_sim={pw_hist_sim:.2f}\n'
                                 f'mean_emb_cos={mean_emb_cos:.2f}\n'
+                                f'mean_emb_hist_sim={mean_emb_hist_sim:.2f}\n'
                                 f'pw_cos2={pw_cos2:.2f}\n'
                                 f'prop>{min_sim}={prop_gt_min_sim:.2f}'
                             )
@@ -583,7 +585,6 @@ def debug_track_similarities(
                                 text=txt,
                                 color=color,
                             )
-
 
                 writer.write_frame(canvas_img)
     return None

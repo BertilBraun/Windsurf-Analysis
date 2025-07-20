@@ -6,10 +6,11 @@ from collections import defaultdict
 
 from tracking.preprocessing.filter_non_surfers import filter_non_surfers_from_tracks
 from video_io import VideoInfo
-from common_types import Detection, FrameIndex, Track, TrackId, cosine_similarity
+from common_types import Detection, FrameIndex, Track, TrackId, cosine_similarity, histogram_similarity
 
 from typing import Callable
 import numpy as np
+
 
 class _ComparisonResult(Enum):
     MATCH = 'match'
@@ -33,7 +34,7 @@ def _mean_embedding(t: Track) -> np.ndarray:
     return np.mean([d.feat for d in t.sorted_detections], axis=0)
 
 
-def pariwise_cosine_similarity(a: Track, b: Track) -> float:
+def pairwise_cosine_similarity(a: Track, b: Track) -> float:
     """Calculate pairwise cosine similarity between all detections in two tracks."""
     return _calc_pairwise(a, b, lambda a, b: cosine_similarity(a.feat, b.feat))
 
@@ -46,7 +47,25 @@ def mean_embedding_cosine_similarity(a: Track, b: Track) -> float:
     )
 
 
-def pairwise_sqaured_cosine_similarity(a: Track, b: Track) -> float:
+def pairwise_histogram_similarity(a: Track, b: Track) -> float:
+    """Calculate pairwise histogram similarity between all detections in two tracks."""
+    return _calc_pairwise(a, b, lambda a, b: histogram_similarity(a, b))
+
+
+def _mean_embedding_histogram(t: Track) -> np.ndarray:
+    """Calculate the mean embedding of a track."""
+    return np.mean([d.color_histogram for d in t.sorted_detections], axis=0)
+
+
+def mean_embedding_histogram_similarity(a: Track, b: Track) -> float:
+    """Calculate histogram similarity between mean embeddings of two tracks."""
+    return cosine_similarity(
+        _mean_embedding_histogram(a),
+        _mean_embedding_histogram(b),
+    )
+
+
+def pairwise_squared_cosine_similarity(a: Track, b: Track) -> float:
     """Calculate pairwise squared cosine similarity between all detections in two tracks."""
     return _calc_pairwise(a, b, lambda a, b: cosine_similarity(a.feat, b.feat) ** 2)
 
@@ -256,7 +275,6 @@ class GreedyPreprocessor:
         if iou < self.min_iou_matches_single_track:
             return _ComparisonResult.NO_MATCH
 
-        # TODO cosine similarity to more than just one frame?
         n = len(track.sorted_detections)
         average_sim = sum(cosine_similarity(d.feat, detection.feat) for d in track.sorted_detections) / n
 

@@ -2,9 +2,52 @@ from __future__ import annotations
 
 import math
 import numpy as np
+import cv2
 
 from dataclasses import dataclass
 from typing import Iterator
+
+
+def compute_color_histogram(image: np.ndarray, bbox: BoundingBox) -> np.ndarray:
+    """
+    Compute HSV color histogram for a bounding box region.
+
+    Args:
+        image: BGR image array (H, W, 3)
+        bbox: BoundingBox object defining the region
+
+    Returns:
+        Concatenated HSV histogram with 256 bins each for H, S, V (768 total values)
+    """
+    # Extract the region of interest
+    roi = image[bbox.y1 : bbox.y2, bbox.x1 : bbox.x2]
+
+    # Handle empty or invalid ROI
+    if roi.size == 0:
+        return np.zeros(256 + 16 + 8)
+
+    # Convert BGR to HSV
+    hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+
+    # Compute histograms for each HSV channel with 256 bins
+    hist_h = cv2.calcHist([hsv_roi], [0], None, [256], [0, 256])
+    hist_s = cv2.calcHist([hsv_roi], [1], None, [16], [0, 16])
+    hist_v = cv2.calcHist([hsv_roi], [2], None, [8], [0, 8])
+
+    # Normalize histograms to [0, 1] range, handle empty histograms
+    hist_h = hist_h.flatten()
+    hist_s = hist_s.flatten()
+    hist_v = hist_v.flatten()
+
+    if hist_h.sum() > 0:
+        hist_h = hist_h / hist_h.sum()
+    if hist_s.sum() > 0:
+        hist_s = hist_s / hist_s.sum()
+    if hist_v.sum() > 0:
+        hist_v = hist_v / hist_v.sum()
+
+    # Concatenate all histograms into a single feature vector
+    return np.concatenate([hist_h, hist_s, hist_v])
 
 
 @dataclass
@@ -55,11 +98,14 @@ class BoundingBox:
         return BoundingBox(self.x1, self.y1, self.x2, self.y2)
 
     def interpolate(self, other: BoundingBox, alpha: float) -> BoundingBox:
+        center = self.center.interpolate(other.center, alpha)
+        width = int((1 - alpha) * self.width + alpha * other.width)
+        height = int((1 - alpha) * self.height + alpha * other.height)
         return BoundingBox(
-            int((1 - alpha) * self.x1 + alpha * other.x1),
-            int((1 - alpha) * self.y1 + alpha * other.y1),
-            int((1 - alpha) * self.x2 + alpha * other.x2),
-            int((1 - alpha) * self.y2 + alpha * other.y2),
+            center.x - width // 2,
+            center.y - height // 2,
+            center.x + width // 2,
+            center.y + height // 2,
         )
 
     def iou(self, other: BoundingBox) -> float:
@@ -99,6 +145,7 @@ class Detection:
     feat: np.ndarray
     confidence: float
     frame_idx: FrameIndex
+    color_histogram: np.ndarray  # HSV histogram with 256 buckets each for H, S, V (768 total)
 
     def copy(self) -> Detection:
         return Detection(
@@ -106,6 +153,7 @@ class Detection:
             feat=self.feat.copy(),
             confidence=self.confidence,
             frame_idx=self.frame_idx,
+            color_histogram=self.color_histogram.copy(),
         )
 
     def interpolate(self, other: Detection, alpha: float) -> Detection:
@@ -113,8 +161,16 @@ class Detection:
         new_feat = (1 - alpha) * self.feat + alpha * other.feat
         new_confidence = (1 - alpha) * self.confidence + alpha * other.confidence
         new_frame_idx = int((1 - alpha) * self.frame_idx + alpha * other.frame_idx)
+        # Interpolate color histograms
+        new_color_histogram = (1 - alpha) * self.color_histogram + alpha * other.color_histogram
 
-        return Detection(bbox=new_bbox, feat=new_feat, confidence=new_confidence, frame_idx=new_frame_idx)
+        return Detection(
+            bbox=new_bbox,
+            feat=new_feat,
+            confidence=new_confidence,
+            frame_idx=new_frame_idx,
+            color_histogram=new_color_histogram,
+        )
 
 
 FrameIndex = int
@@ -134,7 +190,6 @@ class Track:
     @property
     def detections_by_frame(self) -> dict[FrameIndex, Detection]:
         return {d.frame_idx: d for d in self.sorted_detections}
-
 
     def copy(self) -> Track:
         new_sorted_detections = [d.copy() for d in self.sorted_detections]
@@ -179,3 +234,17 @@ class Track:
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+
+def histogram_similarity(det1: Detection, det2: Detection) -> float:
+    """
+    Compute similarity between two detections based on their color histograms.
+
+    Args:
+        det1: First detection
+        det2: Second detection
+
+    Returns:
+        Cosine similarity between the color histograms (0-1 range)
+    """
+    return cosine_similarity(det1.color_histogram, det2.color_histogram)

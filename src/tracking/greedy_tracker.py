@@ -94,7 +94,7 @@ def greedy_stitch_tracks(
     tracks: Sequence[Track],
     *,
     sim_thresh: float = 0.7,
-    max_gap: int = 30 * 5,
+    max_gap: int = 30 * 10,
     verbose: bool = False,
 ) -> List[Track]:
     """Greedily fuse tracklets whose average‑embedding similarity is highest.
@@ -118,13 +118,17 @@ def greedy_stitch_tracks(
         # Pre‑compute average embeddings
         avg_emb = [_average_embedding(t) for t in working]
 
+        longest_track_length = max(len(t.sorted_detections) for t in working)
+
         best_i, best_j, best_sim = None, None, -1.0
         # Evaluate all unordered pairs
         for i in range(n):
             for j in range(i + 1, n):
                 if not _can_merge(working[i], working[j], max_gap=max_gap):
                     continue
-                sim = cosine_similarity(avg_emb[i], avg_emb[j])
+                sim = cosine_similarity(avg_emb[i], avg_emb[j]) + (
+                    len(working[i].sorted_detections) + len(working[j].sorted_detections)
+                ) / (2 * longest_track_length)
                 if sim > best_sim:
                     best_i, best_j, best_sim = i, j, sim
 

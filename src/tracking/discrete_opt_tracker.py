@@ -87,7 +87,7 @@ class DiscreteOptimizationTracker:
     def __init__(
         self,
         use_fragment_linking: bool = True,
-        max_link_gap: int = 60,
+        max_link_gap: int = 15,
         min_link_iou: float = 0.0,
         min_link_cos: float = -1.0,
         w_link_iou: float = 0.5,
