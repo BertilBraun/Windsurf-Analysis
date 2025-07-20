@@ -5,7 +5,7 @@
 
 train/datasets/**
 train/runs/**
-src/botsort.yaml
+**/botsort.yaml
 src/individual_surfers/**
 individual_surfers/**
 

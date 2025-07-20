@@ -96,15 +96,19 @@ class GreedyPreprocessor:
         self.greedy_min_iou_matches_single_track = greedy_min_iou_matches_single_track
         self.min_iou_matches_single_track = greedy_min_iou_matches_single_track
 
+        self.use_non_surfer_filter = False
+
     def track_detections(self, detections: list[Detection], video_properties: VideoInfo | None = None) -> list[Track]:
         logging.info(f'{"=" * 80} Running greedy preprocessor {len(detections)} detections {"=" * 80}')
 
         tracks = self._preprocess_detections(detections)
 
-        kept, removed = filter_non_surfers_from_tracks(tracks)
-
-        logging.info(f'{"=" * 80} Greedy preprocessor kept {len(kept)} tracks {"=" * 80}')
-        logging.info(f'{"=" * 80} Greedy preprocessor removed {len(removed)} tracks {"=" * 80}')
+        if self.use_non_surfer_filter:
+            kept, removed = filter_non_surfers_from_tracks(tracks)
+            logging.info(f'{"=" * 80} Greedy preprocessor kept {len(kept)} tracks {"=" * 80}')
+            logging.info(f'{"=" * 80} Greedy preprocessor removed {len(removed)} tracks {"=" * 80}')
+        else:
+            kept = tracks
 
         # for the kept track, I want to experiment:
         # I want to compute the average embedding vector of each track

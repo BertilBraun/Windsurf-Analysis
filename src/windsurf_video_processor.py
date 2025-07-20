@@ -4,6 +4,7 @@ from typing import Callable, TypeVar
 
 from tqdm import tqdm
 from pathlib import Path
+from tracking.preprocessing.greedy_preprocessor import GreedyPreprocessor
 from visualization.debug_drawer import generate_debug_video_worker_function, debug_track_similarities
 from tracking.greedy_tracker import GreedyTracker
 from helpers import log_and_reraise
@@ -59,8 +60,10 @@ class WindsurfingVideoProcessor:
         processed_tracks = process_detections_into_tracks(
             input_path,
             detections,
-            GreedyTracker(),
-        )  # BranchAndBoundFragmentTracker())
+            GreedyPreprocessor(),
+            # GreedyTracker(),
+            # BranchAndBoundFragmentTracker(),
+        )
 
         if not self.dry_run:
             self.submit_low_priority_task(
@@ -77,8 +80,7 @@ class WindsurfingVideoProcessor:
             #     (detections, processed_tracks, None, input_path, self.output_dir)
             # )
             self.submit_low_priority_task(
-                debug_track_similarities,
-                (processed_tracks, input_path, self.output_dir, None)
+                debug_track_similarities, (processed_tracks, input_path, self.output_dir, None)
             )
 
     def finalize(self):
