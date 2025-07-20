@@ -394,8 +394,8 @@ def generate_debug_video_worker_function(
                     for _t_id, det_p in prev_dets:
                         prev_c_global = prev_view._feed_to_global(*det_p.bbox.center)
                         cos = (
-                            cosine_similarity(det_c.feat, det_p.feat)
-                            if det_c.feat is not None and det_p.feat is not None
+                            cosine_similarity(det_c.embedding, det_p.embedding)
+                            if det_c.embedding is not None and det_p.embedding is not None
                             else float('nan')
                         )
                         dist = math.hypot(
@@ -555,7 +555,7 @@ def debug_track_similarities(
                             color = canvas.palette[cnt % len(canvas.palette)]
                             cnt += 1
 
-                            cos_end_start = cosine_similarity(active_track.start().feat, t.end().feat)
+                            cos_end_start = cosine_similarity(active_track.start().embedding, t.end().embedding)
                             iou = bbox.iou(bbox_active)
                             pw_cos = pairwise_cosine_similarity(active_track, t)
                             pw_hist_sim = pairwise_histogram_similarity(active_track, t)

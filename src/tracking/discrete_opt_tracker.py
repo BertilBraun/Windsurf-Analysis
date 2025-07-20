@@ -133,7 +133,7 @@ class DiscreteOptimizationTracker:
                 d2 = end.detections_by_frame.get(end_det.frame_idx + j)
                 if d2 is None:
                     continue
-                cos = cosine_similarity(d1.feat, d2.feat)
+                cos = cosine_similarity(d1.embedding, d2.embedding)
                 cos_sum += cos
                 n_pairs += 1
         cos = cos_sum / n_pairs if n_pairs > 0 else 0.0
@@ -341,7 +341,7 @@ class DiscreteOptimizationTracker:
 
             # Add terms only for forward edges (i -> j in fwd)
             for j_idx in fwd:
-                cos_ij = cosine_similarity(detections[i].feat, detections[j_idx].feat)
+                cos_ij = cosine_similarity(detections[i].embedding, detections[j_idx].embedding)
                 if cos_ij < MIN_COS_FOR_WINDOW:
                     continue
                 cos_ij = max(-1.0, min(1.0, cos_ij))

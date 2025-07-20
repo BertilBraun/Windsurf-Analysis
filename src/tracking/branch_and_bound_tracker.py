@@ -337,7 +337,7 @@ class BranchAndBoundFragmentTracker:
             If True and debug_costs enabled, emit a logging.debug line.
         """
         iou = fa.end_det.bbox.iou(fb.start_det.bbox)
-        cos = cosine_similarity(fa.end_det.feat, fb.start_det.feat)
+        cos = cosine_similarity(fa.end_det.embedding, fb.start_det.embedding)
         # Individual terms --------------------------------------------------
         iou_clamped = max(0.0, min(1.0, iou))
         cos_clamped = max(-1.0, min(1.0, cos))

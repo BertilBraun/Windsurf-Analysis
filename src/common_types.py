@@ -175,7 +175,7 @@ class BoundingBox:
 @dataclass
 class Detection:
     bbox: BoundingBox
-    feat: np.ndarray
+    embedding: np.ndarray
     confidence: float
     frame_idx: FrameIndex
     color_histogram: np.ndarray  # HSV difference histogram: 256(H) + 16(S) + 8(V) = 280 total values
@@ -183,7 +183,7 @@ class Detection:
     def copy(self) -> Detection:
         return Detection(
             bbox=self.bbox.copy(),
-            feat=self.feat.copy(),
+            embedding=self.embedding.copy(),
             confidence=self.confidence,
             frame_idx=self.frame_idx,
             color_histogram=self.color_histogram.copy(),
@@ -191,7 +191,7 @@ class Detection:
 
     def interpolate(self, other: Detection, alpha: float) -> Detection:
         new_bbox = self.bbox.interpolate(other.bbox, alpha)
-        new_feat = (1 - alpha) * self.feat + alpha * other.feat
+        new_embedding = (1 - alpha) * self.embedding + alpha * other.embedding
         new_confidence = (1 - alpha) * self.confidence + alpha * other.confidence
         new_frame_idx = int((1 - alpha) * self.frame_idx + alpha * other.frame_idx)
         # Interpolate color histograms
@@ -199,7 +199,7 @@ class Detection:
 
         return Detection(
             bbox=new_bbox,
-            feat=new_feat,
+            embedding=new_embedding,
             confidence=new_confidence,
             frame_idx=new_frame_idx,
             color_histogram=new_color_histogram,

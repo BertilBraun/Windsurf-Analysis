@@ -31,12 +31,12 @@ def _calc_pairwise(a: Track, b: Track, metric: Callable[[Detection, Detection], 
 
 def _mean_embedding(t: Track) -> np.ndarray:
     """Calculate the mean embedding of a track."""
-    return np.mean([d.feat for d in t.sorted_detections], axis=0)
+    return np.mean([d.embedding for d in t.sorted_detections], axis=0)
 
 
 def pairwise_cosine_similarity(a: Track, b: Track) -> float:
     """Calculate pairwise cosine similarity between all detections in two tracks."""
-    return _calc_pairwise(a, b, lambda a, b: cosine_similarity(a.feat, b.feat))
+    return _calc_pairwise(a, b, lambda a, b: cosine_similarity(a.embedding, b.embedding))
 
 
 def mean_embedding_cosine_similarity(a: Track, b: Track) -> float:
@@ -67,7 +67,7 @@ def mean_embedding_histogram_similarity(a: Track, b: Track) -> float:
 
 def pairwise_squared_cosine_similarity(a: Track, b: Track) -> float:
     """Calculate pairwise squared cosine similarity between all detections in two tracks."""
-    return _calc_pairwise(a, b, lambda a, b: cosine_similarity(a.feat, b.feat) ** 2)
+    return _calc_pairwise(a, b, lambda a, b: cosine_similarity(a.embedding, b.embedding) ** 2)
 
 
 def prop_embeddings_sim(a: Track, b: Track, min_sim: float = 0.5) -> float:
@@ -77,7 +77,7 @@ def prop_embeddings_sim(a: Track, b: Track, min_sim: float = 0.5) -> float:
     for da in a.sorted_detections:
         for db in b.sorted_detections:
             cnt += 1
-            if cosine_similarity(da.feat, db.feat) >= min_sim:
+            if cosine_similarity(da.embedding, db.embedding) >= min_sim:
                 count += 1
     return count / cnt if cnt > 0 else 0.0
 
@@ -120,12 +120,12 @@ class GreedyPreprocessor:
 
         average_embeddings = {}
         for track in kept:
-            average_embedding = np.mean([d.feat for d in track.sorted_detections], axis=0)
+            average_embedding = np.mean([d.embedding for d in track.sorted_detections], axis=0)
             average_embeddings[track.track_id] = average_embedding
 
             average_cosine_similarity = 0
             for detection in track.sorted_detections:
-                average_cosine_similarity += cosine_similarity(detection.feat, average_embedding)
+                average_cosine_similarity += cosine_similarity(detection.embedding, average_embedding)
             average_cosine_similarity /= len(track.sorted_detections)
             print(
                 f'Track {track.track_id} average cosine similarity with its own detections: {average_cosine_similarity} ({len(track.sorted_detections)} detections)'
@@ -141,7 +141,7 @@ class GreedyPreprocessor:
                     continue
                 average_cosine_similarity = 0
                 for detection in other_track.sorted_detections:
-                    average_cosine_similarity += cosine_similarity(detection.feat, average_embedding)
+                    average_cosine_similarity += cosine_similarity(detection.embedding, average_embedding)
                 average_cosine_similarity /= len(other_track.sorted_detections)
                 print(
                     f'Track {track.track_id} average cosine similarity with track {other_track.track_id}: {average_cosine_similarity} ({len(other_track.sorted_detections)} detections)'
@@ -168,7 +168,7 @@ class GreedyPreprocessor:
                 number_of_detections_with_good_similarity = 0
                 for detection_i in track_i.sorted_detections:
                     for detection_j in track_j.sorted_detections:
-                        sim = cosine_similarity(detection_i.feat, detection_j.feat)
+                        sim = cosine_similarity(detection_i.embedding, detection_j.embedding)
                         if sim >= self.greedy_min_cosine_similarity:
                             number_of_detections_with_good_similarity += 1
                         average_pairwise_cosine_similarity += sim
@@ -280,7 +280,7 @@ class GreedyPreprocessor:
             return _ComparisonResult.NO_MATCH
 
         n = len(track.sorted_detections)
-        average_sim = sum(cosine_similarity(d.feat, detection.feat) for d in track.sorted_detections) / n
+        average_sim = sum(cosine_similarity(d.embedding, detection.embedding) for d in track.sorted_detections) / n
 
         if iou >= self.greedy_min_iou and average_sim >= self.greedy_min_cosine_similarity:
             return _ComparisonResult.MATCH

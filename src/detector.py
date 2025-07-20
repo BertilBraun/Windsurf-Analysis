@@ -36,11 +36,6 @@ class SurferDetector:
 
         log_detection_settings()
 
-        self.encoder = (
-            # (lambda feats, s: [f.cpu().numpy() for f in feats])  # native features do not require any model
-            ReID('yolo11n-cls.pt')
-        )
-
     def run_object_detection_on_video(self, video_path: os.PathLike | str) -> Generator[Detection, None, None]:
         """Run batched inference on entire video, return generator of (frame, detections)"""
 
@@ -75,8 +70,6 @@ class SurferDetector:
             # Get the original frame data for histogram computation
             orig_img = result.orig_img
 
-            feats = self.encoder(result.orig_img, _to_numpy(result.boxes.xywh))
-
             for i in range(len(boxes)):
                 bbox = BoundingBox(
                     x1=boxes[i][0],
@@ -92,7 +85,7 @@ class SurferDetector:
 
                 detection = Detection(
                     bbox=bbox,
-                    feat=embedding,
+                    embedding=embedding,
                     confidence=confidences[i],
                     frame_idx=frame_idx,
                     color_histogram=color_histogram,

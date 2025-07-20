@@ -24,7 +24,7 @@ from common_types import Detection, Track, cosine_similarity
 
 
 def _average_embedding(track: Track) -> np.ndarray:
-    return np.mean([d.feat for d in track.sorted_detections], axis=0)
+    return np.mean([d.embedding for d in track.sorted_detections], axis=0)
 
 
 def _can_merge(t1: Track, t2: Track, *, max_gap: int) -> bool:
