@@ -60,7 +60,7 @@ class SurferDetector:
         """Extract detection information for further processing"""
         detections: list[Detection] = []
 
-        if result.boxes is not None:
+        if result.boxes is not None and len(result.boxes) > 0:
             # Convert tensors to numpy arrays using utility function
             boxes = _to_numpy(result.boxes.xyxy)
             confidences = _to_numpy(result.boxes.conf)
