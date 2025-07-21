@@ -241,7 +241,7 @@ def annotate_and_cut(input_path: Path, out_dir: Path, n_workers: int, no_input: 
                                     "source": str(vid),
                                     "start": 0,
                                     "end": None,
-                                    "rotate": 0,
+                                    "rotate": rotate,
                                     "stabilize": do_stabilize
                                 }
                                 segment_queue.put((seg, vid, dst))
