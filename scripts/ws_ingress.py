@@ -231,8 +231,12 @@ def annotate_and_cut(input_path: Path, out_dir: Path, n_workers: int, no_input: 
                             elif msg == "m_keep":
                                 logging.info("  ➡ keeping the whole video")
                                 mpv.show_text("Keeping the whole video", 3)
+                                rotate = mpv.get_property("video-rotate")
+                                rotate = int(rotate or 0)
+
                                 tags = ask_tags_popup(vid.stem)
                                 dst = generate_video_path(tags, out_dir, vid)
+
                                 seg = {
                                     "source": str(vid),
                                     "start": 0,
