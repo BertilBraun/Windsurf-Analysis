@@ -61,11 +61,11 @@ class _FragMeta:
 class BranchAndBoundFragmentTracker:
     def __init__(
         self,
-        w_iou: float = 1.0,
+        w_iou: float = 0.2,
         w_app: float = 1.0,
         w_gap: float = 0.01,
         w_birth: float = 10.0,
-        w_momentum: float = 0.5,  # weight for momentum change penalty (0 disables)
+        w_momentum: float = 0.0,  # weight for momentum change penalty (0 disables)
         momentum_mode: str = 'edge',  # 'edge' or 'predict'
         max_stitch_gap_frames: int = 5 * 30,  # 5 seconds @ 30fps
         gap_normalization: str = 'linear',  # 'linear' | 'sqrt' | 'log'

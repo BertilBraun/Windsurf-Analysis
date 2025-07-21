@@ -23,6 +23,9 @@ def main():
     parser.add_argument(
         '--dry-run', action='store_true', help='Run without rendering individual videos (for testing purposes)'
     )
+    parser.add_argument(
+        '--debug-views', action='store_true', help='Output debug views of the video processing steps'
+    )
 
     args = parser.parse_args()
 
@@ -56,6 +59,7 @@ def main():
         draw_annotations=args.draw_annotations,
         output_dir=args.output_dir or STANDARD_OUTPUT_DIR,
         dry_run=args.dry_run,
+        debug_views= args.debug_views
     )
 
     for i, video_file in enumerate(video_files, 1):

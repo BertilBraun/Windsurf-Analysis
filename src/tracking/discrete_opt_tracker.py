@@ -52,13 +52,15 @@ from common_types import Detection, FrameIndex, Track, cosine_similarity
 from tracking.preprocessing.greedy_preprocessor import GreedyPreprocessor
 
 MAX_TRACKS = 6
-TIMEOUT_S = 30
+TIMEOUT_S = 60
 
 # Cost weights (tune as needed)
 W_LOCAL_IOU = 1.0
+# For non link method <-- direct tracks per detection.
 W_EMB_WINDOW = 1.0  # weight for sliding-window embedding cohesion
 
 # Sliding window parameters
+# TOOD: increase / try with fragments again
 EMB_WINDOW_FRAMES = 30  # W: max |frame_j - frame_i| to consider
 EMB_NEIGHBORS_FWD = 30  # K_next
 EMB_NEIGHBORS_BACK = 30  # K_prev
@@ -87,12 +89,13 @@ class DiscreteOptimizationTracker:
     def __init__(
         self,
         use_fragment_linking: bool = True,
-        max_link_gap: int = 15,
-        min_link_iou: float = 0.0,
+        # TODO: remove this? Or use parameter for window size?
+        max_link_gap: int = 25 * 5,
+        min_link_iou: float = 0.2,
         min_link_cos: float = -1.0,
         w_link_iou: float = 0.5,
         w_link_app: float = 1.0,
-        w_link_gap: float = 0.000,
+        w_link_gap: float = 0.002,
         w_start: float = 10.0,  # <-- should be scaled according to number of estimated starts / tracks and number links required
         # the amount of frames to look forward and backwards for appearance. o
         # For now these are not weighted by distance so keep small
@@ -119,7 +122,6 @@ class DiscreteOptimizationTracker:
             return None
         iou = end_det.bbox.iou(start_det.bbox)
         if iou < self.min_link_iou:
-            assert False, 'Let the solver handlet his for now.'
             return None
         # average cosine similarity over similartiy for link_appearance_window_radius frames
 
@@ -390,7 +392,7 @@ class DiscreteOptimizationTracker:
         logging.info(f'Max simultaneous detections: {max_detections}')
         fragments = GreedyTracker().track_detections(detections, video_properties)
 
-        # return self._optimize_fragments(fragments, None)
+        return self._optimize_fragments(fragments, None)
 
         must_link_groups = [t.sorted_detections for t in fragments if len(t.sorted_detections) > 1]
         logging.info(

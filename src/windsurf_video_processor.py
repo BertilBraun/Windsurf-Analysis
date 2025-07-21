@@ -19,6 +19,7 @@ from visualization.stabilize import stabilize
 from concurrent.futures import ProcessPoolExecutor
 
 from tracking.discrete_opt_tracker import DiscreteOptimizationTracker
+from tracking.branch_and_bound_tracker import BranchAndBoundFragmentTracker
 
 from common_types import Track
 
@@ -32,7 +33,7 @@ R = TypeVar('R')
 class WindsurfingVideoProcessor:
     """Main video processing orchestrator"""
 
-    def __init__(self, draw_annotations: bool = False, output_dir: str = 'individual_surfers', dry_run: bool = False):
+    def __init__(self, draw_annotations: bool = False, output_dir: str = 'individual_surfers', dry_run: bool = False, debug_views: bool = False):
         self.surf_detector = SurferDetector()
         # TODO: parameterize
         self.priority_mp_executor = ProcessPoolExecutor(max_workers=1)
@@ -40,6 +41,7 @@ class WindsurfingVideoProcessor:
         self.draw_annotations = draw_annotations
         self.output_dir = output_dir
         self.dry_run = dry_run
+        self.debug_views = debug_views
 
     def process_video(self, input_path: os.PathLike):
         """Main video processing pipeline with batched YOLO inference"""
@@ -60,9 +62,10 @@ class WindsurfingVideoProcessor:
         processed_tracks = process_detections_into_tracks(
             input_path,
             detections,
-            GreedyPreprocessor(),
+            # GreedyPreprocessor(),
             # GreedyTracker(),
             # BranchAndBoundFragmentTracker(),
+            DiscreteOptimizationTracker(),
         )
 
         if not self.dry_run:
@@ -75,6 +78,7 @@ class WindsurfingVideoProcessor:
                 _generate_annotated_video_worker_function, (processed_tracks, input_path, self.output_dir)
             )
 
+        if self.debug_views:
             # self.submit_low_priority_task(
             #     generate_debug_video_worker_function,
             #     (detections, processed_tracks, None, input_path, self.output_dir)
