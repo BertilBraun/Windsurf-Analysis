@@ -21,7 +21,7 @@ def setup_logging(output_dir: Path | None = None, log_file_name=None):
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[logging.StreamHandler(), logging.FileHandler(log_file_path, encoding='utf-8')],
     )
-    logging.info(f'Logging to {log_file_path}')
+    logging.debug(f'Logging to {log_file_path}')
     return logging.getLogger(__name__)
 
 

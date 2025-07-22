@@ -87,7 +87,7 @@ class BranchAndBoundFragmentTracker:
         self._edge_cost_cache: dict[tuple[int, int, int], dict] = {}  # (fa, fb, gap) -> term breakdown
 
     # ------------------------------ Public API ------------------------------
-    def track_detections(self, detections: list[Detection], video_properties: VideoInfo | None = None) -> list[Track]:
+    def track_detections(self, detections: list[Detection], video_properties: VideoInfo) -> list[Track]:
         logging.info('Branch & Bound Fragment Tracker: tracking %d detections', len(detections))
         if not detections:
             return []

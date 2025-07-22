@@ -52,6 +52,7 @@ def _can_merge(t1: Track, t2: Track, *, max_gap: int) -> bool:
 
     # or one inside a gap of the other (but still non‑overlapping)
     if start1 < start2 < end1 and end2 > end1:
+        return True
         if start2 - 1 in frames1:
             iou_start = t1.detections_by_frame[start2 - 1].bbox.iou(t2.detections_by_frame[start2].bbox)
         else:
@@ -60,9 +61,10 @@ def _can_merge(t1: Track, t2: Track, *, max_gap: int) -> bool:
             iou_end = t1.detections_by_frame[end2].bbox.iou(t2.detections_by_frame[end2 + 1].bbox)
         else:
             iou_end = 1.0  # TODO think about this
-        if iou_start > 0.5 and iou_end > 0.5:
+        if iou_start > 0.3 and iou_end > 0.3:
             return True  # insert t2 tail after t1 body
     if start2 < start1 < end2 and end1 > end2:
+        return True
         if start1 - 1 in frames2:
             iou_start = t2.detections_by_frame[start1 - 1].bbox.iou(t1.detections_by_frame[start1].bbox)
         else:
@@ -71,7 +73,7 @@ def _can_merge(t1: Track, t2: Track, *, max_gap: int) -> bool:
             iou_end = t2.detections_by_frame[end1].bbox.iou(t1.detections_by_frame[end1 + 1].bbox)
         else:
             iou_end = 1.0  # TODO think about this
-        if iou_start > 0.5 and iou_end > 0.5:
+        if iou_start > 0.3 and iou_end > 0.3:
             return True  # insert t1 tail after t2 body
 
     return False
@@ -93,7 +95,7 @@ def _merge_tracks(t1: Track, t2: Track) -> Track:
 def greedy_stitch_tracks(
     tracks: Sequence[Track],
     *,
-    sim_thresh: float = 0.7,
+    sim_thresh: float = 0.85,
     max_gap: int = 30 * 10,
     verbose: bool = False,
 ) -> List[Track]:
@@ -118,7 +120,7 @@ def greedy_stitch_tracks(
         # Pre‑compute average embeddings
         avg_emb = [_average_embedding(t) for t in working]
 
-        longest_track_length = max(len(t.sorted_detections) for t in working)
+        # longest_track_length = max(len(t.sorted_detections) for t in working)
 
         best_i, best_j, best_sim = None, None, -1.0
         # Evaluate all unordered pairs
@@ -126,9 +128,9 @@ def greedy_stitch_tracks(
             for j in range(i + 1, n):
                 if not _can_merge(working[i], working[j], max_gap=max_gap):
                     continue
-                sim = cosine_similarity(avg_emb[i], avg_emb[j]) + (
-                    len(working[i].sorted_detections) + len(working[j].sorted_detections)
-                ) / (2 * longest_track_length)
+                sim = cosine_similarity(avg_emb[i], avg_emb[j])
+                # TODO prefer to merge longer tracks?
+                # (len(working[i].sorted_detections) + len(working[j].sorted_detections)) / (2 * longest_track_length)
                 if sim > best_sim:
                     best_i, best_j, best_sim = i, j, sim
 
@@ -156,7 +158,7 @@ def greedy_stitch_tracks(
 
 
 class GreedyTracker:
-    def track_detections(self, detections: list[Detection], video_properties: VideoInfo | None = None) -> list[Track]:
+    def track_detections(self, detections: list[Detection], video_properties: VideoInfo) -> list[Track]:
         if not detections:
             return []
 

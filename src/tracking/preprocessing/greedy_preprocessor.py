@@ -85,10 +85,10 @@ def prop_embeddings_sim(a: Track, b: Track, min_sim: float = 0.5) -> float:
 class GreedyPreprocessor:
     def __init__(
         self,
-        greedy_min_iou: float = 0.8,
-        greedy_min_cosine_similarity: float = 0.5,
+        greedy_min_iou: float = 0.5,
+        greedy_min_cosine_similarity: float = 0.7,
         greedy_max_frame_distance: int = 5,
-        greedy_min_iou_matches_single_track: float = 0.2,
+        greedy_min_iou_matches_single_track: float = 0.1,
     ):
         self.greedy_min_iou = greedy_min_iou
         self.greedy_min_cosine_similarity = greedy_min_cosine_similarity
@@ -96,19 +96,13 @@ class GreedyPreprocessor:
         self.greedy_min_iou_matches_single_track = greedy_min_iou_matches_single_track
         self.min_iou_matches_single_track = greedy_min_iou_matches_single_track
 
-        self.use_non_surfer_filter = False
-
-    def track_detections(self, detections: list[Detection], video_properties: VideoInfo | None = None) -> list[Track]:
+    def track_detections(self, detections: list[Detection], video_properties: VideoInfo) -> list[Track]:
         logging.info(f'{"=" * 80} Running greedy preprocessor {len(detections)} detections {"=" * 80}')
 
         tracks = self._preprocess_detections(detections)
 
-        if self.use_non_surfer_filter:
-            kept, removed = filter_non_surfers_from_tracks(tracks)
-            logging.info(f'{"=" * 80} Greedy preprocessor kept {len(kept)} tracks {"=" * 80}')
-            logging.info(f'{"=" * 80} Greedy preprocessor removed {len(removed)} tracks {"=" * 80}')
-        else:
-            kept = tracks
+        kept, removed = filter_non_surfers_from_tracks(tracks)
+        logging.info(f'Greedy preprocessor kept {len(kept)} tracks and removed {len(removed)} tracks')
 
         # for the kept track, I want to experiment:
         # I want to compute the average embedding vector of each track

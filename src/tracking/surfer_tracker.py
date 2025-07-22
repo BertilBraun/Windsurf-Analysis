@@ -34,7 +34,8 @@ def process_detections_into_tracks(
     # visualize_tracks(processed_tracks, str(original_video_path))
 
     # Process tracks using the track processing module
-    processed_tracks = tracks_filtering_smoothing_relabeling(processed_tracks, video_properties)
+    # TODO: reenable
+    # processed_tracks = tracks_filtering_smoothing_relabeling(processed_tracks, video_properties)
 
     if not processed_tracks:
         logger.warning('No valid tracks found for video generation')
