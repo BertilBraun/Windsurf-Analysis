@@ -6,10 +6,12 @@ import argparse
 import traceback
 from pathlib import Path
 from itertools import chain
+
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
 from helpers import setup_logging
 
-
-from settings import STANDARD_OUTPUT_DIR
+from settings import NUM_PARALLEL_VIDEO_WORKERS, STANDARD_OUTPUT_DIR
 from windsurf_video_processor import WindsurfingVideoProcessor
 
 
@@ -18,21 +20,22 @@ def main():
     parser.add_argument(
         'input_pattern', nargs='+', help='Path pattern for input video files (e.g., "videos/*.mp4" or single file)'
     )
-    parser.add_argument('--output-dir', help='Directory for individual surfer videos (default: individual_surfers)')
+    parser.add_argument(
+        '--output-dir',
+        default=STANDARD_OUTPUT_DIR,
+        help='Directory for individual surfer videos (default: individual_surfers)',
+    )
     parser.add_argument('--draw-annotations', action='store_true', help='Draw annotations on the video')
     parser.add_argument(
         '--dry-run', action='store_true', help='Run without rendering individual videos (for testing purposes)'
     )
-    parser.add_argument(
-        '--debug-views', action='store_true', help='Output debug views of the video processing steps'
-    )
+    parser.add_argument('--debug-views', action='store_true', help='Output debug views of the video processing steps')
+    parser.add_argument('--parallel-workers', type=int, default=2, help='Number of parallel workers to use')
 
     args = parser.parse_args()
 
-    output_dir_path = Path(args.output_dir) if args.output_dir else None
-
-    if output_dir_path:
-        output_dir_path.mkdir(parents=True, exist_ok=True)
+    output_dir_path = Path(args.output_dir)
+    output_dir_path.mkdir(parents=True, exist_ok=True)
 
     logger = setup_logging(output_dir_path)
 
@@ -55,17 +58,52 @@ def main():
     for video_file in video_files:
         logger.info(f'  - {video_file}')
 
+    parallel_workers = args.parallel_workers
+    with ProcessPoolExecutor(max_workers=parallel_workers) as executor:
+        futures = []
+        for worker_id in range(parallel_workers):
+            indices_to_process = [i for i in range(len(video_files)) if i % parallel_workers == worker_id]
+            futures.append(
+                executor.submit(
+                    _process_videos,
+                    video_files,
+                    indices_to_process,
+                    output_dir_path,
+                    args.draw_annotations,
+                    args.dry_run,
+                    args.debug_views,
+                )
+            )
+
+        for future in as_completed(futures):
+            future.result()
+
+
+def _process_videos(
+    video_files: list[str],
+    indices_to_process: list[int],
+    output_dir: Path | None,
+    draw_annotations: bool,
+    dry_run: bool,
+    debug_views: bool,
+):
+    logger = setup_logging(output_dir)
+
     processor = WindsurfingVideoProcessor(
-        draw_annotations=args.draw_annotations,
-        output_dir=args.output_dir or STANDARD_OUTPUT_DIR,
-        dry_run=args.dry_run,
-        debug_views= args.debug_views
+        draw_annotations=draw_annotations,
+        output_dir=str(output_dir) if output_dir else STANDARD_OUTPUT_DIR,
+        dry_run=dry_run,
+        debug_views=debug_views,
+        parallel_workers=NUM_PARALLEL_VIDEO_WORKERS,
     )
 
-    for i, video_file in enumerate(video_files, 1):
+    for i, video_file in enumerate(video_files):
+        if i not in indices_to_process:
+            continue
+
         logger.info(f'Processing video {i}/{len(video_files)}: {video_file}')
         try:
-            processor.process_video(video_file)
+            processor.process_video(Path(video_file))
             logger.info(f'✓ Completed processing: {video_file}')
         except Exception as e:
             logger.error(f'✗ Error processing {video_file}: {e}')

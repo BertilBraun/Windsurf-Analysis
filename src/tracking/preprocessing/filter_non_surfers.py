@@ -18,9 +18,11 @@ instead of—the inflation test.
 
 from __future__ import annotations
 
+import numpy as np
 from typing import List, Sequence, Tuple
 
-from common_types import Track, TrackId, cosine_similarity
+from common_types import Track, TrackId
+from similarity_helpers import cosine_similarity, mean_embedding
 
 
 def filter_non_surfers_from_tracks(
@@ -50,22 +52,20 @@ def filter_non_surfers_from_tracks(
     kept: List[Track] = []
     removed: List[Track] = []
 
-    import numpy as np
-    from tracking.greedy_tracker import _average_embedding
-
     track_id_to_average_embedding: dict[TrackId, np.ndarray] = {}
     for track in tracks:
-        track_id_to_average_embedding[track.track_id] = _average_embedding(track)
+        if len(track.sorted_detections) >= min_frames:
+            track_id_to_average_embedding[track.track_id] = mean_embedding(track)
 
     for track in tracks:
         if len(track.sorted_detections) >= min_frames:
             kept.append(track)  # always keep long tracks
             continue
 
-        average_embedding = track_id_to_average_embedding[track.track_id]
+        short_track_average_embedding = mean_embedding(track)
 
-        for long_track_id, long_embedding in track_id_to_average_embedding.items():
-            if cosine_similarity(average_embedding, long_embedding) > similarity_thresh:
+        for long_track_average_embedding in track_id_to_average_embedding.values():
+            if cosine_similarity(short_track_average_embedding, long_track_average_embedding) > similarity_thresh:
                 kept.append(track)
                 break
         else:

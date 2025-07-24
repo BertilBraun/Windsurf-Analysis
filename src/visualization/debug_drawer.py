@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Debug‑rendering helpers
 ===========================
 
@@ -27,20 +25,22 @@ Example
 canvas_img = np.zeros((2 * h, w, 3), np.uint8)
 canvas = DebugCanvas(canvas_img)
 
-cur_view  = canvas.create_view(0,      0, w, h, scale_x=0.5, scale_y=0.5)
-prev_view = canvas.create_view(0,      h, w, h, scale_x=0.5, scale_y=0.5)
+cur_view = canvas.create_view(0, 0, w, h, scale_x=0.5, scale_y=0.5)
+prev_view = canvas.create_view(0, h, w, h, scale_x=0.5, scale_y=0.5)
 
-cur_centres  = cur_view.annotate_detections(cur_dets, BOX_COLOR_CUR)
+cur_centres = cur_view.annotate_detections(cur_dets, BOX_COLOR_CUR)
 prev_centres = prev_view.annotate_detections(prev_dets, BOX_COLOR_PREV)
 
 canvas.draw_line_with_metrics(cur_centres, prev_centres, cur_dets, prev_dets)
-cv2.imwrite("preview.png", canvas_img)
+cv2.imwrite('preview.png', canvas_img)
 ```
 
 The snippet above recreates the classic two‑row layout without any of the old
 special‑case code paths.  Switching to a 4×4 grid is as easy as adding more
 `create_view` calls.
 """
+
+from __future__ import annotations
 
 import os
 import cv2
@@ -54,18 +54,21 @@ from typing import List, Optional, Tuple
 from collections import defaultdict
 from .stabilize import VidStabWithoutVideoCapture
 
+from settings import MAX_OVERLAP_LENGTH_SECONDS
+from video_io import VideoInfo
 
-from common_types import BoundingBox, Detection, FrameIndex, Point, TrackId, cosine_similarity, Track
-from tracking.preprocessing.greedy_preprocessor import (
+
+from common_types import BoundingBox, Detection, FrameIndex, Point, TrackId, Track
+from similarity_helpers import (
+    cosine_similarity,
+    mean_embedding_cosine_similarity,
     mean_embedding_histogram_similarity,
     pairwise_cosine_similarity,
-    mean_embedding_cosine_similarity,
     pairwise_histogram_similarity,
     pairwise_squared_cosine_similarity,
     prop_embeddings_sim,
 )
 
-from dataclasses import dataclass
 
 BOX_COLOR_CUR = (255, 255, 255)  # white
 BOX_COLOR_PREV = (170, 170, 170)  # light grey
@@ -415,15 +418,7 @@ def generate_debug_video_worker_function(
     return None
 
 
-@dataclass
-class DebugSimSettings:
-    frame_history: int = 5 * 30  # 5 seconds
-
-
-def get_tracks_active_at_frame(
-    tracks: List[Track],
-    frame_idx: FrameIndex,
-) -> List[Track]:
+def get_tracks_active_at_frame(tracks: List[Track], frame_idx: FrameIndex) -> List[Track]:
     """Return all tracks that are active at the given frame index."""
     return [t for t in tracks if t.alive_at_frame(frame_idx)]
 
@@ -438,14 +433,14 @@ def debug_track_similarities(
         List[Track],
         os.PathLike,  # input video path
         os.PathLike | str,  # output directory
-        DebugSimSettings | None,  # settings for debug similarity video
+        VideoInfo,
     ],
 ) -> None:
     """Shows similarity measures between the active tracks and"""
 
-    tracks, input_path, output_dir, settings = args
-    if settings is None:
-        settings = DebugSimSettings()
+    tracks, input_path, output_dir, video_properties = args
+
+    max_gap = video_properties.fps * MAX_OVERLAP_LENGTH_SECONDS
 
     input_path = Path(input_path)
     output_dir = Path(output_dir)
@@ -497,7 +492,7 @@ def debug_track_similarities(
                         label=f'T{t.track_id}',
                     )
 
-                past_tracks: List[Track] = get_tracks_ended_in_last_n_frames(tracks, f_idx, settings.frame_history)
+                past_tracks: List[Track] = get_tracks_ended_in_last_n_frames(tracks, f_idx, max_gap)
 
                 cnt = 0
                 if past_tracks:

@@ -79,7 +79,7 @@ def compute_color_histogram(image: np.ndarray, bbox: BoundingBox) -> np.ndarray:
         hist_v_diff = hist_v_diff / hist_v_diff.sum()
 
     # Concatenate all difference histograms into a single feature vector
-    return np.concatenate([hist_h_diff])  # TODO , hist_s_diff, hist_v_diff])
+    return np.concatenate([hist_h_diff])  # TODO? , hist_s_diff, hist_v_diff])
     return np.concatenate([hist_h_diff, hist_s_diff, hist_v_diff])
 
 
@@ -194,7 +194,6 @@ class Detection:
         new_embedding = (1 - alpha) * self.embedding + alpha * other.embedding
         new_confidence = (1 - alpha) * self.confidence + alpha * other.confidence
         new_frame_idx = int((1 - alpha) * self.frame_idx + alpha * other.frame_idx)
-        # Interpolate color histograms
         new_color_histogram = (1 - alpha) * self.color_histogram + alpha * other.color_histogram
 
         return Detection(
@@ -207,7 +206,7 @@ class Detection:
 
 
 FrameIndex = int
-TrackId = int | None
+TrackId = int
 
 
 @dataclass
@@ -263,21 +262,3 @@ class Track:
             if i in self.detections_by_frame:
                 return self.detections_by_frame[i]
         assert False
-
-
-def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-
-
-def histogram_similarity(det1: Detection, det2: Detection) -> float:
-    """
-    Compute similarity between two detections based on their color histograms.
-
-    Args:
-        det1: First detection
-        det2: Second detection
-
-    Returns:
-        Cosine similarity between the color histograms (0-1 range)
-    """
-    return cosine_similarity(det1.color_histogram, det2.color_histogram)

@@ -7,36 +7,9 @@ maintaining any state, making it easier to test and reason about.
 
 import logging
 
-from settings import (
-    HISTOGRAM_SIMILARITY_THRESHOLD,
-    MAX_SPATIAL_DISTANCE_BB,
-    MAX_TEMPORAL_DISTANCE_SECONDS,
-    MIN_FRAME_PERCENTAGE,
-    SMOOTHING_WINDOW_SIZE,
-)
+from settings import MIN_FRAME_PERCENTAGE, SMOOTHING_WINDOW_SIZE
 from video_io import VideoInfo
-from common_types import Detection, Track, BoundingBox, TrackId, cosine_similarity
-
-
-def _calculate_spatial_distance(main_track: list[Detection], other_track: list[Detection]) -> float:
-    # Calculate spatial distance between bbox centers
-    end = main_track[-1]
-    start = other_track[0]
-
-    end_center = end.bbox.center
-    start_center = start.bbox.center
-
-    spatial_distance = end_center.distance_to(start_center)
-
-    # Normalize spatial distance by bbox size for scale invariance
-    avg_bbox_size = (end.bbox.width + end.bbox.height + start.bbox.width + start.bbox.height) / 4
-    normalized_spatial_distance = spatial_distance / max(avg_bbox_size, 1)
-
-    return normalized_spatial_distance
-
-
-def _calculate_temporal_distance(main_track: list[Detection], other_track: list[Detection]) -> float:
-    return other_track[0].frame_idx - main_track[-1].frame_idx
+from common_types import Detection, Track, BoundingBox
 
 
 def _interpolate_missing_boxes(track_data: list[Detection]) -> list[Detection]:

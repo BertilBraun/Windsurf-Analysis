@@ -29,7 +29,7 @@ class SurferDetector:
             raise FileNotFoundError(f'Model {settings.YOLO_MODEL_PATH} not found')
 
         self.model = YOLO(settings.YOLO_MODEL_PATH, verbose=False)
-        self.reid_model = ReID(model_path=settings.REID_MODEL_PATH, device='cpu', half=False)
+        self.reid_model = ReID(model_path=settings.REID_MODEL_PATH)
 
         log_detection_settings()
 
@@ -76,8 +76,8 @@ class SurferDetector:
                     y2=boxes[i][3],
                 )
 
-                # embedding = feats[i] / np.linalg.norm(feats[i])
-                embedding = reid_feats[i]  # already normalized
+                # Normalize embedding
+                embedding = reid_feats[i] / np.linalg.norm(reid_feats[i])
 
                 # Compute color histogram for this detection
                 color_histogram = compute_color_histogram(orig_img, bbox)

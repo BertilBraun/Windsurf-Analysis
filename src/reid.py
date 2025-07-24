@@ -11,10 +11,12 @@ from torchreid.reid.utils import FeatureExtractor
 
 
 class ReID:
-    # TODO: don't assign device?
-    def __init__(self, model_path: Union[str, Path], device: str = 'cuda', half: bool = False):
+    def __init__(self, model_path: Union[str, Path], device: str | None = None):
+        if device is None:
+            device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+
         self.device = torch.device(device)
-        self.half = half
+        self.half = device == 'cuda'
 
         self.extractor = FeatureExtractor(
             model_name='osnet_ain_x1_0',

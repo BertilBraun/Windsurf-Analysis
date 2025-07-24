@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Discrete‑optimization based multi‑object tracker using Z3.
 
 This implementation now separates **local geometric continuity** from a **global
@@ -38,13 +36,27 @@ IMPORTANT ASSUMPTIONS
   slow, restrict to a temporal window or subsample pairs.
 """
 
+from __future__ import annotations
+
 import z3
 import logging
 from typing import Dict, List, Tuple, Optional, Set
 
+from similarity_helpers import cosine_similarity, mean_embedding_cosine_similarity
 from video_io import VideoInfo
-from common_types import Detection, Track, cosine_similarity
-from tracking.greedy_tracker import GreedyTracker, _average_embedding
+from common_types import Detection, Track
+from tracking.greedy_tracker import GreedyTracker
+
+from settings import (
+    MAX_OVERLAP_LENGTH_SECONDS,
+    OPTIMIZER_MIN_LINK_IOU,
+    OPTIMIZER_MIN_LINK_COS,
+    OPTIMIZER_W_LINK_IOU,
+    OPTIMIZER_W_LINK_APP,
+    OPTIMIZER_W_LINK_GAP,
+    OPTIMIZER_W_START,
+    OPTIMIZER_LINK_COST_APPEARANCE_WINDOW_RADIUS,
+)
 
 TIMEOUT_SECONDS = 60
 
@@ -88,19 +100,16 @@ class DiscreteOptimizationTracker:
 
     def __init__(
         self,
-        max_link_gap: int = 25 * 5,
-        min_link_iou: float = 0.0,
-        min_link_cos: float = -1.0,
-        w_link_iou: float = 0.2,
-        w_link_app: float = 1.0,
-        w_link_gap: float = 0.001,
-        w_start: float = 10.0,  # <-- should be scaled according to number of estimated starts / tracks and number links required
-        # the amount of frames to look forward and backwards for appearance.
-        # For now these are not weighted by distance so keep small
-        link_cost_appearance_window_radius: int = 10,
+        video_properties: VideoInfo,
+        min_link_iou: float = OPTIMIZER_MIN_LINK_IOU,
+        min_link_cos: float = OPTIMIZER_MIN_LINK_COS,
+        w_link_iou: float = OPTIMIZER_W_LINK_IOU,
+        w_link_app: float = OPTIMIZER_W_LINK_APP,
+        w_link_gap: float = OPTIMIZER_W_LINK_GAP,
+        w_start: float = OPTIMIZER_W_START,
+        link_cost_appearance_window_radius: int = OPTIMIZER_LINK_COST_APPEARANCE_WINDOW_RADIUS,
     ):
-        # Fragment linking config
-        self.max_link_gap = max_link_gap
+        self.max_link_gap = video_properties.fps * MAX_OVERLAP_LENGTH_SECONDS
         self.min_link_iou = min_link_iou
         self.min_link_cos = min_link_cos
         self.w_link_iou = w_link_iou
@@ -373,7 +382,7 @@ class DiscreteOptimizationTracker:
             return None
 
         # Appearance similarity using average embeddings
-        cos = cosine_similarity(_average_embedding(start), _average_embedding(end))
+        cos = mean_embedding_cosine_similarity(start, end)
 
         # Calculate total cost
         cost = self.w_link_iou * (1.0 - max_iou) + self.w_link_app * (1.0 - cos) + self.w_link_gap * gap

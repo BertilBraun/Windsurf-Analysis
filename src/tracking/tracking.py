@@ -13,8 +13,8 @@ class DummyTracker:
     def track_detections(self, detections: list[Detection], video_properties: VideoInfo) -> list[Track]:
         return [
             Track(
-                track_id=None,
+                track_id=i,
                 sorted_detections=[detection],
             )
-            for detection in detections
+            for i, detection in enumerate(detections)
         ]
