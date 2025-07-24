@@ -21,8 +21,8 @@ from tracking.greedy_tracker import GreedyTracker
 
 
 from visualization.debug_drawer import generate_debug_video_worker_function, debug_track_similarities
-from visualization.stabilize import compute_vidstab_transforms
 from visualization.video_splicing import generate_individual_videos
+from visualization.stabilize import compute_vidstab_transforms
 from visualization.track_graph_viz import visualize_tracks
 
 from common_types import Detection, Track
@@ -98,8 +98,6 @@ def _process_detections_into_tracks(detections: list[Detection], video_propertie
         logger.warning('No tracks available for processing')
         return []
 
-    tracks = [Track(track_id=i, sorted_detections=[detection]) for i, detection in enumerate(detections)]
-
     trackers: Sequence[Tracker] = [
         GreedyPreprocessor(),
         GreedyTracker(),
@@ -107,7 +105,7 @@ def _process_detections_into_tracks(detections: list[Detection], video_propertie
         TrackFilteringSmoothingRelabeling(),
     ]
 
-    processed_tracks = tracks
+    processed_tracks = [Track(track_id=i, sorted_detections=[detection]) for i, detection in enumerate(detections)]
     for tracker in trackers:
         processed_tracks = tracker.track(processed_tracks, video_properties)
 

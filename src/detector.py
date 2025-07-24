@@ -4,37 +4,39 @@ import numpy as np
 from typing import Generator
 
 from tqdm import tqdm
+
 from ultralytics import YOLO
 from ultralytics.engine.results import Results
 
-from video_io import get_video_properties
-import settings
-from common_types import BoundingBox, Detection, compute_color_histogram
+
 from reid import ReID
+from settings import YOLO_MODEL_PATH, REID_MODEL_PATH, MIN_TRACKING_FPS, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE
+from video_io import get_video_properties
+from common_types import BoundingBox, Detection, compute_color_histogram
 
 
 class SurferDetector:
     """Pure detection and tracking class for surfers in video"""
 
     def __init__(self):
-        logging.info(f'Using model: {settings.YOLO_MODEL_PATH}')
-        if not settings.YOLO_MODEL_PATH.exists():
-            raise FileNotFoundError(f'Model {settings.YOLO_MODEL_PATH} not found')
+        logging.info(f'Using model: {YOLO_MODEL_PATH}')
+        if not YOLO_MODEL_PATH.exists():
+            raise FileNotFoundError(f'Model {YOLO_MODEL_PATH} not found')
 
-        self.model = YOLO(settings.YOLO_MODEL_PATH, verbose=False)
-        self.reid_model = ReID(model_path=settings.REID_MODEL_PATH)
+        self.model = YOLO(YOLO_MODEL_PATH, verbose=False)
+        self.reid_model = ReID(model_path=REID_MODEL_PATH)
 
     def run_object_detection_on_video(self, video_path: os.PathLike | str) -> Generator[Detection, None, None]:
         """Run batched inference on entire video, return generator of (frame, detections)"""
 
         video_props = get_video_properties(video_path)
-        skip_frames = video_props.fps // settings.MIN_TRACKING_FPS
+        skip_frames = video_props.fps // MIN_TRACKING_FPS
 
         results = self.model.predict(
             str(video_path),
-            iou=settings.IOU_THRESHOLD,
-            conf=settings.CONFIDENCE_THRESHOLD,
-            batch=settings.BATCH_SIZE,
+            iou=IOU_THRESHOLD,
+            conf=CONFIDENCE_THRESHOLD,
+            batch=BATCH_SIZE,
             vid_stride=skip_frames,
             stream=True,
             verbose=False,
