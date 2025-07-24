@@ -29,9 +29,7 @@ class SurferDetector:
             raise FileNotFoundError(f'Model {settings.YOLO_MODEL_PATH} not found')
 
         self.model = YOLO(settings.YOLO_MODEL_PATH, verbose=False)
-        self.model.add_callback('on_predict_start', self._on_predict_start)
-        self.reid_model = ReID(model_path=settings.REID_MODEL_PATH, device="cpu", half=False)
-
+        self.reid_model = ReID(model_path=settings.REID_MODEL_PATH, device='cpu', half=False)
 
         log_detection_settings()
 
@@ -64,7 +62,6 @@ class SurferDetector:
             # Convert tensors to numpy arrays using utility function
             boxes = _to_numpy(result.boxes.xyxy)
             confidences = _to_numpy(result.boxes.conf)
-            # feats = _to_numpy(result.feats)  # Embeddings in non normalized space
 
             # Get the original frame data for histogram computation
             orig_img = result.orig_img
@@ -80,7 +77,7 @@ class SurferDetector:
                 )
 
                 # embedding = feats[i] / np.linalg.norm(feats[i])
-                embedding = reid_feats[i] # already normalized
+                embedding = reid_feats[i]  # already normalized
 
                 # Compute color histogram for this detection
                 color_histogram = compute_color_histogram(orig_img, bbox)
@@ -95,20 +92,6 @@ class SurferDetector:
                 detections.append(detection)
 
         return detections
-
-    def _on_predict_start(self, predictor: object) -> None:
-        """Initialize trackers for object tracking during prediction.
-
-        Args:
-            predictor (ultralytics.engine.predictor.BasePredictor): The predictor object to initialize trackers for.
-        """
-        predictor._feats = None  # type: ignore  # reset in case used earlier
-
-        # Register hook to extract input of Detect layer
-        def pre_hook(module, input):
-            predictor._feats = list(input[0])  # type: ignore  # unroll to new list to avoid mutation in forward
-
-        predictor._hook = predictor.model.model.model[-1].register_forward_pre_hook(pre_hook)  # type: ignore
 
 
 def _to_numpy(tensor_or_array):

@@ -101,8 +101,11 @@ class GreedyPreprocessor:
 
         tracks = self._preprocess_detections(detections)
 
-        kept, removed = filter_non_surfers_from_tracks(tracks)
-        logging.info(f'Greedy preprocessor kept {len(kept)} tracks and removed {len(removed)} tracks')
+        if False:  # TODO: reenable? seems to work well without it
+            kept, removed = filter_non_surfers_from_tracks(tracks)
+            logging.info(f'Greedy preprocessor kept {len(kept)} tracks and removed {len(removed)} tracks')
+        else:
+            kept = tracks
 
         # for the kept track, I want to experiment:
         # I want to compute the average embedding vector of each track
