@@ -1,107 +1,24 @@
-# 🏄‍♂️ Windsurf Analysis: Professional AI-Powered Windsurfing Video Intelligence
+# 🏄‍♂️ Windsurf Analysis: AI-Powered Windsurfing Video Intelligence
 
-**Enterprise-grade computer vision system for comprehensive windsurfing video analysis, tracking, and performance optimization.**
+**Transform your windsurfing footage into actionable insights with cutting-edge computer vision and multi-object tracking.**
 
-Windsurf Analysis is a state-of-the-art AI system that combines custom-trained YOLO models, advanced multi-object tracking algorithms, and professional video processing pipelines to automatically detect, track, and analyze windsurfers in complex marine environments. The system provides end-to-end processing from raw footage to stabilized individual clips with detailed performance analytics.
+Windsurf Analysis automatically detects, tracks, and extracts individual windsurfer videos from complex marine environments. Using custom YOLO models, advanced ReID features, and sophisticated multi-stage tracking algorithms, it delivers professional-grade analysis for technique improvement, progress tracking, and coaching.
 
-- **Technique Analysis**: Review your own technique with frame-by-frame analysis - analyze successful and unsuccessful maneuvers and identify areas for improvement
-- **Progress Tracking**: Compare improvement over time with consistent metrics
-- **Efficient Review**: Quickly isolate specific maneuvers or problem areas
-- **Demonstration Tools**: Create annotated examples for teaching
+![Demo](documentation/processed.gif)
 
-![example](documentation/processed.gif)
+*From raw session footage (top left) to AI-powered detection and tracking (bottom left) to stabilized individual videos (right)*
 
-Example of the usage of the system: Input is a raw video of a windsurf session (top left), we process it using AI to detect the surfer and track their movements (bottom left), we then extract the individual surfer videos, making sure, that the surfer is always in the center of the frame and stabilize their clips (right).
+## ✨ Key Features
 
-## 🔬 Core Technologies
+- **🎯 Precision Detection**: Custom YOLO11 models fine-tuned specifically for windsurfing scenarios
+- **🧠 Smart Tracking**: Multi-stage tracking pipeline combining appearance modeling, spatial reasoning, and discrete optimization
+- **🎬 Individual Videos**: Automatically extract and stabilize focused videos for each detected surfer
+- **📊 Rich Analytics**: Detailed performance metrics, trajectory analysis, and technique insights
+- **⚡ GPU Accelerated**: Optimized for speed with CUDA support and batch processing
 
-### 🧠 **Custom YOLO Fine-Tuning Pipeline**
+## 🚀 Quick Start
 
-- **Domain-specific training**: Custom YOLO11 models fine-tuned on comprehensive windsurfing datasets
-- **Ultralytics integration**: Professional training infrastructure with configurable hyperparameters
-- **Performance optimization**: Batch processing, GPU acceleration, and inference optimization
-- **Model versioning**: Systematic model management and deployment pipeline
-
-### 🎯 **Advanced Multi-Object Tracking**
-
-- **BoT-SORT integration**: State-of-the-art tracking with ReID features and appearance modeling
-- **Intelligent track merging**: Spatial-temporal analysis with histogram-based appearance matching
-- **Robust identity preservation**: Handles occlusions, rapid movements, and challenging marine conditions
-- **Configurable tracking parameters**: Fine-tuned for windsurfing-specific movement patterns
-
-### 🎬 **Professional Video Processing Pipeline**
-
-- **AABB-based stabilization**: Axis-aligned bounding box tracking for motion-aware stabilization
-- **FFmpeg integration**: Professional-grade video encoding with configurable quality parameters
-- **Automated clip extraction**: Intelligent scene segmentation based on tracking continuity
-- **Batch processing**: Parallel video processing with worker pool architecture
-
-## ⚙️ Technical Architecture
-
-### **Machine Learning Infrastructure**
-
-- **YOLO11 Base Models**: Fine-tuned on ~500 annotated windsurfing frames with diverse conditions
-- **Custom Dataset Pipeline**: Automated train/validation splits with data augmentation
-- **PyTorch Integration**: GPU-accelerated inference with CUDA optimization
-- **Model Performance**: 95%+ detection accuracy, sub-10ms inference time per frame
-
-### **Multi-Object Tracking System**
-
-- **BoT-SORT Algorithm**: Advanced tracking with ReID features and global motion compensation
-- **Appearance Modeling**: HSV histogram-based similarity matching for track association
-- **Temporal Consistency**: Intelligent track merging using spatial-temporal distance metrics
-- **Robust Re-identification**: Handles track fragmentation with configurable similarity thresholds
-
-### **Video Processing Pipeline**
-
-- **FFmpeg Backend**: Professional video encoding with H.264/H.265 support
-- **Stabilization Engine**: Two-pass stabilization using vidstab filters with motion detection
-- **Frame Management**: Efficient memory usage with streaming video processing
-
-### **Track Processing Algorithms**
-
-- **Smoothing Filters**: Configurable window-based trajectory smoothing
-- **Track Validation**: Minimum frame percentage and duration filtering
-- **Spatial Analysis**: AABB-based collision detection and overlap handling
-
-### **Performance Optimization**
-
-- **Parallel Processing**: Multi-threaded worker pools for CPU-intensive operations
-- **Batch Inference**: Optimized YOLO batch processing for improved throughput
-- **Memory Management**: Streaming video processing to handle large files efficiently
-- **GPU Utilization**: CUDA acceleration for all compatible operations
-
-## 📈 Model Training & Validation
-
-For more of the training results, check out the [documentation/train_results](documentation/train_results) folder.
-
-### **Dataset Specifications**
-
-- **Training Dataset**: ~500 professionally annotated frames across diverse conditions
-- **Athlete Diversity**: Multiple skill levels from recreational to professional competition
-- **Scenario Coverage**: Jibes, rides, transitions, crashes, and multi-surfer interactions
-- **Environmental Conditions**: Various wind conditions, lighting scenarios, and water states
-- **Equipment Variations**: Different board types, sail configurations, and rigging setups
-- **Camera Perspectives**: Multiple angles, distances, and stabilization conditions
-
-### **Training Infrastructure**
-
-- **Base Model**: YOLO11n architecture with transfer learning
-- **Training Parameters**: Configurable epochs, batch size, image resolution (640px default)
-- **Validation Split**: Automated validation set with stratified sampling
-- **Data Augmentation**: Standard Ultralytics augmentation pipeline
-- **Hardware Requirements**: CUDA-compatible GPU for training acceleration
-
-## 🚀 System Requirements & Installation
-
-### **Software Dependencies**
-
-- **Python**: 3.10+ with pip package management
-- **CUDA**: 11.8+ for GPU acceleration (optional)
-- **FFmpeg**: 4.4+ with vidstab plugin for stabilization
-- **PyTorch**: 2.0+ with CUDA support
-
-### **Installation & Setup**
+### Installation
 
 ```bash
 # Clone repository
@@ -111,66 +28,146 @@ cd Windsurf-Analysis
 # Install dependencies
 pip install -r requirements.txt
 
-# Verify CUDA installation
+# Verify GPU setup (optional but recommended)
 python -c "import torch; print(f'CUDA Available: {torch.cuda.is_available()}')"
 ```
 
-### **Usage Examples**
-
-#### **Basic Video Analysis**
+### Basic Usage
 
 ```bash
-# Process single video with annotations
-python src/main.py "path/to/session.mp4" --draw-annotations
+# Process a single video
+python src/main.py "session.mp4" --draw-annotations
 
 # Batch process multiple videos
-python src/main.py "videos/*.mp4"
+python src/main.py "videos/*.mp4" --output-dir results/
 
-# Custom output directory
-python src/main.py "footage.mp4" --output-dir analysis/ --draw-annotations
+# Custom configuration
+python src/main.py "footage.mp4" --output-dir analysis/ --parallel-workers 4
 ```
 
-#### **Model Training & Fine-tuning**
+### Output Structure
 
-```bash
-# Train custom model on your dataset
-python train/train.py \
-    --src ./train/dataset \
-    --dst ./train/datasets/custom \
-    --epochs 50 \
-    --imgsz 640 \
-    --batch 16 \
-    --device 0
 ```
-
-#### **Advanced Configuration**
-
-```bash
-# Modify detection thresholds in src/settings.py
-IOU_THRESHOLD = 0.2          # Intersection over Union threshold
-CONFIDENCE_THRESHOLD = 0.1   # Detection confidence threshold
-MIN_TRACKING_FPS = 25        # Minimum tracking frame rate
-
-# Adjust tracking parameters
-MAX_TEMPORAL_DISTANCE_SECONDS = 10.0    # Track merging time window
-MAX_SPATIAL_DISTANCE_BB = 1.5           # Spatial distance for track linking
-HISTOGRAM_SIMILARITY_THRESHOLD = 0.9     # Appearance similarity threshold
-```
-
-## 📁 Output Structure & Data Flow
-
-### **Generated Files**
-
-```text
 output_directory/
-├── <input_file_name1>+00_annotated.mp4     # Annotated video with tracking trails
-├── <input_file_name1>+01.stabilized.mp4    # Stabilized individual video
-├── <input_file_name1>+01.start_time.json   # Start time of the individual video
-├── <input_file_name1>+02.stabilized.mp4    # Stabilized individual video
-├── <input_file_name1>+02.start_time.json   # Start time of the individual video
-|
-├── <input_file_name2>+00_annotated.mp4     # Annotated video with tracking trails
-├── <input_file_name2>+01.stabilized.mp4    # Stabilized individual video
-├── <input_file_name2>+01.start_time.json   # Start time of the individual video
-...
+├── session+00_annotated.mp4        # Full video with tracking annotations
+├── session+01.mp4                  # Individual surfer video #1  
+├── session+01.stabilized.mp4       # Stabilized version
+├── session+01.start_time.json      # Timing metadata
+├── session+02.mp4                  # Individual surfer video #2
+└── ...
 ```
+
+## 🏗️ System Architecture
+
+Windsurf Analysis uses a sophisticated multi-stage pipeline:
+
+### 1. **AI Detection Pipeline**
+
+- **YOLO11** object detection fine-tuned on windsurfing datasets
+- **ReID Feature Extraction** using OSNet for robust appearance modeling  
+- **HSV Color Histograms** for visual appearance discrimination
+
+### 2. **Multi-Stage Tracking System**
+
+- **Greedy Preprocessor**: Fast initial track linking with appearance and spatial cues
+- **Greedy Tracker**: Iterative track merging using average embedding similarity
+- **Discrete Optimization**: Z3-based global optimization for complex scenarios
+- **Post-Processing**: Filtering, smoothing, and trajectory refinement
+
+### 3. **Video Processing**
+
+- Individual video extraction with intelligent cropping
+- Professional video stabilization using FFmpeg
+- Batch processing with parallel workers
+
+## 📋 Requirements
+
+### Software Dependencies
+
+- **Python**: 3.10+
+- **CUDA**: 11.8+ (optional, for GPU acceleration)
+- **FFmpeg**: 4.4+ with vidstab plugin
+
+### Hardware Recommendations
+
+- **GPU**: NVIDIA GPU with 4GB+ VRAM (for optimal performance)
+- **RAM**: 8GB+ system memory
+- **Storage**: SSD recommended for large video processing
+
+## ⚙️ Configuration
+
+Key settings can be adjusted in `src/settings.py`:
+
+```python
+# Detection thresholds
+CONFIDENCE_THRESHOLD = 0.25
+IOU_THRESHOLD = 0.2
+
+# Tracking parameters  
+GREEDY_MIN_COSINE_SIMILARITY = 0.8
+OPTIMIZER_MIN_LINK_IOU = 0.0
+OPTIMIZER_W_LINK_APP = 1.0
+
+# Processing settings
+MIN_FRAME_PERCENTAGE = 20
+BATCH_SIZE = 32
+```
+
+## 🎓 Training Custom Models
+
+Train your own detection models on custom datasets:
+
+```bash
+# Prepare dataset from annotated frames
+python train/train.py \
+    --src ./dataset \
+    --dst ./datasets/custom \
+    --epochs 100 \
+    --imgsz 640 \
+    --batch 16
+```
+
+See the annotation tool in `train/annotator.py` for creating training data.
+
+## 📊 Technical Deep Dive
+
+For detailed information about the algorithms, architecture, and implementation:
+
+**📖 [View Technical Documentation](documentation/TECHNICAL.md)**
+
+Topics covered:
+
+- Multi-stage tracking pipeline details
+- Greedy vs. discrete optimization approaches  
+- Feature extraction and embedding methods
+- HSV histogram implementation
+- Performance optimization strategies
+- Model training and evaluation
+
+## 🤝 Contributing
+
+We welcome contributions! Areas where help is needed:
+
+- **Algorithm improvements**: Better tracking heuristics, appearance models
+- **Performance optimization**: GPU utilization, memory efficiency  
+- **Dataset expansion**: More diverse training scenarios
+- **Feature additions**: New analytics, export formats
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **Ultralytics** for the YOLO framework
+- **TorchReID** for person re-identification models
+- **VidStab** for video stabilization
+- **OpenCV** community for computer vision tools
+
+## 📧 Contact
+
+For questions, support, or collaboration opportunities, please open an issue or reach out to the development team.
+
+---
+
+*Built with ❤️ for the windsurfing community*
