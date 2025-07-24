@@ -132,7 +132,7 @@ def train_model(yaml_file: Path, epochs: int, imgsz: int, batch: float, device: 
 # CLI
 # ────────────────────────────────────────────────────────────────────────────
 def main():
-    logger = setup_logging()
+    setup_logging()
 
     parser = argparse.ArgumentParser(description='Prepare windsurfer detection dataset and train YOLO v11.')
     parser.add_argument('--src', type=Path, help='Raw dataset directory')

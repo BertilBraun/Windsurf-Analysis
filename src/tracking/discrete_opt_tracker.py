@@ -88,7 +88,6 @@ class DiscreteOptimizationTracker:
         logging.info(f'{"=" * 80} Running discrete optimization tracker with {len(detections)} detections {"=" * 80}')
 
         fragments = GreedyTracker().track_detections(detections, video_properties)
-        return fragments
         logging.info(f'{"=" * 80} Running discrete optimization tracker with {len(fragments)} fragments {"=" * 80}')
 
         return self._optimize_fragments(fragments)
@@ -250,9 +249,5 @@ class DiscreteOptimizationTracker:
         if iou < self.min_link_iou:
             return None
 
-        # cos = cosine_similarity(end_det.feat, start_det.feat)
-        # if cos < self.min_link_cos:
-        #     assert False, "Let the solver handle this for now."
-        #     return None
         cost = self.w_link_iou * (1.0 - iou) + self.w_link_app * (1.0 - cos) + self.w_link_gap * gap
         return cost
