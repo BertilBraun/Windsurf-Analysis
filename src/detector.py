@@ -13,13 +13,6 @@ from common_types import BoundingBox, Detection, compute_color_histogram
 from reid import ReID
 
 
-def log_detection_settings():
-    settings_str = '\n'.join(
-        f'{k}: {v}' for k, v in settings.__dict__.items() if not k.startswith('__') and not callable(v) and k.isupper()
-    )
-    logging.info(f'Detection settings: \n{settings_str}')
-
-
 class SurferDetector:
     """Pure detection and tracking class for surfers in video"""
 
@@ -30,8 +23,6 @@ class SurferDetector:
 
         self.model = YOLO(settings.YOLO_MODEL_PATH, verbose=False)
         self.reid_model = ReID(model_path=settings.REID_MODEL_PATH)
-
-        log_detection_settings()
 
     def run_object_detection_on_video(self, video_path: os.PathLike | str) -> Generator[Detection, None, None]:
         """Run batched inference on entire video, return generator of (frame, detections)"""

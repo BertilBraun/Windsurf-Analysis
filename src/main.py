@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import glob
+import logging
 import torch
 import argparse
 import traceback
@@ -58,6 +59,8 @@ def main():
     for video_file in video_files:
         logger.info(f'  - {video_file}')
 
+    _log_detection_settings(logger)
+
     parallel_workers = args.parallel_workers
     with ProcessPoolExecutor(max_workers=parallel_workers) as executor:
         futures = []
@@ -77,6 +80,15 @@ def main():
 
         for future in as_completed(futures):
             future.result()
+
+
+def _log_detection_settings(logger: logging.Logger):
+    import settings
+
+    settings_str = '\n'.join(
+        f'{k}: {v}' for k, v in settings.__dict__.items() if not k.startswith('__') and not callable(v) and k.isupper()
+    )
+    logger.info(f'Detection settings: \n{settings_str}')
 
 
 def _process_videos(

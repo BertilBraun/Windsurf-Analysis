@@ -7,6 +7,12 @@ from video_io import VideoInfo
 from tracking.preprocessing.filter_non_surfers import filter_non_surfers_from_tracks
 from common_types import Detection, FrameIndex, Track, TrackId
 from similarity_helpers import cosine_similarity
+from settings import (
+    GREEDY_PREPROCESSOR_MIN_IOU,
+    GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY,
+    GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE,
+    GREEDY_PREPROCESSOR_MIN_IOU_MATCHES_SINGLE_TRACK,
+)
 
 
 class _ComparisonResult(Enum):
@@ -18,10 +24,10 @@ class _ComparisonResult(Enum):
 class GreedyPreprocessor:
     def __init__(
         self,
-        greedy_min_iou: float = 0.5,
-        greedy_min_cosine_similarity: float = 0.7,
-        greedy_max_frame_distance: int = 5,
-        greedy_min_iou_matches_single_track: float = 0.1,
+        greedy_min_iou: float = GREEDY_PREPROCESSOR_MIN_IOU,
+        greedy_min_cosine_similarity: float = GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY,
+        greedy_max_frame_distance: int = GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE,
+        greedy_min_iou_matches_single_track: float = GREEDY_PREPROCESSOR_MIN_IOU_MATCHES_SINGLE_TRACK,
     ):
         self.greedy_min_iou = greedy_min_iou
         self.greedy_min_cosine_similarity = greedy_min_cosine_similarity
@@ -29,10 +35,10 @@ class GreedyPreprocessor:
         self.greedy_min_iou_matches_single_track = greedy_min_iou_matches_single_track
         self.min_iou_matches_single_track = greedy_min_iou_matches_single_track
 
-    def track_detections(self, detections: list[Detection], video_properties: VideoInfo) -> list[Track]:
-        logging.info(f'{"=" * 80} Running greedy preprocessor {len(detections)} detections {"=" * 80}')
+    def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
+        logging.info(f'{"=" * 80} Running greedy preprocessor {len(tracks)} tracks {"=" * 80}')
 
-        tracks = self._preprocess_detections(detections)
+        tracks = self._preprocess_tracks(tracks)
 
         if False:  # TODO: reenable? seems to work well without it
             kept, removed = filter_non_surfers_from_tracks(tracks)
@@ -42,7 +48,7 @@ class GreedyPreprocessor:
 
         return kept
 
-    def _preprocess_detections(self, detections: list[Detection]) -> list[Track]:
+    def _preprocess_tracks(self, tracks: list[Track]) -> list[Track]:
         """Greedily stiches detections onto tracks as long as both IOU and cosine similarity are high."""
 
         # We match greedily if:
@@ -56,8 +62,10 @@ class GreedyPreprocessor:
         # - have been matched by multiple detections in the same frame
 
         detections_by_frame: dict[FrameIndex, list[Detection]] = defaultdict(list)
-        for det in detections:
-            detections_by_frame[det.frame_idx].append(det)
+        for track in tracks:
+            assert len(track.sorted_detections) == 1, 'Greedy preprocessor only supports single-detection tracks'
+            for det in track.sorted_detections:
+                detections_by_frame[det.frame_idx].append(det)
 
         # Sort detections by frame index to process them in order.
         sorted_frame_indices = sorted(detections_by_frame.keys())

@@ -11,9 +11,7 @@ track remains.
 """
 
 from __future__ import annotations
-
-from typing import List, Sequence
-
+import logging
 
 from settings import (
     GREEDY_MIN_COSINE_SIMILARITY,
@@ -23,82 +21,63 @@ from settings import (
 )
 from similarity_helpers import mean_embedding
 from video_io import VideoInfo
-from common_types import Detection, Track
+from common_types import Track
 from similarity_helpers import cosine_similarity
-from tracking.preprocessing.greedy_preprocessor import GreedyPreprocessor
 
 
 class GreedyTracker:
-    def track_detections(self, detections: list[Detection], video_properties: VideoInfo) -> list[Track]:
-        if not detections:
-            return []
+    def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
+        """Greedily fuse tracklets whose average‑embedding similarity is highest.
 
-        fragments = GreedyPreprocessor().track_detections(detections, video_properties)
-        return greedy_stitch_tracks(fragments, video_properties)
+        Parameters
+        ----------
+        tracks     : current list of **pre‑filtered** Track objects.
+        sim_thresh : minimum cosine similarity required to merge.
+        max_gap    : max number of frames allowed between two adjacent tracklets.
+        verbose    : print merge operations if *True*.
+        """
+        logging.info(f'{"=" * 80} Running greedy tracker with {len(tracks)} tracks {"=" * 80}')
 
+        working = list(tracks)  # copy
 
-def greedy_stitch_tracks(
-    tracks: Sequence[Track],
-    video_properties: VideoInfo,
-    *,
-    sim_thresh: float = GREEDY_MIN_COSINE_SIMILARITY,
-    verbose: bool = False,
-) -> List[Track]:
-    """Greedily fuse tracklets whose average‑embedding similarity is highest.
+        max_gap = video_properties.fps * MAX_OVERLAP_LENGTH_SECONDS
 
-    Parameters
-    ----------
-    tracks     : current list of **pre‑filtered** Track objects.
-    sim_thresh : minimum cosine similarity required to merge.
-    max_gap    : max number of frames allowed between two adjacent tracklets.
-    verbose    : print merge operations if *True*.
-    """
-    working = list(tracks)  # copy
+        while True:
+            n = len(working)
+            if n < 2:
+                break
 
-    max_gap = video_properties.fps * MAX_OVERLAP_LENGTH_SECONDS
+            # Pre‑compute average embeddings
+            avg_emb = [mean_embedding(t) for t in working]
 
-    while True:
-        n = len(working)
-        if n < 2:
-            break
+            best_i, best_j, best_sim = None, None, -1.0
+            # Evaluate all unordered pairs
+            for i in range(n):
+                for j in range(i + 1, n):
+                    if not _can_merge(working[i], working[j], max_gap=max_gap):
+                        continue
+                    sim = cosine_similarity(avg_emb[i], avg_emb[j])
+                    # TODO prefer to merge longer tracks?
+                    # longest_track_length = max(len(t.sorted_detections) for t in working)
+                    # (len(working[i].sorted_detections) + len(working[j].sorted_detections)) / (2 * longest_track_length)
+                    if sim > best_sim:
+                        best_i, best_j, best_sim = i, j, sim
 
-        # Pre‑compute average embeddings
-        avg_emb = [mean_embedding(t) for t in working]
+            # Stopping condition
+            if best_sim < GREEDY_MIN_COSINE_SIMILARITY:
+                break
 
-        best_i, best_j, best_sim = None, None, -1.0
-        # Evaluate all unordered pairs
-        for i in range(n):
-            for j in range(i + 1, n):
-                if not _can_merge(working[i], working[j], max_gap=max_gap):
-                    continue
-                sim = cosine_similarity(avg_emb[i], avg_emb[j])
-                # TODO prefer to merge longer tracks?
-                # longest_track_length = max(len(t.sorted_detections) for t in working)
-                # (len(working[i].sorted_detections) + len(working[j].sorted_detections)) / (2 * longest_track_length)
-                if sim > best_sim:
-                    best_i, best_j, best_sim = i, j, sim
+            assert best_i is not None and best_j is not None
+            assert 0 <= best_i < n and 0 <= best_j < n
 
-        # Stopping condition
-        if best_sim < sim_thresh:
-            if verbose:
-                print(f'Stopping – best similarity {best_sim:.3f} below threshold {sim_thresh}')
-            break
+            # Merge the best pair
+            new_track = _merge_tracks(working[best_i], working[best_j])
 
-        assert best_i is not None and best_j is not None
-        assert 0 <= best_i < n and 0 <= best_j < n
+            # Replace indices i & j with t_new
+            working = [t for k, t in enumerate(working) if k not in (best_i, best_j)]
+            working.append(new_track)
 
-        # Merge the best pair
-        t_new = _merge_tracks(working[best_i], working[best_j])
-        if verbose:
-            id_i, id_j = working[best_i].track_id, working[best_j].track_id
-            print(f'Merging tracks {id_i} & {id_j} (sim={best_sim:.3f}) → new id {t_new.track_id}')
-
-        # Replace indices i & j with t_new
-        new_list = [t for k, t in enumerate(working) if k not in (best_i, best_j)]
-        new_list.append(t_new)
-        working = new_list
-
-    return working
+        return working
 
 
 def _can_merge(t1: Track, t2: Track, *, max_gap: int) -> bool:

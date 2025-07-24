@@ -23,6 +23,12 @@ MIN_FRAME_PERCENTAGE = 20
 SMOOTHING_WINDOW_SIZE = 2  # TODO more or less?
 
 
+# Greedy preprocessor settings
+GREEDY_PREPROCESSOR_MIN_IOU = 0.5
+GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY = 0.7
+GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE = 5
+GREEDY_PREPROCESSOR_MIN_IOU_MATCHES_SINGLE_TRACK = 0.1
+
 # Greedy tracker settings
 # Greedy tracker merges tracks by average embedding cosine similarity of the tracks until no more possible merges exist, or the max average embedding cosine similarity is below the threshold
 GREEDY_MIN_IOU_MATCHES_SINGLE_TRACK = 0.5
@@ -41,3 +47,6 @@ OPTIMIZER_W_START = 10.0
 # the amount of frames to look forward and backwards for appearance.
 # For now these are not weighted by distance so keep small
 OPTIMIZER_LINK_COST_APPEARANCE_WINDOW_RADIUS = 10
+
+
+OPTIMIZER_TIMEOUT_SECONDS = 60

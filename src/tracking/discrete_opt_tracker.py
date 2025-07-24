@@ -45,7 +45,6 @@ from typing import Dict, List, Tuple, Optional, Set
 from similarity_helpers import cosine_similarity, mean_embedding_cosine_similarity
 from video_io import VideoInfo
 from common_types import Detection, Track
-from tracking.greedy_tracker import GreedyTracker
 
 from settings import (
     MAX_OVERLAP_LENGTH_SECONDS,
@@ -56,9 +55,8 @@ from settings import (
     OPTIMIZER_W_LINK_GAP,
     OPTIMIZER_W_START,
     OPTIMIZER_LINK_COST_APPEARANCE_WINDOW_RADIUS,
+    OPTIMIZER_TIMEOUT_SECONDS,
 )
-
-TIMEOUT_SECONDS = 60
 
 
 class TimeoutException(Exception):
@@ -100,7 +98,6 @@ class DiscreteOptimizationTracker:
 
     def __init__(
         self,
-        video_properties: VideoInfo,
         min_link_iou: float = OPTIMIZER_MIN_LINK_IOU,
         min_link_cos: float = OPTIMIZER_MIN_LINK_COS,
         w_link_iou: float = OPTIMIZER_W_LINK_IOU,
@@ -109,7 +106,7 @@ class DiscreteOptimizationTracker:
         w_start: float = OPTIMIZER_W_START,
         link_cost_appearance_window_radius: int = OPTIMIZER_LINK_COST_APPEARANCE_WINDOW_RADIUS,
     ):
-        self.max_link_gap = video_properties.fps * MAX_OVERLAP_LENGTH_SECONDS
+        self.max_link_gap = -1  # set in track()
         self.min_link_iou = min_link_iou
         self.min_link_cos = min_link_cos
         self.w_link_iou = w_link_iou
@@ -118,18 +115,13 @@ class DiscreteOptimizationTracker:
         self.w_start = w_start
         self.link_cost_appearance_window_radius = link_cost_appearance_window_radius
 
-    def track_detections(self, detections: List[Detection], video_properties: VideoInfo) -> List[Track]:
+    def track(self, tracks: List[Track], video_properties: VideoInfo) -> List[Track]:
         """Main entry point for tracking detections."""
-        logging.info(f'{"=" * 80} Running discrete optimization tracker with {len(detections)} detections {"=" * 80}')
+        logging.info(f'{"=" * 80} Running discrete optimization tracker with {len(tracks)} tracks {"=" * 80}')
 
-        fragments = self._create_initial_fragments(detections, video_properties)
-        logging.info(f'{"=" * 80} Running discrete optimization tracker with {len(fragments)} fragments {"=" * 80}')
+        self.max_link_gap = video_properties.fps * MAX_OVERLAP_LENGTH_SECONDS
 
-        return self._optimize_fragments(fragments)
-
-    def _create_initial_fragments(self, detections: List[Detection], video_properties: VideoInfo) -> List[Track]:
-        """Create initial fragments using greedy tracker."""
-        return GreedyTracker().track_detections(detections, video_properties)
+        return self._optimize_fragments(tracks)
 
     def _optimize_fragments(self, fragments: List[Track]) -> List[Track]:
         """Optimize fragment connections using Z3 solver."""
@@ -197,7 +189,7 @@ class DiscreteOptimizationTracker:
     def _create_z3_optimizer(self) -> z3.Optimize:
         """Create and configure Z3 optimizer."""
         opt = z3.Optimize()
-        opt.set('timeout', TIMEOUT_SECONDS * 1000)
+        opt.set('timeout', OPTIMIZER_TIMEOUT_SECONDS * 1000)
         return opt
 
     def _create_link_variables(self, graph: FragmentGraph) -> Dict[Tuple[int, int], z3.BoolRef]:

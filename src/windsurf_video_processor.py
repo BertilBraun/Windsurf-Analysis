@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import Callable, TypeVar
+from typing import Callable, Sequence, TypeVar
 
 from tqdm import tqdm
 from pathlib import Path
@@ -14,7 +14,7 @@ from visualization.annotation_drawer import Annotation, AnnotationDrawer
 from visualization.stabilize import stabilize
 
 from tracking.tracking import Tracker
-from tracking.track_processing import tracks_filtering_smoothing_relabeling
+from tracking.track_processing import TrackFilteringSmoothingRelabeling
 from tracking.discrete_opt_tracker import DiscreteOptimizationTracker
 from tracking.preprocessing.greedy_preprocessor import GreedyPreprocessor
 from tracking.greedy_tracker import GreedyTracker
@@ -61,14 +61,7 @@ class WindsurfingVideoProcessor:
         # wait for stabilizer computation to finish
         # stabilizer = stabilizer_future.result()
 
-        processed_tracks = _process_detections_into_tracks(
-            detections=detections,
-            # tracker=GreedyPreprocessor(),
-            # tracker=GreedyTracker(),
-            # tracker=BranchAndBoundFragmentTracker(),
-            tracker=DiscreteOptimizationTracker(video_properties=props),
-            video_properties=props,
-        )
+        processed_tracks = _process_detections_into_tracks(detections, props)
 
         if not self.dry_run:
             self.submit_low_priority_task(
@@ -97,9 +90,7 @@ class WindsurfingVideoProcessor:
         )
 
 
-def _process_detections_into_tracks(
-    detections: list[Detection], tracker: Tracker, video_properties: VideoInfo
-) -> list[Track]:
+def _process_detections_into_tracks(detections: list[Detection], video_properties: VideoInfo) -> list[Track]:
     """Process collected tracks and return processed track data for video generation"""
     logger = logging.getLogger(__name__)
 
@@ -107,13 +98,21 @@ def _process_detections_into_tracks(
         logger.warning('No tracks available for processing')
         return []
 
-    processed_tracks = tracker.track_detections(detections, video_properties)
+    tracks = [Track(track_id=i, sorted_detections=[detection]) for i, detection in enumerate(detections)]
 
-    # Show a timeline of the tracks with all possible merge options
-    # visualize_tracks(processed_tracks, str(original_video_path))
+    trackers: Sequence[Tracker] = [
+        GreedyPreprocessor(),
+        GreedyTracker(),
+        DiscreteOptimizationTracker(),
+        TrackFilteringSmoothingRelabeling(),
+    ]
 
-    # Process tracks using the track processing module
-    processed_tracks = tracks_filtering_smoothing_relabeling(processed_tracks, video_properties)
+    processed_tracks = tracks
+    for tracker in trackers:
+        processed_tracks = tracker.track(processed_tracks, video_properties)
+
+        # Show a timeline of the tracks with all possible merge options
+        # visualize_tracks(processed_tracks, str(original_video_path))
 
     if not processed_tracks:
         logger.warning('No valid tracks found for video generation')
