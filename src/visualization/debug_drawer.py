@@ -319,19 +319,13 @@ def generate_debug_video_worker_function(
     args: Tuple[
         List[Detection],  # all detections (flat list)
         List[Track],
-        VidStabWithoutVideoCapture | None,  # stabilizer instance
         os.PathLike,  # input video path
         os.PathLike | str,  # output directory
     ],
 ) -> None:
     """Multiprocessing worker that writes the debug video to disk using the DebugCanvas API."""
 
-    detections, tracks, stabilizer_in, input_path, output_dir = args
-    if stabilizer_in is not None:
-        stabilizer = stabilizer_in.get_vid_stab(input_path)
-        transforms = stabilizer.transforms
-    else:
-        transforms = None
+    detections, tracks, input_path, output_dir = args
     det_map = defaultdict(list)
     for det in detections:
         det_map[det.frame_idx].append(det)
