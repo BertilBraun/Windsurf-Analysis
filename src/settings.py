@@ -22,6 +22,7 @@ MIN_FRAME_PERCENTAGE = 20
 
 SMOOTHING_WINDOW_SIZE = 2  # TODO more or less?
 
+VIDEO_SUFFIX_SECONDS = 1.0
 
 # Greedy preprocessor settings
 GREEDY_PREPROCESSOR_MIN_IOU = 0.5

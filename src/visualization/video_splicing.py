@@ -14,6 +14,7 @@ from pathlib import Path
 
 from common_types import Detection, Point
 from common_types import Track, TrackId
+from settings import VIDEO_SUFFIX_SECONDS
 from video_io import VideoReader, VideoWriter, get_video_properties
 
 
@@ -125,7 +126,10 @@ def _find_detection_at_frame(track_data: list[Detection], frame_idx: int) -> Det
 
 
 def generate_individual_videos(
-    tracks: list[Track], original_video_path: os.PathLike | str, output_dir: os.PathLike | str
+    tracks: list[Track],
+    original_video_path: os.PathLike | str,
+    output_dir: os.PathLike | str,
+    video_suffix_seconds: float = VIDEO_SUFFIX_SECONDS,
 ) -> list[os.PathLike]:
     """Generate individual MP4 videos for each tracked person with centered, fixed-size crops.
 
@@ -181,6 +185,10 @@ def generate_individual_videos(
             for track in tracks:
                 # Find detection for this frame
                 detection = _find_detection_at_frame(track.sorted_detections, frame_idx)
+                is_in_suffix = track.end_frame() + video_properties.fps * video_suffix_seconds < frame_idx
+
+                if detection is None and is_in_suffix:
+                    detection = track.end()
 
                 if detection is not None:
                     # Extract fixed-size slice centered on bbox
