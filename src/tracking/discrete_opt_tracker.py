@@ -115,17 +115,18 @@ class DiscreteILPTracker:
         """Main entry point for tracking detections."""
         logging.info(f'{"=" * 80} Running ILP discrete optimization tracker with {len(tracks)} tracks {"=" * 80}')
 
+        if not tracks:
+            logging.warning('No tracks available for processing')
+            return []
+
         self.max_link_gap = video_properties.fps * MAX_OVERLAP_LENGTH_SECONDS
 
         return self._optimize_fragments(tracks)
 
     def _optimize_fragments(self, fragments: List[Track]) -> List[Track]:
         """Optimize fragment connections using ILP solver."""
-        if not fragments:
-            return []
-
         # Sort fragments by start frame
-        fragments = sorted(fragments, key=lambda t: t.sorted_detections[0].frame_idx)
+        fragments = sorted(fragments, key=lambda t: t.start_frame())
 
         # Build fragment connection graph
         graph = self._build_fragment_graph(fragments)
@@ -142,14 +143,12 @@ class DiscreteILPTracker:
         N = len(fragments)
 
         for i, start_fragment in enumerate(fragments):
-            start_frames = self._get_fragment_frames(start_fragment)
-
             for j in range(i, N):
                 end_fragment = fragments[j]
-                end_frames = self._get_fragment_frames(end_fragment)
 
                 # Skip if fragments have overlapping frames
-                if start_frames.intersection(end_frames):
+                gap = end_fragment.start_frame() - start_fragment.end_frame()
+                if gap < 0 or gap > self.max_link_gap:
                     continue
 
                 # Calculate connection cost
@@ -158,10 +157,6 @@ class DiscreteILPTracker:
                     graph.add_connection(i, j, cost)
 
         return graph
-
-    def _get_fragment_frames(self, fragment: Track) -> Set[int]:
-        """Get the set of frame indices for a fragment."""
-        return {detection.frame_idx for detection in fragment.sorted_detections}
 
     def _solve_optimization_problem(self, graph: FragmentGraph) -> Dict[int, Optional[int]]:
         """Solve the fragment linking optimization problem using ILP."""
@@ -344,18 +339,10 @@ class DiscreteILPTracker:
     def _calculate_link_cost(self, start: Track, end: Track) -> Optional[float]:
         """Calculate the cost of linking two tracks. Returns None if they can't be linked."""
         assert end.start_frame() > start.start_frame(), 'End track must start after start track'
+        assert end.start_frame() - start.end_frame() <= self.max_link_gap, 'Gap between tracks is too large'
+        assert end.start_frame() - start.end_frame() >= 0, 'Gap between tracks is negative'
 
-        if start.end_frame() < end.start_frame():
-            return self._calculate_sequential_link_cost(start, end)
-        else:
-            return self._calculate_overlapping_link_cost(start, end)
-
-    def _calculate_sequential_link_cost(self, start: Track, end: Track) -> Optional[float]:
-        """Calculate cost for linking sequential (non-overlapping) tracks."""
         gap = end.start_frame() - start.end_frame()
-
-        if gap > self.max_link_gap:
-            return None
 
         # Geometric similarity (IoU)
         start_det = start.end()
@@ -370,37 +357,6 @@ class DiscreteILPTracker:
 
         # Calculate total cost
         cost = self.w_link_iou * (1.0 - iou) + self.w_link_app * (1.0 - cos) + self.w_link_gap * gap
-
-        return cost
-
-    def _calculate_overlapping_link_cost(self, start: Track, end: Track) -> Optional[float]:
-        """Calculate cost for linking tracks that would overlap temporally."""
-        start_frames = self._get_fragment_frames(start)
-        end_frames = self._get_fragment_frames(end)
-
-        assert not start_frames.intersection(end_frames), 'Start and end tracks must not overlap'
-
-        # Calculate gap and IoU
-        min_frame = min(min(start_frames), min(end_frames))
-        max_frame = max(max(start_frames), max(end_frames))
-        total_frames = len(start_frames.union(end_frames))
-        total_frame_duration = max_frame - min_frame
-        gap = total_frame_duration - total_frames
-
-        if gap > self.max_link_gap:
-            return None
-
-        # Find maximum IoU between any pair of detections
-        max_iou = self._find_max_iou_between_tracks(start, end)
-
-        if max_iou < self.min_link_iou:
-            return None
-
-        # Appearance similarity using average embeddings
-        cos = mean_embedding_cosine_similarity(start, end)
-
-        # Calculate total cost
-        cost = self.w_link_iou * (1.0 - max_iou) + self.w_link_app * (1.0 - cos) + self.w_link_gap * gap
 
         return cost
 
@@ -428,24 +384,3 @@ class DiscreteILPTracker:
                 n_pairs += 1
 
         return cos_sum / n_pairs if n_pairs > 0 else 0.0
-
-    def _find_max_iou_between_tracks(self, start: Track, end: Track) -> float:
-        """Find the maximum IoU between any pair of detections from two tracks."""
-        max_iou = 0.0
-
-        # Compare all pairs of detections
-        for start_det in start.sorted_detections:
-            for end_det in end.sorted_detections:
-                iou = end_det.bbox.iou(start_det.bbox)
-                max_iou = max(max_iou, iou)
-
-        # Also compare ends with all detections
-        for start_det in start.sorted_detections:
-            iou = end.end().bbox.iou(start_det.bbox)
-            max_iou = max(max_iou, iou)
-
-        for end_det in end.sorted_detections:
-            iou = start.start().bbox.iou(end_det.bbox)
-            max_iou = max(max_iou, iou)
-
-        return max_iou
