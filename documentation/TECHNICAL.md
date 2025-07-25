@@ -150,56 +150,10 @@ class GreedyPreprocessor:
 - `GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY`: 0.7
 - `GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE`: 5 frames
 
-### Stage 2: Greedy Tracker
-
-**Purpose**: Iterative track merging based on average embedding similarity
-**Algorithm**: Greedy pairwise merging with highest-similarity-first strategy
-
-```python
-def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
-    while True:
-        # Pre-compute average embeddings for all tracks
-        avg_emb = [mean_embedding(t) for t in working]
-        
-        best_i, best_j, best_sim = None, None, -1.0
-        for i in range(n):
-            for j in range(i + 1, n):
-                if not _can_merge(working[i], working[j], max_gap=max_gap):
-                    continue
-                sim = cosine_similarity(avg_emb[i], avg_emb[j])
-                if sim > best_sim:
-                    best_i, best_j, best_sim = i, j, sim
-        
-        if best_sim < GREEDY_MIN_COSINE_SIMILARITY:
-            break
-            
-        # Merge best pair and continue
-        new_track = _merge_tracks(working[best_i], working[best_j])
-        # ... update working list
-```
-
-**Innovation: Average Embedding Similarity**
-Instead of pairwise detection comparisons, tracks are represented by their average embedding:
-
-```python
-def mean_embedding(t: Track) -> np.ndarray:
-    return np.mean([d.embedding for d in t.sorted_detections], axis=0)
-
-def mean_embedding_cosine_similarity(a: Track, b: Track) -> float:
-    return cosine_similarity(mean_embedding(a), mean_embedding(b))
-```
-
-**Merging Constraints**:
-
-- **Temporal non-overlap**: Track frame ranges must not intersect
-- **Minimum IoU**: Spatial consistency at connection points
-- **Maximum gap**: Limited temporal separation (10 seconds default)
-- **Minimum length**: Very short tracks handled in later stages
-
 ### Stage 3: Discrete Optimization Tracker
 
 **Purpose**: Global optimization for complex multi-track scenarios
-**Algorithm**: Z3-based constraint satisfaction with cost minimization
+**Algorithm**: ILP-based constraint satisfaction with cost minimization
 
 #### Problem Formulation
 
@@ -273,29 +227,11 @@ def _calculate_windowed_cosine_similarity(self, start: Track, end: Track,
     return cos_sum / n_pairs if n_pairs > 0 else 0.0
 ```
 
-#### Z3 Solver Implementation
+**Key Innovation: Adaptive Parameters**
 
-```python
-def _solve_optimization_problem(self, graph: FragmentGraph) -> Dict[int, Optional[int]]:
-    opt = z3.Optimize()
-    opt.set('timeout', OPTIMIZER_TIMEOUT_SECONDS * 1000)
-    
-    # Create decision variables
-    link_vars = {(i,j): z3.Bool(f'link_{i}_{j}') for (i,j) in graph.get_all_connections()}
-    start_vars = [z3.Bool(f'start_{i}') for i in range(len(graph.fragments))]
-    
-    # Add constraints (outgoing, incoming, start)
-    # Set objective function
-    # Solve and extract solution
-    
-    result = opt.check()
-    if result != z3.sat:
-        raise UnsatisfiableException("Fragment linking UNSAT")
-        
-    return self._extract_solution(opt.model(), link_vars)
-```
+The system uses adaptive parameters based on track length to balance importance of iou and center distance for short tracks with appearance similarity which is more important for long tracks.
 
-**Advantages of Z3 Approach**:
+**Advantages of ILP Approach**:
 
 - **Global optimality**: Considers all fragments simultaneously
 - **Constraint satisfaction**: Hard constraints ensure valid solutions
@@ -531,11 +467,25 @@ GREEDY_MIN_COSINE_SIMILARITY = 0.8
 GREEDY_SHORT_TRACK_MIN_FRAMES = 10
 
 # Discrete optimization
-OPTIMIZER_MIN_LINK_IOU = 0.0
-OPTIMIZER_W_LINK_APP = 1.0        # Appearance weight
-OPTIMIZER_W_LINK_IOU = 0.2        # Spatial weight  
-OPTIMIZER_W_START = 10.0          # New track penalty
-OPTIMIZER_TIMEOUT_SECONDS = 60    # Z3 solver timeout
+OPTIMIZER_W_START = 10.0
+
+OPTIMIZER_SHORT_MIN_LINK_IOU = 0.0
+OPTIMIZER_SHORT_MIN_LINK_COS = -1.0
+OPTIMIZER_SHORT_W_LINK_IOU = 0.2
+OPTIMIZER_SHORT_W_LINK_APP = 1.0
+OPTIMIZER_SHORT_W_LINK_GAP = 0.001
+# the amount of frames to look forward and backwards for appearance.
+# For now these are not weighted by distance so keep small
+OPTIMIZER_SHORT_LINK_COST_APPEARANCE_WINDOW_RADIUS = 10
+
+
+OPTIMIZER_LONG_MIN_LINK_IOU = 0.0
+OPTIMIZER_LONG_MIN_LINK_COS = -1.0
+OPTIMIZER_LONG_W_LINK_IOU = 0.1
+OPTIMIZER_LONG_W_LINK_APP = 1.0
+OPTIMIZER_LONG_W_LINK_GAP = 0.001
+
+OPTIMIZER_TIMEOUT_SECONDS = 60
 ```
 
 ### Post-Processing Settings

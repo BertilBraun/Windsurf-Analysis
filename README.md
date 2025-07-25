@@ -70,8 +70,7 @@ Windsurf Analysis uses a sophisticated multi-stage pipeline:
 ### 2. **Multi-Stage Tracking System**
 
 - **Greedy Preprocessor**: Fast initial track linking with appearance and spatial cues
-- **Greedy Tracker**: Iterative track merging using average embedding similarity
-- **Discrete Optimization**: Z3-based global optimization for complex scenarios
+- **Discrete Optimization**: ILP-based global optimization for complex scenarios
 - **Post-Processing**: Filtering, smoothing, and trajectory refinement
 
 ### 3. **Video Processing**

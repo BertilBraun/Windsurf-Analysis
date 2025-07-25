@@ -122,6 +122,7 @@ class DiscreteILPTracker:
     ):
         self.video_fps = -1  # set in track()
 
+        # Short track parameters
         self.short_min_link_iou = short_min_link_iou
         self.short_min_link_cos = short_min_link_cos
         self.short_w_link_iou = short_w_link_iou
