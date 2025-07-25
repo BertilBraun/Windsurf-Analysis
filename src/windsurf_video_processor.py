@@ -100,7 +100,7 @@ def _process_detections_into_tracks(detections: list[Detection], video_propertie
 
     trackers: Sequence[Tracker] = [
         GreedyPreprocessor(),
-        GreedyTracker(),
+        # GreedyTracker(),
         DiscreteILPTracker(),
         TrackFilteringSmoothingRelabeling(),
     ]

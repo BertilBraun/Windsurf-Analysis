@@ -33,10 +33,11 @@ IMPORTANT ASSUMPTIONS
 """
 
 from __future__ import annotations
+from dataclasses import dataclass
 
 import pulp
 import logging
-from typing import Dict, List, Tuple, Optional, Set
+from typing import Dict, List, Tuple, Optional
 
 from similarity_helpers import cosine_similarity, mean_embedding_cosine_similarity
 from video_io import VideoInfo
@@ -44,13 +45,18 @@ from common_types import Detection, Track
 
 from settings import (
     MAX_OVERLAP_LENGTH_SECONDS,
-    OPTIMIZER_MIN_LINK_IOU,
-    OPTIMIZER_MIN_LINK_COS,
-    OPTIMIZER_W_LINK_IOU,
-    OPTIMIZER_W_LINK_APP,
-    OPTIMIZER_W_LINK_GAP,
     OPTIMIZER_W_START,
-    OPTIMIZER_LINK_COST_APPEARANCE_WINDOW_RADIUS,
+    OPTIMIZER_SHORT_MIN_LINK_IOU,
+    OPTIMIZER_SHORT_MIN_LINK_COS,
+    OPTIMIZER_SHORT_W_LINK_IOU,
+    OPTIMIZER_SHORT_W_LINK_APP,
+    OPTIMIZER_SHORT_W_LINK_GAP,
+    OPTIMIZER_SHORT_LINK_COST_APPEARANCE_WINDOW_RADIUS,
+    OPTIMIZER_LONG_MIN_LINK_IOU,
+    OPTIMIZER_LONG_MIN_LINK_COS,
+    OPTIMIZER_LONG_W_LINK_IOU,
+    OPTIMIZER_LONG_W_LINK_APP,
+    OPTIMIZER_LONG_W_LINK_GAP,
     OPTIMIZER_TIMEOUT_SECONDS,
 )
 
@@ -94,22 +100,49 @@ class DiscreteILPTracker:
 
     def __init__(
         self,
-        min_link_iou: float = OPTIMIZER_MIN_LINK_IOU,
-        min_link_cos: float = OPTIMIZER_MIN_LINK_COS,
-        w_link_iou: float = OPTIMIZER_W_LINK_IOU,
-        w_link_app: float = OPTIMIZER_W_LINK_APP,
-        w_link_gap: float = OPTIMIZER_W_LINK_GAP,
+        # Track length thresholds
+        short_track_threshold_seconds: float = 0.3,
+        long_track_threshold_seconds: float = 1.0,
+        # Short track parameters (< short_track_threshold_seconds)
+        short_min_link_iou: float = OPTIMIZER_SHORT_MIN_LINK_IOU,
+        short_min_link_cos: float = OPTIMIZER_SHORT_MIN_LINK_COS,
+        short_w_link_iou: float = OPTIMIZER_SHORT_W_LINK_IOU,
+        short_w_link_app: float = OPTIMIZER_SHORT_W_LINK_APP,
+        short_w_link_gap: float = OPTIMIZER_SHORT_W_LINK_GAP,
+        short_link_cost_appearance_window_radius: int = OPTIMIZER_SHORT_LINK_COST_APPEARANCE_WINDOW_RADIUS,
+        # Long track parameters (> long_track_threshold_seconds)
+        long_min_link_iou: float = OPTIMIZER_LONG_MIN_LINK_IOU,
+        long_min_link_cos: float = OPTIMIZER_LONG_MIN_LINK_COS,
+        long_w_link_iou: float = OPTIMIZER_LONG_W_LINK_IOU,
+        long_w_link_app: float = OPTIMIZER_LONG_W_LINK_APP,
+        long_w_link_gap: float = OPTIMIZER_LONG_W_LINK_GAP,
+        long_link_cost_appearance_window_radius: int = 999999,  # Essentially infinite for mean appearance
+        # Shared parameters
         w_start: float = OPTIMIZER_W_START,
-        link_cost_appearance_window_radius: int = OPTIMIZER_LINK_COST_APPEARANCE_WINDOW_RADIUS,
     ):
-        self.max_link_gap = -1  # set in track()
-        self.min_link_iou = min_link_iou
-        self.min_link_cos = min_link_cos
-        self.w_link_iou = w_link_iou
-        self.w_link_app = w_link_app
-        self.w_link_gap = w_link_gap
+        self.video_fps = -1  # set in track()
+
+        self.short_min_link_iou = short_min_link_iou
+        self.short_min_link_cos = short_min_link_cos
+        self.short_w_link_iou = short_w_link_iou
+        self.short_w_link_app = short_w_link_app
+        self.short_w_link_gap = short_w_link_gap
+        self.short_link_cost_appearance_window_radius = short_link_cost_appearance_window_radius
+
+        # Long track parameters
+        self.long_min_link_iou = long_min_link_iou
+        self.long_min_link_cos = long_min_link_cos
+        self.long_w_link_iou = long_w_link_iou
+        self.long_w_link_app = long_w_link_app
+        self.long_w_link_gap = long_w_link_gap
+        self.long_link_cost_appearance_window_radius = long_link_cost_appearance_window_radius
+
+        # Shared parameters
         self.w_start = w_start
-        self.link_cost_appearance_window_radius = link_cost_appearance_window_radius
+
+        # Track length thresholds
+        self.short_track_threshold_seconds = short_track_threshold_seconds
+        self.long_track_threshold_seconds = long_track_threshold_seconds
 
     def track(self, tracks: List[Track], video_properties: VideoInfo) -> List[Track]:
         """Main entry point for tracking detections."""
@@ -119,7 +152,7 @@ class DiscreteILPTracker:
             logging.warning('No tracks available for processing')
             return []
 
-        self.max_link_gap = video_properties.fps * MAX_OVERLAP_LENGTH_SECONDS
+        self.video_fps = video_properties.fps
 
         return self._optimize_fragments(tracks)
 
@@ -148,7 +181,7 @@ class DiscreteILPTracker:
 
                 # Skip if fragments have overlapping frames
                 gap = end_fragment.start_frame() - start_fragment.end_frame()
-                if gap < 0 or gap > self.max_link_gap:
+                if gap <= 0 or gap > self.video_fps * MAX_OVERLAP_LENGTH_SECONDS:
                     continue
 
                 # Calculate connection cost
@@ -157,6 +190,50 @@ class DiscreteILPTracker:
                     graph.add_connection(i, j, cost)
 
         return graph
+
+    @dataclass
+    class AdaptiveParameters:
+        min_link_iou: float
+        min_link_cos: float
+        w_link_iou: float
+        w_link_app: float
+        w_link_gap: float
+        window_radius: int
+
+    def _get_adaptive_parameters(self, track_length_frames: int) -> AdaptiveParameters:
+        """Get adaptive parameters based on track length with linear interpolation."""
+        short_track_threshold_frames = self.short_track_threshold_seconds * self.video_fps
+        long_track_threshold_frames = self.long_track_threshold_seconds * self.video_fps
+
+        # Determine interpolation factor
+        if track_length_frames <= short_track_threshold_frames:
+            # Short track - use short parameters
+            alpha = 0.0
+        elif track_length_frames >= long_track_threshold_frames:
+            # Long track - use long parameters
+            alpha = 1.0
+        else:
+            # Interpolate between short and long parameters
+            alpha = (track_length_frames - short_track_threshold_frames) / (
+                long_track_threshold_frames - short_track_threshold_frames
+            )
+
+        # Linear interpolation of parameters
+        min_link_iou = self.short_min_link_iou + alpha * (self.long_min_link_iou - self.short_min_link_iou)
+        min_link_cos = self.short_min_link_cos + alpha * (self.long_min_link_cos - self.short_min_link_cos)
+        w_link_iou = self.short_w_link_iou + alpha * (self.long_w_link_iou - self.short_w_link_iou)
+        w_link_app = self.short_w_link_app + alpha * (self.long_w_link_app - self.short_w_link_app)
+        w_link_gap = self.short_w_link_gap + alpha * (self.long_w_link_gap - self.short_w_link_gap)
+
+        # For window radius, interpolate but ensure it's an integer
+        window_radius_float = self.short_link_cost_appearance_window_radius + alpha * (
+            self.long_link_cost_appearance_window_radius - self.short_link_cost_appearance_window_radius
+        )
+        window_radius = int(window_radius_float)
+
+        return DiscreteILPTracker.AdaptiveParameters(
+            min_link_iou, min_link_cos, w_link_iou, w_link_app, w_link_gap, window_radius
+        )
 
     def _solve_optimization_problem(self, graph: FragmentGraph) -> Dict[int, Optional[int]]:
         """Solve the fragment linking optimization problem using ILP."""
@@ -338,44 +415,53 @@ class DiscreteILPTracker:
 
     def _calculate_link_cost(self, start: Track, end: Track) -> Optional[float]:
         """Calculate the cost of linking two tracks. Returns None if they can't be linked."""
-        assert end.start_frame() > start.start_frame(), 'End track must start after start track'
-        assert end.start_frame() - start.end_frame() <= self.max_link_gap, 'Gap between tracks is too large'
-        assert end.start_frame() - start.end_frame() >= 0, 'Gap between tracks is negative'
-
         gap = end.start_frame() - start.end_frame()
 
-        # Geometric similarity (IoU)
-        start_det = start.end()
-        end_det = end.start()
-        iou = end_det.bbox.iou(start_det.bbox)
+        assert gap >= 0, 'Gap must be non-negative'
+        assert gap <= self.video_fps * MAX_OVERLAP_LENGTH_SECONDS, 'Gap must be less than max overlap length'
 
-        if iou < self.min_link_iou:
+        # Get adaptive parameters based on both tracks
+        # Use the average length of both tracks for parameter selection
+        min_track_length = min(len(start.sorted_detections), len(end.sorted_detections))
+
+        adaptive_params = self._get_adaptive_parameters(min_track_length)
+
+        # Geometric similarity (IoU)
+        iou = end.start().bbox.iou(start.end().bbox)
+
+        if iou < adaptive_params.min_link_iou:
             return None
 
-        # Appearance similarity (cosine similarity over window)
-        cos = self._calculate_windowed_cosine_similarity(start, end, start_det, end_det)
+        # Appearance similarity
+        if adaptive_params.window_radius >= min_track_length:  # Use mean appearance for long tracks
+            cos = mean_embedding_cosine_similarity(start, end)
+        else:
+            cos = self._calculate_windowed_cosine_similarity(start, end, adaptive_params.window_radius)
+
+        if cos < adaptive_params.min_link_cos:
+            return None
 
         # Calculate total cost
-        cost = self.w_link_iou * (1.0 - iou) + self.w_link_app * (1.0 - cos) + self.w_link_gap * gap
+        cost = (
+            adaptive_params.w_link_iou * (1.0 - iou)
+            + adaptive_params.w_link_app * (1.0 - cos)
+            + adaptive_params.w_link_gap * gap
+        )
 
         return cost
 
-    def _calculate_windowed_cosine_similarity(
-        self, start: Track, end: Track, start_det: Detection, end_det: Detection
-    ) -> float:
+    def _calculate_windowed_cosine_similarity(self, start: Track, end: Track, window_radius: int) -> float:
         """Calculate average cosine similarity over a temporal window."""
         n_pairs = 0
         cos_sum = 0.0
 
-        window_radius = self.link_cost_appearance_window_radius
-
         for i in range(-window_radius, window_radius + 1):
-            d1 = start.detections_by_frame.get(start_det.frame_idx + i)
+            d1 = start.detections_by_frame.get(start.end_frame() + i)
             if d1 is None:
                 continue
 
             for j in range(-window_radius, window_radius + 1):
-                d2 = end.detections_by_frame.get(end_det.frame_idx + j)
+                d2 = end.detections_by_frame.get(end.start_frame() + j)
                 if d2 is None:
                     continue
 
