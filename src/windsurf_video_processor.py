@@ -15,7 +15,7 @@ from visualization.stabilize import stabilize
 
 from tracking.tracking import Tracker
 from tracking.track_processing import TrackFilteringSmoothingRelabeling
-from tracking.discrete_opt_tracker import DiscreteOptimizationTracker
+from tracking.discrete_opt_tracker import DiscreteILPTracker
 from tracking.preprocessing.greedy_preprocessor import GreedyPreprocessor
 from tracking.greedy_tracker import GreedyTracker
 
@@ -101,7 +101,7 @@ def _process_detections_into_tracks(detections: list[Detection], video_propertie
     trackers: Sequence[Tracker] = [
         GreedyPreprocessor(),
         GreedyTracker(),
-        DiscreteOptimizationTracker(),
+        DiscreteILPTracker(),
         TrackFilteringSmoothingRelabeling(),
     ]
 

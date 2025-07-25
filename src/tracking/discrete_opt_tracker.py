@@ -1,7 +1,7 @@
-"""Discrete‑optimization based multi‑object tracker using Z3.
+"""Discrete-optimization based multi-object tracker using ILP (Integer Linear Programming).
 
-This implementation now separates **local geometric continuity** from a **global
-appearance cohesion** term:
+This implementation replaces Z3 with PuLP for solving the fragment linking optimization
+problem. The core logic remains the same:
 
 Local cost (adjacent frames only):
     For detections *i* (frame f) and *j* (frame f+1) on the **same track** we
@@ -15,30 +15,26 @@ Global embedding cohesion (sliding temporal window):
     distance cost `(1 - cos(i,j)) / N_i` where `N_i` is the number of neighbor
     comparisons originating from *i*. This normalises the expected contribution
     per detection so the overall magnitude is roughly independent of window
-    size or clip length. (We only create directed edges i→j for j>i to avoid
-    double counting.)
-
-    *K_prev* = *K_next* = 5 by default (configurable). Set them larger for more
-    robust global cohesion; costs remain O(N * K) rather than O(N^2).
+    size or clip length.
 
 Other components preserved:
-    • A decision variable per detection for its track id (domain 0‥n_tracks-1).
-    • Frame‑level exclusivity (AllDifferent per frame).
-    • Greedy pre‑processing creates *must‑link* groups (short obvious
+    • Binary decision variables for fragment links and track starts
+    • Constraints ensuring each fragment has at most one incoming/outgoing link
+    • Greedy pre-processing creates *must-link* groups (short obvious
       fragments) whose detections are forced to share a track id.
 
 IMPORTANT ASSUMPTIONS
 ———————————————————
-* Max per‑frame detection count ≤ n_tracks else UNSAT.
+* Max per-frame detection count ≤ n_tracks else UNSAT.
 * Every detection is assigned to some track (no unassigned sentinel).
-* Embeddings are L2‑normalised.
+* Embeddings are L2-normalised.
 * Global embedding cost is quadratic in #detections (pairwise). If this becomes
   slow, restrict to a temporal window or subsample pairs.
 """
 
 from __future__ import annotations
 
-import z3
+import pulp
 import logging
 from typing import Dict, List, Tuple, Optional, Set
 
@@ -60,11 +56,11 @@ from settings import (
 
 
 class TimeoutException(Exception):
-    """Raised when the Z3 solver times out."""
+    """Raised when the ILP solver times out."""
 
 
 class UnsatisfiableException(Exception):
-    """Raised when the Z3 solver finds the problem unsatisfiable."""
+    """Raised when the ILP solver finds the problem unsatisfiable."""
 
 
 class FragmentGraph:
@@ -93,8 +89,8 @@ class FragmentGraph:
         return self.pair_costs
 
 
-class DiscreteOptimizationTracker:
-    """Track objects by solving an assignment problem with *Z3*."""
+class DiscreteILPTracker:
+    """Track objects by solving an assignment problem with ILP."""
 
     def __init__(
         self,
@@ -117,14 +113,14 @@ class DiscreteOptimizationTracker:
 
     def track(self, tracks: List[Track], video_properties: VideoInfo) -> List[Track]:
         """Main entry point for tracking detections."""
-        logging.info(f'{"=" * 80} Running discrete optimization tracker with {len(tracks)} tracks {"=" * 80}')
+        logging.info(f'{"=" * 80} Running ILP discrete optimization tracker with {len(tracks)} tracks {"=" * 80}')
 
         self.max_link_gap = video_properties.fps * MAX_OVERLAP_LENGTH_SECONDS
 
         return self._optimize_fragments(tracks)
 
     def _optimize_fragments(self, fragments: List[Track]) -> List[Track]:
-        """Optimize fragment connections using Z3 solver."""
+        """Optimize fragment connections using ILP solver."""
         if not fragments:
             return []
 
@@ -168,123 +164,150 @@ class DiscreteOptimizationTracker:
         return {detection.frame_idx for detection in fragment.sorted_detections}
 
     def _solve_optimization_problem(self, graph: FragmentGraph) -> Dict[int, Optional[int]]:
-        """Solve the fragment linking optimization problem using Z3."""
-        opt = self._create_z3_optimizer()
+        """Solve the fragment linking optimization problem using ILP."""
+        # Create the ILP problem
+        prob = pulp.LpProblem('Fragment_Linking', pulp.LpMinimize)
 
         # Create decision variables
         link_vars = self._create_link_variables(graph)
         start_vars = self._create_start_variables(len(graph.fragments))
 
         # Add constraints
-        self._add_outgoing_constraints(opt, graph, link_vars)
-        self._add_incoming_constraints(opt, graph, link_vars)
-        self._add_start_constraints(opt, graph, link_vars, start_vars)
+        self._add_outgoing_constraints(prob, graph, link_vars)
+        self._add_incoming_constraints(prob, graph, link_vars)
+        self._add_start_constraints(prob, graph, link_vars, start_vars)
 
         # Set objective function
-        self._set_objective_function(opt, graph, link_vars, start_vars)
+        self._set_objective_function(prob, graph, link_vars, start_vars)
 
         # Solve and return solution
-        return self._solve_and_extract_solution(opt, graph, link_vars)
+        return self._solve_and_extract_solution(prob, graph, link_vars)
 
-    def _create_z3_optimizer(self) -> z3.Optimize:
-        """Create and configure Z3 optimizer."""
-        opt = z3.Optimize()
-        opt.set('timeout', OPTIMIZER_TIMEOUT_SECONDS * 1000)
-        return opt
+    def _create_link_variables(self, graph: FragmentGraph) -> Dict[Tuple[int, int], pulp.LpVariable]:
+        """Create binary variables for fragment links."""
+        link_vars = {}
+        for i, j in graph.get_all_connections():
+            var_name = f'link_{i}_{j}'
+            link_vars[(i, j)] = pulp.LpVariable(var_name, cat='Binary')
+        return link_vars
 
-    def _create_link_variables(self, graph: FragmentGraph) -> Dict[Tuple[int, int], z3.BoolRef]:
-        """Create boolean variables for fragment links."""
-        return {(i, j): z3.Bool(f'link_{i}_{j}') for (i, j) in graph.get_all_connections()}
-
-    def _create_start_variables(self, num_fragments: int) -> List[z3.BoolRef]:
-        """Create boolean variables for fragment starts."""
-        return [z3.Bool(f'start_{i}') for i in range(num_fragments)]
+    def _create_start_variables(self, num_fragments: int) -> List[pulp.LpVariable]:
+        """Create binary variables for fragment starts."""
+        start_vars = []
+        for i in range(num_fragments):
+            var_name = f'start_{i}'
+            start_vars.append(pulp.LpVariable(var_name, cat='Binary'))
+        return start_vars
 
     def _add_outgoing_constraints(
-        self, opt: z3.Optimize, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], z3.BoolRef]
+        self, prob: pulp.LpProblem, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], pulp.LpVariable]
     ) -> None:
         """Add constraints ensuring each fragment has at most one outgoing link."""
         for i in range(len(graph.fragments)):
             outgoing_connections = graph.get_outgoing_connections(i)
             if outgoing_connections:
-                out_links = [link_vars[(i, j)] for j in outgoing_connections]
-                opt.add(z3.PbLe([(v, 1) for v in out_links], 1))
+                # Sum of outgoing links <= 1
+                outgoing_vars = [link_vars[(i, j)] for j in outgoing_connections]
+                constraint_name = f'outgoing_{i}'
+                prob += pulp.lpSum(outgoing_vars) <= 1, constraint_name
 
     def _add_incoming_constraints(
-        self, opt: z3.Optimize, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], z3.BoolRef]
+        self, prob: pulp.LpProblem, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], pulp.LpVariable]
     ) -> None:
         """Add constraints ensuring each fragment has at most one incoming link."""
         # Build incoming connections mapping
-        incoming: List[List[z3.BoolRef]] = [[] for _ in range(len(graph.fragments))]
+        incoming: List[List[pulp.LpVariable]] = [[] for _ in range(len(graph.fragments))]
         for (i, j), var in link_vars.items():
             incoming[j].append(var)
 
         # Add constraints
         for j in range(len(graph.fragments)):
             if incoming[j]:
-                opt.add(z3.PbLe([(v, 1) for v in incoming[j]], 1))
+                constraint_name = f'incoming_{j}'
+                prob += pulp.lpSum(incoming[j]) <= 1, constraint_name
 
     def _add_start_constraints(
         self,
-        opt: z3.Optimize,
+        prob: pulp.LpProblem,
         graph: FragmentGraph,
-        link_vars: Dict[Tuple[int, int], z3.BoolRef],
-        start_vars: List[z3.BoolRef],
+        link_vars: Dict[Tuple[int, int], pulp.LpVariable],
+        start_vars: List[pulp.LpVariable],
     ) -> None:
         """Add constraints defining when a fragment is a start of a track."""
         # Build incoming connections mapping
-        incoming: List[List[z3.BoolRef]] = [[] for _ in range(len(graph.fragments))]
+        incoming: List[List[pulp.LpVariable]] = [[] for _ in range(len(graph.fragments))]
         for (i, j), var in link_vars.items():
             incoming[j].append(var)
 
         # Add start constraints
         for i in range(len(graph.fragments)):
             if incoming[i]:
-                opt.add(start_vars[i] == z3.And([z3.Not(v) for v in incoming[i]]))
+                # start_i = 1 - sum(incoming_links_to_i)
+                # This means: start_i + sum(incoming_links_to_i) = 1
+                constraint_name = f'start_{i}'
+                prob += start_vars[i] + pulp.lpSum(incoming[i]) == 1, constraint_name
             else:
-                opt.add(start_vars[i])
+                # No incoming links, so must be a start
+                constraint_name = f'start_forced_{i}'
+                prob += start_vars[i] == 1, constraint_name
 
     def _set_objective_function(
         self,
-        opt: z3.Optimize,
+        prob: pulp.LpProblem,
         graph: FragmentGraph,
-        link_vars: Dict[Tuple[int, int], z3.BoolRef],
-        start_vars: List[z3.BoolRef],
+        link_vars: Dict[Tuple[int, int], pulp.LpVariable],
+        start_vars: List[pulp.LpVariable],
     ) -> None:
         """Set the objective function to minimize total cost."""
+        objective_terms = []
+
         # Link costs
-        link_cost_terms = [
-            z3.If(var, z3.RealVal(graph.get_connection_cost(i, j)), z3.RealVal(0.0))
-            for (i, j), var in link_vars.items()
-        ]
+        for (i, j), var in link_vars.items():
+            cost = graph.get_connection_cost(i, j)
+            objective_terms.append(cost * var)
 
         # Start costs
-        start_cost_terms = [z3.If(var, z3.RealVal(self.w_start), z3.RealVal(0.0)) for var in start_vars]
+        for var in start_vars:
+            objective_terms.append(self.w_start * var)
 
-        # Total cost
-        all_terms = link_cost_terms + start_cost_terms
-        total_cost = z3.Sum(all_terms) if all_terms else z3.RealVal(0.0)
-        opt.minimize(total_cost)
+        # Set objective
+        if objective_terms:
+            prob += pulp.lpSum(objective_terms)
+        else:
+            # Empty objective if no terms
+            prob += 0
 
     def _solve_and_extract_solution(
-        self, opt: z3.Optimize, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], z3.BoolRef]
+        self, prob: pulp.LpProblem, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], pulp.LpVariable]
     ) -> Dict[int, Optional[int]]:
         """Solve the optimization problem and extract the solution."""
-        result = opt.check()
+        # Get solver
+        solver = pulp.PULP_CBC_CMD(timeLimit=OPTIMIZER_TIMEOUT_SECONDS, msg=False)  # don't print solver output
 
-        if result != z3.sat:
-            if result == z3.unknown:
-                raise TimeoutException('Fragment linking solver timeout')
-            if result == z3.unsat:
-                raise UnsatisfiableException('Fragment linking UNSAT')
-            raise RuntimeError(f'Unexpected solver status {result}')
+        # Solve the problem
+        prob.solve(solver)
+
+        # Check solution status
+        status = pulp.LpStatus[prob.status]
+
+        if status == 'Optimal':
+            logging.info(f'ILP solver found optimal solution with cost: {pulp.value(prob.objective)}')
+        elif status == 'Feasible':
+            logging.warning(f'ILP solver found feasible solution with cost: {pulp.value(prob.objective)}')
+        elif status == 'Infeasible':
+            raise UnsatisfiableException('Fragment linking problem is infeasible')
+        elif status == 'Unbounded':
+            raise RuntimeError('Fragment linking problem is unbounded')
+        elif status == 'Undefined':
+            raise TimeoutException('Fragment linking solver timeout or undefined status')
+        else:
+            raise RuntimeError(f'Unexpected solver status: {status}')
 
         # Extract solution
-        model = opt.model()
         successor_of: Dict[int, Optional[int]] = {i: None for i in range(len(graph.fragments))}
 
         for (i, j), var in link_vars.items():
-            if model.evaluate(var) == z3.BoolVal(True):  # type: ignore
+            if var.varValue is not None and var.varValue > 0.5:  # Binary variable is 1
                 successor_of[i] = j
 
         return successor_of
