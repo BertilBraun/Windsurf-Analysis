@@ -137,9 +137,7 @@ def _get_valid_tracks(tracks: list[Track], total_frames: int) -> list[Track]:
             continue
 
         # Calculate track duration in frames
-        first_frame = track.sorted_detections[0].frame_idx
-        last_frame = track.sorted_detections[-1].frame_idx
-        duration_frames = last_frame - first_frame
+        duration_frames = len(track.sorted_detections)
 
         if duration_frames >= min_frames:
             # Interpolate missing detections
