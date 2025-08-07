@@ -52,7 +52,6 @@ from tqdm import tqdm
 from pathlib import Path
 from typing import List, Optional, Tuple
 from collections import defaultdict
-from .stabilize import VidStabWithoutVideoCapture
 
 from settings import MAX_OVERLAP_LENGTH_SECONDS
 from video_io import VideoInfo
