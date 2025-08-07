@@ -60,3 +60,11 @@ OPTIMIZER_LONG_W_LINK_GAP = 0.001
 
 
 OPTIMIZER_TIMEOUT_SECONDS = 60
+
+# Video splicing settings
+OUTPUT_WIDTH = 1000  # width of the written video
+OUTPUT_HEIGHT = 1000  # height of the written video
+TARGET_BBOX_HEIGHT_RATIO = 0.60  # bbox should fill ~60 % of output height
+SMOOTHING_ALPHA = 0.8  # 0 = no smoothing, 0.8 ≈ keep 80 % of the previous scale
+MIN_SCALE = 0.2  # avoid over/under-zoom
+MAX_SCALE = 10.0  # avoid over/under-zoom

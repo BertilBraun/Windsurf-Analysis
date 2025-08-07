@@ -31,7 +31,7 @@ def main():
         '--dry-run', action='store_true', help='Run without rendering individual videos (for testing purposes)'
     )
     parser.add_argument('--debug-views', action='store_true', help='Output debug views of the video processing steps')
-    parser.add_argument('--parallel-workers', type=int, default=2, help='Number of parallel workers to use')
+    parser.add_argument('--parallel-workers', type=int, default=1, help='Number of parallel workers to use')
 
     args = parser.parse_args()
 

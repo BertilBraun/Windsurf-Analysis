@@ -1,205 +1,204 @@
 """
-Video splicing functions for extracting and generating individual tracked object videos.
+video_splicing.py – “always-centred” highlight-clip generator
+-------------------------------------------------------------
 
-This module provides pure functions for video processing operations without
-maintaining any state, making it easier to test and reason about.
+Each output clip is a fixed-size MP4 (OUTPUT_WIDTH × OUTPUT_HEIGHT) in which the
+tracked subject’s bounding-box height always occupies
+TARGET_BBOX_HEIGHT_RATIO of the frame height, with optional EMA smoothing on the
+zoom factor.
+
+Requires:
+    * OpenCV (`cv2`)
+    * NumPy
+    * tqdm
+    * your existing `common_types`, `settings`, and `video_io` modules
 """
 
+from __future__ import annotations
+
 import json
-import os
 import logging
+import os
+from pathlib import Path
+from typing import Dict, List, Tuple
+
+import cv2
 import numpy as np
 from tqdm import tqdm
-from pathlib import Path
 
-from common_types import Detection, Point
-from common_types import Track, TrackId
-from settings import VIDEO_SUFFIX_SECONDS
+from common_types import BoundingBox, Detection, Track, TrackId
+from settings import (
+    VIDEO_SUFFIX_SECONDS,
+    OUTPUT_WIDTH,
+    OUTPUT_HEIGHT,
+    TARGET_BBOX_HEIGHT_RATIO,
+    SMOOTHING_ALPHA,
+    MIN_SCALE,
+    MAX_SCALE,
+)
 from video_io import VideoReader, VideoWriter, get_video_properties
 
+# --------------------------------------------------------------------------- #
+# Helper – per-frame zoom + centre                                            #
+# --------------------------------------------------------------------------- #
 
-def _extract_centered_slice(frame: np.ndarray, center: Point, slice_size: tuple[int, int]) -> np.ndarray:
-    """Extract a fixed-size slice centered on a point with black padding if needed.
 
-    Args:
-        frame: Input frame
-        center: Center point for extraction
-        slice_size: (width, height) of the output slice
-
-    Returns:
-        Fixed-size slice with black padding if needed
+def _scale_and_center(
+    frame: np.ndarray,
+    bbox: BoundingBox,
+    output_size: Tuple[int, int],
+    target_ratio: float,
+    prev_scale: float | None = None,
+    smoothing_alpha: float = 0.0,
+) -> Tuple[np.ndarray, float]:
     """
-    frame_height, frame_width = frame.shape[:2]
-    slice_width, slice_height = slice_size
+    Resize the *whole* frame so that bbox.height == target_ratio * output_height,
+    then crop a fixed window centred on the (scaled) bbox centre.
 
-    # Calculate slice boundaries centered on bbox center
-    slice_x1 = int(center.x - slice_width // 2)
-    slice_y1 = int(center.y - slice_height // 2)
-    slice_x2 = slice_x1 + slice_width
-    slice_y2 = slice_y1 + slice_height
-
-    # Create output slice with black background
-    output_slice = np.zeros((slice_height, slice_width, 3), dtype=np.uint8)
-
-    # Calculate intersection with frame bounds
-    frame_x1 = max(0, slice_x1)
-    frame_y1 = max(0, slice_y1)
-    frame_x2 = min(frame_width, slice_x2)
-    frame_y2 = min(frame_height, slice_y2)
-
-    # Calculate corresponding positions in output slice
-    out_x1 = frame_x1 - slice_x1
-    out_y1 = frame_y1 - slice_y1
-    out_x2 = out_x1 + (frame_x2 - frame_x1)
-    out_y2 = out_y1 + (frame_y2 - frame_y1)
-
-    # Copy the valid region from frame to output slice
-    if frame_x2 > frame_x1 and frame_y2 > frame_y1:
-        output_slice[out_y1:out_y2, out_x1:out_x2] = frame[frame_y1:frame_y2, frame_x1:frame_x2]
-
-    return output_slice
-
-
-def _calculate_crop_size(track_data: list[Detection], min_width: int = 400, min_height: int = 600) -> tuple[int, int]:
-    """Calculate optimal crop size for a track based on average bbox dimensions.
-
-    Args:
-        track_data: List of track detections
-        min_width: Minimum width for the crop
-        min_height: Minimum height for the crop
-
-    Returns:
-        Tuple of (width, height) for the crop
+    Returns
+    -------
+    output_frame  Fixed-size BGR image (output_size) with black padding as needed.
+    used_scale    The scale factor that was applied (after smoothing / clipping).
     """
-    if not track_data:
-        return min_width, min_height
+    out_w, out_h = output_size
 
-    # Calculate average bbox size for this track
-    total_width = sum(detection.bbox.width for detection in track_data)
-    total_height = sum(detection.bbox.height for detection in track_data)
+    # instantaneous scale to make bbox fill `target_ratio` of output height
+    s_inst = (target_ratio * out_h) / bbox.height
+    s_inst = float(np.clip(s_inst, MIN_SCALE, MAX_SCALE))
 
-    avg_width = total_width / len(track_data)
-    avg_height = total_height / len(track_data)
-    avg_width = max(detection.bbox.width for detection in track_data)
-    avg_height = max(detection.bbox.height for detection in track_data)
+    # optional exponential smoothing
+    s = (
+        smoothing_alpha * prev_scale + (1 - smoothing_alpha) * s_inst
+        if prev_scale is not None and 0.0 < smoothing_alpha < 1.0
+        else s_inst
+    )
 
-    # Create slice size with generous context
-    context_factor = 2.0
-    slice_width = int(avg_width * context_factor)
-    slice_height = int(avg_height * context_factor)
+    # resize whole frame
+    scaled_h = int(frame.shape[0] * s)
+    scaled_w = int(frame.shape[1] * s)
+    scaled = cv2.resize(frame, (scaled_w, scaled_h), interpolation=cv2.INTER_LINEAR)
 
-    # Ensure minimum reasonable size
-    slice_width = max(slice_width, min_width)
-    slice_height = max(slice_height, min_height)
+    # new centre of bbox in the scaled frame
+    cx, cy = bbox.center
+    scx = int(cx * s)
+    scy = int(cy * s)
 
-    # Scale to 1000-2000px range to reduce artifacts
-    current_max = max(slice_width, slice_height)
-    target_size = 1500  # Target for larger dimension
+    # crop window [x1:x2, y1:y2] around (scx, scy)
+    x1 = scx - out_w // 2
+    y1 = scy - out_h // 2
+    x2 = x1 + out_w
+    y2 = y1 + out_h
 
-    if current_max < 1000:
-        # Scale up if too small
-        scale_factor = target_size / current_max
-        slice_width = int(slice_width * scale_factor)
-        slice_height = int(slice_height * scale_factor)
+    output = np.zeros((out_h, out_w, 3), dtype=np.uint8)
 
-    # Round up to even numbers for video encoding compatibility
-    slice_width = int(np.ceil(slice_width / 2) * 2)
-    slice_height = int(np.ceil(slice_height / 2) * 2)
+    # intersection between crop and scaled frame
+    sx1, sy1 = max(0, x1), max(0, y1)
+    sx2, sy2 = min(scaled_w, x2), min(scaled_h, y2)
+    ox1, oy1 = sx1 - x1, sy1 - y1
+    ox2, oy2 = ox1 + (sx2 - sx1), oy1 + (sy2 - sy1)
 
-    return slice_width, slice_height
+    if sx2 > sx1 and sy2 > sy1:
+        output[oy1:oy2, ox1:ox2] = scaled[sy1:sy2, sx1:sx2]
+
+    return output, s
 
 
-def _find_detection_at_frame(track_data: list[Detection], frame_idx: int) -> Detection | None:
-    """Find the detection at a specific frame index in track data.
+# --------------------------------------------------------------------------- #
+# Utility                                                                     #
+# --------------------------------------------------------------------------- #
 
-    Args:
-        track_data: List of track detections
-        frame_idx: Frame index to search for
 
-    Returns:
-        Detection at the frame index, or None if not found
-    """
-    for detection in track_data:
-        if detection.frame_idx == frame_idx:
-            return detection
+def _find_detection_at_frame(track_data: List[Detection], frame_idx: int) -> Detection | None:
+    """Return the Detection whose `frame_idx` equals *frame_idx*, or None."""
+    for d in track_data:
+        if d.frame_idx == frame_idx:
+            return d
     return None
 
 
+# --------------------------------------------------------------------------- #
+# Public API                                                                  #
+# --------------------------------------------------------------------------- #
+
+
 def generate_individual_videos(
-    tracks: list[Track],
+    tracks: List[Track],
     original_video_path: os.PathLike | str,
     output_dir: os.PathLike | str,
     video_suffix_seconds: float = VIDEO_SUFFIX_SECONDS,
-) -> list[os.PathLike]:
-    """Generate individual MP4 videos for each tracked person with centered, fixed-size crops.
+) -> List[Path]:
+    """
+    Write one centred, scale-normalised MP4 for each Track in *tracks*.
 
-    Args:
-        tracks: Dictionary of processed track data
-        original_video_path: Path to original high-resolution video
-        output_dir: Directory to save individual videos
+    Each output clip has resolution (OUTPUT_WIDTH × OUTPUT_HEIGHT).
     """
     logger = logging.getLogger(__name__)
 
     if not tracks:
-        logger.warning('No tracks found for individual video generation')
+        logger.warning('No tracks supplied – nothing to do.')
         return []
 
-    # Create output directory
     os.makedirs(output_dir, exist_ok=True)
-
-    # Get input filename without extension for output naming
     input_name = Path(original_video_path).stem
 
-    # Read original video properties
-    video_properties = get_video_properties(original_video_path)
-    total_frames = video_properties.total_frames
+    props = get_video_properties(original_video_path)
+    total_frames = props.total_frames
 
-    logger.info(f'Generating individual videos for {len(tracks)} tracks...')
+    logger.info(
+        'Generating %d videos (%d×%d px, target ratio %.2f)…',
+        len(tracks),
+        OUTPUT_WIDTH,
+        OUTPUT_HEIGHT,
+        TARGET_BBOX_HEIGHT_RATIO,
+    )
 
-    # Pre-calculate crop sizes and create writers
-    writers: dict[TrackId, VideoWriter] = {}
-    crop_sizes: dict[TrackId, tuple[int, int]] = {}
+    # prepare one writer and one scale history per track
+    writers: Dict[TrackId, VideoWriter] = {}
+    prev_scales: Dict[TrackId, float | None] = {}
 
     for track in tracks:
-        # Calculate optimal crop size for this track
-        slice_width, slice_height = _calculate_crop_size(track.sorted_detections)
-        crop_sizes[track.track_id] = (slice_width, slice_height)
+        out_path = Path(output_dir) / f'{input_name}+{track.track_id:02d}.mp4'
+        vw = VideoWriter(out_path, OUTPUT_WIDTH, OUTPUT_HEIGHT, props.fps)
+        vw.start_writing()
+        writers[track.track_id] = vw
+        prev_scales[track.track_id] = None
 
-        logger.info(f'Track {track.track_id}: slice size {slice_width}x{slice_height} pixels')
-
-        # Create video writer with sequential numbering
-        output_path = Path(output_dir) / f'{input_name}+{track.track_id:02d}.mp4'
-        writer = VideoWriter(output_path, slice_width, slice_height, video_properties.fps)
-        writer.start_writing()
-        writers[track.track_id] = writer
-
-        start_time_path = Path(output_dir) / f'{input_name}+{track.track_id:02d}.start_time.json'
-        start_time_path.write_text(
-            json.dumps({'start_time': track.sorted_detections[0].frame_idx / video_properties.fps})
+        # optional: JSON with first-appearance timestamp
+        (Path(output_dir) / f'{input_name}+{track.track_id:02d}.start_time.json').write_text(
+            json.dumps({'start_time': track.start_frame() / props.fps})
         )
 
-    # Process video frame by frame with progress bar
-    with VideoReader(original_video_path) as reader:
-        for frame_idx, frame in tqdm(reader.read_frames(), total=total_frames, desc='Writing individual videos'):
-            # Process each track for this frame
+    # iterate through original video
+    with VideoReader(original_video_path) as rdr:
+        for frame_idx, frame in tqdm(rdr.read_frames(), total=total_frames, desc='Writing clips'):
             for track in tracks:
-                # Find detection for this frame
-                detection = _find_detection_at_frame(track.sorted_detections, frame_idx)
-                is_in_suffix = track.end_frame() + video_properties.fps * video_suffix_seconds < frame_idx
+                det = _find_detection_at_frame(track.sorted_detections, frame_idx)
 
-                if detection is None and is_in_suffix:
-                    detection = track.end()
+                # keep last bbox for a few seconds after the track ends
+                if (
+                    det is None
+                    and frame_idx <= track.end_frame() + int(props.fps * video_suffix_seconds)
+                    and track.sorted_detections
+                ):
+                    det = track.sorted_detections[-1]
 
-                if detection is not None:
-                    # Extract fixed-size slice centered on bbox
-                    target_size = crop_sizes[track.track_id]
-                    cropped_frame = _extract_centered_slice(frame, detection.bbox.center, target_size)
-                    writers[track.track_id].write_frame(cropped_frame)
+                if det is None:
+                    continue
 
-    # Clean up writers
-    for writer in writers.values():
-        writer.finish_writing()
+                centred, used_scale = _scale_and_center(
+                    frame,
+                    det.bbox,
+                    (OUTPUT_WIDTH, OUTPUT_HEIGHT),
+                    TARGET_BBOX_HEIGHT_RATIO,
+                    prev_scale=prev_scales[track.track_id],
+                    smoothing_alpha=SMOOTHING_ALPHA,
+                )
+                prev_scales[track.track_id] = used_scale
+                writers[track.track_id].write_frame(centred)
 
-    logger.info(f'Individual videos saved to: {output_dir}')
+    # finalise files
+    for w in writers.values():
+        w.finish_writing()
 
-    return [Path(writer.output_path) for writer in writers.values()]
+    logger.info('✔  Saved %d videos to %s', len(writers), output_dir)
+    return [Path(w.output_path) for w in writers.values()]
