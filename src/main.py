@@ -31,6 +31,7 @@ def main():
         '--dry-run', action='store_true', help='Run without rendering individual videos (for testing purposes)'
     )
     parser.add_argument('--debug-views', action='store_true', help='Output debug views of the video processing steps')
+    parser.add_argument('--stabilize', action='store_true', help='Stabilize the video')
     parser.add_argument('--parallel-workers', type=int, default=1, help='Number of parallel workers to use')
 
     args = parser.parse_args()
@@ -75,6 +76,7 @@ def main():
                     args.draw_annotations,
                     args.dry_run,
                     args.debug_views,
+                    args.stabilize,
                 )
             )
 
@@ -98,6 +100,7 @@ def _process_videos(
     draw_annotations: bool,
     dry_run: bool,
     debug_views: bool,
+    stabilize: bool,
 ):
     logger = setup_logging(output_dir)
 
@@ -107,6 +110,7 @@ def _process_videos(
         dry_run=dry_run,
         debug_views=debug_views,
         parallel_workers=NUM_PARALLEL_VIDEO_WORKERS,
+        stabilize=stabilize,
     )
 
     for i, video_file in enumerate(video_files):

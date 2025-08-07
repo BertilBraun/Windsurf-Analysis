@@ -36,7 +36,13 @@ class WindsurfingVideoProcessor:
     """Main video processing orchestrator"""
 
     def __init__(
-        self, draw_annotations: bool, output_dir: str, dry_run: bool, debug_views: bool, parallel_workers: int
+        self,
+        draw_annotations: bool,
+        output_dir: str,
+        dry_run: bool,
+        debug_views: bool,
+        parallel_workers: int,
+        stabilize: bool,
     ):
         self.surf_detector = SurferDetector()
         self.high_mp_executor = ProcessPoolExecutor(max_workers=parallel_workers)
@@ -44,6 +50,7 @@ class WindsurfingVideoProcessor:
         self.output_dir = output_dir
         self.dry_run = dry_run
         self.debug_views = debug_views
+        self.stabilize = stabilize
 
     def process_video(self, input_path: os.PathLike):
         """Main video processing pipeline with batched YOLO inference"""
@@ -65,7 +72,8 @@ class WindsurfingVideoProcessor:
 
         if not self.dry_run:
             self.submit_low_priority_task(
-                _generate_individual_videos_worker_function, (processed_tracks, input_path, self.output_dir)
+                _generate_individual_videos_worker_function,
+                (processed_tracks, input_path, self.output_dir, self.stabilize),
             )
 
         if self.draw_annotations:
@@ -138,14 +146,15 @@ def _stabilize_individual_video_worker_function(args: tuple[os.PathLike, os.Path
         os.unlink(input_file)
 
 
-def _generate_individual_videos_worker_function(args: tuple[list[Track], os.PathLike, os.PathLike | str]) -> None:
-    tracks, input_path, output_dir = args
-    individual_videos = generate_individual_videos(tracks, input_path, output_dir)
+def _generate_individual_videos_worker_function(args: tuple[list[Track], os.PathLike, os.PathLike | str, bool]) -> None:
+    tracks, input_path, output_dir, stabilize = args
+    individual_videos = generate_individual_videos(tracks, input_path, output_dir, stabilize)
 
-    with ProcessPoolExecutor(max_workers=4) as executor:
-        for individual_video in individual_videos:
-            output_file = Path(individual_video).with_suffix('.stabilized.mp4')
-            executor.submit(_stabilize_individual_video_worker_function, (individual_video, output_file))
+    if stabilize:
+        with ProcessPoolExecutor(max_workers=4) as executor:
+            for individual_video in individual_videos:
+                output_file = Path(individual_video).with_suffix('.stabilized.mp4')
+                executor.submit(_stabilize_individual_video_worker_function, (individual_video, output_file))
 
 
 def _generate_annotated_video_worker_function(args: tuple[list[Track], os.PathLike, os.PathLike | str]) -> None:
