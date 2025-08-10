@@ -25,3 +25,6 @@ pillow
 cpython
 
 pulp
+ 
+# GUI for interactive player
+PySide6>=6.6.0

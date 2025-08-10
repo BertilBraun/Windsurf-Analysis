@@ -1,5 +1,6 @@
 import os
 import logging
+import json
 from typing import Callable, Sequence, TypeVar
 
 from tqdm import tqdm
@@ -16,13 +17,13 @@ from tracking.tracking import Tracker
 from tracking.track_processing import TrackFilteringSmoothingRelabeling
 from tracking.discrete_opt_tracker import DiscreteILPTracker
 from tracking.preprocessing.greedy_preprocessor import GreedyPreprocessor
-from tracking.greedy_tracker import GreedyTracker
+from tracking.greedy_tracker import GreedyTracker  # noqa: F401 (imported for optional use)
 
 
 from visualization.debug_drawer import generate_debug_video_worker_function, debug_track_similarities
 from visualization.video_splicing import generate_individual_videos
 from visualization.stabilize import compute_vidstab_transforms
-from visualization.track_graph_viz import visualize_tracks
+from visualization.track_graph_viz import visualize_tracks  # noqa: F401 (optional debugging import)
 
 from common_types import Detection, Track
 
@@ -46,7 +47,7 @@ class WindsurfingVideoProcessor:
         self.surf_detector = SurferDetector()
         self.executor = ProcessPoolExecutor(max_workers=parallel_workers)
         self.draw_annotations = draw_annotations
-        self.output_dir = output_dir
+        self.output_dir = Path(output_dir)
         self.dry_run = dry_run
         self.debug_views = debug_views
         self.stabilize = stabilize
@@ -54,6 +55,8 @@ class WindsurfingVideoProcessor:
     def process_video(self, input_path: os.PathLike):
         """Main video processing pipeline with batched YOLO inference"""
         logger = logging.getLogger(__name__)
+
+        input_path = Path(input_path)
 
         props = get_video_properties(input_path)
         logger.info(f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.total_frames} frames')
@@ -71,6 +74,9 @@ class WindsurfingVideoProcessor:
                 TrackFilteringSmoothingRelabeling(),
             ],
         )
+
+        # Always save compact track metadata for the interactive player
+        _save_tracks_metadata(processed_tracks, input_path, self.output_dir, props)
 
         if not self.dry_run:
             self.submit_task(
@@ -137,7 +143,7 @@ def _process_detections_into_tracks(
     return processed_tracks
 
 
-def _generate_individual_videos_worker_function(args: tuple[list[Track], os.PathLike, os.PathLike | str, bool]) -> None:
+def _generate_individual_videos_worker_function(args: tuple[list[Track], os.PathLike, Path, bool]) -> None:
     tracks, input_path, output_dir, stabilize = args
     individual_videos = generate_individual_videos(tracks, input_path, output_dir)
 
@@ -148,7 +154,7 @@ def _generate_individual_videos_worker_function(args: tuple[list[Track], os.Path
             video_stabilizer.stabilize(input_path=individual_video, output_path=output_file, use_stored_transforms=True)
 
 
-def _generate_annotated_video_worker_function(args: tuple[list[Track], os.PathLike, os.PathLike | str]) -> None:
+def _generate_annotated_video_worker_function(args: tuple[list[Track], os.PathLike, Path]) -> None:
     tracks, input_path, output_dir = args
     annotation_drawer = AnnotationDrawer()
 
@@ -169,3 +175,44 @@ def _generate_annotated_video_worker_function(args: tuple[list[Track], os.PathLi
                 ]
 
                 writer.write_frame(annotation_drawer.draw_detections_with_trails(frame, annotations))
+
+
+def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Path, video_props: VideoInfo) -> None:
+    """Save compact track metadata for later loading by the player interface.
+
+    The metadata excludes embeddings and color histograms to keep file sizes small.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    metadata = {
+        'input_video_path': str(input_path),
+        'video_properties': {
+            'fps': video_props.fps,
+            'width': video_props.width,
+            'height': video_props.height,
+            'total_frames': video_props.total_frames,
+        },
+        'tracks': [
+            {
+                'track_id': track.track_id,
+                'start_frame': track.start_frame(),
+                'end_frame': track.end_frame(),
+                'start_time': track.start_frame() / video_props.fps,
+                'duration': (track.end_frame() - track.start_frame()) / video_props.fps,
+                'detection_count': len(track.sorted_detections),
+                'detections': [
+                    {
+                        'frame_idx': det.frame_idx,
+                        'bbox': [int(det.bbox.x1), int(det.bbox.y1), int(det.bbox.x2), int(det.bbox.y2)],
+                        'confidence': float(det.confidence),
+                    }
+                    for det in track.sorted_detections
+                ],
+            }
+            for track in tracks
+        ],
+    }
+
+    metadata_path = output_dir / f'{input_path.stem}.tracks.json'
+    with open(metadata_path, 'w', encoding='utf-8') as f:
+        json.dump(metadata, f, ensure_ascii=False)

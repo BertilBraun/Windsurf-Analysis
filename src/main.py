@@ -32,6 +32,9 @@ def main():
     )
     parser.add_argument('--debug-views', action='store_true', help='Output debug views of the video processing steps')
     parser.add_argument('--stabilize', action='store_true', help='Stabilize the video')
+    parser.add_argument(
+        '--generate-videos', action='store_true', help='Also render individual/annotated videos (legacy output)'
+    )
     parser.add_argument('--parallel-workers', type=int, default=1, help='Number of parallel workers to use')
 
     args = parser.parse_args()
@@ -77,6 +80,7 @@ def main():
                     args.dry_run,
                     args.debug_views,
                     args.stabilize,
+                    args.generate_videos,
                 )
             )
 
@@ -101,8 +105,14 @@ def _process_videos(
     dry_run: bool,
     debug_views: bool,
     stabilize: bool,
+    generate_videos: bool,
 ):
     logger = setup_logging(output_dir)
+
+    # For the new player workflow, skip legacy video rendering unless explicitly requested
+    if not generate_videos:
+        draw_annotations = False
+        dry_run = True
 
     processor = WindsurfingVideoProcessor(
         draw_annotations=draw_annotations,
