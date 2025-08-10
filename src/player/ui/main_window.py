@@ -1,11 +1,9 @@
 from __future__ import annotations
-
-import os
 from pathlib import Path
 from typing import Optional, List
 
 from PySide6.QtCore import QTimer, Qt
-from PySide6.QtWidgets import QMainWindow, QWidget, QFileDialog, QSplitter, QVBoxLayout, QMessageBox
+from PySide6.QtWidgets import QMainWindow, QWidget, QFileDialog, QVBoxLayout, QMessageBox
 
 from core.player_state import PlayerState
 from core.video_manager import VideoManager
@@ -13,7 +11,6 @@ from core.metadata_loader import load_tracks_metadata
 from ui.video_widget import VideoWidget
 from ui.timeline_widget import TimelineWidget
 from ui.controls_widget import ControlsWidget
-from ui.track_list_widget import TrackListWidget
 
 
 class MainWindow(QMainWindow):
@@ -41,18 +38,13 @@ class MainWindow(QMainWindow):
             on_speed_up=lambda: self._bump_speed(down=False),
         )
 
-        splitter = QSplitter()
-        splitter.setOrientation(Qt.Orientation.Horizontal)
-        splitter.addWidget(self.video_widget)
-
-        self.track_list = TrackListWidget(self.state, on_visibility_changed=self._on_visibility_changed)
-        splitter.addWidget(self.track_list)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 0)
-
-        root_layout.addWidget(splitter)
-        root_layout.addWidget(self.timeline)
-        root_layout.addWidget(self.controls)
+        # Single-pane layout (removed track sidebar)
+        root_layout.addWidget(self.video_widget, 1)
+        root_layout.addWidget(self.timeline, 0)
+        root_layout.addWidget(self.controls, 0)
+        # Keep UI from ballooning
+        self.controls.setMaximumHeight(48)
+        self.timeline.setMaximumHeight(56)
         self.setCentralWidget(central)
 
         # Startup flow: pick a directory, auto-load first video, then stop auto-advance
@@ -132,7 +124,6 @@ class MainWindow(QMainWindow):
         self.state.loaded_tracks = tracks
         self.state.visible_tracks = {t.track_id for t in tracks}
         self.state.input_video_path = input_video_path
-        self.track_list.refresh()
         self.setWindowTitle(f'Windsurf Player - {Path(input_video_path).name}')
 
         self._open_video(Path(input_video_path))
@@ -146,6 +137,10 @@ class MainWindow(QMainWindow):
 
     # ----------------------------- Key bindings ----------------------------- #
     def keyPressEvent(self, event):  # type: ignore[override]
+        # Ensure main window consumes Spacebar instead of focused buttons
+        if event.key() == Qt.Key.Key_Space:
+            self._toggle_play()
+            return
         # modifiers first
         if (event.modifiers() & Qt.KeyboardModifier.ControlModifier) and event.key() == Qt.Key.Key_Left:
             self._on_seek(
@@ -176,9 +171,7 @@ class MainWindow(QMainWindow):
             )
             return
 
-        if event.key() == Qt.Key.Key_Space:
-            self._toggle_play()
-        elif event.key() == Qt.Key.Key_Minus:
+        if event.key() == Qt.Key.Key_Minus:
             self._bump_speed(down=True)
         elif event.key() == Qt.Key.Key_Plus or event.key() == Qt.Key.Key_Equal:
             self._bump_speed(down=False)

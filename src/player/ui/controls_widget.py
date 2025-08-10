@@ -20,6 +20,8 @@ class ControlsWidget(QWidget):
         self.on_speed_up = on_speed_up
 
         layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(8)
         self.play_btn = QPushButton('Play/Pause')
         self.play_btn.clicked.connect(self.on_play_pause)  # type: ignore[arg-type]
         self.slow_btn = QPushButton('-')
@@ -27,6 +29,11 @@ class ControlsWidget(QWidget):
         self.fast_btn = QPushButton('+')
         self.fast_btn.clicked.connect(self.on_speed_up)  # type: ignore[arg-type]
 
-        layout.addWidget(self.play_btn)
-        layout.addWidget(self.slow_btn)
-        layout.addWidget(self.fast_btn)
+        layout.addWidget(self.play_btn, 0)
+        layout.addWidget(self.slow_btn, 0)
+        layout.addWidget(self.fast_btn, 0)
+
+        # Prevent buttons from stealing Spacebar focus
+        self.play_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.slow_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.fast_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)

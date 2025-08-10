@@ -185,7 +185,7 @@ def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Pat
     output_dir.mkdir(parents=True, exist_ok=True)
 
     metadata = {
-        'input_video_path': str(input_path),
+        'input_video_path': input_path.absolute().as_posix(),
         'video_properties': {
             'fps': video_props.fps,
             'width': video_props.width,

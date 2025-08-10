@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional, Callable, Tuple
+from typing import Optional, Callable, Tuple
 
 import cv2
 import numpy as np
@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, QRect, QSize, QTimer
 from PySide6.QtGui import QImage, QPainter, QPen, QColor
 from PySide6.QtWidgets import QWidget
 
-from core.player_state import PlayerState, TrackLite
+from core.player_state import PlayerState
 
 
 def _to_qimage(frame: np.ndarray) -> QImage:
@@ -39,9 +39,9 @@ class VideoWidget(QWidget):
         self.setMinimumSize(640, 360)
         self.on_track_selected = on_track_selected
 
-        # zoom state
+        # zoom state (persistent view rectangle in image coords)
         self.zoom: float = 1.0
-        self.zoom_center_img: Optional[Tuple[float, float]] = None
+        self.view_rect_img: Optional[QRect] = None
         self._hud_text: Optional[str] = None
 
     def sizeHint(self) -> QSize:
@@ -67,17 +67,11 @@ class VideoWidget(QWidget):
             det_bbox = self._bbox_for_track_at_frame(self.state.current_track_id, self.state.current_frame)
             if det_bbox:
                 x1, y1, x2, y2 = det_bbox
-                source_rect = QRect(x1, y1, x2 - x1, y2 - y1)
-        elif self.zoom != 1.0:
-            img_w = self.current_frame_image.width()
-            img_h = self.current_frame_image.height()
-            cx = img_w / 2 if self.zoom_center_img is None else self.zoom_center_img[0]
-            cy = img_h / 2 if self.zoom_center_img is None else self.zoom_center_img[1]
-            half_w = max(1, int((img_w / self.zoom) / 2))
-            half_h = max(1, int((img_h / self.zoom) / 2))
-            x1 = int(max(0, min(cx - half_w, img_w - 2 * half_w)))
-            y1 = int(max(0, min(cy - half_h, img_h - 2 * half_h)))
-            source_rect = QRect(x1, y1, min(2 * half_w, img_w), min(2 * half_h, img_h))
+                source_rect = QRect(x1, y1, max(1, x2 - x1), max(1, y2 - y1))
+        elif self.zoom != 1.0 and self.view_rect_img is not None:
+            source_rect = self._clamp_view_rect(
+                self.view_rect_img, self.current_frame_image.width(), self.current_frame_image.height()
+            )
 
         painter.drawImage(target_rect, self.current_frame_image, source_rect)
 
@@ -124,6 +118,7 @@ class VideoWidget(QWidget):
     def _fit_rect(img_w: int, img_h: int, bounds: QRect) -> QRect:
         if img_w == 0 or img_h == 0:
             return QRect(bounds.x(), bounds.y(), bounds.width(), bounds.height())
+        # keep scale reasonable to avoid extreme upscaling
         scale = min(bounds.width() / img_w, bounds.height() / img_h)
         w = int(img_w * scale)
         h = int(img_h * scale)
@@ -142,21 +137,17 @@ class VideoWidget(QWidget):
         return None
 
     def mousePressEvent(self, event):  # type: ignore[override]
+        if self.current_frame_image is None or self.current_frame_image.isNull():
+            return
         if self.state.current_mode != 'overview' or not self.on_track_selected:
             return
         # map mouse to image coords using inverse of drawing transform (with zoom)
         target_rect = self._fit_rect(self.current_frame_image.width(), self.current_frame_image.height(), self.rect())
-        source_rect = self.current_frame_image.rect()
-        if self.zoom != 1.0:
-            img_w = self.current_frame_image.width()
-            img_h = self.current_frame_image.height()
-            cx = img_w / 2 if self.zoom_center_img is None else self.zoom_center_img[0]
-            cy = img_h / 2 if self.zoom_center_img is None else self.zoom_center_img[1]
-            half_w = max(1, int((img_w / self.zoom) / 2))
-            half_h = max(1, int((img_h / self.zoom) / 2))
-            x1 = int(max(0, min(cx - half_w, img_w - 2 * half_w)))
-            y1 = int(max(0, min(cy - half_h, img_h - 2 * half_h)))
-            source_rect = QRect(x1, y1, min(2 * half_w, img_w), min(2 * half_h, img_h))
+        source_rect = (
+            self.view_rect_img
+            if (self.zoom != 1.0 and self.view_rect_img is not None)
+            else self.current_frame_image.rect()
+        )
 
         if not target_rect.contains(event.position().toPoint()):
             return
@@ -178,23 +169,59 @@ class VideoWidget(QWidget):
                     return
 
     def wheelEvent(self, event):  # type: ignore[override]
-        # zoom in/out around mouse position
+        # zoom in/out around mouse position; relative to current view only
         if self.current_frame_image is None:
+            return
+        if self.state.current_mode != 'overview':
             return
         angle = event.angleDelta().y()
         factor = 1.0 + (0.1 if angle > 0 else -0.1)
         new_zoom = float(np.clip(self.zoom * factor, 0.25, 8.0))
         if abs(new_zoom - self.zoom) < 1e-3:
             return
-        # update zoom center to mouse position in image coords
-        target_rect = self._fit_rect(self.current_frame_image.width(), self.current_frame_image.height(), self.rect())
-        if target_rect.contains(event.position().toPoint()):
-            px = (event.position().x() - target_rect.x()) / target_rect.width()
-            py = (event.position().y() - target_rect.y()) / target_rect.height()
-            img_x = int(px * self.current_frame_image.width())
-            img_y = int(py * self.current_frame_image.height())
-            self.zoom_center_img = (img_x, img_y)
+
+        img_w = self.current_frame_image.width()
+        img_h = self.current_frame_image.height()
+        target_rect = self._fit_rect(img_w, img_h, self.rect())
+        curr_source = (
+            self.view_rect_img
+            if (self.zoom != 1.0 and self.view_rect_img is not None)
+            else self.current_frame_image.rect()
+        )
+        # Determine zoom center: stationary under mouse for zoom-in; center for zoom-out
+        if new_zoom > self.zoom:
+            if not target_rect.contains(event.position().toPoint()):
+                return
+            px = (event.position().x() - target_rect.x()) / max(1, target_rect.width())
+            py = (event.position().y() - target_rect.y()) / max(1, target_rect.height())
+            img_x = curr_source.x() + px * curr_source.width()
+            img_y = curr_source.y() + py * curr_source.height()
+        else:
+            px = 0.5
+            py = 0.5
+            img_x = curr_source.center().x()
+            img_y = curr_source.center().y()
+
+        # Compute new view relative to current source
+        ratio = self.zoom / new_zoom  # <1 zooming in, >1 zooming out
+        new_w = max(1, int(curr_source.width() * ratio))
+        new_h = max(1, int(curr_source.height() * ratio))
+        # Keep the pixel under the mouse stationary by aligning new rect so that
+        # img_x maps to the same px position: new_x = img_x - px * new_w
+        x1 = int(img_x - px * new_w)
+        y1 = int(img_y - py * new_h)
+        proposed = QRect(x1, y1, new_w, new_h)
+
+        if new_zoom > self.zoom:
+            # Zooming in: clamp to current source to avoid revealing outside content
+            bounded = self._clamp_rect_to_bounds(proposed, curr_source)
+        else:
+            # Zooming out: clamp to full image
+            bounded = self._clamp_view_rect(proposed, img_w, img_h)
+
         self.zoom = new_zoom
+        self.view_rect_img = bounded
+
         self._hud_text = f'Zoom: {self.zoom:.2f}x'
         self.update()
         QTimer.singleShot(1000, self.clear_hud)
@@ -211,3 +238,22 @@ class VideoWidget(QWidget):
     def clear_hud(self) -> None:
         self._hud_text = None
         self.update()
+
+    @staticmethod
+    def _clamp_view_rect(rect: QRect, img_w: int, img_h: int) -> QRect:
+        x = min(max(0, rect.x()), max(0, img_w - rect.width()))
+        y = min(max(0, rect.y()), max(0, img_h - rect.height()))
+        w = min(rect.width(), img_w)
+        h = min(rect.height(), img_h)
+        if w <= 0 or h <= 0:
+            return QRect(0, 0, img_w, img_h)
+        return QRect(x, y, w, h)
+
+    @staticmethod
+    def _clamp_rect_to_bounds(rect: QRect, bounds: QRect) -> QRect:
+        # Clamp rect entirely within bounds rect
+        w = min(rect.width(), bounds.width())
+        h = min(rect.height(), bounds.height())
+        x = min(max(bounds.x(), rect.x()), bounds.x() + bounds.width() - w)
+        y = min(max(bounds.y(), rect.y()), bounds.y() + bounds.height() - h)
+        return QRect(x, y, w, h)

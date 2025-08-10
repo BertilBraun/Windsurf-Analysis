@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Callable, Optional
+from typing import Optional
 
-from PySide6.QtCore import Qt, QRect, Signal
+from PySide6.QtCore import QRect, Signal
 from PySide6.QtGui import QPainter, QColor, QMouseEvent
 from PySide6.QtWidgets import QWidget
 
@@ -16,6 +16,7 @@ class TimelineWidget(QWidget):
         super().__init__(parent)
         self.state = state
         self.setMinimumHeight(40)
+        self.setSizePolicy(self.sizePolicy().horizontalPolicy(), self.sizePolicy().verticalPolicy())
 
     def paintEvent(self, event):  # type: ignore[override]
         painter = QPainter(self)
