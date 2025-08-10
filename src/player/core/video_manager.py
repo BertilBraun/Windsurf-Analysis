@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import cv2
 
@@ -30,10 +30,11 @@ class VideoManager:
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     def seek_frame(self, index: int) -> None:
+        assert self.cap is not None, 'Video not opened'
         index = max(0, min(index, self.total_frames - 1))
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, index)
 
-    def read_frame(self) -> tuple[int, Optional[any]]:
+    def read_frame(self) -> tuple[int, Optional[Any]]:
         if self.cap is None:
             return -1, None
         ok, frame = self.cap.read()
@@ -42,7 +43,7 @@ class VideoManager:
         idx = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
         return idx, frame
 
-    def advance_by(self, frames: int) -> tuple[int, Optional[any]]:
+    def advance_by(self, frames: int) -> tuple[int, Optional[Any]]:
         """Advance forward by N frames efficiently and return the next decoded frame.
 
         Uses grab() to skip frames without seeking, which is typically faster than
