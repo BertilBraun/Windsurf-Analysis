@@ -139,7 +139,7 @@ def _process_detections_into_tracks(
 
 def _generate_individual_videos_worker_function(args: tuple[list[Track], os.PathLike, os.PathLike | str, bool]) -> None:
     tracks, input_path, output_dir, stabilize = args
-    individual_videos = generate_individual_videos(tracks, input_path, output_dir, stabilize)
+    individual_videos = generate_individual_videos(tracks, input_path, output_dir)
 
     if stabilize:
         video_stabilizer = compute_vidstab_transforms(input_path)
