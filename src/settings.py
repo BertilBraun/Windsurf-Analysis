@@ -20,7 +20,7 @@ MAX_OVERLAP_LENGTH_SECONDS = 10
 # Minimum percentage of total frames a track must appear in (default 20%)
 MIN_FRAME_PERCENTAGE = 20
 
-SMOOTHING_WINDOW_SIZE = 2  # TODO more or less?
+SMOOTHING_WINDOW_SIZE = 1  # TODO more or less?
 
 VIDEO_SUFFIX_SECONDS = 1.0
 

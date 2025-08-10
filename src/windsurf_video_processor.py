@@ -11,7 +11,6 @@ from helpers import log_and_reraise
 from video_io import VideoInfo, VideoReader, VideoWriter, get_video_properties
 from detector import SurferDetector
 from visualization.annotation_drawer import Annotation, AnnotationDrawer
-from visualization.stabilize import stabilize
 
 from tracking.tracking import Tracker
 from tracking.track_processing import TrackFilteringSmoothingRelabeling
@@ -59,16 +58,19 @@ class WindsurfingVideoProcessor:
         props = get_video_properties(input_path)
         logger.info(f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.total_frames} frames')
 
-        # start stabilizer computation in background
-        # stabilizer_future = self.submit_high_priority_task(compute_vidstab_transforms, input_path)
-
         # run detection and tracking
         detections = list(self.surf_detector.run_object_detection_on_video(input_path))
 
-        # wait for stabilizer computation to finish
-        # stabilizer = stabilizer_future.result()
-
-        processed_tracks = _process_detections_into_tracks(detections, props)
+        processed_tracks = _process_detections_into_tracks(
+            detections,
+            props,
+            trackers=[
+                GreedyPreprocessor(),
+                # GreedyTracker(),
+                DiscreteILPTracker(),
+                TrackFilteringSmoothingRelabeling(),
+            ],
+        )
 
         if not self.dry_run:
             self.submit_task(
@@ -77,13 +79,20 @@ class WindsurfingVideoProcessor:
             )
 
         if self.draw_annotations:
-            self.submit_task(_generate_annotated_video_worker_function, (processed_tracks, input_path, self.output_dir))
+            self.submit_task(
+                _generate_annotated_video_worker_function,
+                (processed_tracks, input_path, self.output_dir),
+            )
 
         if self.debug_views:
             self.submit_task(
-                generate_debug_video_worker_function, (detections, processed_tracks, input_path, self.output_dir)
+                generate_debug_video_worker_function,
+                (detections, processed_tracks, input_path, self.output_dir),
             )
-            self.submit_task(debug_track_similarities, (processed_tracks, input_path, self.output_dir, props))
+            self.submit_task(
+                debug_track_similarities,
+                (processed_tracks, input_path, self.output_dir, props),
+            )
 
     def finalize(self):
         self.executor.shutdown(wait=True)
@@ -94,20 +103,15 @@ class WindsurfingVideoProcessor:
         )
 
 
-def _process_detections_into_tracks(detections: list[Detection], video_properties: VideoInfo) -> list[Track]:
+def _process_detections_into_tracks(
+    detections: list[Detection], video_properties: VideoInfo, trackers: Sequence[Tracker]
+) -> list[Track]:
     """Process collected tracks and return processed track data for video generation"""
     logger = logging.getLogger(__name__)
 
     if not detections:
         logger.warning('No tracks available for processing')
         return []
-
-    trackers: Sequence[Tracker] = [
-        GreedyPreprocessor(),
-        # GreedyTracker(),
-        DiscreteILPTracker(),
-        TrackFilteringSmoothingRelabeling(),
-    ]
 
     processed_tracks = [Track(track_id=i, sorted_detections=[detection]) for i, detection in enumerate(detections)]
     for tracker in trackers:
@@ -133,24 +137,15 @@ def _process_detections_into_tracks(detections: list[Detection], video_propertie
     return processed_tracks
 
 
-def _stabilize_individual_video_worker_function(args: tuple[os.PathLike, os.PathLike]) -> None:
-    logger = logging.getLogger(__name__)
-    input_file, output_file = args
-    logger.info(f'Stabilizing {input_file} -> {output_file}')
-    if stabilize(input_file, output_file):
-        logger.info(f'Stabilized {input_file} -> {output_file}')
-        os.unlink(input_file)
-
-
 def _generate_individual_videos_worker_function(args: tuple[list[Track], os.PathLike, os.PathLike | str, bool]) -> None:
     tracks, input_path, output_dir, stabilize = args
     individual_videos = generate_individual_videos(tracks, input_path, output_dir, stabilize)
 
     if stabilize:
-        with ProcessPoolExecutor(max_workers=4) as executor:
-            for individual_video in individual_videos:
-                output_file = Path(individual_video).with_suffix('.stabilized.mp4')
-                executor.submit(_stabilize_individual_video_worker_function, (individual_video, output_file))
+        video_stabilizer = compute_vidstab_transforms(input_path)
+        for individual_video in individual_videos:
+            output_file = Path(individual_video).with_suffix('.stabilized.mp4')
+            video_stabilizer.stabilize(input_path=individual_video, output_path=output_file, use_stored_transforms=True)
 
 
 def _generate_annotated_video_worker_function(args: tuple[list[Track], os.PathLike, os.PathLike | str]) -> None:
