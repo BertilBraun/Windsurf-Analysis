@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Optional, Callable, Tuple
 
 import numpy as np
+import cv2
 from PySide6.QtCore import Qt, QRect, QSize, QTimer
 from PySide6.QtGui import QImage, QPainter, QPen, QColor
 from PySide6.QtWidgets import QWidget
@@ -43,6 +44,7 @@ class VideoWidget(QWidget):
         super().__init__(parent)
         self.state = state
         self.current_frame_image: Optional[QImage] = None
+        self.current_frame_np: Optional[np.ndarray] = None
         self.setMinimumSize(640, 360)
         self.on_track_selected = on_track_selected
         # Hint to Qt that we fully paint the widget to avoid unnecessary clears
@@ -60,6 +62,7 @@ class VideoWidget(QWidget):
 
     def set_frame(self, frame: np.ndarray) -> None:
         self.current_frame_image = _to_qimage(frame)
+        self.current_frame_np = frame
         self.update()
 
     def paintEvent(self, event):  # type: ignore[override]
@@ -74,9 +77,17 @@ class VideoWidget(QWidget):
             target_rect = self._fit_aspect_rect(OUTPUT_WIDTH, OUTPUT_HEIGHT, self.rect())
             det_bbox = self._bbox_for_track_at_frame(self.state.current_track_id, self.state.current_frame)
             if det_bbox:
+                # Render directly at target_rect size using high-quality OpenCV interpolation
+                painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
                 self._draw_detailed_with_padding(painter, det_bbox, target_rect)
+
             else:
-                painter.drawImage(target_rect, self.current_frame_image, self.current_frame_image.rect())
+                # Draw full frame into fixed-aspect target
+                src = self.current_frame_image.rect()
+                is_upscale = target_rect.width() > src.width() or target_rect.height() > src.height()
+                painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, is_upscale)
+                painter.drawImage(target_rect, self.current_frame_image, src)
+                painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
         else:
             # Fit whole frame and optionally apply interactive zoom view
             target_rect = self._fit_rect(
@@ -87,7 +98,12 @@ class VideoWidget(QWidget):
                 source_rect = self._clamp_view_rect(
                     self.view_rect_img, self.current_frame_image.width(), self.current_frame_image.height()
                 )
+            # Toggle high-quality only when upscaling the selected source area
+            is_upscale = target_rect.width() > source_rect.width() or target_rect.height() > source_rect.height()
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, is_upscale)
             painter.drawImage(target_rect, self.current_frame_image, source_rect)
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+
             # Draw overlays in overview mode (respect source scaling)
             if self.state.current_mode == 'overview' and self.state.video_properties is not None:
                 scale_x = target_rect.width() / source_rect.width()
@@ -369,11 +385,12 @@ class VideoWidget(QWidget):
     ) -> None:
         if self.current_frame_image is None or self.current_frame_image.isNull():
             return
-        img = self.current_frame_image
-        img_w = img.width()
-        img_h = img.height()
-        out_w = int(OUTPUT_WIDTH)
-        out_h = int(OUTPUT_HEIGHT)
+        if self.current_frame_np is None:
+            return
+        frame = self.current_frame_np
+        img_h, img_w = frame.shape[:2]
+        out_w = max(1, int(target_rect.width()))
+        out_h = max(1, int(target_rect.height()))
 
         x1, y1, x2, y2 = det_bbox
         bbox_h = max(1, y2 - y1)
@@ -389,12 +406,11 @@ class VideoWidget(QWidget):
         if track_id is not None:
             self._prev_scale_by_track_id[track_id] = s
 
-        # Scale entire frame
+        # Scale entire frame using OpenCV (Lanczos for upscaling, Area for downscaling)
         scaled_w = max(1, int(img_w * s))
         scaled_h = max(1, int(img_h * s))
-        scaled_img = img.scaled(
-            scaled_w, scaled_h, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation
-        )
+        interp = cv2.INTER_LANCZOS4 if s > 1.0 else cv2.INTER_AREA
+        scaled = cv2.resize(frame, (scaled_w, scaled_h), interpolation=interp)
 
         # Centre of bbox in scaled coordinates
         cx = (x1 + x2) * 0.5
@@ -419,18 +435,13 @@ class VideoWidget(QWidget):
         copy_w = max(0, src_x2 - src_x1)
         copy_h = max(0, src_y2 - src_y1)
 
-        # Compose into a fixed-size offscreen image (black background)
-        out_img = QImage(out_w, out_h, QImage.Format.Format_BGR888)
-        out_img.fill(QColor(0, 0, 0))
+        # Compose into a fixed-size numpy image (black background)
+        out_np = np.zeros((out_h, out_w, 3), dtype=np.uint8)
         if copy_w > 0 and copy_h > 0:
-            off = QPainter(out_img)
-            off.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-            off.drawImage(
-                QRect(int(dst_x1), int(dst_y1), int(copy_w), int(copy_h)),
-                scaled_img,
-                QRect(int(src_x1), int(src_y1), int(copy_w), int(copy_h)),
-            )
-            off.end()
+            out_np[int(dst_y1) : int(dst_y1 + copy_h), int(dst_x1) : int(dst_x1 + copy_w)] = scaled[
+                int(src_y1) : int(src_y1 + copy_h), int(src_x1) : int(src_x1 + copy_w)
+            ]
 
-        # Finally draw to screen into target_rect (same aspect as out_img)
-        painter.drawImage(target_rect, out_img)
+        # Draw directly with no additional scaling
+        composed = _to_qimage(out_np)
+        painter.drawImage(target_rect, composed)
