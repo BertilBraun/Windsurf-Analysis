@@ -36,7 +36,7 @@ class GreedyTracker:
         max_gap    : max number of frames allowed between two adjacent tracklets.
         verbose    : print merge operations if *True*.
         """
-        logging.info(f'{"=" * 80} Running greedy tracker with {len(tracks)} tracks {"=" * 80}')
+        logging.info(f'{"=" * 30} Running greedy tracker with {len(tracks)} tracks {"=" * 30}')
 
         working = list(tracks)  # copy
 

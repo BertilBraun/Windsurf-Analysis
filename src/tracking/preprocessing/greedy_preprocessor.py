@@ -36,7 +36,7 @@ class GreedyPreprocessor:
         self.min_iou_matches_single_track = greedy_min_iou_matches_single_track
 
     def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
-        logging.info(f'{"=" * 80} Running greedy preprocessor {len(tracks)} tracks {"=" * 80}')
+        logging.info(f'{"=" * 30} Running greedy preprocessor with {len(tracks)} tracks {"=" * 30}')
 
         tracks = self._preprocess_tracks(tracks)
 

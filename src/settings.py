@@ -5,7 +5,7 @@ STANDARD_OUTPUT_DIR = 'individual_surfers'
 NUM_PARALLEL_VIDEO_WORKERS = 4
 
 # YOLO settings
-YOLO_MODEL_PATH = Path(__file__).parent / '../train/models/100epochs.pt'
+YOLO_MODEL_PATH = Path(__file__).parent / '../train/models/2025_08_09_100epochs.pt'
 REID_MODEL_PATH = Path(__file__).parent / 'weights/osnet_ain_x1_0_msmt17.pth'
 
 IOU_THRESHOLD = 0.2

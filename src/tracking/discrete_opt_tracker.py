@@ -147,7 +147,7 @@ class DiscreteILPTracker:
 
     def track(self, tracks: List[Track], video_properties: VideoInfo) -> List[Track]:
         """Main entry point for tracking detections."""
-        logging.info(f'{"=" * 80} Running ILP discrete optimization tracker with {len(tracks)} tracks {"=" * 80}')
+        logging.info(f'{"=" * 30} Running ILP discrete optimization tracker with {len(tracks)} tracks {"=" * 30}')
 
         if not tracks:
             logging.warning('No tracks available for processing')
