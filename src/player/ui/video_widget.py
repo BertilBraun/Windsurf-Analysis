@@ -53,6 +53,7 @@ class VideoWidget(QWidget):
         self.view_rect_img: Optional[QRect] = None
         self._hud_text: Optional[str] = None
         self._prev_scale_by_track_id: dict[int, float] = {}
+        self._color_cache: dict[int, QColor] = {}
 
     def sizeHint(self) -> QSize:
         return QSize(960, 540)
@@ -101,10 +102,6 @@ class VideoWidget(QWidget):
             offset_x = target_rect.x() - source_rect.x() * scale_x
             offset_y = target_rect.y() - source_rect.y() * scale_y
 
-            pen = QPen(Qt.GlobalColor.green)
-            pen.setWidth(2)
-            painter.setPen(pen)
-
             current_dets = self.state.detections_by_frame.get(self.state.current_frame, [])
             for track_id, d in current_dets:
                 if self.state.visible_tracks and track_id not in self.state.visible_tracks:
@@ -114,6 +111,9 @@ class VideoWidget(QWidget):
                 ry1 = int(offset_y + y1 * scale_y)
                 rx2 = int(offset_x + x2 * scale_x)
                 ry2 = int(offset_y + y2 * scale_y)
+                pen = QPen(self._color_for_track(track_id))
+                pen.setWidth(2)
+                painter.setPen(pen)
                 painter.drawRect(QRect(rx1, ry1, rx2 - rx1, ry2 - ry1))
                 painter.drawText(QRect(rx1, max(0, ry1 - 18), 80, 16), Qt.AlignmentFlag.AlignLeft, f'ID:{track_id}')
 
@@ -324,3 +324,14 @@ class VideoWidget(QWidget):
         rect = QRect(ox1, oy1, max(1, ox2 - ox1), max(1, oy2 - oy1))
         # Ensure fully within image bounds
         return self._clamp_rect_to_bounds(rect, QRect(0, 0, img_w, img_h))
+
+    def _color_for_track(self, track_id: int) -> QColor:
+        if track_id in self._color_cache:
+            return self._color_cache[track_id]
+        # Golden-ratio distributed hue for distinct colors
+        golden = 0.618033988749895
+        h = (hash(track_id) * golden) % 1.0
+        hue = int(h * 359)
+        color = QColor.fromHsv(hue, 220, 255)
+        self._color_cache[track_id] = color
+        return color

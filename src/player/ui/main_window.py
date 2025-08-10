@@ -5,7 +5,7 @@ from typing import Optional, List
 from PySide6.QtCore import QTimer, Qt, QElapsedTimer
 from PySide6.QtWidgets import QMainWindow, QWidget, QFileDialog, QVBoxLayout, QMessageBox
 
-from player.core.player_state import PlayerState
+from player.core.player_state import PlayerState, VideoProperties
 from player.core.video_manager import VideoManager
 from player.core.metadata_loader import load_tracks_metadata
 from player.ui.video_widget import VideoWidget
@@ -19,13 +19,19 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('Windsurf Player')
 
         self.state = PlayerState()
+        self.state.reset(
+            input_video_path='',
+            video_properties=VideoProperties(fps=0, width=0, height=0, total_frames=0),
+            loaded_tracks=[],
+        )
+
         self.video: Optional[VideoManager] = None
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
         self.timer.start(16)  # ~60 FPS UI timer
         self._elapsed = QElapsedTimer()
         self._elapsed.start()
-        self._accum_frames: float = 0.0
+        self._accumulated_frames: float = 0.0
 
         # UI layout
         central = QWidget()
@@ -39,6 +45,8 @@ class MainWindow(QMainWindow):
             on_play_pause=self._toggle_play,
             on_speed_down=lambda: self._bump_speed(down=True),
             on_speed_up=lambda: self._bump_speed(down=False),
+            on_prev_video=lambda: self._load_adjacent(-1),
+            on_next_video=lambda: self._load_adjacent(1),
         )
 
         # Single-pane layout (removed track sidebar)
@@ -62,7 +70,7 @@ class MainWindow(QMainWindow):
         self.state.is_playing = not self.state.is_playing
         if self.state.is_playing:
             self._elapsed.restart()
-            self._accum_frames = 0.0
+            self._accumulated_frames = 0.0
 
     def _bump_speed(self, down: bool) -> None:
         rates = [0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
@@ -86,7 +94,7 @@ class MainWindow(QMainWindow):
         self.timeline.update()
         # Reset timing after explicit seek
         self._elapsed.restart()
-        self._accum_frames = 0.0
+        self._accumulated_frames = 0.0
 
     def _on_visibility_changed(self, visible: set[int]) -> None:
         self.video_widget.update()
@@ -98,11 +106,11 @@ class MainWindow(QMainWindow):
         # Time-based advancement for smooth slow/fast playback
         elapsed_ms = max(0, self._elapsed.restart())
         frames_float = (elapsed_ms / 1000.0) * self.video.fps * float(self.state.playback_speed)
-        self._accum_frames += frames_float
-        frames_to_advance = int(self._accum_frames)
+        self._accumulated_frames += frames_float
+        frames_to_advance = int(self._accumulated_frames)
         if frames_to_advance <= 0:
             return
-        self._accum_frames -= frames_to_advance
+        self._accumulated_frames -= frames_to_advance
         idx, frame_img = self.video.advance_by(frames_to_advance)
         if idx < 0 or frame_img is None:
             self.state.is_playing = False
@@ -129,19 +137,18 @@ class MainWindow(QMainWindow):
         self._load_metadata_by_index(0)
 
     def _load_metadata_by_index(self, index: int) -> None:
-        if not (0 <= index < len(self.metadata_files)):
+        if index < 0 or index >= len(self.metadata_files):
             return
         self.current_metadata_index = index
         self._load_metadata(self.metadata_files[index])
 
     def _load_metadata(self, metadata_path: Path) -> None:
         metadata = load_tracks_metadata(metadata_path)
-        self.state.reset_for_new_video()
-        self.state.video_properties = metadata.video_properties
-        self.state.loaded_tracks = metadata.tracks
-        self.state.visible_tracks = {t.track_id for t in metadata.tracks}
-        self.state.rebuild_detection_index()
-        self.state.input_video_path = metadata.input_video_path
+        self.state.reset(
+            input_video_path=metadata.input_video_path,
+            video_properties=metadata.video_properties,
+            loaded_tracks=metadata.tracks,
+        )
         self.setWindowTitle(f'Windsurf Player - {Path(metadata.input_video_path).name}')
 
         self._open_video(Path(metadata.input_video_path))
@@ -156,13 +163,28 @@ class MainWindow(QMainWindow):
             self.timer.setInterval(max(5, int(1000 / min(60.0, self.video.fps))))
         # Reset timing for new video
         self._elapsed.restart()
-        self._accum_frames = 0.0
+        self._accumulated_frames = 0.0
 
     # ----------------------------- Key bindings ----------------------------- #
     def keyPressEvent(self, event):  # type: ignore[override]
         # Ensure main window consumes Spacebar instead of focused buttons
         if event.key() == Qt.Key.Key_Space:
             self._toggle_play()
+            return
+        if event.key() == Qt.Key.Key_Left and not (
+            event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+        ):
+            # Frame-precise back step that ignores timer accumulation
+            self.state.is_playing = False
+            self._accumulated_frames = 0.0
+            self._on_seek(self.state.current_frame - 1)
+            return
+        if event.key() == Qt.Key.Key_Right and not (
+            event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+        ):
+            self.state.is_playing = False
+            self._accumulated_frames = 0.0
+            self._on_seek(self.state.current_frame + 1)
             return
         # modifiers first
         if (event.modifiers() & Qt.KeyboardModifier.ControlModifier) and event.key() == Qt.Key.Key_Left:
@@ -198,10 +220,7 @@ class MainWindow(QMainWindow):
             self._bump_speed(down=True)
         elif event.key() == Qt.Key.Key_Plus or event.key() == Qt.Key.Key_Equal:
             self._bump_speed(down=False)
-        elif event.key() == Qt.Key.Key_Left:
-            self._on_seek(self.state.current_frame - 1)
-        elif event.key() == Qt.Key.Key_Right:
-            self._on_seek(self.state.current_frame + 1)
+        # plain left/right handled above for snappy stepping
         elif event.key() == Qt.Key.Key_Q:
             self.close()
         elif event.key() == Qt.Key.Key_Escape:
@@ -216,8 +235,7 @@ class MainWindow(QMainWindow):
         if not self.metadata_files:
             return
         nxt = self.current_metadata_index + delta
-        if 0 <= nxt < len(self.metadata_files):
-            self._load_metadata_by_index(nxt)
+        self._load_metadata_by_index(nxt)
 
     def _enter_detailed(self, track_id: int) -> None:
         self.state.current_track_id = track_id
