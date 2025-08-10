@@ -8,6 +8,14 @@ from PySide6.QtGui import QImage, QPainter, QPen, QColor
 from PySide6.QtWidgets import QWidget
 
 from player.core.player_state import PlayerState
+from settings import (
+    OUTPUT_WIDTH,
+    OUTPUT_HEIGHT,
+    TARGET_BBOX_HEIGHT_RATIO,
+    SMOOTHING_ALPHA,
+    MIN_SCALE,
+    MAX_SCALE,
+)
 
 
 def _to_qimage(frame: np.ndarray) -> QImage:
@@ -44,6 +52,7 @@ class VideoWidget(QWidget):
         self.zoom: float = 1.0
         self.view_rect_img: Optional[QRect] = None
         self._hud_text: Optional[str] = None
+        self._prev_scale_by_track_id: dict[int, float] = {}
 
     def sizeHint(self) -> QSize:
         return QSize(960, 540)
@@ -59,21 +68,29 @@ class VideoWidget(QWidget):
         if self.current_frame_image is None or self.current_frame_image.isNull():
             return
 
-        # Fit frame into widget while preserving aspect ratio
-        target_rect = self._fit_rect(self.current_frame_image.width(), self.current_frame_image.height(), self.rect())
-
-        source_rect = self.current_frame_image.rect()
-
-        # Determine source rect for detailed mode or zoomed overview
+        # Determine target and source rects
         if self.state.current_mode == 'detailed' and self.state.current_track_id is not None:
+            target_rect = self._fit_aspect_rect(OUTPUT_WIDTH, OUTPUT_HEIGHT, self.rect())
+            source_rect = self.current_frame_image.rect()
             det_bbox = self._bbox_for_track_at_frame(self.state.current_track_id, self.state.current_frame)
             if det_bbox:
-                x1, y1, x2, y2 = det_bbox
-                source_rect = QRect(x1, y1, max(1, x2 - x1), max(1, y2 - y1))
-        elif self.zoom != 1.0 and self.view_rect_img is not None:
-            source_rect = self._clamp_view_rect(
-                self.view_rect_img, self.current_frame_image.width(), self.current_frame_image.height()
+                source_rect = self._compute_detailed_source_rect(
+                    det_bbox,
+                    self.current_frame_image.width(),
+                    self.current_frame_image.height(),
+                    OUTPUT_WIDTH,
+                    OUTPUT_HEIGHT,
+                )
+        else:
+            # Fit whole frame and optionally apply interactive zoom view
+            target_rect = self._fit_rect(
+                self.current_frame_image.width(), self.current_frame_image.height(), self.rect()
             )
+            source_rect = self.current_frame_image.rect()
+            if self.zoom != 1.0 and self.view_rect_img is not None:
+                source_rect = self._clamp_view_rect(
+                    self.view_rect_img, self.current_frame_image.width(), self.current_frame_image.height()
+                )
 
         painter.drawImage(target_rect, self.current_frame_image, source_rect)
 
@@ -119,6 +136,17 @@ class VideoWidget(QWidget):
         scale = min(bounds.width() / img_w, bounds.height() / img_h)
         w = int(img_w * scale)
         h = int(img_h * scale)
+        x = bounds.x() + (bounds.width() - w) // 2
+        y = bounds.y() + (bounds.height() - h) // 2
+        return QRect(x, y, w, h)
+
+    @staticmethod
+    def _fit_aspect_rect(aspect_w: int, aspect_h: int, bounds: QRect) -> QRect:
+        if aspect_w <= 0 or aspect_h <= 0:
+            return QRect(bounds.x(), bounds.y(), bounds.width(), bounds.height())
+        scale = min(bounds.width() / aspect_w, bounds.height() / aspect_h)
+        w = int(aspect_w * scale)
+        h = int(aspect_h * scale)
         x = bounds.x() + (bounds.width() - w) // 2
         y = bounds.y() + (bounds.height() - h) // 2
         return QRect(x, y, w, h)
@@ -224,6 +252,7 @@ class VideoWidget(QWidget):
         self.zoom = 1.0
         self.zoom_center_img = None
         self._hud_text = None
+        self._prev_scale_by_track_id.clear()
 
     def show_hud(self, text: str) -> None:
         self._hud_text = text
@@ -251,3 +280,47 @@ class VideoWidget(QWidget):
         x = min(max(bounds.x(), rect.x()), bounds.x() + bounds.width() - w)
         y = min(max(bounds.y(), rect.y()), bounds.y() + bounds.height() - h)
         return QRect(x, y, w, h)
+
+    def _compute_detailed_source_rect(
+        self,
+        det_bbox: Tuple[int, int, int, int],
+        img_w: int,
+        img_h: int,
+        out_w: int,
+        out_h: int,
+    ) -> QRect:
+        x1, y1, x2, y2 = det_bbox
+        bbox_h = max(1, y2 - y1)
+        s_inst = (TARGET_BBOX_HEIGHT_RATIO * out_h) / bbox_h
+        s_inst = float(np.clip(s_inst, MIN_SCALE, MAX_SCALE))
+
+        track_id = self.state.current_track_id
+        if track_id is not None and 0.0 < SMOOTHING_ALPHA < 1.0:
+            prev = self._prev_scale_by_track_id.get(track_id)
+        else:
+            prev = None
+        if prev is not None and 0.0 < SMOOTHING_ALPHA < 1.0:
+            s = SMOOTHING_ALPHA * prev + (1.0 - SMOOTHING_ALPHA) * s_inst
+        else:
+            s = s_inst
+        if track_id is not None:
+            self._prev_scale_by_track_id[track_id] = s
+
+        # bbox centre in original image coords
+        cx = (x1 + x2) * 0.5
+        cy = (y1 + y2) * 0.5
+        # crop window in scaled-image coordinates
+        scx = cx * s
+        scy = cy * s
+        sx1 = scx - out_w * 0.5
+        sy1 = scy - out_h * 0.5
+        sx2 = sx1 + out_w
+        sy2 = sy1 + out_h
+        # map back to original image coords
+        ox1 = int(max(0, min(img_w, sx1 / s)))
+        oy1 = int(max(0, min(img_h, sy1 / s)))
+        ox2 = int(max(0, min(img_w, sx2 / s)))
+        oy2 = int(max(0, min(img_h, sy2 / s)))
+        rect = QRect(ox1, oy1, max(1, ox2 - ox1), max(1, oy2 - oy1))
+        # Ensure fully within image bounds
+        return self._clamp_rect_to_bounds(rect, QRect(0, 0, img_w, img_h))
