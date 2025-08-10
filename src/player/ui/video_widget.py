@@ -69,19 +69,14 @@ class VideoWidget(QWidget):
         if self.current_frame_image is None or self.current_frame_image.isNull():
             return
 
-        # Determine target and source rects
+        # Draw based on mode
         if self.state.current_mode == 'detailed' and self.state.current_track_id is not None:
             target_rect = self._fit_aspect_rect(OUTPUT_WIDTH, OUTPUT_HEIGHT, self.rect())
-            source_rect = self.current_frame_image.rect()
             det_bbox = self._bbox_for_track_at_frame(self.state.current_track_id, self.state.current_frame)
             if det_bbox:
-                source_rect = self._compute_detailed_source_rect(
-                    det_bbox,
-                    self.current_frame_image.width(),
-                    self.current_frame_image.height(),
-                    OUTPUT_WIDTH,
-                    OUTPUT_HEIGHT,
-                )
+                self._draw_detailed_with_padding(painter, det_bbox, target_rect)
+            else:
+                painter.drawImage(target_rect, self.current_frame_image, self.current_frame_image.rect())
         else:
             # Fit whole frame and optionally apply interactive zoom view
             target_rect = self._fit_rect(
@@ -92,30 +87,28 @@ class VideoWidget(QWidget):
                 source_rect = self._clamp_view_rect(
                     self.view_rect_img, self.current_frame_image.width(), self.current_frame_image.height()
                 )
+            painter.drawImage(target_rect, self.current_frame_image, source_rect)
+            # Draw overlays in overview mode (respect source scaling)
+            if self.state.current_mode == 'overview' and self.state.video_properties is not None:
+                scale_x = target_rect.width() / source_rect.width()
+                scale_y = target_rect.height() / source_rect.height()
+                offset_x = target_rect.x() - source_rect.x() * scale_x
+                offset_y = target_rect.y() - source_rect.y() * scale_y
 
-        painter.drawImage(target_rect, self.current_frame_image, source_rect)
-
-        # Draw overlays in overview mode (respect source scaling)
-        if self.state.current_mode == 'overview' and self.state.video_properties is not None:
-            scale_x = target_rect.width() / source_rect.width()
-            scale_y = target_rect.height() / source_rect.height()
-            offset_x = target_rect.x() - source_rect.x() * scale_x
-            offset_y = target_rect.y() - source_rect.y() * scale_y
-
-            current_dets = self.state.detections_by_frame.get(self.state.current_frame, [])
-            for track_id, d in current_dets:
-                if self.state.visible_tracks and track_id not in self.state.visible_tracks:
-                    continue
-                x1, y1, x2, y2 = d.bbox
-                rx1 = int(offset_x + x1 * scale_x)
-                ry1 = int(offset_y + y1 * scale_y)
-                rx2 = int(offset_x + x2 * scale_x)
-                ry2 = int(offset_y + y2 * scale_y)
-                pen = QPen(self._color_for_track(track_id))
-                pen.setWidth(2)
-                painter.setPen(pen)
-                painter.drawRect(QRect(rx1, ry1, rx2 - rx1, ry2 - ry1))
-                painter.drawText(QRect(rx1, max(0, ry1 - 18), 80, 16), Qt.AlignmentFlag.AlignLeft, f'ID:{track_id}')
+                current_dets = self.state.detections_by_frame.get(self.state.current_frame, [])
+                for track_id, d in current_dets:
+                    if self.state.visible_tracks and track_id not in self.state.visible_tracks:
+                        continue
+                    x1, y1, x2, y2 = d.bbox
+                    rx1 = int(offset_x + x1 * scale_x)
+                    ry1 = int(offset_y + y1 * scale_y)
+                    rx2 = int(offset_x + x2 * scale_x)
+                    ry2 = int(offset_y + y2 * scale_y)
+                    pen = QPen(self._color_for_track(track_id))
+                    pen.setWidth(2)
+                    painter.setPen(pen)
+                    painter.drawRect(QRect(rx1, ry1, rx2 - rx1, ry2 - ry1))
+                    painter.drawText(QRect(rx1, max(0, ry1 - 18), 80, 16), Qt.AlignmentFlag.AlignLeft, f'ID:{track_id}')
 
         # HUD text
         if self._hud_text:
@@ -281,6 +274,38 @@ class VideoWidget(QWidget):
         y = min(max(bounds.y(), rect.y()), bounds.y() + bounds.height() - h)
         return QRect(x, y, w, h)
 
+    @staticmethod
+    def _clamp_rect_to_bounds_preserve_aspect(rect: QRect, bounds: QRect) -> QRect:
+        """Clamp rect within bounds while keeping its aspect ratio.
+
+        - Translate inside bounds when possible without resizing.
+        - If larger than bounds along any axis, scale down uniformly.
+        """
+        req_w = max(1, rect.width())
+        req_h = max(1, rect.height())
+        max_w = max(1, bounds.width())
+        max_h = max(1, bounds.height())
+
+        # Uniformly scale down if needed
+        if req_w > max_w or req_h > max_h:
+            scale = min(max_w / req_w, max_h / req_h)
+            new_w = max(1, int(req_w * scale))
+            new_h = max(1, int(req_h * scale))
+        else:
+            new_w = req_w
+            new_h = req_h
+
+        # Preserve center, then translate to fit within bounds
+        cx = rect.x() + req_w // 2
+        cy = rect.y() + req_h // 2
+        x = cx - new_w // 2
+        y = cy - new_h // 2
+
+        x = max(bounds.x(), min(x, bounds.x() + max_w - new_w))
+        y = max(bounds.y(), min(y, bounds.y() + max_h - new_h))
+
+        return QRect(int(x), int(y), int(new_w), int(new_h))
+
     def _compute_detailed_source_rect(
         self,
         det_bbox: Tuple[int, int, int, int],
@@ -322,8 +347,8 @@ class VideoWidget(QWidget):
         ox2 = int(max(0, min(img_w, sx2 / s)))
         oy2 = int(max(0, min(img_h, sy2 / s)))
         rect = QRect(ox1, oy1, max(1, ox2 - ox1), max(1, oy2 - oy1))
-        # Ensure fully within image bounds
-        return self._clamp_rect_to_bounds(rect, QRect(0, 0, img_w, img_h))
+        # Ensure fully within image bounds while preserving aspect ratio
+        return self._clamp_rect_to_bounds_preserve_aspect(rect, QRect(0, 0, img_w, img_h))
 
     def _color_for_track(self, track_id: int) -> QColor:
         if track_id in self._color_cache:
@@ -335,3 +360,77 @@ class VideoWidget(QWidget):
         color = QColor.fromHsv(hue, 220, 255)
         self._color_cache[track_id] = color
         return color
+
+    # ------------------------------------------------------------------
+    # Detailed-mode renderer with black padding (no stretching)
+    # ------------------------------------------------------------------
+    def _draw_detailed_with_padding(
+        self, painter: QPainter, det_bbox: Tuple[int, int, int, int], target_rect: QRect
+    ) -> None:
+        if self.current_frame_image is None or self.current_frame_image.isNull():
+            return
+        img = self.current_frame_image
+        img_w = img.width()
+        img_h = img.height()
+        out_w = int(OUTPUT_WIDTH)
+        out_h = int(OUTPUT_HEIGHT)
+
+        x1, y1, x2, y2 = det_bbox
+        bbox_h = max(1, y2 - y1)
+        s_inst = (TARGET_BBOX_HEIGHT_RATIO * out_h) / bbox_h
+        s_inst = float(np.clip(s_inst, MIN_SCALE, MAX_SCALE))
+
+        track_id = self.state.current_track_id
+        prev = self._prev_scale_by_track_id.get(track_id, None) if track_id is not None else None
+        if prev is not None and 0.0 < SMOOTHING_ALPHA < 1.0:
+            s = SMOOTHING_ALPHA * prev + (1.0 - SMOOTHING_ALPHA) * s_inst
+        else:
+            s = s_inst
+        if track_id is not None:
+            self._prev_scale_by_track_id[track_id] = s
+
+        # Scale entire frame
+        scaled_w = max(1, int(img_w * s))
+        scaled_h = max(1, int(img_h * s))
+        scaled_img = img.scaled(
+            scaled_w, scaled_h, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation
+        )
+
+        # Centre of bbox in scaled coordinates
+        cx = (x1 + x2) * 0.5
+        cy = (y1 + y2) * 0.5
+        scx = int(cx * s)
+        scy = int(cy * s)
+
+        # Desired crop window in scaled image coords
+        crop_x1 = scx - out_w // 2
+        crop_y1 = scy - out_h // 2
+        crop_x2 = crop_x1 + out_w
+        crop_y2 = crop_y1 + out_h
+
+        # Intersection with scaled image
+        src_x1 = max(0, crop_x1)
+        src_y1 = max(0, crop_y1)
+        src_x2 = min(scaled_w, crop_x2)
+        src_y2 = min(scaled_h, crop_y2)
+
+        dst_x1 = src_x1 - crop_x1
+        dst_y1 = src_y1 - crop_y1
+        copy_w = max(0, src_x2 - src_x1)
+        copy_h = max(0, src_y2 - src_y1)
+
+        # Compose into a fixed-size offscreen image (black background)
+        out_img = QImage(out_w, out_h, QImage.Format.Format_BGR888)
+        out_img.fill(QColor(0, 0, 0))
+        if copy_w > 0 and copy_h > 0:
+            off = QPainter(out_img)
+            off.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+            off.drawImage(
+                QRect(int(dst_x1), int(dst_y1), int(copy_w), int(copy_h)),
+                scaled_img,
+                QRect(int(src_x1), int(src_y1), int(copy_w), int(copy_h)),
+            )
+            off.end()
+
+        # Finally draw to screen into target_rect (same aspect as out_img)
+        painter.drawImage(target_rect, out_img)

@@ -20,7 +20,7 @@ MAX_OVERLAP_LENGTH_SECONDS = 10
 # Minimum percentage of total frames a track must appear in (default 20%)
 MIN_FRAME_PERCENTAGE = 20
 
-SMOOTHING_WINDOW_SIZE = 1  # TODO more or less?
+SMOOTHING_WINDOW_SIZE = 2  # TODO more or less?
 
 VIDEO_SUFFIX_SECONDS = 1.0
 
@@ -64,7 +64,7 @@ OPTIMIZER_TIMEOUT_SECONDS = 60
 # Video splicing settings
 OUTPUT_WIDTH = 1000  # width of the written video
 OUTPUT_HEIGHT = 1000  # height of the written video
-TARGET_BBOX_HEIGHT_RATIO = 0.50  # bbox should fill ~60 % of output height
+TARGET_BBOX_HEIGHT_RATIO = 0.70  # bbox should fill ~60 % of output height
 SMOOTHING_ALPHA = 0.0  # 0 = no smoothing, 0.8 ≈ keep 80 % of the previous scale
 MIN_SCALE = 0.2  # avoid over/under-zoom
 MAX_SCALE = 10.0  # avoid over/under-zoom
