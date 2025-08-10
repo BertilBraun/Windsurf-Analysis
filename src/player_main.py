@@ -6,7 +6,7 @@ from typing import Optional
 
 from PySide6.QtWidgets import QApplication
 
-from ui.main_window import MainWindow
+from player.ui.main_window import MainWindow
 
 
 def run_player(start_dir: Optional[str] = None) -> None:

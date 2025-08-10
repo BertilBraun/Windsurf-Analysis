@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Optional
 
 import cv2
 
@@ -41,6 +41,21 @@ class VideoManager:
             return -1, None
         idx = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
         return idx, frame
+
+    def advance_by(self, frames: int) -> tuple[int, Optional[any]]:
+        """Advance forward by N frames efficiently and return the next decoded frame.
+
+        Uses grab() to skip frames without seeking, which is typically faster than
+        setting CAP_PROP_POS_FRAMES repeatedly.
+        """
+        if self.cap is None or frames <= 0:
+            return self.read_frame()
+        # Skip frames-1 using grab (no image copy to Python)
+        for _ in range(max(0, frames - 1)):
+            ok = self.cap.grab()
+            if not ok:
+                return -1, None
+        return self.read_frame()
 
     def release(self) -> None:
         if self.cap is not None:

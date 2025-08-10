@@ -1,6 +1,7 @@
 import os
 import logging
 import json
+import pickle
 from typing import Callable, Sequence, TypeVar
 
 from tqdm import tqdm
@@ -9,6 +10,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 from helpers import log_and_reraise
 
+from player.core.player_state import DetectionLite, Metadata, TrackLite, VideoProperties
 from video_io import VideoInfo, VideoReader, VideoWriter, get_video_properties
 from detector import SurferDetector
 from visualization.annotation_drawer import Annotation, AnnotationDrawer
@@ -39,7 +41,7 @@ class WindsurfingVideoProcessor:
         self,
         draw_annotations: bool,
         output_dir: str,
-        dry_run: bool,
+        generate_videos: bool,
         debug_views: bool,
         parallel_workers: int,
         stabilize: bool,
@@ -48,7 +50,7 @@ class WindsurfingVideoProcessor:
         self.executor = ProcessPoolExecutor(max_workers=parallel_workers)
         self.draw_annotations = draw_annotations
         self.output_dir = Path(output_dir)
-        self.dry_run = dry_run
+        self.generate_videos = generate_videos
         self.debug_views = debug_views
         self.stabilize = stabilize
 
@@ -78,7 +80,7 @@ class WindsurfingVideoProcessor:
         # Always save compact track metadata for the interactive player
         _save_tracks_metadata(processed_tracks, input_path, self.output_dir, props)
 
-        if not self.dry_run:
+        if self.generate_videos:
             self.submit_task(
                 _generate_individual_videos_worker_function,
                 (processed_tracks, input_path, self.output_dir, self.stabilize),
@@ -184,35 +186,34 @@ def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Pat
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    metadata = {
-        'input_video_path': input_path.absolute().as_posix(),
-        'video_properties': {
-            'fps': video_props.fps,
-            'width': video_props.width,
-            'height': video_props.height,
-            'total_frames': video_props.total_frames,
-        },
-        'tracks': [
-            {
-                'track_id': track.track_id,
-                'start_frame': track.start_frame(),
-                'end_frame': track.end_frame(),
-                'start_time': track.start_frame() / video_props.fps,
-                'duration': (track.end_frame() - track.start_frame()) / video_props.fps,
-                'detection_count': len(track.sorted_detections),
-                'detections': [
-                    {
-                        'frame_idx': det.frame_idx,
-                        'bbox': [int(det.bbox.x1), int(det.bbox.y1), int(det.bbox.x2), int(det.bbox.y2)],
-                        'confidence': float(det.confidence),
-                    }
+    metadata = Metadata(
+        input_video_path=input_path.absolute().as_posix(),
+        video_properties=VideoProperties(
+            fps=video_props.fps,
+            width=video_props.width,
+            height=video_props.height,
+            total_frames=video_props.total_frames,
+        ),
+        tracks=[
+            TrackLite(
+                track_id=track.track_id,
+                start_frame=track.start_frame(),
+                end_frame=track.end_frame(),
+                start_time=track.start_frame() / video_props.fps,
+                duration=(track.end_frame() - track.start_frame()) / video_props.fps,
+                detection_count=len(track.sorted_detections),
+                detections=[
+                    DetectionLite(
+                        frame_idx=det.frame_idx,
+                        bbox=[int(det.bbox.x1), int(det.bbox.y1), int(det.bbox.x2), int(det.bbox.y2)],
+                        confidence=float(det.confidence),
+                    )
                     for det in track.sorted_detections
                 ],
-            }
+            )
             for track in tracks
         ],
-    }
+    )
 
-    metadata_path = output_dir / f'{input_path.stem}.tracks.json'
-    with open(metadata_path, 'w', encoding='utf-8') as f:
-        json.dump(metadata, f, ensure_ascii=False)
+    with open(output_dir / f'{input_path.stem}.tracks.pkl', 'wb') as f:
+        pickle.dump(metadata, f)

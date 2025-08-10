@@ -26,15 +26,10 @@ def main():
         default=STANDARD_OUTPUT_DIR,
         help='Directory for individual surfer videos (default: individual_surfers)',
     )
+    parser.add_argument('--generate-videos', action='store_true', help='Generate individual videos')
     parser.add_argument('--draw-annotations', action='store_true', help='Draw annotations on the video')
-    parser.add_argument(
-        '--dry-run', action='store_true', help='Run without rendering individual videos (for testing purposes)'
-    )
     parser.add_argument('--debug-views', action='store_true', help='Output debug views of the video processing steps')
     parser.add_argument('--stabilize', action='store_true', help='Stabilize the video')
-    parser.add_argument(
-        '--generate-videos', action='store_true', help='Also render individual/annotated videos (legacy output)'
-    )
     parser.add_argument('--parallel-workers', type=int, default=1, help='Number of parallel workers to use')
 
     args = parser.parse_args()
@@ -77,10 +72,9 @@ def main():
                     indices_to_process,
                     output_dir_path,
                     args.draw_annotations,
-                    args.dry_run,
+                    args.generate_videos,
                     args.debug_views,
                     args.stabilize,
-                    args.generate_videos,
                 )
             )
 
@@ -102,22 +96,16 @@ def _process_videos(
     indices_to_process: list[int],
     output_dir: Path | None,
     draw_annotations: bool,
-    dry_run: bool,
+    generate_videos: bool,
     debug_views: bool,
     stabilize: bool,
-    generate_videos: bool,
 ):
     logger = setup_logging(output_dir)
-
-    # For the new player workflow, skip legacy video rendering unless explicitly requested
-    if not generate_videos:
-        draw_annotations = False
-        dry_run = True
 
     processor = WindsurfingVideoProcessor(
         draw_annotations=draw_annotations,
         output_dir=str(output_dir) if output_dir else STANDARD_OUTPUT_DIR,
-        dry_run=dry_run,
+        generate_videos=generate_videos,
         debug_views=debug_views,
         parallel_workers=NUM_PARALLEL_VIDEO_WORKERS,
         stabilize=stabilize,

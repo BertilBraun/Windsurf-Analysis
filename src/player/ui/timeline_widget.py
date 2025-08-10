@@ -6,7 +6,7 @@ from PySide6.QtCore import QRect, Signal
 from PySide6.QtGui import QPainter, QColor, QMouseEvent
 from PySide6.QtWidgets import QWidget
 
-from core.player_state import PlayerState
+from player.core.player_state import PlayerState
 
 
 class TimelineWidget(QWidget):

@@ -2,15 +2,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional, List
 
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import QTimer, Qt, QElapsedTimer
 from PySide6.QtWidgets import QMainWindow, QWidget, QFileDialog, QVBoxLayout, QMessageBox
 
-from core.player_state import PlayerState
-from core.video_manager import VideoManager
-from core.metadata_loader import load_tracks_metadata
-from ui.video_widget import VideoWidget
-from ui.timeline_widget import TimelineWidget
-from ui.controls_widget import ControlsWidget
+from player.core.player_state import PlayerState
+from player.core.video_manager import VideoManager
+from player.core.metadata_loader import load_tracks_metadata
+from player.ui.video_widget import VideoWidget
+from player.ui.timeline_widget import TimelineWidget
+from player.ui.controls_widget import ControlsWidget
 
 
 class MainWindow(QMainWindow):
@@ -23,6 +23,9 @@ class MainWindow(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
         self.timer.start(16)  # ~60 FPS UI timer
+        self._elapsed = QElapsedTimer()
+        self._elapsed.start()
+        self._accum_frames: float = 0.0
 
         # UI layout
         central = QWidget()
@@ -57,6 +60,9 @@ class MainWindow(QMainWindow):
     # ------------------------------ UI actions ------------------------------ #
     def _toggle_play(self) -> None:
         self.state.is_playing = not self.state.is_playing
+        if self.state.is_playing:
+            self._elapsed.restart()
+            self._accum_frames = 0.0
 
     def _bump_speed(self, down: bool) -> None:
         rates = [0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
@@ -78,6 +84,9 @@ class MainWindow(QMainWindow):
         if frame_img is not None:
             self.video_widget.set_frame(frame_img)
         self.timeline.update()
+        # Reset timing after explicit seek
+        self._elapsed.restart()
+        self._accum_frames = 0.0
 
     def _on_visibility_changed(self, visible: set[int]) -> None:
         self.video_widget.update()
@@ -86,17 +95,25 @@ class MainWindow(QMainWindow):
     def _tick(self) -> None:
         if not (self.state.is_playing and self.video):
             return
-        step = max(1, int(self.state.playback_speed))
-        next_frame = self.state.current_frame + step
-        if next_frame >= self.video.total_frames:
-            # stop at end; do not auto-advance to next video
+        # Time-based advancement for smooth slow/fast playback
+        elapsed_ms = max(0, self._elapsed.restart())
+        frames_float = (elapsed_ms / 1000.0) * self.video.fps * float(self.state.playback_speed)
+        self._accum_frames += frames_float
+        frames_to_advance = int(self._accum_frames)
+        if frames_to_advance <= 0:
+            return
+        self._accum_frames -= frames_to_advance
+        idx, frame_img = self.video.advance_by(frames_to_advance)
+        if idx < 0 or frame_img is None:
             self.state.is_playing = False
             return
-        self._on_seek(next_frame)
+        self.state.current_frame = idx
+        self.video_widget.set_frame(frame_img)
+        self.timeline.update()
 
     # --------------------------- Loading and setup -------------------------- #
     def _ask_output_dir(self) -> Optional[Path]:
-        dlg = QFileDialog(self, 'Select output directory with .tracks.json files')
+        dlg = QFileDialog(self, 'Select output directory with .tracks.pkl files')
         dlg.setFileMode(QFileDialog.FileMode.Directory)
         if dlg.exec():
             sel = dlg.selectedFiles()
@@ -105,9 +122,9 @@ class MainWindow(QMainWindow):
         return None
 
     def _load_first_tracks_file(self, directory: Path) -> None:
-        self.metadata_files = sorted(directory.glob('*.tracks.json'))
+        self.metadata_files = sorted(directory.glob('*.tracks.pkl'))
         if not self.metadata_files:
-            QMessageBox.warning(self, 'No metadata', 'No .tracks.json files found in the selected directory.')
+            QMessageBox.warning(self, 'No metadata', 'No .tracks.pkl files found in the selected directory.')
             return
         self._load_metadata_by_index(0)
 
@@ -117,16 +134,17 @@ class MainWindow(QMainWindow):
         self.current_metadata_index = index
         self._load_metadata(self.metadata_files[index])
 
-    def _load_metadata(self, json_path: Path) -> None:
-        input_video_path, video_props, tracks = load_tracks_metadata(json_path)
+    def _load_metadata(self, metadata_path: Path) -> None:
+        metadata = load_tracks_metadata(metadata_path)
         self.state.reset_for_new_video()
-        self.state.video_properties = video_props
-        self.state.loaded_tracks = tracks
-        self.state.visible_tracks = {t.track_id for t in tracks}
-        self.state.input_video_path = input_video_path
-        self.setWindowTitle(f'Windsurf Player - {Path(input_video_path).name}')
+        self.state.video_properties = metadata.video_properties
+        self.state.loaded_tracks = metadata.tracks
+        self.state.visible_tracks = {t.track_id for t in metadata.tracks}
+        self.state.rebuild_detection_index()
+        self.state.input_video_path = metadata.input_video_path
+        self.setWindowTitle(f'Windsurf Player - {Path(metadata.input_video_path).name}')
 
-        self._open_video(Path(input_video_path))
+        self._open_video(Path(metadata.input_video_path))
 
     def _open_video(self, video_path: Path) -> None:
         if self.video:
@@ -134,6 +152,11 @@ class MainWindow(QMainWindow):
         self.video = VideoManager(video_path)
         self.state.current_frame = 0
         self._on_seek(0)
+        if self.video and self.video.fps > 0:
+            self.timer.setInterval(max(5, int(1000 / min(60.0, self.video.fps))))
+        # Reset timing for new video
+        self._elapsed.restart()
+        self._accum_frames = 0.0
 
     # ----------------------------- Key bindings ----------------------------- #
     def keyPressEvent(self, event):  # type: ignore[override]

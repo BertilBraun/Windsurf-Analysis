@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from typing import Optional, Callable, Tuple
 
-import cv2
 import numpy as np
 from PySide6.QtCore import Qt, QRect, QSize, QTimer
 from PySide6.QtGui import QImage, QPainter, QPen, QColor
 from PySide6.QtWidgets import QWidget
 
-from core.player_state import PlayerState
+from player.core.player_state import PlayerState
 
 
 def _to_qimage(frame: np.ndarray) -> QImage:
@@ -17,8 +16,8 @@ def _to_qimage(frame: np.ndarray) -> QImage:
     if len(frame.shape) == 3:
         h, w, ch = frame.shape
         bytes_per_line = ch * w
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        return QImage(rgb.data, w, h, bytes_per_line, QImage.Format.Format_RGB888).copy()
+        # Use BGR888 directly to avoid an extra color conversion
+        return QImage(frame.data, w, h, bytes_per_line, QImage.Format.Format_BGR888).copy()
     else:
         h, w = frame.shape
         return QImage(frame.data, w, h, w, QImage.Format.Format_Grayscale8).copy()
@@ -38,6 +37,8 @@ class VideoWidget(QWidget):
         self.current_frame_image: Optional[QImage] = None
         self.setMinimumSize(640, 360)
         self.on_track_selected = on_track_selected
+        # Hint to Qt that we fully paint the widget to avoid unnecessary clears
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
 
         # zoom state (persistent view rectangle in image coords)
         self.zoom: float = 1.0
@@ -53,6 +54,7 @@ class VideoWidget(QWidget):
 
     def paintEvent(self, event):  # type: ignore[override]
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
         painter.fillRect(self.rect(), QColor(0, 0, 0))
         if self.current_frame_image is None or self.current_frame_image.isNull():
             return
@@ -86,22 +88,17 @@ class VideoWidget(QWidget):
             pen.setWidth(2)
             painter.setPen(pen)
 
-            for track in self.state.loaded_tracks:
-                if self.state.visible_tracks and track.track_id not in self.state.visible_tracks:
+            current_dets = self.state.detections_by_frame.get(self.state.current_frame, [])
+            for track_id, d in current_dets:
+                if self.state.visible_tracks and track_id not in self.state.visible_tracks:
                     continue
-                # draw bbox for this frame if available
-                for d in track.detections:
-                    if d.frame_idx == self.state.current_frame:
-                        x1, y1, x2, y2 = d.bbox
-                        rx1 = int(offset_x + x1 * scale_x)
-                        ry1 = int(offset_y + y1 * scale_y)
-                        rx2 = int(offset_x + x2 * scale_x)
-                        ry2 = int(offset_y + y2 * scale_y)
-                        painter.drawRect(QRect(rx1, ry1, rx2 - rx1, ry2 - ry1))
-                        painter.drawText(
-                            QRect(rx1, max(0, ry1 - 18), 80, 16), Qt.AlignmentFlag.AlignLeft, f'ID:{track.track_id}'
-                        )
-                        break
+                x1, y1, x2, y2 = d.bbox
+                rx1 = int(offset_x + x1 * scale_x)
+                ry1 = int(offset_y + y1 * scale_y)
+                rx2 = int(offset_x + x2 * scale_x)
+                ry2 = int(offset_y + y2 * scale_y)
+                painter.drawRect(QRect(rx1, ry1, rx2 - rx1, ry2 - ry1))
+                painter.drawText(QRect(rx1, max(0, ry1 - 18), 80, 16), Qt.AlignmentFlag.AlignLeft, f'ID:{track_id}')
 
         # HUD text
         if self._hud_text:
@@ -157,16 +154,13 @@ class VideoWidget(QWidget):
         img_y = int(source_rect.y() + py * source_rect.height())
 
         # find top-most track bbox under cursor
-        for t in self.state.loaded_tracks:
-            if self.state.visible_tracks and t.track_id not in self.state.visible_tracks:
+        for track_id, d in self.state.detections_by_frame.get(self.state.current_frame, []):
+            if self.state.visible_tracks and track_id not in self.state.visible_tracks:
                 continue
-            for d in t.detections:
-                if d.frame_idx != self.state.current_frame:
-                    continue
-                x1, y1, x2, y2 = d.bbox
-                if x1 <= img_x <= x2 and y1 <= img_y <= y2:
-                    self.on_track_selected(t.track_id)
-                    return
+            x1, y1, x2, y2 = d.bbox
+            if x1 <= img_x <= x2 and y1 <= img_y <= y2:
+                self.on_track_selected(track_id)
+                return
 
     def wheelEvent(self, event):  # type: ignore[override]
         # zoom in/out around mouse position; relative to current view only
