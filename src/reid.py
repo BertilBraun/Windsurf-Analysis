@@ -52,3 +52,20 @@ class ReID:
             feats = self.extractor(batch)
         feats = normalize(feats, dim=1)
         return feats.cpu().numpy()
+
+    def get_features_for_crops(self, crops: list[np.ndarray]) -> np.ndarray:
+        """
+        Args:
+            crops: list of cropped person images (H×W×3, BGR uint8)
+
+        Returns:
+            NxD normalized feature array in the same order as input crops
+        """
+        if len(crops) == 0:
+            return np.zeros((0, 512), dtype=np.float32)
+
+        batch = torch.cat([self.preprocess_crop(c) for c in crops], dim=0)
+        with torch.no_grad():
+            feats = self.extractor(batch)
+        feats = normalize(feats, dim=1)
+        return feats.cpu().numpy()

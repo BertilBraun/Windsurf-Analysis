@@ -1,18 +1,16 @@
 import os
 import logging
 import numpy as np
-from typing import Generator
 
 from tqdm import tqdm
 
 from ultralytics import YOLO
-from ultralytics.engine.results import Results
 
 
 from reid import ReID
 from settings import YOLO_MODEL_PATH, REID_MODEL_PATH, MIN_TRACKING_FPS, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE
 from video_io import get_video_properties
-from common_types import BoundingBox, Detection, compute_color_histogram
+from common_types import BoundingBox, Detection
 
 
 class SurferDetector:
@@ -23,11 +21,16 @@ class SurferDetector:
         if not YOLO_MODEL_PATH.exists():
             raise FileNotFoundError(f'Model {YOLO_MODEL_PATH} not found')
 
-        self.model = YOLO(YOLO_MODEL_PATH, verbose=False)
+        self.model = YOLO(model=YOLO_MODEL_PATH, verbose=False)
         self.reid_model = ReID(model_path=REID_MODEL_PATH)
 
-    def run_object_detection_on_video(self, video_path: os.PathLike | str) -> Generator[Detection, None, None]:
-        """Run batched inference on entire video, return generator of (frame, detections)"""
+    def run_object_detection_on_video(self, video_path: os.PathLike | str) -> list[Detection]:
+        """Run batched inference on entire video and return all detections as a list.
+
+        This performs YOLO inference in a streamed fashion but accumulates lightweight
+        metadata (frame index, boxes and confidences) and then
+        runs ReID in larger batches across frames to improve GPU utilization.
+        """
 
         video_props = get_video_properties(video_path)
         skip_frames = video_props.fps // MIN_TRACKING_FPS
@@ -42,54 +45,91 @@ class SurferDetector:
             verbose=False,
         )
 
+        # Accumulate per-detection info first (without ReID), then do ReID in batches
+        pending_crops: list[np.ndarray] = []
+        pending_meta: list[tuple[BoundingBox, float, int]] = []
+        all_detections: list[Detection] = []
+
         for frame_index, result in tqdm(
             enumerate(results), total=video_props.total_frames // skip_frames, desc='Processing video'
         ):
-            yield from self._extract_detections(result, frame_index * skip_frames)
+            frame_idx = frame_index * skip_frames
+            if result.boxes is None or len(result.boxes) == 0:
+                continue
 
-    def _extract_detections(self, result: Results, frame_idx: int) -> list[Detection]:
-        """Extract detection information for further processing"""
+            boxes = _to_numpy(result.boxes.xyxy)
+            confidences = _to_numpy(result.boxes.conf)
+            orig_img = result.orig_img
 
-        if result.boxes is None or len(result.boxes) == 0:
-            return []
+            # Prepare crops and metadata
+            for i in range(len(boxes)):
+                bbox = BoundingBox(
+                    x1=boxes[i][0],
+                    y1=boxes[i][1],
+                    x2=boxes[i][2],
+                    y2=boxes[i][3],
+                )
 
-        detections: list[Detection] = []
+                # Crop for ReID (BGR)
+                x1, y1, x2, y2 = map(int, (bbox.x1, bbox.y1, bbox.x2, bbox.y2))
+                h, w = orig_img.shape[:2]
+                x1c, y1c, x2c, y2c = max(0, x1), max(0, y1), min(w, x2), min(h, y2)
+                crop = orig_img[y1c:y2c, x1c:x2c]
 
-        # Convert tensors to numpy arrays using utility function
-        boxes = _to_numpy(result.boxes.xyxy)
-        confidences = _to_numpy(result.boxes.conf)
+                # Skip invalid crops
+                if crop.size == 0:
+                    continue
 
-        # Get the original frame data for histogram computation
-        orig_img = result.orig_img
+                bbox_clipped = BoundingBox(x1c, y1c, x2c, y2c)
+                pending_crops.append(crop)
+                pending_meta.append((bbox_clipped, float(confidences[i]), frame_idx))
 
-        reid_feats = self.reid_model.get_features(
-            boxes, orig_img
-        )  # TODO run extractor batched over all frames in the results
+                # If we have enough crops, flush a ReID batch
+                if len(pending_crops) >= BATCH_SIZE:
+                    _flush_reid_batch(self.reid_model, pending_crops, pending_meta, all_detections)
 
-        for i in range(len(boxes)):
-            bbox = BoundingBox(
-                x1=boxes[i][0],
-                y1=boxes[i][1],
-                x2=boxes[i][2],
-                y2=boxes[i][3],
-            )
+        # Flush remaining crops
+        if pending_crops:
+            _flush_reid_batch(self.reid_model, pending_crops, pending_meta, all_detections)
 
-            # Normalize embedding
-            embedding = reid_feats[i] / np.linalg.norm(reid_feats[i])
+        return all_detections
 
-            # Compute color histogram for this detection
-            color_histogram = compute_color_histogram(orig_img, bbox)
 
-            detection = Detection(
+def _flush_reid_batch(
+    reid_model: ReID,
+    pending_crops: list[np.ndarray],
+    pending_meta: list[tuple[BoundingBox, float, int]],
+    output_detections: list[Detection],
+) -> None:
+    """Encode a batch of crops with ReID and append as Detection objects.
+
+    pending_meta must align 1:1 with pending_crops and contain:
+      (bbox, confidence, frame_idx)
+    """
+    if not pending_crops:
+        return
+
+    features = reid_model.get_features_for_crops(pending_crops)
+    assert features.shape[0] == len(pending_meta)
+
+    for i, (bbox, confidence, frame_idx) in enumerate(pending_meta):
+        embedding = features[i]
+        # Ensure numerical safety: normalize if slightly off
+        norm = np.linalg.norm(embedding)
+        if norm > 0 and abs(norm - 1.0) > 1e-3:
+            embedding = embedding / norm
+
+        output_detections.append(
+            Detection(
                 bbox=bbox,
                 embedding=embedding,
-                confidence=confidences[i],
+                confidence=confidence,
                 frame_idx=frame_idx,
-                color_histogram=color_histogram,
             )
-            detections.append(detection)
+        )
 
-        return detections
+    pending_crops.clear()
+    pending_meta.clear()
 
 
 def _to_numpy(tensor_or_array):

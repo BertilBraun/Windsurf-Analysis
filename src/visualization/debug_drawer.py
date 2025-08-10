@@ -61,9 +61,7 @@ from common_types import BoundingBox, Detection, FrameIndex, Point, TrackId, Tra
 from similarity_helpers import (
     cosine_similarity,
     mean_embedding_cosine_similarity,
-    mean_embedding_histogram_similarity,
     pairwise_cosine_similarity,
-    pairwise_histogram_similarity,
     pairwise_squared_cosine_similarity,
     prop_embeddings_sim,
 )
@@ -546,9 +544,7 @@ def debug_track_similarities(
                             cos_end_start = cosine_similarity(active_track.start().embedding, t.end().embedding)
                             iou = bbox.iou(bbox_active)
                             pw_cos = pairwise_cosine_similarity(active_track, t)
-                            pw_hist_sim = pairwise_histogram_similarity(active_track, t)
                             mean_emb_cos = mean_embedding_cosine_similarity(active_track, t)
-                            mean_hist_sim = mean_embedding_histogram_similarity(active_track, t)
                             pw_cos2 = pairwise_squared_cosine_similarity(active_track, t)
                             min_sim = 0.5
                             prop_gt_min_sim = prop_embeddings_sim(active_track, t, min_sim=min_sim)
@@ -557,9 +553,7 @@ def debug_track_similarities(
                                 f'c_se={cos_end_start:.2f}\n'
                                 f'iou={iou:.2f}\n'
                                 f'pw_cos={pw_cos:.2f}\n'
-                                f'pw_hist_sim={pw_hist_sim:.2f}\n'
                                 f'mean_emb_cos={mean_emb_cos:.2f}\n'
-                                f'mean_hist_sim={mean_hist_sim:.2f}\n'
                                 f'pw_cos2={pw_cos2:.2f}\n'
                                 f'prop>{min_sim}={prop_gt_min_sim:.2f}'
                             )

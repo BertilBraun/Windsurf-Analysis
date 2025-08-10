@@ -1,6 +1,5 @@
 import os
 import logging
-import json
 import pickle
 from typing import Callable, Sequence, TypeVar
 
@@ -64,7 +63,7 @@ class WindsurfingVideoProcessor:
         logger.info(f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.total_frames} frames')
 
         # run detection and tracking
-        detections = list(self.surf_detector.run_object_detection_on_video(input_path))
+        detections = self.surf_detector.run_object_detection_on_video(input_path)
 
         processed_tracks = _process_detections_into_tracks(
             detections,
@@ -182,7 +181,7 @@ def _generate_annotated_video_worker_function(args: tuple[list[Track], os.PathLi
 def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Path, video_props: VideoInfo) -> None:
     """Save compact track metadata for later loading by the player interface.
 
-    The metadata excludes embeddings and color histograms to keep file sizes small.
+    The metadata excludes embeddings to keep file sizes small.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 

@@ -8,20 +8,6 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 
-def histogram_similarity(det1: Detection, det2: Detection) -> float:
-    """
-    Compute similarity between two detections based on their color histograms.
-
-    Args:
-        det1: First detection
-        det2: Second detection
-
-    Returns:
-        Cosine similarity between the color histograms (0-1 range)
-    """
-    return cosine_similarity(det1.color_histogram, det2.color_histogram)
-
-
 def _calc_pairwise(a: Track, b: Track, metric: Callable[[Detection, Detection], float]) -> float:
     """Calculate pairwise metric between all detections in two tracks."""
     total = 0
@@ -48,24 +34,6 @@ def mean_embedding_cosine_similarity(a: Track, b: Track) -> float:
     return cosine_similarity(
         mean_embedding(a),
         mean_embedding(b),
-    )
-
-
-def pairwise_histogram_similarity(a: Track, b: Track) -> float:
-    """Calculate pairwise histogram similarity between all detections in two tracks."""
-    return _calc_pairwise(a, b, lambda a, b: histogram_similarity(a, b))
-
-
-def _mean_embedding_histogram(t: Track) -> np.ndarray:
-    """Calculate the mean embedding of a track."""
-    return np.mean([d.color_histogram for d in t.sorted_detections], axis=0)
-
-
-def mean_embedding_histogram_similarity(a: Track, b: Track) -> float:
-    """Calculate histogram similarity between mean embeddings of two tracks."""
-    return cosine_similarity(
-        _mean_embedding_histogram(a),
-        _mean_embedding_histogram(b),
     )
 
 
