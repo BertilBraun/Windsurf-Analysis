@@ -38,15 +38,15 @@ GREEDY_MIN_COSINE_SIMILARITY = 0.8
 
 
 # Discrete optimization tracker settings
-# could be scaled according to number of estimated starts / tracks and number links required
-OPTIMIZER_W_START = 10.0
+# Start cost should discourage frivolous starts but not overpower strong local matches
+OPTIMIZER_W_START = 4.0
 
 
-OPTIMIZER_SHORT_MIN_LINK_IOU = 0.0
-OPTIMIZER_SHORT_MIN_LINK_COS = 0.1
-OPTIMIZER_SHORT_W_LINK_IOU = 0.2
-OPTIMIZER_SHORT_W_LINK_APP = 1.0
-OPTIMIZER_SHORT_W_LINK_GAP = 0.001
+OPTIMIZER_SHORT_MIN_LINK_IOU = 0.1
+OPTIMIZER_SHORT_MIN_LINK_COS = 0.2
+OPTIMIZER_SHORT_W_LINK_IOU = 0.3
+OPTIMIZER_SHORT_W_LINK_APP = 1.2
+OPTIMIZER_SHORT_W_LINK_GAP = 0.02
 # the amount of frames to look forward and backwards for appearance.
 # For now these are not weighted by distance so keep small
 OPTIMIZER_SHORT_LINK_COST_APPEARANCE_WINDOW_RADIUS = 10

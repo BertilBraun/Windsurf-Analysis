@@ -422,10 +422,13 @@ class DiscreteILPTracker:
         assert gap <= self.video_fps * MAX_OVERLAP_LENGTH_SECONDS, 'Gap must be less than max overlap length'
 
         # Get adaptive parameters based on both tracks
-        # Use the average length of both tracks for parameter selection
-        min_track_length = min(len(start.sorted_detections), len(end.sorted_detections))
+        # Use the shorter DURATION (in frames) of both tracks for parameter selection,
+        # not the number of detections. This better reflects temporal extent.
+        start_duration_frames = start.end_frame() - start.start_frame() + 1
+        end_duration_frames = end.end_frame() - end.start_frame() + 1
+        min_duration_frames = min(start_duration_frames, end_duration_frames)
 
-        adaptive_params = self._get_adaptive_parameters(min_track_length)
+        adaptive_params = self._get_adaptive_parameters(min_duration_frames)
 
         # Geometric similarity (IoU)
         iou = end.start().bbox.iou(start.end().bbox)
@@ -434,7 +437,7 @@ class DiscreteILPTracker:
             return None
 
         # Appearance similarity
-        if adaptive_params.window_radius >= min_track_length:  # Use mean appearance for long tracks
+        if adaptive_params.window_radius >= min_duration_frames:  # Use mean appearance for long tracks
             cos = mean_embedding_cosine_similarity(start, end)
         else:
             cos = self._calculate_windowed_cosine_similarity(start, end, adaptive_params.window_radius)
@@ -448,7 +451,6 @@ class DiscreteILPTracker:
         cos_cost = 1.0 - (cos - adaptive_params.min_link_cos) / (1.0 - adaptive_params.min_link_cos)
         cos_cost = max(0.0, cos_cost)
 
-        print(cos_cost, cos, adaptive_params.min_link_cos)
 
         # Calculate total cost
         cost = (
