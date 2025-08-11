@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 
 import cv2
+import glob
+from itertools import chain
 import numpy as np
 import torch
 from ultralytics import YOLO
@@ -701,13 +703,211 @@ def run_pose_with_detector_crops(
             )
 
 
+def run_pose_center_crop(
+    input_video: Path,
+    output_video: Path | None,
+    output_json: Path | None,
+    model_path: str,
+    conf: float,
+    iou: float,
+    imgsz: int,
+    stride: int,
+    device: str | int,
+    center_crop_frac: float,
+    pose_batch: int,
+    kp_conf: float,
+    min_kpts: int,
+    min_box_frac: float,
+    require_torso: bool,
+    ignore_face: bool,
+    ignore_wrists: bool,
+    min_persist: int,
+) -> None:
+    pose_model = YOLO(model_path)
+
+    cap = cv2.VideoCapture(str(input_video))
+    if not cap.isOpened():
+        raise RuntimeError(f'Failed to open video: {input_video}')
+
+    input_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    effective_fps = max(input_fps / max(stride, 1), 1.0)
+
+    # Compute square center crop box once
+    side = int(center_crop_frac * min(width, height))
+    cx, cy = width // 2, height // 2
+    x1 = max(cx - side // 2, 0)
+    y1 = max(cy - side // 2, 0)
+    x2 = min(x1 + side, width)
+    y2 = min(y1 + side, height)
+
+    writer: cv2.VideoWriter | None = None
+    if output_video:
+        writer = _build_video_writer(output_video, width, height, effective_fps)
+
+    serialized_frames: list[dict[str, Any]] = []
+    prev_boxes_counts: list[tuple[tuple[int, int, int, int], int]] = []
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    total_iters = int(total_frames / max(stride, 1)) if total_frames > 0 else None
+
+    frame_index = 0
+    batch_crops: list[np.ndarray] = []
+    batch_metas: list[tuple[int, int]] = []  # (x1, y1)
+
+    def flush_batch():
+        nonlocal serialized_frames, prev_boxes_counts
+        if not batch_crops:
+            return
+        pose_results = pose_model.predict(
+            source=list(batch_crops),
+            conf=conf,
+            iou=iou,
+            imgsz=imgsz,
+            device=device,
+            verbose=False,
+            batch=max(1, int(pose_batch)),
+        )
+        idx_local = 0
+        for res, meta in zip(pose_results, batch_metas):
+            bx, by = meta
+            frame_people: list[dict[str, Any]] = []
+            kept: list[tuple[np.ndarray, np.ndarray | None, tuple[int, int, int, int]]] = []
+            curr_boxes: list[tuple[int, int, int, int]] = []
+            if res.keypoints is not None and res.keypoints.xy is not None:
+                kxy = _to_numpy(res.keypoints.xy)
+                ksc = _to_numpy(res.keypoints.conf) if res.keypoints.conf is not None else None
+                for i in range(kxy.shape[0]):
+                    k_local = kxy[i]
+                    k_global = k_local.copy()
+                    k_global[:, 0] += bx
+                    k_global[:, 1] += by
+                    if not skeleton_is_valid(
+                        k_global,
+                        None if ksc is None else ksc[i],
+                        kp_conf,
+                        min_kpts,
+                        width,
+                        height,
+                        min_box_frac,
+                        require_torso,
+                        ignore_face,
+                        ignore_wrists,
+                    ):
+                        continue
+                    K = k_global.shape[0]
+                    valid_mask = np.ones((K,), dtype=bool)
+                    if ksc is not None:
+                        valid_mask &= ksc[i] >= kp_conf
+                    if ignore_face:
+                        for idx in (0, 1, 2, 3, 4):
+                            if idx < K:
+                                valid_mask[idx] = False
+                    if ignore_wrists:
+                        for idx in (9, 10):
+                            if idx < K:
+                                valid_mask[idx] = False
+                    x1b = int(np.min(k_global[valid_mask][:, 0]))
+                    y1b = int(np.min(k_global[valid_mask][:, 1]))
+                    x2b = int(np.max(k_global[valid_mask][:, 0]))
+                    y2b = int(np.max(k_global[valid_mask][:, 1]))
+                    bbox = (x1b, y1b, x2b, y2b)
+                    kept.append((k_global, None if ksc is None else ksc[i], bbox))
+                    curr_boxes.append(bbox)
+
+            prev_boxes_counts = update_persistence(prev_boxes_counts, curr_boxes, iou_thresh=0.3)
+            for k_global, s_global, bbox in kept:
+                count = 1
+                for pb, c in prev_boxes_counts:
+                    if bbox_iou(pb, bbox) >= 0.3:
+                        count = c
+                        break
+                if count < max(1, int(min_persist)):
+                    continue
+                # draw on the original frame later in the outer loop
+                person_entry: dict[str, Any] = {'id': int(len(frame_people)), 'keypoints': k_global.tolist()}
+                if s_global is not None:
+                    person_entry['scores'] = s_global.tolist()
+                frame_people.append(person_entry)
+
+            serialized_frames.append(
+                {'frame_index': int(frame_index - len(batch_crops) + idx_local), 'people': frame_people}
+            )
+            idx_local += 1
+
+        batch_crops.clear()
+        batch_metas.clear()
+
+    with tqdm(total=total_iters, desc='CenterPose', unit='f') as pbar:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            if frame_index % max(stride, 1) != 0:
+                frame_index += 1
+                continue
+
+            crop = frame[y1:y2, x1:x2]
+            batch_crops.append(crop)
+            batch_metas.append((x1, y1))
+
+            # Draw previous persisted people on current frame if any from the last flush
+            # (We will draw after flush to keep alignment simple)
+
+            # Flush when batch is full
+            if len(batch_crops) >= max(1, int(pose_batch)):
+                flush_batch()
+
+            if writer is not None:
+                # For simplicity, draw nothing here; the JSON has people per frame. Optionally, we could redraw.
+                writer.write(frame)
+
+            frame_index += 1
+            pbar.update(1)
+
+    # Flush remainder
+    flush_batch()
+
+    cap.release()
+    if writer is not None:
+        writer.release()
+
+    if output_json:
+        output_json.parent.mkdir(parents=True, exist_ok=True)
+        with output_json.open('w', encoding='utf-8') as f:
+            json.dump(
+                {
+                    'source': str(input_video),
+                    'model': str(model_path),
+                    'imgsz': imgsz,
+                    'conf': conf,
+                    'iou': iou,
+                    'stride': stride,
+                    'center_crop_frac': center_crop_frac,
+                    'pose_batch': pose_batch,
+                    'kp_conf': kp_conf,
+                    'min_kpts': min_kpts,
+                    'min_box_frac': min_box_frac,
+                    'require_torso': require_torso,
+                    'ignore_face': ignore_face,
+                    'ignore_wrists': ignore_wrists,
+                    'min_persist': min_persist,
+                    'frames': serialized_frames,
+                },
+                f,
+                indent=2,
+            )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Run human pose detection on a video using YOLOv8-pose.')
-    parser.add_argument('input', type=Path, help='Path to input video file')
+    parser.add_argument('input', nargs='+', type=Path, help='Input video path(s) or glob pattern(s)')
     parser.add_argument(
         '--output-video', type=Path, default=None, help='Path to save annotated video (e.g., output.mp4)'
     )
     parser.add_argument('--output-json', type=Path, default=None, help='Path to save keypoints JSON')
+    parser.add_argument('--output-dir', type=Path, default=None, help='Directory to store outputs for batch runs')
     parser.add_argument(
         '--model', default='yolov8x-pose-p6.pt', help='Ultralytics pose model (e.g., yolov8x-pose-p6.pt)'
     )
@@ -717,6 +917,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--stride', type=int, default=1, help='Process every Nth frame (vid_stride)')
     parser.add_argument('--augment', action='store_true', help='Enable test-time augmentation for pose inference')
     parser.add_argument('--use-detector', action='store_true', help='Use a detector to crop around people before pose')
+    parser.add_argument(
+        '--center-crop', action='store_true', help='Assume subject is centered; skip detector and crop center'
+    )
+    parser.add_argument(
+        '--center-crop-frac', type=float, default=0.6, help='Square crop side as fraction of min(frame_w, frame_h)'
+    )
     parser.add_argument('--det-model', default='yolov8x.pt', help='Detector model for cropping (COCO)')
     parser.add_argument('--det-conf', type=float, default=0.25, help='Detector confidence threshold')
     parser.add_argument('--expand', type=float, default=1.6, help='Box expansion factor for crops')
@@ -749,59 +955,92 @@ def main() -> None:
 
     device: str | int = 'cpu' if args.cpu or not torch.cuda.is_available() else 0
 
-    if not args.output_video and not args.output_json:
-        # Default to writing an annotated video next to the input
-        inferred_out = args.input.with_name(args.input.stem + '_pose.mp4')
-        args.output_video = inferred_out
+    # Expand input patterns
+    patterns = [str(p) for p in args.input]
+    files = list(chain(*(glob.glob(p, recursive=True) for p in patterns)))
+    if not files:
+        print('No input files matched the given pattern(s).')
+        return
 
-    if args.use_detector:
-        run_pose_with_detector_crops(
-            input_video=args.input,
-            output_video=args.output_video,
-            output_json=args.output_json,
-            pose_model_path=args.model,
-            det_model_path=args.det_model,
-            conf=args.conf,
-            det_conf=args.det_conf,
-            iou=args.iou,
-            imgsz=args.imgsz,
-            stride=max(1, int(args.stride)),
-            device=device,
-            expand=args.expand,
-            det_imgsz=args.det_imgsz,
-            det_every=max(1, int(args.det_every)),
-            pose_batch=max(1, int(args.pose_batch)),
-            max_det=max(1, int(args.max_det)),
-            max_crops=max(1, int(args.max_crops)),
-            det_min_box_frac=float(args.det_min_box_frac),
-            kp_conf=args.kp_conf,
-            min_kpts=args.min_kpts,
-            min_box_frac=args.min_box_frac,
-            require_torso=args.require_torso,
-            ignore_face=args.ignore_face,
-            ignore_wrists=args.ignore_wrists,
-            min_persist=args.min_persist,
+    for file_path in files:
+        in_path = Path(file_path)
+        # Derive per-file outputs
+        out_dir = args.output_dir if args.output_dir else in_path.parent
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_video = (
+            args.output_video if (args.output_video and len(files) == 1) else out_dir / f'{in_path.stem}_pose.mp4'
         )
-    else:
-        run_pose_detection(
-            input_video=args.input,
-            output_video=args.output_video,
-            output_json=args.output_json,
-            model_path=args.model,
-            conf=args.conf,
-            iou=args.iou,
-            imgsz=args.imgsz,
-            stride=max(1, int(args.stride)),
-            device=device,
-            augment=bool(args.augment),
-            kp_conf=args.kp_conf,
-            min_kpts=args.min_kpts,
-            min_box_frac=args.min_box_frac,
-            require_torso=args.require_torso,
-            ignore_face=args.ignore_face,
-            ignore_wrists=args.ignore_wrists,
-            min_persist=args.min_persist,
-        )
+        out_json = args.output_json if (args.output_json and len(files) == 1) else out_dir / f'{in_path.stem}_pose.json'
+
+        if args.use_detector:
+            run_pose_with_detector_crops(
+                input_video=in_path,
+                output_video=out_video,
+                output_json=out_json,
+                pose_model_path=args.model,
+                det_model_path=args.det_model,
+                conf=args.conf,
+                det_conf=args.det_conf,
+                iou=args.iou,
+                imgsz=args.imgsz,
+                stride=max(1, int(args.stride)),
+                device=device,
+                expand=args.expand,
+                det_imgsz=args.det_imgsz,
+                det_every=max(1, int(args.det_every)),
+                pose_batch=max(1, int(args.pose_batch)),
+                max_det=max(1, int(args.max_det)),
+                max_crops=max(1, int(args.max_crops)),
+                det_min_box_frac=float(args.det_min_box_frac),
+                kp_conf=args.kp_conf,
+                min_kpts=args.min_kpts,
+                min_box_frac=args.min_box_frac,
+                require_torso=args.require_torso,
+                ignore_face=args.ignore_face,
+                ignore_wrists=args.ignore_wrists,
+                min_persist=args.min_persist,
+            )
+        elif args.center_crop:
+            run_pose_center_crop(
+                input_video=in_path,
+                output_video=out_video,
+                output_json=out_json,
+                model_path=args.model,
+                conf=args.conf,
+                iou=args.iou,
+                imgsz=args.imgsz,
+                stride=max(1, int(args.stride)),
+                device=device,
+                center_crop_frac=float(args.center_crop_frac),
+                pose_batch=max(1, int(args.pose_batch if hasattr(args, 'pose_batch') else 16)),
+                kp_conf=args.kp_conf,
+                min_kpts=args.min_kpts,
+                min_box_frac=args.min_box_frac,
+                require_torso=args.require_torso,
+                ignore_face=args.ignore_face,
+                ignore_wrists=args.ignore_wrists,
+                min_persist=args.min_persist,
+            )
+        else:
+            run_pose_detection(
+                input_video=in_path,
+                output_video=out_video,
+                output_json=out_json,
+                model_path=args.model,
+                conf=args.conf,
+                iou=args.iou,
+                imgsz=args.imgsz,
+                stride=max(1, int(args.stride)),
+                device=device,
+                augment=bool(args.augment),
+                kp_conf=args.kp_conf,
+                min_kpts=args.min_kpts,
+                min_box_frac=args.min_box_frac,
+                require_torso=args.require_torso,
+                ignore_face=args.ignore_face,
+                ignore_wrists=args.ignore_wrists,
+                min_persist=args.min_persist,
+            )
 
 
 if __name__ == '__main__':
