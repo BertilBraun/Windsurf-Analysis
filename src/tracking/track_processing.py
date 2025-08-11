@@ -62,7 +62,7 @@ def _interpolate_missing_boxes(track_data: list[Detection]) -> list[Detection]:
             # Linear interpolation factor
             alpha = gap_frame / frame_gap
 
-            interpolated.append(current.interpolate(next_detection, alpha))
+            interpolated.append(current.interpolate(next_detection, alpha, current.frame_idx + gap_frame))
 
     interpolated.append(track_data[-1])
     return list(sorted(interpolated, key=lambda x: x.frame_idx))

@@ -116,6 +116,14 @@ class MainWindow(QMainWindow):
             self.state.is_playing = False
             return
         self.state.current_frame = idx
+        # if we are in detailed mode but the track has no further detections, switch to overview mode
+        if self.state.current_mode == 'detailed':
+            detections = self.state.detections_by_frame.get(idx, [])
+            has_detections = any(track_id == self.state.current_track_id for track_id, det in detections)
+            if not has_detections:
+                self.state.current_mode = 'overview'
+                self.state.current_track_id = None
+                self.video_widget.update()
         self.video_widget.set_frame(frame_img)
         self.timeline.update()
 
@@ -149,6 +157,7 @@ class MainWindow(QMainWindow):
             video_properties=metadata.video_properties,
             loaded_tracks=metadata.tracks,
         )
+
         self.setWindowTitle(f'Windsurf Player - {Path(metadata.input_video_path).name}')
 
         self._open_video(Path(metadata.input_video_path))

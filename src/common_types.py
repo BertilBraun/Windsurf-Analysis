@@ -111,17 +111,16 @@ class Detection:
             frame_idx=self.frame_idx,
         )
 
-    def interpolate(self, other: Detection, alpha: float) -> Detection:
+    def interpolate(self, other: Detection, alpha: float, frame_idx: FrameIndex) -> Detection:
         new_bbox = self.bbox.interpolate(other.bbox, alpha)
         new_embedding = (1 - alpha) * self.embedding + alpha * other.embedding
         new_confidence = (1 - alpha) * self.confidence + alpha * other.confidence
-        new_frame_idx = int((1 - alpha) * self.frame_idx + alpha * other.frame_idx)
 
         return Detection(
             bbox=new_bbox,
             embedding=new_embedding,
             confidence=new_confidence,
-            frame_idx=new_frame_idx,
+            frame_idx=frame_idx,
         )
 
 
