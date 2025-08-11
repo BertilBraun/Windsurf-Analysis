@@ -10,7 +10,7 @@ from itertools import chain
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from helpers import setup_logging
+from util.helpers import setup_logging
 
 from settings import NUM_PARALLEL_VIDEO_WORKERS, STANDARD_OUTPUT_DIR
 from windsurf_video_processor import WindsurfingVideoProcessor

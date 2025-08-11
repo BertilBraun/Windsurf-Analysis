@@ -9,7 +9,7 @@ from ultralytics import YOLO
 
 from tracking.reid import ReID
 from settings import YOLO_MODEL_PATH, REID_MODEL_PATH, MIN_TRACKING_FPS, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE
-from video_io import get_video_properties
+from util.video_io import get_video_properties
 from common_types import BoundingBox, Detection
 
 

@@ -22,7 +22,7 @@ import numpy as np
 from typing import List, Sequence, Tuple
 
 from common_types import Track, TrackId
-from similarity_helpers import cosine_similarity, mean_embedding
+from util.similarity_helpers import cosine_similarity, mean_embedding
 
 
 def filter_non_surfers_from_tracks(

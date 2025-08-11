@@ -3,10 +3,10 @@ from enum import Enum
 from collections import defaultdict
 
 
-from video_io import VideoInfo
+from util.video_io import VideoInfo
 from tracking.preprocessing.filter_non_surfers import filter_non_surfers_from_tracks
 from common_types import Detection, FrameIndex, Track, TrackId
-from similarity_helpers import cosine_similarity
+from util.similarity_helpers import cosine_similarity
 from settings import (
     GREEDY_PREPROCESSOR_MIN_IOU,
     GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY,

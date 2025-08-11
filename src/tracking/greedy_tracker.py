@@ -19,10 +19,10 @@ from settings import (
     GREEDY_SHORT_TRACK_MIN_FRAMES,
     MAX_OVERLAP_LENGTH_SECONDS,
 )
-from similarity_helpers import mean_embedding
-from video_io import VideoInfo
 from common_types import Track
-from similarity_helpers import cosine_similarity
+from util.similarity_helpers import mean_embedding
+from util.video_io import VideoInfo
+from util.similarity_helpers import cosine_similarity
 
 
 class GreedyTracker:

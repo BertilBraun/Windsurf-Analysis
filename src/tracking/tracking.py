@@ -1,4 +1,4 @@
-from video_io import VideoInfo
+from util.video_io import VideoInfo
 from common_types import Track
 from typing import Protocol
 
