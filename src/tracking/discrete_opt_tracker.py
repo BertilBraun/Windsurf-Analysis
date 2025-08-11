@@ -442,11 +442,19 @@ class DiscreteILPTracker:
         if cos < adaptive_params.min_link_cos:
             return None
 
+        gap_percentage = gap / (self.video_fps * MAX_OVERLAP_LENGTH_SECONDS)
+
+        # cost for similarity should be relative to the adaptive_params.min_link_cos i.e. if min_link_cos is 0.5, then cos_cost should be extremly high for cos close to 0.5 and only for cos close to 1.0 it should be 0
+        cos_cost = 1.0 - (cos - adaptive_params.min_link_cos) / (1.0 - adaptive_params.min_link_cos)
+        cos_cost = max(0.0, cos_cost)
+
+        print(cos_cost, cos, adaptive_params.min_link_cos)
+
         # Calculate total cost
         cost = (
             adaptive_params.w_link_iou * (1.0 - iou)
-            + adaptive_params.w_link_app * (1.0 - cos)
-            + adaptive_params.w_link_gap * gap
+            + adaptive_params.w_link_app * cos_cost
+            + adaptive_params.w_link_gap * gap_percentage
         )
 
         return cost
