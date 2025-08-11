@@ -6,7 +6,7 @@ Windsurf Analysis automatically detects, tracks, and extracts individual windsur
 
 ![Demo](documentation/processed.gif)
 
-*From raw session footage (top left) to AI-powered detection and tracking (bottom left) to stabilized individual videos (right)*
+Note: From raw session footage (top left) to AI-powered detection and tracking (bottom left) to stabilized individual videos (right).
 
 ## ✨ Key Features
 
@@ -32,28 +32,65 @@ pip install -r requirements.txt
 python -c "import torch; print(f'CUDA Available: {torch.cuda.is_available()}')"
 ```
 
+### Player
+
+After processing, launch the interactive Player to browse results:
+
+```bash
+python src/player_main.py  # prompts to select the output directory
+# or pass a directory explicitly
+python src/player_main.py "results/"
+```
+
+Controls:
+
+- Space: Play/Pause
+- Left/Right: Step frame
+- Shift+Left/Right: -/+ 5 seconds
+- Ctrl+Left/Right: -/+ 30 seconds
+- `+` / `-`: Speed up/down
+- Mouse wheel: Zoom (in overview); zoom-in keeps the pixel under the cursor stationary
+- Mouse click: Enter detailed view for the surfer under the cursor
+- Esc: Back to overview
+- n / p: Next/Previous video in directory
+
 ### Basic Usage
 
 ```bash
-# Process a single video
-python src/main.py "session.mp4" --draw-annotations
+# Process a single video (saves compact metadata for the Player)
+python src/main.py "session.mp4" --output-dir results/
 
 # Batch process multiple videos
 python src/main.py "videos/*.mp4" --output-dir results/
 
-# Custom configuration
-python src/main.py "footage.mp4" --output-dir analysis/ --parallel-workers 4
+# Custom configuration (parallel workers, debug views)
+python src/main.py "footage.mp4" --output-dir analysis/ --parallel-workers 4 --debug-views
+
+### CLI Flags (Processing)
+
+- `--output-dir`: Directory to store outputs (metadata and optional videos)
+- `--generate-videos`: Also render per-surfer videos (legacy export)
+- `--draw-annotations`: Render a full annotated overview video
+- `--stabilize`: Stabilize generated per-surfer videos
+- `--parallel-workers`: Parallel processing degree
 ```
 
 ### Output Structure
 
-```
+By default, the processing step writes compact track metadata used by the interactive Player. Large video exports are optional.
+
+```text
 output_directory/
-├── session+00_annotated.mp4        # Full video with tracking annotations
-├── session+01.mp4                  # Individual surfer video #1  
-├── session+01.stabilized.mp4       # Stabilized version
-├── session+01.start_time.json      # Timing metadata
-├── session+02.mp4                  # Individual surfer video #2
+└── session.tracks.pkl              # Serialized metadata for the Player (pickle)
+```
+
+Optional legacy exports (only when requested):
+
+```text
+output_directory/
+├── session+00_annotated.mp4        # Overview with all tracks (when --draw-annotations)
+├── session+01.mp4                  # Individual surfer video #1  (when --generate-videos)
+├── session+01.stabilized.mp4       # Stabilized version          (when --stabilize)
 └── ...
 ```
 
@@ -73,10 +110,11 @@ Windsurf Analysis uses a sophisticated multi-stage pipeline:
 - **Discrete Optimization**: ILP-based global optimization for complex scenarios
 - **Post-Processing**: Filtering, smoothing, and trajectory refinement
 
-### 3. **Video Processing**
+### 3. **Player-Centric Processing**
 
-- Individual video extraction with intelligent cropping
-- Professional video stabilization using FFmpeg
+- Compact metadata export for interactive review
+- Optional: annotated overview video and per-surfer clips
+- Optional: video stabilization for exported clips
 - Batch processing with parallel workers
 
 ## 📋 Requirements
@@ -110,6 +148,12 @@ OPTIMIZER_W_LINK_APP = 1.0
 # Processing settings
 MIN_FRAME_PERCENTAGE = 20
 BATCH_SIZE = 32
+
+# Player detailed-view rendering
+TARGET_BBOX_HEIGHT_RATIO = 0.5
+SMOOTHING_ALPHA = 0.2
+MIN_SCALE = 0.5
+MAX_SCALE = 3.0
 ```
 
 ## 🎓 Training Custom Models
@@ -169,4 +213,4 @@ For questions, support, or collaboration opportunities, please open an issue or 
 
 ---
 
-*Built with ❤️ for the windsurfing community*
+Built with ❤️ for the windsurfing community.
