@@ -32,11 +32,6 @@ class MainWindow(QMainWindow):
         self._elapsed = QElapsedTimer()
         self._elapsed.start()
         self._accumulated_frames: float = 0.0
-        # Frame cache and lazy seek for snappy back-step
-        from collections import OrderedDict
-        self._frame_cache: "OrderedDict[int, object]" = OrderedDict()
-        self._cache_capacity: int = 120
-        self._pending_seek: Optional[int] = None
 
         # UI layout
         central = QWidget()
@@ -96,18 +91,10 @@ class MainWindow(QMainWindow):
         _, frame_img = self.video.read_frame()
         if frame_img is not None:
             self.video_widget.set_frame(frame_img)
-            # cache decoded frame
-            if hasattr(self, '_frame_cache'):
-                if self.state.current_frame in self._frame_cache:
-                    self._frame_cache.pop(self.state.current_frame, None)
-                self._frame_cache[self.state.current_frame] = frame_img
-                while len(self._frame_cache) > self._cache_capacity:
-                    self._frame_cache.popitem(last=False)
         self.timeline.update()
         # Reset timing after explicit seek
         self._elapsed.restart()
         self._accumulated_frames = 0.0
-        self._pending_seek = None
 
     def _step_next(self) -> None:
         """Advance by exactly one frame using grab/read path for speed."""
@@ -116,21 +103,11 @@ class MainWindow(QMainWindow):
         # Disable playback accumulation when stepping
         self.state.is_playing = False
         self._accumulated_frames = 0.0
-        if self._pending_seek is not None:
-            self.video.seek_frame(self._pending_seek)
-            self._pending_seek = None
         idx, frame_img = self.video.advance_by(1)
         if idx < 0 or frame_img is None:
             return
         self.state.current_frame = idx
         self.video_widget.set_frame(frame_img)
-        # cache
-        if hasattr(self, '_frame_cache'):
-            if idx in self._frame_cache:
-                self._frame_cache.pop(idx, None)
-            self._frame_cache[idx] = frame_img
-            while len(self._frame_cache) > self._cache_capacity:
-                self._frame_cache.popitem(last=False)
         self.timeline.update()
 
     def _on_visibility_changed(self, visible: set[int]) -> None:
@@ -148,9 +125,6 @@ class MainWindow(QMainWindow):
         if frames_to_advance <= 0:
             return
         self._accumulated_frames -= frames_to_advance
-        if self._pending_seek is not None:
-            self.video.seek_frame(self._pending_seek)
-            self._pending_seek = None
         idx, frame_img = self.video.advance_by(frames_to_advance)
         if idx < 0 or frame_img is None:
             self.state.is_playing = False
@@ -165,13 +139,6 @@ class MainWindow(QMainWindow):
                 self.state.current_track_id = None
                 self.video_widget.update()
         self.video_widget.set_frame(frame_img)
-        # cache
-        if hasattr(self, '_frame_cache'):
-            if idx in self._frame_cache:
-                self._frame_cache.pop(idx, None)
-            self._frame_cache[idx] = frame_img
-            while len(self._frame_cache) > self._cache_capacity:
-                self._frame_cache.popitem(last=False)
         self.timeline.update()
 
     # --------------------------- Loading and setup -------------------------- #
