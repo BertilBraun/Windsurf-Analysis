@@ -39,8 +39,8 @@ import pulp
 import logging
 from typing import Dict, List, Tuple, Optional
 
-from similarity_helpers import cosine_similarity, mean_embedding_cosine_similarity
-from video_io import VideoInfo
+from util.similarity_helpers import cosine_similarity, mean_embedding_cosine_similarity
+from util.video_io import VideoInfo
 from common_types import Detection, Track
 
 from settings import (

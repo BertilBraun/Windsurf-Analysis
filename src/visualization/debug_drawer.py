@@ -54,11 +54,11 @@ from typing import List, Optional, Tuple
 from collections import defaultdict
 
 from settings import MAX_OVERLAP_LENGTH_SECONDS
-from video_io import VideoInfo
+from util.video_io import VideoInfo
 
 
 from common_types import BoundingBox, Detection, FrameIndex, Point, TrackId, Track
-from similarity_helpers import (
+from util.similarity_helpers import (
     cosine_similarity,
     mean_embedding_cosine_similarity,
     pairwise_cosine_similarity,

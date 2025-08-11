@@ -8,7 +8,7 @@ maintaining any state, making it easier to test and reason about.
 import logging
 
 from settings import MIN_FRAME_PERCENTAGE, SMOOTHING_WINDOW_SIZE
-from video_io import VideoInfo
+from util.video_io import VideoInfo
 from common_types import Detection, Track, BoundingBox
 
 

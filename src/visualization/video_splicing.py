@@ -36,7 +36,7 @@ from settings import (
     MIN_SCALE,
     MAX_SCALE,
 )
-from video_io import VideoReader, VideoWriter, get_video_properties
+from util.video_io import VideoReader, VideoWriter, get_video_properties
 
 # --------------------------------------------------------------------------- #
 # Helper – per-frame zoom + centre                                            #

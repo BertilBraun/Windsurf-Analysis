@@ -7,13 +7,13 @@ from tqdm import tqdm
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 
-from helpers import log_and_reraise
+from util.helpers import log_and_reraise
 
 from player.core.player_state import DetectionLite, Metadata, TrackLite, VideoProperties
-from video_io import VideoInfo, VideoReader, VideoWriter, get_video_properties
-from detector import SurferDetector
+from util.video_io import VideoInfo, VideoReader, VideoWriter, get_video_properties
 from visualization.annotation_drawer import Annotation, AnnotationDrawer
 
+from tracking.detector import SurferDetector
 from tracking.tracking import Tracker
 from tracking.track_processing import TrackFilteringSmoothingRelabeling
 from tracking.discrete_opt_tracker import DiscreteILPTracker

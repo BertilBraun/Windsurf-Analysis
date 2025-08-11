@@ -2,7 +2,7 @@ import os
 
 from vidstab import VidStab
 
-from video_io import get_video_properties
+from util.video_io import get_video_properties
 
 
 def compute_vidstab_transforms(input_video: str | os.PathLike) -> VidStab:
