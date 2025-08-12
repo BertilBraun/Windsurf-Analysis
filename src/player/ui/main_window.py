@@ -2,7 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional, List
 
-from PySide6.QtCore import QTimer, Qt, QElapsedTimer
+from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import QMainWindow, QWidget, QFileDialog, QVBoxLayout, QMessageBox
 
 from player.core.player_state import PlayerState, VideoProperties
@@ -28,10 +28,7 @@ class MainWindow(QMainWindow):
         self.video: Optional[VideoManager] = None
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
-        self.timer.start(16)  # ~60 FPS UI timer
-        self._elapsed = QElapsedTimer()
-        self._elapsed.start()
-        self._accumulated_frames: float = 0.0
+        self.timer.start(16)  # adjusted after video load
 
         # UI layout
         central = QWidget()
@@ -68,9 +65,7 @@ class MainWindow(QMainWindow):
     # ------------------------------ UI actions ------------------------------ #
     def _toggle_play(self) -> None:
         self.state.is_playing = not self.state.is_playing
-        if self.state.is_playing:
-            self._elapsed.restart()
-            self._accumulated_frames = 0.0
+        self._update_timer_interval()
 
     def _bump_speed(self, down: bool) -> None:
         rates = [0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
@@ -82,6 +77,7 @@ class MainWindow(QMainWindow):
         self.state.playback_speed = rates[idx]
         self.video_widget.show_hud(f'Speed: {self.state.playback_speed}x')
         QTimer.singleShot(1000, self.video_widget.clear_hud)
+        self._update_timer_interval()
 
     def _on_seek(self, frame: int) -> None:
         if not self.video:
@@ -92,17 +88,13 @@ class MainWindow(QMainWindow):
         if frame_img is not None:
             self.video_widget.set_frame(frame_img)
         self.timeline.update()
-        # Reset timing after explicit seek
-        self._elapsed.restart()
-        self._accumulated_frames = 0.0
+        # no time accumulation; frame-locked playback
 
     def _step_next(self) -> None:
         """Advance by exactly one frame using grab/read path for speed."""
         if not self.video:
             return
-        # Disable playback accumulation when stepping
         self.state.is_playing = False
-        self._accumulated_frames = 0.0
         idx, frame_img = self.video.advance_by(1)
         if idx < 0 or frame_img is None:
             return
@@ -117,15 +109,8 @@ class MainWindow(QMainWindow):
     def _tick(self) -> None:
         if not (self.state.is_playing and self.video):
             return
-        # Time-based advancement for smooth slow/fast playback
-        elapsed_ms = max(0, self._elapsed.restart())
-        frames_float = (elapsed_ms / 1000.0) * self.video.fps * float(self.state.playback_speed)
-        self._accumulated_frames += frames_float
-        frames_to_advance = int(self._accumulated_frames)
-        if frames_to_advance <= 0:
-            return
-        self._accumulated_frames -= frames_to_advance
-        idx, frame_img = self.video.advance_by(frames_to_advance)
+        # Frame-locked playback: advance exactly one frame per tick
+        idx, frame_img = self.video.advance_by(1)
         if idx < 0 or frame_img is None:
             self.state.is_playing = False
             return
@@ -182,11 +167,14 @@ class MainWindow(QMainWindow):
         self.video = VideoManager(video_path)
         self.state.current_frame = 0
         self._on_seek(0)
-        if self.video and self.video.fps > 0:
-            self.timer.setInterval(max(5, int(1000 / min(60.0, self.video.fps))))
-        # Reset timing for new video
-        self._elapsed.restart()
-        self._accumulated_frames = 0.0
+        self._update_timer_interval()
+
+    def _update_timer_interval(self) -> None:
+        if not self.video or self.video.fps <= 0:
+            return
+        # one frame per tick, factoring speed
+        effective_fps = max(0.1, self.video.fps * float(self.state.playback_speed))
+        self.timer.setInterval(int(max(5, min(1000.0, 1000.0 / effective_fps))))
 
     # ----------------------------- Key bindings ----------------------------- #
     def keyPressEvent(self, event):  # type: ignore[override]

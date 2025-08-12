@@ -393,8 +393,12 @@ class VideoWidget(QWidget):
         out_h = max(1, int(target_rect.height()))
 
         x1, y1, x2, y2 = det_bbox
+        bbox_w = max(1, x2 - x1)
         bbox_h = max(1, y2 - y1)
-        s_inst = (TARGET_BBOX_HEIGHT_RATIO * out_h) / bbox_h
+        # Choose scale to respect height target ratio but also ensure bbox width fits
+        s_height = (TARGET_BBOX_HEIGHT_RATIO * out_h) / bbox_h
+        s_width_limit = out_w / bbox_w
+        s_inst = min(s_height, s_width_limit)
         s_inst = float(np.clip(s_inst, MIN_SCALE, MAX_SCALE))
 
         track_id = self.state.current_track_id
@@ -406,41 +410,35 @@ class VideoWidget(QWidget):
         if track_id is not None:
             self._prev_scale_by_track_id[track_id] = s
 
-        # Scale entire frame using OpenCV (Lanczos for upscaling, Area for downscaling)
-        scaled_w = max(1, int(img_w * s))
-        scaled_h = max(1, int(img_h * s))
-        interp = cv2.INTER_LANCZOS4 if s > 1.0 else cv2.INTER_AREA
-        scaled = cv2.resize(frame, (scaled_w, scaled_h), interpolation=interp)
-
-        # Centre of bbox in scaled coordinates
+        # Compute crop in original image coords directly (avoid scaling full frame)
         cx = (x1 + x2) * 0.5
         cy = (y1 + y2) * 0.5
-        scx = int(cx * s)
-        scy = int(cy * s)
+        crop_w = out_w / s
+        crop_h = out_h / s
+        win_x1 = cx - crop_w / 2.0
+        win_y1 = cy - crop_h / 2.0
+        win_x2 = win_x1 + crop_w
+        win_y2 = win_y1 + crop_h
+        # Intersection with original image
+        src_x1 = int(max(0, np.floor(win_x1)))
+        src_y1 = int(max(0, np.floor(win_y1)))
+        src_x2 = int(min(img_w, np.ceil(win_x2)))
+        src_y2 = int(min(img_h, np.ceil(win_y2)))
+        # Destination placement within output, preserving scale s
+        dst_x1 = int(max(0, np.floor((src_x1 - win_x1) * s)))
+        dst_y1 = int(max(0, np.floor((src_y1 - win_y1) * s)))
+        dst_x2 = int(min(out_w, np.ceil((src_x2 - win_x1) * s)))
+        dst_y2 = int(min(out_h, np.ceil((src_y2 - win_y1) * s)))
+        copy_w = max(0, dst_x2 - dst_x1)
+        copy_h = max(0, dst_y2 - dst_y1)
 
-        # Desired crop window in scaled image coords
-        crop_x1 = scx - out_w // 2
-        crop_y1 = scy - out_h // 2
-        crop_x2 = crop_x1 + out_w
-        crop_y2 = crop_y1 + out_h
-
-        # Intersection with scaled image
-        src_x1 = max(0, crop_x1)
-        src_y1 = max(0, crop_y1)
-        src_x2 = min(scaled_w, crop_x2)
-        src_y2 = min(scaled_h, crop_y2)
-
-        dst_x1 = src_x1 - crop_x1
-        dst_y1 = src_y1 - crop_y1
-        copy_w = max(0, src_x2 - src_x1)
-        copy_h = max(0, src_y2 - src_y1)
-
-        # Compose into a fixed-size numpy image (black background)
         out_np = np.zeros((out_h, out_w, 3), dtype=np.uint8)
         if copy_w > 0 and copy_h > 0:
-            out_np[int(dst_y1) : int(dst_y1 + copy_h), int(dst_x1) : int(dst_x1 + copy_w)] = scaled[
-                int(src_y1) : int(src_y1 + copy_h), int(src_x1) : int(src_x1 + copy_w)
-            ]
+            src_roi = frame[src_y1:src_y2, src_x1:src_x2]
+            # Resize source ROI to destination size (copy_w x copy_h)
+            interp = cv2.INTER_LANCZOS4 if s > 1.0 else cv2.INTER_AREA
+            resized = cv2.resize(src_roi, (copy_w, copy_h), interpolation=interp)
+            out_np[dst_y1:dst_y2, dst_x1:dst_x2] = resized
 
         # Draw directly with no additional scaling
         composed = _to_qimage(out_np)
