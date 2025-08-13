@@ -214,3 +214,11 @@ For questions, support, or collaboration opportunities, please open an issue or 
 ---
 
 Built with ❤️ for the windsurfing community.
+
+## 🌐 Web App (Production MVP)
+
+This repo includes a minimal backend API (`backend/`) and a Modal GPU function (`modal_app/`) implementing the production requirements in `PRODUCTION_REQUIREMENTS.md`:
+
+- FastAPI backend: Basic Auth, upload AC, job management, Modal webhook, S3 (R2) storage.
+- Modal GPU function: downloads AC, runs existing pipeline, serializes tracks to results JSON, posts completion.
+- See `DEPLOYMENT.md` for end-to-end setup with Neon (Postgres), Cloudflare R2 (S3), Modal, and a React frontend.

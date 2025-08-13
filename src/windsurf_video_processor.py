@@ -53,7 +53,7 @@ class WindsurfingVideoProcessor:
         self.debug_views = debug_views
         self.stabilize = stabilize
 
-    def process_video(self, input_path: os.PathLike):
+    def process_video(self, input_path: os.PathLike) -> Metadata:
         """Main video processing pipeline with batched YOLO inference"""
         logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ class WindsurfingVideoProcessor:
         )
 
         # Always save compact track metadata for the interactive player
-        _save_tracks_metadata(processed_tracks, input_path, self.output_dir, props)
+        metadata = _save_tracks_metadata(processed_tracks, input_path, self.output_dir, props)
 
         if self.generate_videos:
             self.submit_task(
@@ -100,6 +100,8 @@ class WindsurfingVideoProcessor:
                 debug_track_similarities,
                 (processed_tracks, input_path, self.output_dir, props),
             )
+
+        return metadata
 
     def finalize(self):
         self.executor.shutdown(wait=True)
@@ -178,7 +180,7 @@ def _generate_annotated_video_worker_function(args: tuple[list[Track], os.PathLi
                 writer.write_frame(annotation_drawer.draw_detections_with_trails(frame, annotations))
 
 
-def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Path, video_props: VideoInfo) -> None:
+def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Path, video_props: VideoInfo) -> Metadata:
     """Save compact track metadata for later loading by the player interface.
 
     The metadata excludes embeddings to keep file sizes small.
@@ -216,3 +218,5 @@ def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Pat
 
     with open(output_dir / f'{input_path.stem}.tracks.pkl', 'wb') as f:
         pickle.dump(metadata, f)
+
+    return metadata

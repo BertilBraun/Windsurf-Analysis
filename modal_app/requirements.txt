@@ -1,0 +1,17 @@
+# Minimal runtime deps for GPU inference in Modal
+opencv-python>=4.8.0
+numpy>=1.24.0
+ultralytics>=8.0.0
+
+# Progress/utilities
+tqdm>=4.65.0
+PyYAML>=6.0
+vidstab>=1.7.0
+
+torch>=2.0.0
+# ReID for feature extraction
+torchreid
+
+gdown
+pillow
+pulp

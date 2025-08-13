@@ -20,9 +20,10 @@ class SurferDetector:
     def __init__(self):
         logging.info(f'Using model: {YOLO_MODEL_PATH}')
         if not YOLO_MODEL_PATH.exists():
-            raise FileNotFoundError(f'Model {YOLO_MODEL_PATH} not found')
-
-        self.model = YOLO(model=YOLO_MODEL_PATH, verbose=False)
+            logging.warning(f'Model {YOLO_MODEL_PATH} not found. Falling back to ultralytics default yolov8n.pt')
+            self.model = YOLO(model='yolov8n.pt', verbose=False)
+        else:
+            self.model = YOLO(model=YOLO_MODEL_PATH, verbose=False)
         self.reid_model = ReID(model_path=REID_MODEL_PATH)
 
     @cache_to_file('yolo_detections', ignore_args=[0], additional_args=[YOLO_MODEL_PATH, REID_MODEL_PATH])
