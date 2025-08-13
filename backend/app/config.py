@@ -44,5 +44,8 @@ class Settings:
     # Signed URL expirations (seconds)
     SIGNED_URL_TTL: int = int(os.getenv('SIGNED_URL_TTL', '900'))
 
+    # Admin secret for creating users via API
+    USER_CREATE_SECRET: str = get_env('USER_CREATE_SECRET', None)
+
 
 settings = Settings()

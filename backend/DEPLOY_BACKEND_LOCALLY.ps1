@@ -8,5 +8,6 @@ $env:BACKEND_WEBHOOK_SECRET="replace-with-random"
 $env:BACKEND_PUBLIC_BASE_URL="http://localhost:8000"
 $env:MODAL_INVOKE_URL="https://modal-web-endpoint"
 $env:CORS_ORIGINS="http://localhost:5173"
+$env:USER_CREATE_SECRET="replace-with-random"
 
 uvicorn app.main:app --reload --port 8000

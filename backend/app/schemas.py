@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal, Optional
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 
 
 class ChecksumPreflightRequest(BaseModel):
@@ -40,3 +40,14 @@ class JobListResponse(BaseModel):
 class ReportRequest(BaseModel):
     message: str
     type: Literal['missed_detection', 'false_association', 'other']
+
+
+class CreateUserRequest(BaseModel):
+    secret: str
+    username: str
+    password: str
+
+
+class CreateUserResponse(BaseModel):
+    id: str
+    username: str

@@ -213,6 +213,7 @@ def main():
 
     yaml_path = prepare_dataset(args.src, args.dst, args.val_ratio, args.seed)
     train_model(yaml_path, args.epochs, args.imgsz, args.batch, args.device)
+    shutil.rmtree(args.dst)
 
 
 if __name__ == '__main__':

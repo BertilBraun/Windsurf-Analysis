@@ -18,6 +18,7 @@ Environment variables (shared)
 - BACKEND_PUBLIC_BASE_URL=https://api.example.com
 - MODAL_INVOKE_URL=https://<modal-web-endpoint>
 - CORS_ORIGINS=https://app.example.com
+- USER_CREATE_SECRET=<admin-secret>
 
 Database setup (Neon)
 
@@ -35,10 +36,10 @@ Modal deployment
 
 1. pip install modal-client
 2. modal token new
-3. Create requirements for container image: copy project root requirements.txt into /root/requirements.txt at build time (Modal will upload project context).
-4. Deploy app:
+3. Deploy app:
    modal deploy modal_app/inference.py
-5. Copy the printed web endpoint URL into MODAL_INVOKE_URL.
+4. Copy the printed web endpoint URL into MODAL_INVOKE_URL.
+5. Note: Modal no longer needs storage credentials; the backend sends the AC bytes directly via multipart to Modal.
 
 Backend deployment (Render or similar)
 

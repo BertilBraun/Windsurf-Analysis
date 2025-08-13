@@ -1,5 +1,6 @@
 import os
 import logging
+from pathlib import Path
 import numpy as np
 
 from tqdm import tqdm
@@ -17,14 +18,17 @@ from common_types import BoundingBox, Detection
 class SurferDetector:
     """Pure detection and tracking class for surfers in video"""
 
-    def __init__(self):
-        logging.info(f'Using model: {YOLO_MODEL_PATH}')
-        if not YOLO_MODEL_PATH.exists():
-            logging.warning(f'Model {YOLO_MODEL_PATH} not found. Falling back to ultralytics default yolov8n.pt')
+    def __init__(self, yolo_model_path: os.PathLike | str, reid_model_path: os.PathLike | str):
+        logging.info(f'Using model: {yolo_model_path}')
+        yolo_model_path = Path(yolo_model_path)
+        reid_model_path = Path(reid_model_path)
+
+        if not yolo_model_path.exists():
+            logging.warning(f'YOLO model {yolo_model_path} not found. Falling back to ultralytics default yolov8n.pt')
             self.model = YOLO(model='yolov8n.pt', verbose=False)
         else:
-            self.model = YOLO(model=YOLO_MODEL_PATH, verbose=False)
-        self.reid_model = ReID(model_path=REID_MODEL_PATH)
+            self.model = YOLO(model=yolo_model_path, verbose=False)
+        self.reid_model = ReID(model_path=reid_model_path)
 
     @cache_to_file('yolo_detections', ignore_args=[0], additional_args=[YOLO_MODEL_PATH, REID_MODEL_PATH])
     def run_object_detection_on_video(self, video_path: os.PathLike | str) -> list[Detection]:

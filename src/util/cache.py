@@ -19,7 +19,7 @@ def generate_hash_code(data) -> str:
 
 def cache_to_file(folder_name: str, ignore_args: list[str | int] = [], additional_args: list[Any] = []):
     # This decorator should be usable like @cache to cache the result of a function. The cache mapping should be stored in a file with the given file_name. The cache should be loaded at the beginning of the function and saved at the end of the function. The cache should be a dictionary that maps the arguments to the result of the function.
-    folder_name = os.path.join('cache', folder_name)
+    folder_name = os.path.join('tmp', 'cache', folder_name)
 
     def decorator(func):
         @wraps(func)

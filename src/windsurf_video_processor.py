@@ -7,6 +7,7 @@ from tqdm import tqdm
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 
+from settings import REID_MODEL_PATH, YOLO_MODEL_PATH
 from util.helpers import log_and_reraise
 
 from player.core.player_state import DetectionLite, Metadata, TrackLite, VideoProperties
@@ -44,8 +45,10 @@ class WindsurfingVideoProcessor:
         debug_views: bool,
         parallel_workers: int,
         stabilize: bool,
+        yolo_model_path: os.PathLike | str = YOLO_MODEL_PATH,
+        reid_model_path: os.PathLike | str = REID_MODEL_PATH,
     ):
-        self.surf_detector = SurferDetector()
+        self.surf_detector = SurferDetector(yolo_model_path=yolo_model_path, reid_model_path=reid_model_path)
         self.executor = ProcessPoolExecutor(max_workers=parallel_workers)
         self.draw_annotations = draw_annotations
         self.output_dir = Path(output_dir)

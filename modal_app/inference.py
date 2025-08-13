@@ -1,9 +1,7 @@
-import os
 import tempfile
 from pathlib import Path
 
 import modal
-from typing import Any
 
 # Container image with system deps for OpenCV/torch
 image = (
@@ -17,20 +15,8 @@ app = modal.App('windsurf-analysis-inference')
 
 
 @app.function(image=image, gpu='A10G', timeout=60 * 30)
-def run(
-    job_id: str,
-    ac_storage_url: str,
-    model: str,
-    complete_webhook: str,
-    s3_endpoint_url: str,
-    s3_bucket: str,
-    s3_region: str,
-    s3_access_key_id: str,
-    s3_secret_access_key: str,
-):
-    import boto3  # type: ignore
+def run(job_id: str, ac_bytes: bytes, yolo_model: str, reid_model: str, complete_webhook: str):
     import requests
-    from botocore.client import Config  # type: ignore
 
     # Ensure project root is on path
     import sys
@@ -38,26 +24,10 @@ def run(
     sys.path.append('/root/src')
     from windsurf_video_processor import WindsurfingVideoProcessor
 
-    # Download AC from S3-compatible storage to local temp file
-    session = boto3.session.Session()
-    s3 = session.client(
-        's3',
-        aws_access_key_id=s3_access_key_id,
-        aws_secret_access_key=s3_secret_access_key,
-        endpoint_url=s3_endpoint_url,
-        region_name=s3_region,
-        config=Config(s3={'addressing_style': 'virtual'}),
-    )
-
-    assert ac_storage_url.startswith('s3://')
-    _, _, rest = ac_storage_url.partition('s3://')
-    bucket, _, key = rest.partition('/')
-
     with tempfile.TemporaryDirectory() as td:
-        local_video = Path(td) / 'input.mp4'
+        local_video = Path(td) / f'{job_id}.mp4'
         with open(local_video, 'wb') as f:
-            obj = s3.get_object(Bucket=bucket or s3_bucket, Key=key)
-            f.write(obj['Body'].read())
+            f.write(ac_bytes)
 
         # Run pipeline
         processor = WindsurfingVideoProcessor(
@@ -67,6 +37,8 @@ def run(
             debug_views=False,
             parallel_workers=1,
             stabilize=False,
+            yolo_model_path=yolo_model,
+            reid_model_path=reid_model,
         )
         metadata = processor.process_video(local_video)
         processor.finalize()
@@ -100,19 +72,27 @@ def run(
 
 
 @app.web_endpoint()
-def invoke(request: modal.functions.web_endpoint.Request):
-    body = request.json
-    # Proxy parameters into function call; pass S3 creds so the function can download AC
-    run_f: Any = run
-    run_f.spawn(
-        job_id=body['job_id'],
-        ac_storage_url=body['ac_storage_url'],
-        model=body.get('model', 'yolo-8n'),
-        complete_webhook=body['complete_webhook'],
-        s3_endpoint_url=os.environ.get('S3_ENDPOINT_URL'),
-        s3_bucket=os.environ.get('S3_BUCKET'),
-        s3_region=os.environ.get('S3_REGION', 'auto'),
-        s3_access_key_id=os.environ.get('S3_ACCESS_KEY_ID'),
-        s3_secret_access_key=os.environ.get('S3_SECRET_ACCESS_KEY'),
+def invoke(request):
+    # Expect multipart/form-data with fields: job_id, model, complete_webhook, and file under 'file'
+    form = request.form
+    files = request.files
+    if 'file' not in files:
+        return {'error': 'missing file'}, 400
+    uploaded = files['file']
+    ac_bytes = uploaded.read()
+
+    job_id = form.get('job_id')
+    yolo_model = form.get('yolo_model')
+    reid_model = form.get('reid_model')
+    complete_webhook = form.get('complete_webhook')
+    if not job_id or not yolo_model or not reid_model or not complete_webhook:
+        return {'error': 'missing job_id or yolo_model or reid_model or complete_webhook'}, 400
+
+    run.spawn(
+        job_id=job_id,
+        ac_bytes=ac_bytes,
+        yolo_model=yolo_model,
+        reid_model=reid_model,
+        complete_webhook=complete_webhook,
     )
     return {'ok': True}

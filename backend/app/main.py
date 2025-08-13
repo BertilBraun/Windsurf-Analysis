@@ -24,6 +24,8 @@ from .schemas import (
     JobListItem,
     JobListResponse,
     ReportRequest,
+    CreateUserRequest,
+    CreateUserResponse,
 )
 
 
@@ -130,14 +132,15 @@ async def jobs_upload(
 
     webhook_secret = settings.BACKEND_WEBHOOK_SECRET
     complete_url = f'{settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job.id}/complete?secret={webhook_secret}'
-    payload = {
+    # Send AC bytes directly to Modal; no need to give it storage creds
+    form = {
         'job_id': str(job.id),
-        'ac_storage_url': video.ac_storage_url,
         'model': model,
         'complete_webhook': complete_url,
     }
-    async with httpx.AsyncClient(timeout=60) as client:
-        await client.post(settings.MODAL_INVOKE_URL, json=payload)
+    files = {'file': (file.filename or 'ac.mp4', content, file.content_type or 'video/mp4')}
+    async with httpx.AsyncClient(timeout=120) as client:
+        await client.post(settings.MODAL_INVOKE_URL, data=form, files=files)
 
     return JobCreateUploadResponse(job_id=str(job.id), status=job.status.value)
 
@@ -258,3 +261,28 @@ async def jobs_complete(job_id: str, request: Request, db: AsyncSession = Depend
     job_row.finished_at = datetime.utcnow()
     await db.commit()
     return {'ok': True}
+
+
+@app.post('/v1/admin/users', response_model=CreateUserResponse)
+async def create_user(payload: CreateUserRequest, db: AsyncSession = Depends(get_db)):
+    # Protect with dedicated admin secret (constant from env)
+    if payload.secret != settings.USER_CREATE_SECRET:
+        raise HTTPException(status_code=401, detail='invalid secret')
+
+    # Hash password and create user
+    from passlib.context import CryptContext
+    from sqlalchemy import select
+    from .models import User
+
+    pwd = CryptContext(schemes=['bcrypt'], deprecated='auto')
+
+    # Prevent duplicates
+    existing = (await db.execute(select(User).where(User.username == payload.username))).scalars().first()
+    if existing:
+        raise HTTPException(status_code=409, detail='username already exists')
+
+    user = User(username=payload.username, password_hash=pwd.hash(payload.password))
+    db.add(user)
+    await db.flush()
+    await db.commit()
+    return CreateUserResponse(id=str(user.id), username=user.username)
