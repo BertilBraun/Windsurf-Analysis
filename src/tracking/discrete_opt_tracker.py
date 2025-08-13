@@ -160,7 +160,7 @@ class DiscreteILPTracker:
     def _optimize_fragments(self, fragments: List[Track]) -> List[Track]:
         """Optimize fragment connections using ILP solver."""
         # Sort fragments by start frame
-        fragments = sorted(fragments, key=lambda t: t.start_frame())
+        fragments = sorted(fragments, key=lambda t: t.start_frame)
 
         # Build fragment connection graph
         graph = self._build_fragment_graph(fragments)
@@ -181,7 +181,7 @@ class DiscreteILPTracker:
                 end_fragment = fragments[j]
 
                 # Skip if fragments have overlapping frames
-                gap = end_fragment.start_frame() - start_fragment.end_frame()
+                gap = end_fragment.start_frame - start_fragment.end_frame
                 if gap <= 0 or gap > self.video_fps * MAX_OVERLAP_LENGTH_SECONDS:
                     continue
 
@@ -416,7 +416,7 @@ class DiscreteILPTracker:
 
     def _calculate_link_cost(self, start: Track, end: Track) -> Optional[float]:
         """Calculate the cost of linking two tracks. Returns None if they can't be linked."""
-        gap = end.start_frame() - start.end_frame()
+        gap = end.start_frame - start.end_frame
 
         assert gap >= 0, 'Gap must be non-negative'
         assert gap <= self.video_fps * MAX_OVERLAP_LENGTH_SECONDS, 'Gap must be less than max overlap length'
@@ -424,14 +424,14 @@ class DiscreteILPTracker:
         # Get adaptive parameters based on both tracks
         # Use the shorter DURATION (in frames) of both tracks for parameter selection,
         # not the number of detections. This better reflects temporal extent.
-        start_duration_frames = start.end_frame() - start.start_frame() + 1
-        end_duration_frames = end.end_frame() - end.start_frame() + 1
+        start_duration_frames = start.end_frame - start.start_frame + 1
+        end_duration_frames = end.end_frame - end.start_frame + 1
         min_duration_frames = min(start_duration_frames, end_duration_frames)
 
         adaptive_params = self._get_adaptive_parameters(min_duration_frames)
 
         # Geometric similarity (IoU)
-        iou = end.start().bbox.iou(start.end().bbox)
+        iou = end.start.bbox.iou(start.end.bbox)
 
         if iou < adaptive_params.min_link_iou:
             return None
@@ -451,7 +451,6 @@ class DiscreteILPTracker:
         cos_cost = 1.0 - (cos - adaptive_params.min_link_cos) / (1.0 - adaptive_params.min_link_cos)
         cos_cost = max(0.0, cos_cost)
 
-
         # Calculate total cost
         cost = (
             adaptive_params.w_link_iou * (1.0 - iou)
@@ -467,12 +466,12 @@ class DiscreteILPTracker:
         cos_sum = 0.0
 
         for i in range(-window_radius, window_radius + 1):
-            d1 = start.detections_by_frame.get(start.end_frame() + i)
+            d1 = start.detections_by_frame.get(start.end_frame + i)
             if d1 is None:
                 continue
 
             for j in range(-window_radius, window_radius + 1):
-                d2 = end.detections_by_frame.get(end.start_frame() + j)
+                d2 = end.detections_by_frame.get(end.start_frame + j)
                 if d2 is None:
                     continue
 

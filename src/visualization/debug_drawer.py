@@ -422,7 +422,7 @@ def get_tracks_active_at_frame(tracks: List[Track], frame_idx: FrameIndex) -> Li
 
 def get_tracks_ended_in_last_n_frames(tracks: List[Track], frame_idx: FrameIndex, n_frames: int) -> List[Track]:
     """Return all tracks that ended in the last *n_frames* frames."""
-    return [t for t in tracks if t.end_frame() >= frame_idx - n_frames and t.end_frame() < frame_idx]
+    return [t for t in tracks if t.end_frame >= frame_idx - n_frames and t.end_frame < frame_idx]
 
 
 def debug_track_similarities(
@@ -493,7 +493,7 @@ def debug_track_similarities(
 
                 cnt = 0
                 if past_tracks:
-                    past_tracks = sorted(past_tracks, key=lambda t: t.end_frame(), reverse=True)
+                    past_tracks = sorted(past_tracks, key=lambda t: t.end_frame, reverse=True)
 
                     n_past_tracks = len(past_tracks)
 
@@ -502,7 +502,7 @@ def debug_track_similarities(
                     width = center_w // n_cols
                     height = int(round(width * center_h / center_w))
                     for i, t in enumerate(past_tracks):
-                        last_frame = t.end_frame()
+                        last_frame = t.end_frame
                         # of row is 0 it is above the center view if it is 1 it is below.
                         row = i // n_cols
                         col = i % n_cols
@@ -529,7 +529,7 @@ def debug_track_similarities(
                         # ======================================================================
                         bbox_center_global = view._feed_to_global(*bbox.center)
                         for active_track in active_tracks:
-                            if active_track.start_frame() <= last_frame:
+                            if active_track.start_frame <= last_frame:
                                 # we would not consider these tracks for merging anyways since the active track has started before
                                 # the past track ended.
                                 continue
@@ -541,7 +541,7 @@ def debug_track_similarities(
                             color = canvas.palette[cnt % len(canvas.palette)]
                             cnt += 1
 
-                            cos_end_start = cosine_similarity(active_track.start().embedding, t.end().embedding)
+                            cos_end_start = cosine_similarity(active_track.start.embedding, t.end.embedding)
                             iou = bbox.iou(bbox_active)
                             pw_cos = pairwise_cosine_similarity(active_track, t)
                             mean_emb_cos = mean_embedding_cosine_similarity(active_track, t)

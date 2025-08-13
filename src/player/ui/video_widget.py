@@ -135,7 +135,7 @@ class VideoWidget(QWidget):
                 self._hud_text,
             )
 
-        painter.end()
+        painter.end
 
     @staticmethod
     def _fit_rect(img_w: int, img_h: int, bounds: QRect) -> QRect:

@@ -18,7 +18,7 @@ visualize_tracks(tracks, style='graph', gap_threshold=8)
 Features
 ────────
 1. **Native dataclass support** – Accepts your `Track` objects (with
-   `.start().frame_idx`, `.end().frame_idx`, `.track_id`).
+   `.start.frame_idx`, `.end.frame_idx`, `.track_id`).
 2. **Two visualization styles**
    • *timeline*  – Each track is a horizontal bar aligned to frame indices.
                   Merge candidates appear as dashed arrows between bars.
@@ -34,7 +34,6 @@ from typing import Dict, List, Literal, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 
-from graphviz import Digraph
 
 from common_types import *
 
@@ -46,7 +45,7 @@ from common_types import *
 def _intervals_from_objects(track_objs: Sequence[Track]) -> Dict[TrackId, Tuple[int, int]]:
     out: Dict[TrackId, Tuple[int, int]] = {}
     for t in track_objs:
-        start_f, end_f = t.start().frame_idx, t.end().frame_idx
+        start_f, end_f = t.start.frame_idx, t.end.frame_idx
         if t.track_id in out:
             raise ValueError(f'Duplicate track_id {t.track_id}.')
         out[t.track_id] = (start_f, end_f)
@@ -149,8 +148,7 @@ def _visualize_graph(
     outfile_basename: str | None = 'track_graph',
     view: bool = True,
 ):
-    if Digraph is None:
-        raise RuntimeError('Graphviz python package or system binaries not available.')
+    from graphviz import Digraph
 
     g = Digraph('Tracks', format='png')
     g.attr(rankdir=rankdir)

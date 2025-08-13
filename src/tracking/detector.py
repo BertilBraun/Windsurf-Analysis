@@ -9,7 +9,15 @@ from ultralytics import YOLO
 
 
 from tracking.reid import ReID
-from settings import YOLO_MODEL_PATH, REID_MODEL_PATH, MIN_TRACKING_FPS, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE
+from settings import (
+    USE_GPU,
+    YOLO_MODEL_PATH,
+    REID_MODEL_PATH,
+    MIN_TRACKING_FPS,
+    IOU_THRESHOLD,
+    CONFIDENCE_THRESHOLD,
+    BATCH_SIZE,
+)
 from util.cache import cache_to_file
 from util.video_io import get_video_properties
 from common_types import BoundingBox, Detection
@@ -49,6 +57,8 @@ class SurferDetector:
             batch=BATCH_SIZE,
             vid_stride=skip_frames,
             stream=True,
+            save=False,
+            half=USE_GPU,
             verbose=False,
         )
 
@@ -57,9 +67,7 @@ class SurferDetector:
         pending_meta: list[tuple[BoundingBox, float, int]] = []
         all_detections: list[Detection] = []
 
-        for frame_index, result in tqdm(
-            enumerate(results), total=video_props.total_frames // skip_frames, desc='Processing video'
-        ):
+        for frame_index, result in enumerate(results):
             frame_idx = frame_index * skip_frames
             if result.boxes is None or len(result.boxes) == 0:
                 continue

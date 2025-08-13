@@ -15,3 +15,7 @@ torchreid
 gdown
 pillow
 pulp
+
+Cython
+
+tensorboard

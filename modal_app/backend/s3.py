@@ -7,7 +7,7 @@ from .config import settings
 
 
 def s3_client():
-    session = boto3.session.Session()
+    session = boto3.Session()
     client = session.client(
         's3',
         aws_access_key_id=settings.S3_ACCESS_KEY_ID,

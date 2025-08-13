@@ -22,7 +22,11 @@ class ReID:
             model_name='osnet_ain_x1_0',
             model_path=str(model_path),
             device=str(self.device),
+            pixel_norm=False,
         )
+        self.extractor.model.eval()
+        self.extractor.model.to(self.device)
+        self.extractor.model.half() if self.half else self.extractor.model.float()
 
         self.transform = transforms.Compose(
             [

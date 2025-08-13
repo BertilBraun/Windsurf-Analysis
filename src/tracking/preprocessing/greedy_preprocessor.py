@@ -133,7 +133,7 @@ class GreedyPreprocessor:
 
             # Too old tracks are stale
             for track in active_tracks:
-                if track.end().frame_idx + self.greedy_max_frame_distance < frame_idx:
+                if track.end.frame_idx + self.greedy_max_frame_distance < frame_idx:
                     if track.track_id not in stale_track_ids:
                         stale_track_ids.add(track.track_id)
                         stale_tracks.append(track)
@@ -143,7 +143,7 @@ class GreedyPreprocessor:
         return stale_tracks + active_tracks
 
     def _compare_detection_to_track(self, track: Track, detection: Detection) -> _ComparisonResult:
-        iou = track.end().bbox.iou(detection.bbox)
+        iou = track.end.bbox.iou(detection.bbox)
 
         if iou < self.min_iou_matches_single_track:
             return _ComparisonResult.NO_MATCH

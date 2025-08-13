@@ -38,7 +38,7 @@ class TimelineWidget(QWidget):
                 QRect(lx, self.height() // 2, max(1, rx - lx), self.height() // 2), QColor(80, 160, 240, 140)
             )
 
-        painter.end()
+        painter.end
 
     def mousePressEvent(self, event: QMouseEvent):  # type: ignore[override]
         if not self.state.video_properties:

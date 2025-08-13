@@ -44,10 +44,10 @@ class ReportRequest(BaseModel):
 
 class CreateUserRequest(BaseModel):
     secret: str
-    username: str
+    email: str
     password: str
 
 
 class CreateUserResponse(BaseModel):
     id: str
-    username: str
+    email: str

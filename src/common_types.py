@@ -149,35 +149,43 @@ class Track:
             sorted_detections=new_sorted_detections,
         )
 
+    @property
     def start(self) -> Detection:
         """Return the first detection in the track."""
         if not self.sorted_detections:
             raise ValueError('Track has no detections.')
         return self.sorted_detections[0]
 
+    @property
     def end(self) -> Detection:
         """Return the last detection in the track."""
         if not self.sorted_detections:
             raise ValueError('Track has no detections.')
         return self.sorted_detections[-1]
 
-    def start_frame(self) -> int:
+    @property
+    def start_frame(self) -> FrameIndex:
         """Return the frame index of the first detection in the track."""
-        return self.start().frame_idx
+        return self.start.frame_idx
 
-    def end_frame(self) -> int:
+    @property
+    def end_frame(self) -> FrameIndex:
         """Return the frame index of the last detection in the track."""
-        return self.end().frame_idx
+        return self.end.frame_idx
+
+    @property
+    def duration_frames(self) -> int:
+        return self.end_frame - self.start_frame
 
     def alive_at_frame(self, frame_idx: FrameIndex) -> bool:
         """Check if the track has a detection at the given frame index."""
-        return frame_idx >= self.start_frame() and frame_idx <= self.end_frame()
+        return frame_idx >= self.start_frame and frame_idx <= self.end_frame
 
     def get_most_recent_detection_at_frame(self, frame_idx: FrameIndex) -> Detection:
         """Get the most recent detection at the given frame index."""
         if not self.alive_at_frame(frame_idx):
             raise ValueError(f'Track {self.track_id} is not alive at frame {frame_idx}.')
-        for i in range(frame_idx, self.start_frame() - 1, -1):
+        for i in range(frame_idx, self.start_frame - 1, -1):
             if i in self.detections_by_frame:
                 return self.detections_by_frame[i]
         assert False

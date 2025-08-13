@@ -78,8 +78,8 @@ def print_track_similarity_statistics(tracks: list[Track], greedy_min_cosine_sim
             if other_track.track_id == track.track_id:
                 continue
             if (
-                other_track.start_frame() < track.end_frame()  # It does not start after the track
-                or other_track.start_frame() > track.end_frame() + 30  # It starts too far in the future
+                other_track.start_frame < track.end_frame  # It does not start after the track
+                or other_track.start_frame > track.end_frame + 30  # It starts too far in the future
             ):
                 continue
             average_cosine_similarity = 0
@@ -95,8 +95,8 @@ def print_track_similarity_statistics(tracks: list[Track], greedy_min_cosine_sim
             track_i = tracks[i]
             track_j = tracks[j]
             if (
-                track_i.start_frame() < track_j.end_frame()  # It does not start after the track
-                or track_i.start_frame() > track_j.end_frame() + 30  # It starts too far in the future
+                track_i.start_frame < track_j.end_frame  # It does not start after the track
+                or track_i.start_frame > track_j.end_frame + 30  # It starts too far in the future
                 or i == j
             ):
                 continue

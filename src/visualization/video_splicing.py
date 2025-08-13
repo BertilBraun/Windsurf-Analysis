@@ -165,7 +165,7 @@ def generate_individual_videos(
 
         # optional: JSON with first-appearance timestamp
         (Path(output_dir) / f'{input_name}+{track.track_id:02d}.start_time.json').write_text(
-            json.dumps({'start_time': track.start_frame() / props.fps})
+            json.dumps({'start_time': track.start_frame / props.fps})
         )
 
     # iterate through original video
@@ -177,7 +177,7 @@ def generate_individual_videos(
                 # keep last bbox for a few seconds after the track ends
                 if (
                     det is None
-                    and frame_idx <= track.end_frame() + int(props.fps * video_suffix_seconds)
+                    and frame_idx <= track.end_frame + int(props.fps * video_suffix_seconds)
                     and track.sorted_detections
                 ):
                     det = track.sorted_detections[-1]

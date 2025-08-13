@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -14,10 +15,11 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSe
 
 
 @asynccontextmanager
-async def session_scope() -> AsyncSession:
+async def session_scope() -> AsyncGenerator[AsyncSession, None]:
     session = SessionLocal()
     try:
         yield session
+        await session.flush()
         await session.commit()
     except Exception:
         await session.rollback()
@@ -34,3 +36,8 @@ async def init_db() -> None:
         except Exception:
             pass
         await conn.run_sync(Base.metadata.create_all)
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with SessionLocal() as session:
+        yield session

@@ -1,5 +1,7 @@
+import torch
 from pathlib import Path
 
+USE_GPU = torch.cuda.is_available()
 
 STANDARD_OUTPUT_DIR = 'individual_surfers'
 NUM_PARALLEL_VIDEO_WORKERS = 4

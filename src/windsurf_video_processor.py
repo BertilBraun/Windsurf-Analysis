@@ -139,9 +139,8 @@ def _process_detections_into_tracks(
     # Log track statistics
     logger.info(f'After processing: {len(processed_tracks)} tracks remaining')
     for track in processed_tracks:
-        duration_frames = track.sorted_detections[-1].frame_idx - track.sorted_detections[0].frame_idx
-        duration_seconds = duration_frames / video_properties.fps
-        frame_percentage = duration_frames / video_properties.total_frames
+        duration_seconds = track.duration_frames / video_properties.fps
+        frame_percentage = track.duration_frames / video_properties.total_frames
         logger.info(
             f'  Track {track.track_id}: {len(track.sorted_detections)} detections, {duration_seconds:.1f}s ({frame_percentage * 100:.1f}%)'
         )
@@ -201,10 +200,10 @@ def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Pat
         tracks=[
             TrackLite(
                 track_id=track.track_id,
-                start_frame=track.start_frame(),
-                end_frame=track.end_frame(),
-                start_time=track.start_frame() / video_props.fps,
-                duration=(track.end_frame() - track.start_frame()) / video_props.fps,
+                start_frame=track.start_frame,
+                end_frame=track.end_frame,
+                start_time=track.start_frame / video_props.fps,
+                duration=track.duration_frames / video_props.fps,
                 detection_count=len(track.sorted_detections),
                 detections=[
                     DetectionLite(
