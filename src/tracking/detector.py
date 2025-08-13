@@ -9,6 +9,7 @@ from ultralytics import YOLO
 
 from tracking.reid import ReID
 from settings import YOLO_MODEL_PATH, REID_MODEL_PATH, MIN_TRACKING_FPS, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE
+from util.cache import cache_to_file
 from util.video_io import get_video_properties
 from common_types import BoundingBox, Detection
 
@@ -24,6 +25,7 @@ class SurferDetector:
         self.model = YOLO(model=YOLO_MODEL_PATH, verbose=False)
         self.reid_model = ReID(model_path=REID_MODEL_PATH)
 
+    @cache_to_file('yolo_detections', ignore_args=[0], additional_args=[YOLO_MODEL_PATH, REID_MODEL_PATH])
     def run_object_detection_on_video(self, video_path: os.PathLike | str) -> list[Detection]:
         """Run batched inference on entire video and return all detections as a list.
 
