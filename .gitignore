@@ -13,3 +13,6 @@ individual_surfers/**
 
 run.bat
 test_outputs/**
+
+**/*.log
+**/*.json
