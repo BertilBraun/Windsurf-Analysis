@@ -16,3 +16,4 @@ test_outputs/**
 
 **/*.log
 **/*.json
+**/.env

@@ -7,19 +7,14 @@ from sqlalchemy import select
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .config import settings
-from .db import get_db
-from .models import User
+from modal_app.backend.db import get_db
+from modal_app.backend.models import User
 
 
 def parse_basic_auth(request: Request) -> tuple[str, str]:
     auth = request.headers.get('Authorization')
     if not auth or not auth.lower().startswith('basic '):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Missing basic auth',
-            headers={'WWW-Authenticate': f'Basic realm="{settings.BASIC_AUTH_REALM}"'},
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Missing basic auth')
     try:
         raw = base64.b64decode(auth.split(' ', 1)[1]).decode('utf-8')
         email, password = raw.split(':', 1)

@@ -5,12 +5,13 @@ from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from .config import settings
 from sqlalchemy import text
-from .models import Base
+
+from modal_app.backend.models import Base
+from modal_app.backend.config import Settings
 
 
-engine = create_async_engine(settings.DATABASE_URL, echo=False, pool_pre_ping=True, future=True)
+engine = create_async_engine(Settings.DATABASE_URL, echo=False, pool_pre_ping=True, future=True)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 

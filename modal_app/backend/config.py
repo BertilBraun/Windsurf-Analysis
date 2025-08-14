@@ -1,4 +1,9 @@
 import os
+from typing import Any, Callable
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def get_env(name: str, default: str | None = None) -> str:
@@ -10,42 +15,78 @@ def get_env(name: str, default: str | None = None) -> str:
 
 class Settings:
     # Server
-    APP_NAME: str = os.getenv('APP_NAME', 'windsurf-analysis-api')
-    APP_ENV: str = os.getenv('APP_ENV', 'dev')
-    CORS_ORIGINS: str = os.getenv('CORS_ORIGINS', '*')
+    @classmethod
+    @property
+    def APP_NAME(cls) -> str:
+        return os.getenv('APP_NAME', 'windsurf-analysis-backend')
 
-    # Auth
-    BASIC_AUTH_REALM: str = os.getenv('BASIC_AUTH_REALM', 'Windsurf Analysis')
-    # Comma-separated bootstrap users: "user1:hashed, user2:hashed"; optional if using DB-seeded users
-    BOOTSTRAP_USERS: str | None = os.getenv('BOOTSTRAP_USERS')
+    @classmethod
+    @property
+    def APP_ENV(cls) -> str:
+        return os.getenv('APP_ENV', 'dev')
 
     # Database (Neon Postgres)
-    DATABASE_URL: str = get_env('DATABASE_URL', None)
+    @classmethod
+    @property
+    def DATABASE_URL(cls) -> str:
+        return get_env('DATABASE_URL', None)
 
     # Object storage (R2/S3 compatible)
-    S3_ENDPOINT_URL: str | None = os.getenv('S3_ENDPOINT_URL')  # e.g., https://<accountid>.r2.cloudflarestorage.com
-    S3_REGION: str = os.getenv('S3_REGION', 'auto')
-    S3_BUCKET: str = get_env('S3_BUCKET', None)
-    S3_ACCESS_KEY_ID: str = get_env('S3_ACCESS_KEY_ID', None)
-    S3_SECRET_ACCESS_KEY: str = get_env('S3_SECRET_ACCESS_KEY', None)
+    @classmethod
+    @property
+    def S3_ENDPOINT_URL(cls) -> str | None:
+        return os.getenv('S3_ENDPOINT_URL')  # e.g., https://<accountid>.r2.cloudflarestorage.com
+
+    @classmethod
+    @property
+    def S3_REGION(cls) -> str:
+        return os.getenv('S3_REGION', 'auto')
+
+    @classmethod
+    @property
+    def S3_BUCKET(cls) -> str:
+        return get_env('S3_BUCKET', None)
+
+    @classmethod
+    @property
+    def S3_ACCESS_KEY_ID(cls) -> str:
+        return get_env('S3_ACCESS_KEY_ID', None)
+
+    @classmethod
+    @property
+    def S3_SECRET_ACCESS_KEY(cls) -> str:
+        return get_env('S3_SECRET_ACCESS_KEY', None)
 
     # Storage layout
-    PREFIX_AC_VIDEOS: str = os.getenv('PREFIX_AC_VIDEOS', 'ac-videos/')
-    PREFIX_RESULTS_JSON: str = os.getenv('PREFIX_RESULTS_JSON', 'results-json/')
+    @classmethod
+    @property
+    def PREFIX_AC_VIDEOS(cls) -> str:
+        return os.getenv('PREFIX_AC_VIDEOS', 'ac-videos/')
+
+    @classmethod
+    @property
+    def PREFIX_RESULTS_JSON(cls) -> str:
+        return os.getenv('PREFIX_RESULTS_JSON', 'results-json/')
 
     # Quotas
-    MAX_JOBS_PER_USER: int = int(os.getenv('MAX_JOBS_PER_USER', '5'))
+    @classmethod
+    @property
+    def MAX_JOBS_PER_USER(cls) -> int:
+        return int(os.getenv('MAX_JOBS_PER_USER', '5'))
 
     # Modal / inference
-    MODAL_INVOKE_URL: str = get_env('MODAL_INVOKE_URL', None)  # HTTPS URL of Modal web endpoint
-    BACKEND_WEBHOOK_SECRET: str = get_env('BACKEND_WEBHOOK_SECRET', None)
-    BACKEND_PUBLIC_BASE_URL: str = get_env('BACKEND_PUBLIC_BASE_URL', None)  # e.g., https://api.example.com
+    @classmethod
+    @property
+    def BACKEND_WEBHOOK_SECRET(cls) -> str:
+        return get_env('BACKEND_WEBHOOK_SECRET', None)
 
-    # Signed URL expirations (seconds)
-    SIGNED_URL_TTL: int = int(os.getenv('SIGNED_URL_TTL', '900'))
+    @classmethod
+    @property
+    def BACKEND_PUBLIC_BASE_URL(cls) -> str:
+        return get_env('BACKEND_PUBLIC_BASE_URL', None)  # e.g., https://api.example.com
 
     # Admin secret for creating users via API
-    USER_CREATE_SECRET: str = get_env('USER_CREATE_SECRET', None)
-
-
-settings = Settings()
+    @classmethod
+    @property
+    def USER_CREATE_SECRET(cls) -> str:
+        return get_env('USER_CREATE_SECRET', None)

@@ -12,7 +12,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import CITEXT
+from sqlalchemy.dialects.postgresql import CITEXT, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -81,7 +81,7 @@ class Job(Base):
     started_at: Mapped[datetime | None] = mapped_column(nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
     error_message: Mapped[str | None] = mapped_column(nullable=True)
-    results_json_url: Mapped[str | None] = mapped_column(nullable=True)
+    results_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     user: Mapped[User] = relationship('User', back_populates='jobs')
