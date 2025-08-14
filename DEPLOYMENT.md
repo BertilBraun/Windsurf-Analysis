@@ -8,14 +8,14 @@ Prerequisites
 
 Environment variables (shared)
 
-- DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST/DB
+- DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST/DB       # Here '+asyncpg' is important
 - S3_ENDPOINT_URL=https://<accountid>.r2.cloudflarestorage.com
 - S3_REGION=auto
 - S3_BUCKET=<bucket-name>
 - S3_ACCESS_KEY_ID=...
 - S3_SECRET_ACCESS_KEY=...
 - BACKEND_WEBHOOK_SECRET=<random>
-- BACKEND_PUBLIC_BASE_URL=https://api.example.com
+- BACKEND_PUBLIC_BASE_URL=https://api.example.com            # This is the URL of the backend API
 - MODAL_INVOKE_URL=https://<modal-web-endpoint>
 - CORS_ORIGINS=https://app.example.com
 - USER_CREATE_SECRET=<admin-secret>
@@ -37,7 +37,7 @@ Modal deployment
 1. pip install modal-client
 2. modal token new
 3. Deploy app:
-   modal deploy modal_app/inference.py
+   modal deploy server/inference.py
 4. Copy the printed web endpoint URL into MODAL_INVOKE_URL.
 5. Note: Modal no longer needs storage credentials; the backend sends the AC bytes directly via multipart to Modal.
 
