@@ -37,4 +37,6 @@ async def authenticate_user(request: Request, db: AsyncSession = Depends(get_db)
     if not pwd_context.verify(password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid credentials')
 
+    # TODO: Update user last_active_at?
+
     return user

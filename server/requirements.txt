@@ -9,3 +9,5 @@ pydantic
 boto3
 botocore
 httpx
+bcrypt
+passlib

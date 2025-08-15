@@ -34,6 +34,7 @@ export const App: React.FC = () => {
     const authorizedFetch = useCallback(
         async (input: RequestInfo, init?: RequestInit) => {
             if (!authHeader) throw new Error('Not authenticated')
+            console.log('fetching', input, init)
             const res = await fetch(input, {
                 ...init,
                 headers: {
@@ -41,6 +42,7 @@ export const App: React.FC = () => {
                     Authorization: authHeader,
                 },
             })
+            console.log('res', res)
             if (!res.ok) throw new Error(await res.text())
             return res
         },
@@ -51,11 +53,12 @@ export const App: React.FC = () => {
         if (pollingRef.current) window.clearInterval(pollingRef.current)
         const tick = async () => {
             try {
-                const res = await authorizedFetch(`${apiBase}/jobs/`)
+                const res = await authorizedFetch(`${apiBase}/jobs`)
                 const data = (await res.json()) as { jobs: JobSummary[] }
                 setJobs(data.jobs)
                 const anyOpen = data.jobs.some(j => j.status === 'pending' || j.status === 'running')
-                const interval = anyOpen ? 1000 : 10000
+                const interval = anyOpen ? 10000 : 60000 // 10s or 60s
+                // TODO? Does it even need to poll if no jobs are open?
                 if (pollingRef.current) window.clearInterval(pollingRef.current)
                 pollingRef.current = window.setInterval(tick, interval)
             } catch (e) {
@@ -91,11 +94,15 @@ export const App: React.FC = () => {
             const hashArray = Array.from(new Uint8Array(hashBuffer))
             const sha256 = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 
+            // TODO: Quick check if the checksum is already in the database
+            // TODO: If it is, show a message and don't upload
+
             const form = new FormData()
             form.append('file', new Blob([arrayBuffer], { type: file.type }), file.name)
             form.append('original_file_path', file.name)
             form.append('original_checksum_sha256', sha256)
-            form.append('model', 'yolo-8n')
+            form.append('yolo_model', 'windsurfing/2025_08_09_100epochs.pt')
+            form.append('reid_model', 'common/osnet_ain_x1_0_msmt17.pth')
 
             await authorizedFetch(`${apiBase}/jobs/upload`, { method: 'POST', body: form })
             startPolling()

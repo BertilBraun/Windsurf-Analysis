@@ -78,6 +78,10 @@ async def _get_job_by_id(db: AsyncSession, job_id: str) -> Job | None:
     return res.scalar_one_or_none()
 
 
+def timestamp_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 @router.post('/upload', response_model=JobCreateUploadResponse)
 async def jobs_upload(
     file: UploadFile = File(...),
@@ -171,7 +175,7 @@ async def get_job(job_id: str, db: AsyncSession = Depends(get_db), user: User = 
     if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
-    await db.execute(update(Video).where(Video.id == job.video_id).values(last_accessed_at=func.now()))
+    await db.execute(update(Video).where(Video.id == job.video_id).values(last_accessed_at=timestamp_now()))
 
     return JobDetail(
         id=str(job.id),
@@ -190,7 +194,7 @@ async def delete_job(job_id: str, db: AsyncSession = Depends(get_db), user: User
     if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
-    job.deleted_at = datetime.now(timezone.utc)
+    job.deleted_at = timestamp_now()
     await db.flush()  # Flush to update the job
 
     return {'ok': True}
@@ -225,7 +229,7 @@ async def jobs_complete(job_id: str, payload: JobsCompleteRequest, secret: str, 
 
     job.results_json = payload.results_json
     job.status = JobStatus(payload.status)
-    job.finished_at = datetime.now(timezone.utc)
+    job.finished_at = timestamp_now()
     await db.flush()  # Flush to update the job
 
     return {'ok': True}

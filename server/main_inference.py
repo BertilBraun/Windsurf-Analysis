@@ -110,4 +110,6 @@ class InferenceModel:
             }
 
         # POST completion webhook
-        requests.post(complete_webhook, json={'status': 'succeeded', 'results_json': result}, timeout=60)
+        print(f'POSTing completion webhook to {complete_webhook}')
+        res = requests.post(complete_webhook, json={'status': 'succeeded', 'results_json': result}, timeout=60)
+        print(f'Completion webhook response: {res.status_code} {res.text}')
