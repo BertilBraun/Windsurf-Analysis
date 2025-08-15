@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 import modal
 from pydantic import BaseModel
 from sqlalchemy import and_, func, select, update
@@ -25,10 +25,6 @@ router = APIRouter(prefix='/jobs', tags=['jobs'])
 class JobCreateUploadResponse(BaseModel):
     job_id: str
     status: Literal['pending', 'running', 'succeeded', 'failed', 'canceled']
-
-
-class ErrorResponse(BaseModel):
-    error: dict
 
 
 class JobSummaryItem(BaseModel):
@@ -62,55 +58,51 @@ class ReportRequest(BaseModel):
 # TODO rework the entire logic in this file
 
 
-@router.post('/upload', response_model=JobCreateUploadResponse, responses={409: {'model': ErrorResponse}})
+async def _get_job_count(db: AsyncSession, user: User) -> int:
+    res = await db.execute(select(func.count()).select_from(Job).where(Job.user_id == user.id))
+    return res.scalar_one()
+
+
+async def _does_video_exist(db: AsyncSession, original_checksum_sha256: str) -> bool:
+    res = await db.execute(select(Video).where(Video.original_checksum_sha256 == original_checksum_sha256))
+    return res.scalar_one_or_none() is not None
+
+
+async def _get_job_by_id_and_user(db: AsyncSession, job_id: str, user: User) -> Job | None:
+    res = await db.execute(select(Job).where(and_(Job.id == uuid.UUID(job_id), Job.user_id == user.id)))
+    return res.scalar_one_or_none()
+
+
+async def _get_job_by_id(db: AsyncSession, job_id: str) -> Job | None:
+    res = await db.execute(select(Job).where(Job.id == uuid.UUID(job_id)))
+    return res.scalar_one_or_none()
+
+
+@router.post('/upload', response_model=JobCreateUploadResponse)
 async def jobs_upload(
-    request: Request,
     file: UploadFile = File(...),
     original_file_path: str = Form(...),
     original_checksum_sha256: str = Form(...),
-    yolo_model: str = Form('windsurfing/2025_08_09_100epochs.pt'),
-    reid_model: str = Form('common/osnet_ain_x1_0_msmt17.pth'),
+    yolo_model: str = Form(...),
+    reid_model: str = Form(...),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(authenticate_user),
 ):
-    res = await db.execute(
-        select(func.count())
-        .select_from(Job)
-        .where(
-            and_(
-                Job.user_id == user.id,
-                Job.deleted_at.is_(None),
-                Job.status.in_([JobStatus.pending, JobStatus.running, JobStatus.succeeded]),
-            )
-        )
-    )
-    count = res.scalar_one()
-    if count >= Settings.MAX_JOBS_PER_USER:
+    if await _get_job_count(db, user) >= Settings.MAX_JOBS_PER_USER:
         raise HTTPException(status_code=403, detail={'code': 'quota_exceeded', 'message': 'Job quota exceeded'})
 
-    s3 = s3_client()
+    if await _does_video_exist(db, original_checksum_sha256):
+        raise HTTPException(status_code=409, detail={'code': 'duplicate_original', 'message': 'Video already exists'})
+
     ac_key_prefix = f'{Settings.PREFIX_AC_VIDEOS}{original_checksum_sha256}/ac/'
 
     content = await file.read()
     ac_checksum = hashlib.sha256(content).hexdigest()
 
-    exists = await db.execute(select(Video).where(Video.original_checksum_sha256 == original_checksum_sha256))
-    existing_video = exists.scalars().first()
-    if existing_video:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                'error': {
-                    'code': 'duplicate_original',
-                    'message': 'Video already exists',
-                    'video_id': str(existing_video.id),
-                }
-            },
-        )
-
     ext = mimetypes.guess_extension(file.content_type or 'video/mp4') or '.mp4'
     ac_key = f'{ac_key_prefix}{ac_checksum}{ext}'
-    s3.put_object(Bucket=Settings.S3_BUCKET, Key=ac_key, Body=content, ContentType=file.content_type or 'video/mp4')
+    # TODO? s3 = s3_client()
+    # TODO? s3.put_object(Bucket=Settings.S3_BUCKET, Key=ac_key, Body=content, ContentType=file.content_type or 'video/mp4')
 
     video = Video(
         original_checksum_sha256=original_checksum_sha256,
@@ -119,20 +111,20 @@ async def jobs_upload(
         size_bytes=len(content),
         mime_type=file.content_type or 'video/mp4',
         original_name=file.filename,
-        ac_storage_url=object_url(ac_key),
+        ac_storage_url='N/A',  # TODO? object_url(ac_key),
     )
     db.add(video)
-    await db.flush()
+    await db.flush()  # Flush to get the video id
 
     job = Job(user_id=user.id, video_id=video.id, model=f'{yolo_model}-{reid_model}', status=JobStatus.pending)
     db.add(job)
-    await db.flush()
-    await db.commit()
+    await db.commit()  # Commit to the database and get the job id
 
-    webhook_secret = Settings.BACKEND_WEBHOOK_SECRET
-    complete_url = f'{Settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job.id}/complete?secret={webhook_secret}'
+    complete_url = (
+        f'{Settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job.id}/complete?secret={Settings.BACKEND_WEBHOOK_SECRET}'
+    )
 
-    InferenceModel = modal.Cls.from_name('windsurf-analysis-inference', 'InferenceModel')
+    InferenceModel = modal.Cls.from_name('windsurf-analysis', 'InferenceModel')
     InferenceModel().inference.spawn(
         job_id=str(job.id),
         ac_bytes=content,
@@ -175,37 +167,32 @@ async def list_jobs(
 
 @router.get('/{job_id}', response_model=JobDetail)
 async def get_job(job_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(authenticate_user)):
-    row = (
-        (await db.execute(select(Job).where(and_(Job.id == uuid.UUID(job_id), Job.user_id == user.id))))
-        .scalars()
-        .first()
-    )
-    if not row:
+    job = await _get_job_by_id_and_user(db, job_id, user)
+    if job is None:
         raise HTTPException(status_code=404, detail='Not found')
-    await db.execute(update(Video).where(Video.id == row.video_id).values(last_accessed_at=func.now()))
-    await db.commit()
+
+    await db.execute(update(Video).where(Video.id == job.video_id).values(last_accessed_at=func.now()))
+
     return JobDetail(
-        id=str(row.id),
-        video_id=str(row.video_id),
-        model=row.model,
-        status=row.status.value,
-        created_at=row.created_at,
-        updated_at=row.updated_at,
-        results_json=row.results_json,
+        id=str(job.id),
+        video_id=str(job.video_id),
+        model=job.model,
+        status=job.status.value,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+        results_json=job.results_json,
     )
 
 
 @router.delete('/{job_id}')
 async def delete_job(job_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(authenticate_user)):
-    row = (
-        (await db.execute(select(Job).where(and_(Job.id == uuid.UUID(job_id), Job.user_id == user.id))))
-        .scalars()
-        .first()
-    )
-    if not row:
+    job = await _get_job_by_id_and_user(db, job_id, user)
+    if job is None:
         raise HTTPException(status_code=404, detail='Not found')
-    row.deleted_at = datetime.utcnow()
-    await db.commit()
+
+    job.deleted_at = datetime.now(timezone.utc)
+    await db.flush()  # Flush to update the job
+
     return {'ok': True}
 
 
@@ -213,16 +200,12 @@ async def delete_job(job_id: str, db: AsyncSession = Depends(get_db), user: User
 async def report_job(
     job_id: str, payload: ReportRequest, db: AsyncSession = Depends(get_db), user: User = Depends(authenticate_user)
 ):
-    row = (
-        (await db.execute(select(Job).where(and_(Job.id == uuid.UUID(job_id), Job.user_id == user.id))))
-        .scalars()
-        .first()
-    )
-    if not row:
+    job = await _get_job_by_id_and_user(db, job_id, user)
+    if job is None:
         raise HTTPException(status_code=404, detail='Not found')
-    rep = Report(job_id=row.id, type=ReportType(payload.type), message=payload.message)
-    db.add(rep)
-    await db.commit()
+
+    db.add(Report(job_id=job.id, type=ReportType(payload.type), message=payload.message))
+
     return {'ok': True}
 
 
@@ -236,21 +219,13 @@ async def jobs_complete(job_id: str, payload: JobsCompleteRequest, secret: str, 
     if secret != Settings.BACKEND_WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail='invalid secret')
 
-    row = (
-        await db.execute(
-            select(Job, Video)
-            .join(Video, Video.id == Job.video_id)
-            .where(Job.id == uuid.UUID(job_id))
-            .with_for_update()
-        )
-    ).first()
-    if not row:
-        raise HTTPException(status_code=404, detail='Job not found')
-    job_row, video_row = row
+    job = await _get_job_by_id(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail='Not found')
 
-    # Store results JSON directly in DB
-    job_row.results_json = payload.results_json
-    job_row.status = JobStatus(payload.status)
-    job_row.finished_at = datetime.now(timezone.utc)
-    await db.commit()
+    job.results_json = payload.results_json
+    job.status = JobStatus(payload.status)
+    job.finished_at = datetime.now(timezone.utc)
+    await db.flush()  # Flush to update the job
+
     return {'ok': True}

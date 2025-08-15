@@ -4,14 +4,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import (
-    Enum,
-    ForeignKey,
-    Index,
-    UniqueConstraint,
-    func,
-    text,
-)
+from sqlalchemy import Enum, ForeignKey, Index, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import CITEXT, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 

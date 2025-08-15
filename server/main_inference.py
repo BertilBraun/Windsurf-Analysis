@@ -1,24 +1,30 @@
 import time
 import tempfile
+import requests
 from pathlib import Path
 from typing import Sequence
 
 import modal
 
+from .inference.src.windsurf_video_processor import (
+    SurferDetector,
+    get_video_properties,
+    GreedyPreprocessor,
+    DiscreteILPTracker,
+    TrackFilteringSmoothingRelabeling,
+    Track,
+    Tracker,
+)
+from .inference.src.util.timing import timeit
 
-inference_root_folder = Path(__file__).parent
+inference_root_folder = Path(__file__).parent / 'inference'
 
 # Container image with system deps for OpenCV/torch
 image = (
     modal.Image.debian_slim(python_version='3.10')
     .apt_install('ffmpeg', 'libgl1', 'git')
-    .add_local_dir(
-        inference_root_folder / 'src',
-        remote_path='/root/src',
-        copy=True,
-        ignore=~modal.FilePatternMatcher('**/*.py'),  # include all .py files (inverted ignore)
-    )
-    .add_local_dir(inference_root_folder / 'src/weights', remote_path='/root/weights', copy=True)
+    .add_local_dir(inference_root_folder / 'src', remote_path='/root/src', copy=True)
+    .add_local_dir(inference_root_folder / 'weights', remote_path='/root/weights', copy=True)
     .pip_install_from_requirements(str(inference_root_folder / 'requirements.txt'))
 )
 
@@ -30,24 +36,10 @@ app = modal.App('windsurf-analysis-inference', image=image)
 class InferenceModel:
     @modal.enter()
     def setup(self):
-        from .src.windsurf_video_processor import SurferDetector
-
         self.processors: dict[tuple[str, str], SurferDetector] = {}
 
     @modal.method()
     def inference(self, job_id: str, ac_bytes: bytes, yolo_model: str, reid_model: str, complete_webhook: str):
-        import requests
-        from .src.windsurf_video_processor import (
-            SurferDetector,
-            get_video_properties,
-            GreedyPreprocessor,
-            DiscreteILPTracker,
-            TrackFilteringSmoothingRelabeling,
-            Track,
-            Tracker,
-        )
-        from .src.util.timing import timeit
-
         with tempfile.TemporaryDirectory() as td:
             local_video = Path(td) / f'{job_id}.mp4'
             with open(local_video, 'wb') as f:

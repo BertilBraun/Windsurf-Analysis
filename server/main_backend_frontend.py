@@ -22,7 +22,7 @@ image = (
     .pip_install_from_requirements(str(server_root_folder / 'requirements.txt'))
 )
 
-app = modal.App('windsurf-analysis', image=image)
+app = modal.App('windsurf-analysis-backend', image=image)
 
 
 @asynccontextmanager

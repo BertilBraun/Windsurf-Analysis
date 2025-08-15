@@ -5,9 +5,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.backend.auth import authenticate_user
-from server.backend.db import session_scope
+from server.backend.db import get_db
 from server.backend.models import Job, User, Video
 
 
@@ -27,20 +28,21 @@ class ChecksumPreflightResponse(BaseModel):
 async def videos_checksum(
     payload: ChecksumPreflightRequest,
     user: User = Depends(authenticate_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    async with session_scope() as db:
-        result = await db.execute(
-            select(Job, Video).where(  # noqa: F821
-                and_(
-                    Video.original_checksum_sha256 == payload.original_checksum_sha256,
-                    Job.video_id == Video.id,
-                    Job.deleted_at.is_(None),
-                    Job.user_id == user.id,
-                )
+    result = await db.execute(
+        select(Job, Video).where(
+            and_(
+                Video.original_checksum_sha256 == payload.original_checksum_sha256,
+                Job.video_id == Video.id,
+                Job.user_id == user.id,
+                Job.deleted_at.is_(None),
             )
         )
-        existing = result.first()
-        if not existing:
-            return ChecksumPreflightResponse(exists=False)
-        job, video = existing
-        return ChecksumPreflightResponse(exists=True, video_id=str(video.id))
+    )
+    existing = result.scalar_one_or_none()
+    if existing is None:
+        return ChecksumPreflightResponse(exists=False)
+
+    job, video = existing
+    return ChecksumPreflightResponse(exists=True, video_id=str(video.id))
