@@ -47,6 +47,7 @@ class JobDetail(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    original_file_path: str
     results_json: Optional[dict] = None
 
 
@@ -173,7 +174,13 @@ async def list_jobs(
 async def get_job(job_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(authenticate_user)):
     job = await _get_job_by_id_and_user(db, job_id, user)
     if job is None:
-        raise HTTPException(status_code=404, detail='Not found')
+        raise HTTPException(status_code=404, detail='Job not found')
+
+    # fetch video for additional metadata
+    video = (await db.execute(select(Video).where(Video.id == job.video_id))).scalar_one_or_none()
+
+    if video is None:
+        raise HTTPException(status_code=404, detail='Video not found')
 
     await db.execute(update(Video).where(Video.id == job.video_id).values(last_accessed_at=timestamp_now()))
 
@@ -185,6 +192,7 @@ async def get_job(job_id: str, db: AsyncSession = Depends(get_db), user: User = 
         created_at=job.created_at,
         updated_at=job.updated_at,
         results_json=job.results_json,
+        original_file_path=video.original_file_path,
     )
 
 
