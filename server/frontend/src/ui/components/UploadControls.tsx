@@ -1,5 +1,6 @@
 import React from 'react'
 import { useAuth, API_BASE } from '../auth/AuthProvider'
+import { preprocessVideo } from '../utils/preprocessVideo'
 
 type UploadItem = {
     id: string
@@ -118,13 +119,6 @@ export const UploadControls: React.FC<{ onSubmitted: (num: number) => void }> = 
         return { arrayBuffer, sha256 }
     }
 
-    async function preprocessVideo(file: File): Promise<{ arrayBuffer: ArrayBuffer; type: string; name: string }> {
-        const arrayBuffer = await file.arrayBuffer()
-        // TODO: ffmpeg.wasm pipeline to downscale to 1920x1080 @25fps, remove audio
-        // For now, passthrough original bytes
-        return { arrayBuffer, type: file.type, name: file.name }
-    }
-
     const uploadSingle = (file: File): Promise<boolean> => {
         const id = `${Date.now()}-${counterRef.current++}`
         setUploads(prev => [...prev, { id, name: file.name, size: file.size, progress: 0, status: 'hashing' }])
@@ -145,7 +139,7 @@ export const UploadControls: React.FC<{ onSubmitted: (num: number) => void }> = 
                     return
                 }
 
-                // Preprocess before upload (placeholder)
+                // Preprocess before upload
                 setUploads(prev => prev.map(u => (u.id === id ? { ...u, status: 'preprocessing', progress: 0 } : u)))
                 const processed = await preprocessVideo(file)
 
