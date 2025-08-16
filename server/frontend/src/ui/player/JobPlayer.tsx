@@ -44,6 +44,10 @@ function buildDetectionsByFrame(tracks: Track[], totalFrames: number): Map<numbe
     return map
 }
 
+function clamp(x: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, x))
+}
+
 export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDeleted?: () => void }> = ({ job, onClose, onDeleted }) => {
     const { authorizedFetch } = useAuth()
     const [metadata, setMetadata] = React.useState<Metadata | null>(null)
@@ -261,7 +265,7 @@ export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDelete
     const bumpSpeed = (down: boolean) => {
         const rates = [0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
         const idx = rates.indexOf(playbackSpeed)
-        const next = rates[Math.max(0, Math.min(rates.length - 1, idx < 0 ? 2 : (down ? idx - 1 : idx + 1)))]
+        const next = rates[clamp(idx == -1 ? 2 : (down ? idx - 1 : idx + 1), 0, rates.length - 1)]
         setPlaybackSpeed(next)
         showHud(`Speed: ${next}x`)
     }

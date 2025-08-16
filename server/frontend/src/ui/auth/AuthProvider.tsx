@@ -12,7 +12,7 @@ type AuthContextValue = {
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 const STORAGE_KEY = 'windsurf_auth'
-const API_BASE = '/api/v1'
+export const API_BASE = '/api/v1'
 
 function makeAuthHeader(email: string, password: string): string {
     return 'Basic ' + btoa(`${email}:${password}`)
