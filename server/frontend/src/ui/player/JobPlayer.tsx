@@ -48,7 +48,11 @@ function clamp(x: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, x))
 }
 
-export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDeleted?: () => void }> = ({ job, onClose, onDeleted }) => {
+export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDeleted?: () => void }> = ({
+    job,
+    onClose,
+    onDeleted,
+}) => {
     const { authorizedFetch } = useAuth()
     const [metadata, setMetadata] = React.useState<Metadata | null>(null)
     const [videoUrl, setVideoUrl] = React.useState<string | null>(null)
@@ -87,7 +91,10 @@ export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDelete
             tracks: (raw.tracks as any[]).map((t, idx) => ({
                 id: Number(t.track_id ?? idx),
                 detections: (t.detections || []).map((d: any) => {
-                    const x1 = Number(d.bbox[0]); const y1 = Number(d.bbox[1]); const x2 = Number(d.bbox[2]); const y2 = Number(d.bbox[3])
+                    const x1 = Number(d.bbox[0])
+                    const y1 = Number(d.bbox[1])
+                    const x2 = Number(d.bbox[2])
+                    const y2 = Number(d.bbox[3])
                     return {
                         frame: Number(d.frame_idx),
                         track_id: Number(t.track_id ?? idx),
@@ -118,6 +125,7 @@ export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDelete
                 }
             }
             const url = URL.createObjectURL(file)
+            setIsVideoReady(false)
             setVideoUrl(url)
         }
         input.click()
@@ -181,37 +189,42 @@ export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDelete
     React.useEffect(() => {
         const video = videoRef.current
         if (!video) return
-        const onLoaded = () => {
-            setIsVideoReady(true)
-        }
-        video.addEventListener('loadedmetadata', onLoaded)
+        const onLoadedMeta = () => setIsVideoReady(true)
+        const onLoadedData = () => setIsVideoReady(true)
+        const onCanPlay = () => setIsVideoReady(true)
+        video.addEventListener('loadedmetadata', onLoadedMeta)
+        video.addEventListener('loadeddata', onLoadedData)
+        video.addEventListener('canplay', onCanPlay)
+        // force load in case the browser delays
+        try {
+            video.load()
+        } catch {}
+        if (video.readyState >= 1) setIsVideoReady(true)
         return () => {
-            video.removeEventListener('loadedmetadata', onLoaded)
+            video.removeEventListener('loadedmetadata', onLoadedMeta)
+            video.removeEventListener('loadeddata', onLoadedData)
+            video.removeEventListener('canplay', onCanPlay)
         }
     }, [videoUrl])
 
     React.useEffect(() => {
         const video = videoRef.current
         const canvas = canvasRef.current
-        if (!video || !canvas || !metadata || !videoUrl || !isVideoReady) return
+        if (!video || !canvas || !metadata || !videoUrl) return
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        // Use video intrinsic dimensions to match pixel space for accurate hit-testing
-        canvas.width = video.videoWidth || metadata.video_properties.width
-        canvas.height = video.videoHeight || metadata.video_properties.height
+        // Use video intrinsic dimensions to match pixel space; fallback to metadata or sensible defaults
+        const cw = video.videoWidth || metadata.video_properties.width || 640
+        const ch = video.videoHeight || metadata.video_properties.height || 360
+        canvas.width = cw
+        canvas.height = ch
 
-        // Seek video element to the target time for frame-locked playback
-        const t = Math.max(0, currentFrame) / Math.max(1, metadata.video_properties.fps)
-        if (Math.abs(video.currentTime - t) > 1e-3) {
-            video.currentTime = t
-        }
-
-        // Draw current frame when seeked or if metadata incomplete, draw anyway on timeupdate
+        // Draw routine
         const draw = () => {
             try {
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-            } catch { }
+            } catch {}
             const dets = detectionsByFrameRef.current.get(currentFrame) || []
             for (const d of dets) {
                 const [x, y, w, h] = d.bbox
@@ -233,22 +246,39 @@ export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDelete
             }
         }
 
-        // Ensure we draw after the browser updates currentTime frame
+        // Keep frame/time in sync and draw on relevant events
+        const syncAndDraw = () => {
+            const t = Math.max(0, currentFrame) / Math.max(1, metadata.video_properties.fps)
+            // Only adjust currentTime if drift is significant to avoid thrashing
+            if (Math.abs(video.currentTime - t) > 1e-3) {
+                video.currentTime = t
+            }
+            requestAnimationFrame(draw)
+        }
+
         const onSeeked = () => draw()
         const onTimeUpdate = () => draw()
+        const onLoadedData = () => draw()
+        const onCanPlay = () => draw()
         video.addEventListener('seeked', onSeeked)
         video.addEventListener('timeupdate', onTimeUpdate)
-        draw()
+        video.addEventListener('loadeddata', onLoadedData)
+        video.addEventListener('canplay', onCanPlay)
+
+        syncAndDraw()
+
         return () => {
             video.removeEventListener('seeked', onSeeked)
             video.removeEventListener('timeupdate', onTimeUpdate)
+            video.removeEventListener('loadeddata', onLoadedData)
+            video.removeEventListener('canplay', onCanPlay)
         }
-    }, [currentFrame, metadata, hudMessage, videoUrl, isVideoReady])
+    }, [currentFrame, metadata, hudMessage, videoUrl])
 
     React.useEffect(() => {
         if (!metadata) return
         if (currentMode === 'detailed' && currentTrackId != null) {
-            const dets = (detectionsByFrameRef.current.get(currentFrame) || [])
+            const dets = detectionsByFrameRef.current.get(currentFrame) || []
             const has = dets.some(d => d.track_id === currentTrackId)
             if (!has) {
                 setCurrentMode('overview')
@@ -257,15 +287,18 @@ export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDelete
         }
     }, [currentFrame, currentMode, currentTrackId, metadata])
 
-    React.useEffect(() => () => {
-        if (timerRef.current) window.clearInterval(timerRef.current)
-        if (videoUrl) URL.revokeObjectURL(videoUrl)
-    }, [])
+    React.useEffect(
+        () => () => {
+            if (timerRef.current) window.clearInterval(timerRef.current)
+            if (videoUrl) URL.revokeObjectURL(videoUrl)
+        },
+        []
+    )
 
     const bumpSpeed = (down: boolean) => {
         const rates = [0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
         const idx = rates.indexOf(playbackSpeed)
-        const next = rates[clamp(idx == -1 ? 2 : (down ? idx - 1 : idx + 1), 0, rates.length - 1)]
+        const next = rates[clamp(idx == -1 ? 2 : down ? idx - 1 : idx + 1, 0, rates.length - 1)]
         setPlaybackSpeed(next)
         showHud(`Speed: ${next}x`)
     }
@@ -279,7 +312,10 @@ export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDelete
     const handleKeyDown = (event: KeyboardEvent) => {
         if (!metadata) return
         const active = document.activeElement as HTMLElement | null
-        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || (active as any).isContentEditable)) {
+        if (
+            active &&
+            (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || (active as any).isContentEditable)
+        ) {
             return
         }
         if (event.key === ' ') {
@@ -344,7 +380,7 @@ export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDelete
         return () => window.removeEventListener('keydown', onKey)
     })
 
-    const onCanvasClick: React.MouseEventHandler<HTMLCanvasElement> = (e) => {
+    const onCanvasClick: React.MouseEventHandler<HTMLCanvasElement> = e => {
         if (!metadata) return
         const canvas = canvasRef.current
         if (!canvas) return
@@ -381,14 +417,20 @@ export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDelete
             <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <div><strong>Job</strong> {job.id}</div>
-                        <div style={{ fontSize: 12, color: '#6b7280' }}>File: {getBasename(metadata.input_video_path) || getBasename(job.original_file_path) || 'unknown.mp4'}</div>
+                        <div>
+                            <strong>Job</strong> {getBasename(job.original_file_path) || 'unknown.mp4'}
+                        </div>
+                        <div style={{ fontSize: 12, color: '#6b7280' }}>
+                            File: {getBasename(job.original_file_path)} Job ID: {job.id}
+                        </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button onClick={onClose}>Close</button>
                         <button onClick={pickVideo}>{videoUrl ? 'Change video' : 'Select video'}</button>
                         <button onClick={() => setIsReportOpen(true)}>Report</button>
-                        <button onClick={deleteJob} disabled={isDeleting} style={{ color: '#ef4444' }}>{isDeleting ? 'Deleting…' : 'Delete'}</button>
+                        <button onClick={deleteJob} disabled={isDeleting} style={{ color: '#ef4444' }}>
+                            {isDeleting ? 'Deleting…' : 'Delete'}
+                        </button>
                     </div>
                 </div>
 
@@ -402,8 +444,22 @@ export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDelete
                         )}
                         {videoUrl && (
                             <>
-                                <canvas ref={canvasRef} onClick={onCanvasClick} style={{ width: '100%', maxHeight: 640, background: '#000' }} />
-                                <video ref={videoRef} src={videoUrl || undefined} style={{ display: 'none' }} preload="metadata" playsInline muted />
+                                <canvas
+                                    ref={canvasRef}
+                                    onClick={onCanvasClick}
+                                    style={{ width: '100%', maxHeight: 640, background: '#000' }}
+                                />
+                                <video
+                                    ref={videoRef}
+                                    src={videoUrl || undefined}
+                                    style={{ display: 'none' }}
+                                    preload="metadata"
+                                    playsInline
+                                    muted
+                                    onLoadedMetadata={() => setIsVideoReady(true)}
+                                    onLoadedData={() => setIsVideoReady(true)}
+                                    onCanPlay={() => setIsVideoReady(true)}
+                                />
                             </>
                         )}
 
@@ -416,19 +472,47 @@ export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDelete
                         />
 
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <button onClick={() => setIsPlaying(p => !p)} disabled={!videoUrl || !isVideoReady}>{isPlaying ? 'Pause' : 'Play'}</button>
-                            <button onClick={() => bumpSpeed(true)} disabled={!videoUrl}>Speed -</button>
-                            <button onClick={() => bumpSpeed(false)} disabled={!videoUrl}>Speed +</button>
+                            <button onClick={() => setIsPlaying(p => !p)} disabled={!videoUrl}>
+                                {isPlaying ? 'Pause' : 'Play'}
+                            </button>
+                            <button onClick={() => bumpSpeed(true)} disabled={!videoUrl}>
+                                Speed -
+                            </button>
+                            <button onClick={() => bumpSpeed(false)} disabled={!videoUrl}>
+                                Speed +
+                            </button>
                             <span style={{ fontFamily: 'monospace' }}>Speed: {playbackSpeed}x</span>
-                            <span style={{ marginLeft: 12, fontFamily: 'monospace' }}>Frame {currentFrame + 1}/{metadata.video_properties.total_frames}</span>
-                            <span style={{ marginLeft: 12 }}>Mode: {currentMode}{currentTrackId != null ? ` (#${currentTrackId})` : ''}</span>
+                            <span style={{ marginLeft: 12, fontFamily: 'monospace' }}>
+                                Frame {currentFrame + 1}/{metadata.video_properties.total_frames}
+                            </span>
+                            <span style={{ marginLeft: 12 }}>
+                                Mode: {currentMode}
+                                {currentTrackId != null ? ` (#${currentTrackId})` : ''}
+                            </span>
                         </div>
                     </div>
                 </div>
             </div>
             {isReportOpen && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ background: 'white', padding: 16, borderRadius: 8, width: 420, boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
+                <div
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                >
+                    <div
+                        style={{
+                            background: 'white',
+                            padding: 16,
+                            borderRadius: 8,
+                            width: 420,
+                            boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+                        }}
+                    >
                         <h4 style={{ marginTop: 0 }}>Report an issue</h4>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <label style={{ fontSize: 12, color: '#374151' }}>Type</label>
@@ -438,11 +522,20 @@ export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDelete
                                 <option value="other">Other</option>
                             </select>
                             <label style={{ fontSize: 12, color: '#374151' }}>Message</label>
-                            <textarea rows={4} value={reportMessage} onChange={e => setReportMessage(e.target.value)} placeholder="Describe the issue..." />
+                            <textarea
+                                rows={4}
+                                value={reportMessage}
+                                onChange={e => setReportMessage(e.target.value)}
+                                placeholder="Describe the issue..."
+                            />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-                            <button onClick={() => setIsReportOpen(false)} disabled={isSubmittingReport}>{isSubmittingReport ? 'Closing…' : 'Cancel'}</button>
-                            <button onClick={submitReport} disabled={!reportMessage || isSubmittingReport}>{isSubmittingReport ? 'Submitting…' : 'Submit'}</button>
+                            <button onClick={() => setIsReportOpen(false)} disabled={isSubmittingReport}>
+                                {isSubmittingReport ? 'Closing…' : 'Cancel'}
+                            </button>
+                            <button onClick={submitReport} disabled={!reportMessage || isSubmittingReport}>
+                                {isSubmittingReport ? 'Submitting…' : 'Submit'}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -450,5 +543,3 @@ export const JobPlayer: React.FC<{ job: JobDetail; onClose: () => void; onDelete
         </>
     )
 }
-
-
