@@ -9,7 +9,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 import modal
 from pydantic import BaseModel
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import Row, and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.backend.auth import authenticate_user
@@ -56,9 +56,6 @@ class ReportRequest(BaseModel):
     type: Literal['missed_detection', 'false_association', 'other']
 
 
-# TODO rework the entire logic in this file
-
-
 async def _get_job_count(db: AsyncSession, user: User) -> int:
     res = await db.execute(select(func.count()).select_from(Job).where(Job.user_id == user.id))
     return res.scalar_one()
@@ -72,6 +69,21 @@ async def _does_video_exist(db: AsyncSession, original_checksum_sha256: str) -> 
 async def _get_job_by_id_and_user(db: AsyncSession, job_id: str, user: User) -> Job | None:
     res = await db.execute(select(Job).where(and_(Job.id == uuid.UUID(job_id), Job.user_id == user.id)))
     return res.scalar_one_or_none()
+
+
+async def _get_job_and_video_by_id_and_user(db: AsyncSession, job_id: str, user: User) -> Row[tuple[Job, Video]] | None:
+    res = await db.execute(
+        select(Job, Video)
+        .join(Video, Job.video_id == Video.id)
+        .where(
+            and_(
+                Job.id == uuid.UUID(job_id),
+                Job.user_id == user.id,
+                Job.deleted_at.is_(None),
+            )
+        )
+    )
+    return res.one_or_none()
 
 
 async def _get_job_by_id(db: AsyncSession, job_id: str) -> Job | None:
@@ -172,15 +184,11 @@ async def list_jobs(
 
 @router.get('/{job_id}', response_model=JobDetail)
 async def get_job(job_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(authenticate_user)):
-    job = await _get_job_by_id_and_user(db, job_id, user)
-    if job is None:
-        raise HTTPException(status_code=404, detail='Job not found')
+    tuple = await _get_job_and_video_by_id_and_user(db, job_id, user)
+    if tuple is None:
+        raise HTTPException(status_code=404, detail='Not found')
 
-    # fetch video for additional metadata
-    video = (await db.execute(select(Video).where(Video.id == job.video_id))).scalar_one_or_none()
-
-    if video is None:
-        raise HTTPException(status_code=404, detail='Video not found')
+    job, video = tuple.t
 
     await db.execute(update(Video).where(Video.id == job.video_id).values(last_accessed_at=timestamp_now()))
 

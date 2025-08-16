@@ -21,7 +21,7 @@ export async function preprocessVideo(file: File): Promise<{ arrayBuffer: ArrayB
                 ; (window as any).__ffmpegLoading = ffmpegLoading
         }
         ffmpegInstance = await ffmpegLoading
-            ; (window as any).__ffmpegSingleton = ffmpegInstance
+        ;(window as any).__ffmpegSingleton = ffmpegInstance
         return ffmpegInstance
     }
 
@@ -34,7 +34,7 @@ export async function preprocessVideo(file: File): Promise<{ arrayBuffer: ArrayB
                 vid.removeAttribute('src')
                 try {
                     vid.load()
-                } catch { }
+                } catch {}
             }
             vid.preload = 'metadata'
             vid.onloadedmetadata = () => {
@@ -117,5 +117,3 @@ export async function preprocessVideo(file: File): Promise<{ arrayBuffer: ArrayB
         return await passthrough()
     }
 }
-
-

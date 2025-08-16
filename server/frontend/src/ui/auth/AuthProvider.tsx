@@ -12,7 +12,7 @@ type AuthContextValue = {
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 const STORAGE_KEY = 'windsurf_auth'
-export const API_BASE = '/api/v1'
+export const API_BASE = 'https://bertil-braun-private--windsurf-analysis-fastapi-app.modal.run/api/v1'
 
 function makeAuthHeader(email: string, password: string): string {
     return 'Basic ' + btoa(`${email}:${password}`)
@@ -30,7 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setEmail(e)
                 setAuthHeader(h)
             }
-        } catch { }
+        } catch {}
     }, [])
 
     const login = useCallback((e: string, p: string) => {
@@ -39,7 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setEmail(e)
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify({ email: e, authHeader: h }))
-        } catch { }
+        } catch {}
     }, [])
 
     const logout = useCallback(() => {
@@ -47,36 +47,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setEmail(null)
         try {
             localStorage.removeItem(STORAGE_KEY)
-        } catch { }
+        } catch {}
     }, [])
 
-    const authorizedFetch = useCallback(async (input: RequestInfo, init?: RequestInit) => {
-        if (!authHeader) throw new Error('Not authenticated')
-        // Safety: only allow relative API paths; prefix with apiBase
-        const path = typeof input === 'string' ? input : (input as Request).url
-        if (/^https?:\/\//i.test(path)) {
-            throw new Error('External URLs are not allowed in authorizedFetch')
-        }
-        const url = `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`
-        const res = await fetch(url, {
-            ...init,
-            headers: {
-                ...(init?.headers || {}),
-                Authorization: authHeader,
-            },
-        })
-        if (!res.ok) throw new Error(await res.text())
-        return res
-    }, [authHeader])
+    const authorizedFetch = useCallback(
+        async (input: RequestInfo, init?: RequestInit) => {
+            if (!authHeader) throw new Error('Not authenticated')
+            // Only allow relative API paths; prefix with apiBase
+            const path = typeof input === 'string' ? input : (input as Request).url
+            const url = `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`
+            const res = await fetch(url, {
+                ...init,
+                headers: {
+                    ...(init?.headers || {}),
+                    Authorization: authHeader,
+                },
+            })
+            if (!res.ok) throw new Error(await res.text())
+            return res
+        },
+        [authHeader]
+    )
 
-    const value = useMemo<AuthContextValue>(() => ({
-        isAuthenticated: !!authHeader,
-        authHeader,
-        email,
-        login,
-        logout,
-        authorizedFetch,
-    }), [authHeader, email, login, logout, authorizedFetch])
+    const value = useMemo<AuthContextValue>(
+        () => ({
+            isAuthenticated: !!authHeader,
+            authHeader,
+            email,
+            login,
+            logout,
+            authorizedFetch,
+        }),
+        [authHeader, email, login, logout, authorizedFetch]
+    )
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
@@ -86,5 +89,3 @@ export function useAuth(): AuthContextValue {
     if (!ctx) throw new Error('useAuth must be used within AuthProvider')
     return ctx
 }
-
-

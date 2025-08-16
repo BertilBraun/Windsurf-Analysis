@@ -4,8 +4,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import modal
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from server.backend.config import Settings
 from server.backend.db import init_db
@@ -40,6 +41,15 @@ def fastapi_app():
         lifespan=lifespan,
         docs_url='/api/docs',
         redoc_url=None,
+    )
+
+    # Allow local dev origins to call the API directly (useful when not using a proxy)
+    api.add_middleware(
+        CORSMiddleware,
+        allow_origins=['http://localhost:5173', 'http://127.0.0.1:5173'],
+        allow_credentials=False,
+        allow_methods=['*'],
+        allow_headers=['*'],
     )
 
     api.include_router(videos_router, prefix='/api/v1')
