@@ -45,11 +45,16 @@ export async function getFileByRelativePath(dirHandle: FileSystemDirectoryHandle
                 current = await current.getDirectoryHandle(name)
             }
         }
-        const file = await (current as FileSystemFileHandle).getFile()
-        return file
+        return await getFileFromHandle(current)
     } catch (e) {
         throw new Error(`Error getting file by relative path: ${e}`)
     }
+}
+
+async function getFileFromHandle(handle: FileSystemHandle): Promise<File> {
+    if (handle.kind !== 'file') throw new Error('Handle is not a file')
+    const file = await (handle as FileSystemFileHandle).getFile()
+    return file
 }
 
 async function* iterateEntries(
@@ -116,19 +121,4 @@ export async function listFilesRecursively(
         out.push(entry)
     }
     return out
-}
-
-async function getFileFromHandle(handle: FileSystemHandle): Promise<File> {
-    if ((handle as any)?.kind !== 'file') throw new Error('Handle is not a file')
-    const file = await (handle as FileSystemFileHandle).getFile()
-    return file
-}
-
-export function isMp4Name(name: string): boolean {
-    return /\.mp4$/i.test(name)
-}
-
-export function isMp4File(file: File): boolean {
-    const type = (file.type || '').toLowerCase()
-    return type === 'video/mp4'
 }

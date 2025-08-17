@@ -1,7 +1,7 @@
 import React from 'react'
 import { addProcessedHash, hasProcessedHash, removeProcessedHash } from '../utils/idb'
 import { UploadContext, uploadVideoFile, computeSha256 } from '../utils/uploader'
-import { listFilesRecursively, isMp4File, isMp4Name } from '../utils/fsAccess'
+import { listFilesRecursively } from '../utils/fsAccess'
 
 export function useIngressScanner(
     dirHandle: FileSystemDirectoryHandle | null,
@@ -24,9 +24,8 @@ export function useIngressScanner(
         try {
             const entries = await listFilesRecursively(dirHandle as any, ['.mp4'])
             for (const entry of entries) {
-                if (!isMp4Name(entry.name)) continue
                 const file = await entry.getFile()
-                if (!isMp4File(file)) continue
+                if (file.type.toLowerCase() !== 'video/mp4') continue
                 const relPath = entry.relativePath
                 const { sha256 } = await computeSha256(file)
                 const already = await hasProcessedHash(sha256)
