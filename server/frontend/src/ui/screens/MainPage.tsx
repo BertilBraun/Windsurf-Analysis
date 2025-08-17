@@ -25,7 +25,7 @@ export const MainPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const [dirHandle, setDirHandle] = React.useState<FileSystemDirectoryHandle | null>(null)
     const [dirPermission, setDirPermission] = React.useState<'granted' | 'denied' | 'prompt' | null>(null)
     const uploadCtx = React.useMemo(() => ({ authorizedFetch, authHeader }), [authorizedFetch, authHeader])
-    const scanner = useIngressScanner(dirHandle, uploadCtx)
+    const scanner = useIngressScanner(dirHandle, uploadCtx, () => startPolling())
 
     // Try to restore directory handle from IndexedDB on mount
     React.useEffect(() => {

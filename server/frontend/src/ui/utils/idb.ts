@@ -91,3 +91,17 @@ export async function hasProcessedHash(hash: string): Promise<boolean> {
         return false
     }
 }
+
+export async function removeProcessedHash(hash: string): Promise<void> {
+    try {
+        const db = await openDb()
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(STORE_PROCESSED, 'readwrite')
+            const store = tx.objectStore(STORE_PROCESSED)
+            store.delete(hash)
+            tx.oncomplete = () => resolve()
+            tx.onerror = () => reject(tx.error)
+        })
+        db.close()
+    } catch {}
+}

@@ -138,7 +138,7 @@ export const UploadControls: React.FC<{ onSubmitted: (num: number) => void }> = 
     const onPickFile = async () => {
         const input = document.createElement('input')
         input.type = 'file'
-        input.accept = 'video/*'
+        input.accept = 'video/mp4'
         input.onchange = async () => {
             if (!input.files || input.files.length === 0) return
             setIsUploading(true)
@@ -159,7 +159,7 @@ export const UploadControls: React.FC<{ onSubmitted: (num: number) => void }> = 
         input.type = 'file'
         ;(input as any).webkitdirectory = true
         input.multiple = true
-        input.accept = 'video/*'
+        input.accept = 'video/mp4'
         input.onchange = async () => {
             if (!input.files || input.files.length === 0) return
             const files = Array.from(input.files).filter(f => f.type.startsWith('video/'))

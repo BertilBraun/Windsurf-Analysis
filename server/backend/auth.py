@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy import select
 from passlib.context import CryptContext
 
 from server.backend.database.db import get_db
