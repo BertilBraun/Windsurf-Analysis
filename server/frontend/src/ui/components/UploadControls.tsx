@@ -1,6 +1,7 @@
 import React from 'react'
-import { useAuth, API_BASE } from '../auth/AuthProvider'
-import { preprocessVideo } from '../utils/preprocessVideo'
+import { useAuth } from '../auth/AuthProvider'
+import { uploadVideoFile, computeSha256 } from '../utils/uploader'
+import { addProcessedHash } from '../utils/idb'
 
 type UploadItem = {
     id: string
@@ -82,28 +83,6 @@ function UploadList({ uploads }: { uploads: UploadItem[] }) {
     )
 }
 
-function doXhrUpload(
-    url: string,
-    authHeader: string | null,
-    form: FormData,
-    onProgress: (percent: number) => void
-): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.open('POST', url, true)
-        if (authHeader) xhr.setRequestHeader('Authorization', authHeader)
-        xhr.upload.onprogress = e => {
-            if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
-        }
-        xhr.onerror = () => reject(new Error('Network error'))
-        xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) resolve()
-            else reject(new Error(xhr.responseText || `HTTP ${xhr.status}`))
-        }
-        xhr.send(form)
-    })
-}
-
 export const UploadControls: React.FC<{ onSubmitted: (num: number) => void }> = ({ onSubmitted }) => {
     const { authHeader, isAuthenticated, authorizedFetch } = useAuth()
     const [isUploading, setIsUploading] = React.useState(false)
@@ -111,20 +90,12 @@ export const UploadControls: React.FC<{ onSubmitted: (num: number) => void }> = 
     const [uploads, setUploads] = React.useState<UploadItem[]>([])
     const counterRef = React.useRef(1)
 
-    const computeSha256 = async (file: File) => {
-        const arrayBuffer = await file.arrayBuffer()
-        const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer)
-        const hashArray = Array.from(new Uint8Array(hashBuffer))
-        const sha256 = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-        return { arrayBuffer, sha256 }
-    }
-
     const uploadSingle = (file: File): Promise<boolean> => {
         const id = `${Date.now()}-${counterRef.current++}`
         setUploads(prev => [...prev, { id, name: file.name, size: file.size, progress: 0, status: 'hashing' }])
         return new Promise(async (resolve, reject) => {
             try {
-                const { arrayBuffer, sha256 } = await computeSha256(file)
+                const { sha256 } = await computeSha256(file)
                 // Preflight duplicate check
                 setUploads(prev => prev.map(u => (u.id === id ? { ...u, status: 'preflight', progress: 0 } : u)))
                 const res = await authorizedFetch('/videos/checksum', {
@@ -135,28 +106,21 @@ export const UploadControls: React.FC<{ onSubmitted: (num: number) => void }> = 
                 const pre = (await res.json()) as { exists: boolean }
                 if (pre.exists) {
                     setUploads(prev => prev.map(u => (u.id === id ? { ...u, status: 'skipped', progress: 100 } : u)))
+                    await addProcessedHash(sha256)
                     resolve(false)
                     return
                 }
 
                 // Preprocess before upload
                 setUploads(prev => prev.map(u => (u.id === id ? { ...u, status: 'preprocessing', progress: 0 } : u)))
-                const processed = await preprocessVideo(file)
 
-                // Build form and upload via XHR to capture progress
                 setUploads(prev => prev.map(u => (u.id === id ? { ...u, status: 'uploading', progress: 0 } : u)))
-                const form = new FormData()
-                form.append('file', new Blob([processed.arrayBuffer], { type: processed.type }), processed.name)
-                form.append('original_file_path', file.name)
-                form.append('original_checksum_sha256', sha256)
-                form.append('yolo_model', 'windsurfing/2025_08_09_100epochs.pt')
-                form.append('reid_model', 'common/osnet_ain_x1_0_msmt17.pth')
-
                 try {
-                    await doXhrUpload(`${API_BASE}/jobs/upload`, authHeader, form, percent => {
+                    await uploadVideoFile(file, { authorizedFetch, authHeader }, percent => {
                         setUploads(prev => prev.map(u => (u.id === id ? { ...u, progress: percent } : u)))
                     })
                     setUploads(prev => prev.map(u => (u.id === id ? { ...u, status: 'done', progress: 100 } : u)))
+                    await addProcessedHash(sha256)
                     resolve(true)
                 } catch (e: any) {
                     const msg = e?.message || 'Upload failed'

@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import mimetypes
-import uuid
 from datetime import datetime, timezone
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 import modal
 from pydantic import BaseModel
-from sqlalchemy import Row, and_, func, select, update
+from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.backend.auth import authenticate_user
@@ -18,6 +17,13 @@ from server.backend.db import get_db
 from server.backend.models import Job, JobStatus, Report, ReportType, User, Video
 from server.backend.s3 import object_url, s3_client
 
+from server.backend.accessors.job_accessor import (
+    get_job_count,
+    does_video_exist,
+    get_job_by_id_and_user,
+    get_job_and_video_by_id_and_user,
+    get_job_by_id,
+)
 
 router = APIRouter(prefix='/jobs', tags=['jobs'])
 
@@ -48,47 +54,13 @@ class JobDetail(BaseModel):
     created_at: datetime
     updated_at: datetime
     original_file_path: str
-    results_json: Optional[dict] = None
+    original_checksum_sha256: str
+    tracks: Optional[list[Any]] = None
 
 
 class ReportRequest(BaseModel):
     message: str
     type: Literal['missed_detection', 'false_association', 'other']
-
-
-async def _get_job_count(db: AsyncSession, user: User) -> int:
-    res = await db.execute(select(func.count()).select_from(Job).where(Job.user_id == user.id))
-    return res.scalar_one()
-
-
-async def _does_video_exist(db: AsyncSession, original_checksum_sha256: str) -> bool:
-    res = await db.execute(select(Video).where(Video.original_checksum_sha256 == original_checksum_sha256))
-    return res.scalar_one_or_none() is not None
-
-
-async def _get_job_by_id_and_user(db: AsyncSession, job_id: str, user: User) -> Job | None:
-    res = await db.execute(select(Job).where(and_(Job.id == uuid.UUID(job_id), Job.user_id == user.id)))
-    return res.scalar_one_or_none()
-
-
-async def _get_job_and_video_by_id_and_user(db: AsyncSession, job_id: str, user: User) -> Row[tuple[Job, Video]] | None:
-    res = await db.execute(
-        select(Job, Video)
-        .join(Video, Job.video_id == Video.id)
-        .where(
-            and_(
-                Job.id == uuid.UUID(job_id),
-                Job.user_id == user.id,
-                Job.deleted_at.is_(None),
-            )
-        )
-    )
-    return res.one_or_none()
-
-
-async def _get_job_by_id(db: AsyncSession, job_id: str) -> Job | None:
-    res = await db.execute(select(Job).where(Job.id == uuid.UUID(job_id)))
-    return res.scalar_one_or_none()
 
 
 def timestamp_now() -> datetime:
@@ -105,10 +77,10 @@ async def jobs_upload(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(authenticate_user),
 ):
-    if await _get_job_count(db, user) >= Settings.MAX_JOBS_PER_USER:
+    if await get_job_count(db, user) >= Settings.MAX_JOBS_PER_USER:
         raise HTTPException(status_code=403, detail={'code': 'quota_exceeded', 'message': 'Job quota exceeded'})
 
-    if await _does_video_exist(db, original_checksum_sha256):
+    if await does_video_exist(db, original_checksum_sha256):
         raise HTTPException(status_code=409, detail={'code': 'duplicate_original', 'message': 'Video already exists'})
 
     ac_key_prefix = f'{Settings.PREFIX_AC_VIDEOS}{original_checksum_sha256}/ac/'
@@ -184,11 +156,11 @@ async def list_jobs(
 
 @router.get('/{job_id}', response_model=JobDetail)
 async def get_job(job_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(authenticate_user)):
-    tuple = await _get_job_and_video_by_id_and_user(db, job_id, user)
-    if tuple is None:
+    existing = await get_job_and_video_by_id_and_user(db, job_id, user)
+    if existing is None:
         raise HTTPException(status_code=404, detail='Not found')
 
-    job, video = tuple.t
+    job, video = existing
 
     await db.execute(update(Video).where(Video.id == job.video_id).values(last_accessed_at=timestamp_now()))
 
@@ -199,14 +171,15 @@ async def get_job(job_id: str, db: AsyncSession = Depends(get_db), user: User = 
         status=job.status.value,
         created_at=job.created_at,
         updated_at=job.updated_at,
-        results_json=job.results_json,
+        tracks=job.tracks,
         original_file_path=video.original_file_path,
+        original_checksum_sha256=video.original_checksum_sha256,
     )
 
 
 @router.delete('/{job_id}')
 async def delete_job(job_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(authenticate_user)):
-    job = await _get_job_by_id_and_user(db, job_id, user)
+    job = await get_job_by_id_and_user(db, job_id, user)
     if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
@@ -220,7 +193,7 @@ async def delete_job(job_id: str, db: AsyncSession = Depends(get_db), user: User
 async def report_job(
     job_id: str, payload: ReportRequest, db: AsyncSession = Depends(get_db), user: User = Depends(authenticate_user)
 ):
-    job = await _get_job_by_id_and_user(db, job_id, user)
+    job = await get_job_by_id_and_user(db, job_id, user)
     if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
@@ -230,7 +203,7 @@ async def report_job(
 
 
 class JobsCompleteRequest(BaseModel):
-    results_json: dict
+    tracks: list[Any]
     status: Literal['succeeded', 'failed']
 
 
@@ -239,11 +212,11 @@ async def jobs_complete(job_id: str, payload: JobsCompleteRequest, secret: str, 
     if secret != Settings.BACKEND_WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail='invalid secret')
 
-    job = await _get_job_by_id(db, job_id)
+    job = await get_job_by_id(db, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
-    job.results_json = payload.results_json
+    job.tracks = payload.tracks
     job.status = JobStatus(payload.status)
     job.finished_at = timestamp_now()
     await db.flush()  # Flush to update the job

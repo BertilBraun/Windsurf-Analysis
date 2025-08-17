@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+from typing import Any
 import uuid
 from datetime import datetime
 
@@ -74,7 +75,7 @@ class Job(Base):
     started_at: Mapped[datetime | None] = mapped_column(nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
     error_message: Mapped[str | None] = mapped_column(nullable=True)
-    results_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    tracks: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     user: Mapped[User] = relationship('User', back_populates='jobs')

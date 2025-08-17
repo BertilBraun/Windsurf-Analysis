@@ -31,6 +31,10 @@ image = (
 app = modal.App('windsurf-analysis-inference', image=image)
 
 
+def clamp_percentage(p: float) -> float:
+    return max(0, min(round(p, 3), 1))
+
+
 @app.cls(gpu='L40S', max_containers=2)
 @modal.concurrent(max_inputs=16, target_inputs=12)
 class InferenceModel:
@@ -81,35 +85,31 @@ class InferenceModel:
             print(f'{job_id}: Found {len(processed_tracks)} tracks')
 
             # Convert dataclasses to primitive JSON structure
-            result = {
-                'video_properties': {
-                    'fps': props.fps,
-                    'width': props.width,
-                    'height': props.height,
-                    'total_frames': props.total_frames,
-                },
-                'tracks': [
-                    {
-                        'track_id': t.track_id,
-                        'start_frame': t.start_frame,
-                        'end_frame': t.end_frame,
-                        'start_time': t.start_frame / props.fps,
-                        'duration': t.duration_frames / props.fps,
-                        'detection_count': len(t.sorted_detections),
-                        'detections': [
-                            {
-                                'frame_idx': d.frame_idx,
-                                'bbox': [d.bbox.x1, d.bbox.y1, d.bbox.x2, d.bbox.y2],
-                                'confidence': d.confidence,
-                            }
-                            for d in t.sorted_detections
-                        ],
-                    }
-                    for t in processed_tracks
-                ],
-            }
+            tracks = [
+                {
+                    'track_id': t.track_id,
+                    'start_percent': clamp_percentage(t.start_frame / props.total_frames),
+                    'end_percent': clamp_percentage(t.end_frame / props.total_frames),
+                    'start_time_seconds': clamp_percentage(t.start_frame / props.fps),
+                    'duration_seconds': clamp_percentage(t.duration_frames / props.fps),
+                    'detections': [
+                        {
+                            'time_percent': clamp_percentage(d.frame_idx / props.total_frames),
+                            'bbox': [
+                                clamp_percentage(d.bbox.x1 / props.width),
+                                clamp_percentage(d.bbox.y1 / props.height),
+                                clamp_percentage(d.bbox.x2 / props.width),
+                                clamp_percentage(d.bbox.y2 / props.height),
+                            ],
+                            'confidence': clamp_percentage(d.confidence),
+                        }
+                        for d in t.sorted_detections
+                    ],
+                }
+                for t in processed_tracks
+            ]
 
         # POST completion webhook
         print(f'POSTing completion webhook to {complete_webhook}')
-        res = requests.post(complete_webhook, json={'status': 'succeeded', 'results_json': result}, timeout=60)
+        res = requests.post(complete_webhook, json={'status': 'succeeded', 'tracks': tracks}, timeout=60)
         print(f'Completion webhook response: {res.status_code} {res.text}')
