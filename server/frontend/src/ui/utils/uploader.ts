@@ -58,9 +58,8 @@ export async function uploadVideoFile(
     // Upload
     const form = new FormData()
     form.append('file', new Blob([processed.arrayBuffer], { type: processed.type }), processed.name)
-    const localRelativePath = relativePathOverride || (file as any).webkitRelativePath || file.name
+    const localRelativePath = relativePathOverride || file.webkitRelativePath || file.name
     form.append('original_file_path', localRelativePath)
-    form.append('local_relative_path', localRelativePath)
     form.append('original_checksum_sha256', sha256)
     form.append('yolo_model', 'windsurfing/2025_08_09_100epochs.pt')
     form.append('reid_model', 'common/osnet_ain_x1_0_msmt17.pth')

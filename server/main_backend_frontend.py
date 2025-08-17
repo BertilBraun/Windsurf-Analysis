@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from server.backend.config import Settings
-from server.backend.db import init_db
+from server.backend.database.db import init_db
 from server.backend.routes.jobs import router as jobs_router
 from server.backend.routes.users import router as users_router
 from server.backend.routes.videos import router as videos_router

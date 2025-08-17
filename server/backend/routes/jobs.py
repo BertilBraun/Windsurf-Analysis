@@ -13,17 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.backend.auth import authenticate_user
 from server.backend.config import Settings
-from server.backend.db import get_db
+from server.backend.database.accessor import DatabaseAccessor
+from server.backend.database.db import get_db
 from server.backend.models import Job, JobStatus, Report, ReportType, User, Video
 from server.backend.s3 import object_url, s3_client
 
-from server.backend.accessors.job_accessor import (
-    get_job_count,
-    does_video_exist,
-    get_job_by_id_and_user,
-    get_job_and_video_by_id_and_user,
-    get_job_by_id,
-)
 
 router = APIRouter(prefix='/jobs', tags=['jobs'])
 
@@ -74,13 +68,13 @@ async def jobs_upload(
     original_checksum_sha256: str = Form(...),
     yolo_model: str = Form(...),
     reid_model: str = Form(...),
-    db: AsyncSession = Depends(get_db),
+    db: DatabaseAccessor = Depends(get_db),
     user: User = Depends(authenticate_user),
 ):
-    if await get_job_count(db, user) >= Settings.MAX_JOBS_PER_USER:
+    if await db.get_job_count(user) >= Settings.MAX_JOBS_PER_USER:
         raise HTTPException(status_code=403, detail={'code': 'quota_exceeded', 'message': 'Job quota exceeded'})
 
-    if await does_video_exist(db, original_checksum_sha256):
+    if await db.does_video_exist(original_checksum_sha256):
         raise HTTPException(status_code=409, detail={'code': 'duplicate_original', 'message': 'Video already exists'})
 
     ac_key_prefix = f'{Settings.PREFIX_AC_VIDEOS}{original_checksum_sha256}/ac/'
@@ -102,12 +96,10 @@ async def jobs_upload(
         original_name=file.filename,
         ac_storage_url='N/A',  # TODO? object_url(ac_key),
     )
-    db.add(video)
-    await db.flush()  # Flush to get the video id
+    await db.add(video)
 
     job = Job(user_id=user.id, video_id=video.id, model=f'{yolo_model}-{reid_model}', status=JobStatus.pending)
-    db.add(job)
-    await db.commit()  # Commit to the database and get the job id
+    await db.add(job)
 
     complete_url = (
         f'{Settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job.id}/complete?secret={Settings.BACKEND_WEBHOOK_SECRET}'
@@ -129,17 +121,10 @@ async def jobs_upload(
 async def list_jobs(
     status_filter: Optional[str] = Query(None, alias='status'),
     updated_after: Optional[datetime] = Query(None),
-    db: AsyncSession = Depends(get_db),
+    db: DatabaseAccessor = Depends(get_db),
     user: User = Depends(authenticate_user),
 ):
-    query = select(Job).where(and_(Job.user_id == user.id, Job.deleted_at.is_(None)))
-    if status_filter:
-        query = query.where(Job.status == JobStatus(status_filter))
-    if updated_after:
-        query = query.where(Job.updated_at > updated_after)
-    query = query.order_by(Job.created_at.desc())
-
-    rows = (await db.execute(query)).scalars().all()
+    rows = await db.get_jobs_by_user(user, status_filter, updated_after)
     items = [
         JobSummaryItem(
             id=str(r.id),
@@ -155,14 +140,14 @@ async def list_jobs(
 
 
 @router.get('/{job_id}', response_model=JobDetail)
-async def get_job(job_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(authenticate_user)):
-    existing = await get_job_and_video_by_id_and_user(db, job_id, user)
+async def get_job(job_id: str, db: DatabaseAccessor = Depends(get_db), user: User = Depends(authenticate_user)):
+    existing = await db.get_job_and_video_by_id_and_user(job_id, user)
     if existing is None:
         raise HTTPException(status_code=404, detail='Not found')
 
     job, video = existing
 
-    await db.execute(update(Video).where(Video.id == job.video_id).values(last_accessed_at=timestamp_now()))
+    await db.db.execute(update(Video).where(Video.id == job.video_id).values(last_accessed_at=timestamp_now()))
 
     return JobDetail(
         id=str(job.id),
@@ -178,8 +163,8 @@ async def get_job(job_id: str, db: AsyncSession = Depends(get_db), user: User = 
 
 
 @router.delete('/{job_id}')
-async def delete_job(job_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(authenticate_user)):
-    job = await get_job_by_id_and_user(db, job_id, user)
+async def delete_job(job_id: str, db: DatabaseAccessor = Depends(get_db), user: User = Depends(authenticate_user)):
+    job = await db.get_job_by_id_and_user(job_id, user)
     if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
@@ -191,13 +176,16 @@ async def delete_job(job_id: str, db: AsyncSession = Depends(get_db), user: User
 
 @router.post('/{job_id}/report')
 async def report_job(
-    job_id: str, payload: ReportRequest, db: AsyncSession = Depends(get_db), user: User = Depends(authenticate_user)
+    job_id: str,
+    payload: ReportRequest,
+    db: DatabaseAccessor = Depends(get_db),
+    user: User = Depends(authenticate_user),
 ):
-    job = await get_job_by_id_and_user(db, job_id, user)
+    job = await db.get_job_by_id_and_user(job_id, user)
     if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
-    db.add(Report(job_id=job.id, type=ReportType(payload.type), message=payload.message))
+    await db.add(Report(job_id=job.id, type=ReportType(payload.type), message=payload.message))
 
     return {'ok': True}
 
@@ -208,11 +196,11 @@ class JobsCompleteRequest(BaseModel):
 
 
 @router.post('/{job_id}/complete')
-async def jobs_complete(job_id: str, payload: JobsCompleteRequest, secret: str, db: AsyncSession = Depends(get_db)):
+async def jobs_complete(job_id: str, payload: JobsCompleteRequest, secret: str, db: DatabaseAccessor = Depends(get_db)):
     if secret != Settings.BACKEND_WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail='invalid secret')
 
-    job = await get_job_by_id(db, job_id)
+    job = await db.get_job_by_id(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 

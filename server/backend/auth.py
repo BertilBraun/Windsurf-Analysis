@@ -5,9 +5,9 @@ import base64
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from passlib.context import CryptContext
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from server.backend.db import get_db
+from server.backend.database.db import get_db
+from server.backend.database.accessor import DatabaseAccessor
 from server.backend.models import User
 
 
@@ -26,11 +26,10 @@ def parse_basic_auth(request: Request) -> tuple[str, str]:
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
 
-async def authenticate_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
+async def authenticate_user(request: Request, db: DatabaseAccessor = Depends(get_db)) -> User:
     email, password = parse_basic_auth(request)
 
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
+    user = await db.get_user_by_email(email)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid credentials')
 
