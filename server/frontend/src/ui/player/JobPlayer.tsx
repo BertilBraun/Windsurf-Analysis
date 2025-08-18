@@ -18,7 +18,6 @@ export const JobPlayer: React.FC<{
     const [error, setError] = React.useState<string | null>(null)
     const videoRef = React.useRef<HTMLVideoElement | null>(null)
     const containerRef = React.useRef<HTMLDivElement | null>(null)
-    const fallbackTriedRef = React.useRef(false)
     const [player, setPlayer] = React.useState<PlayerState | null>(null)
     const [overviewZoom, setOverviewZoom] = React.useState(1)
     const [overviewOffset, setOverviewOffset] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -79,43 +78,12 @@ export const JobPlayer: React.FC<{
             log('video loadedmetadata', videoProps)
             setPlayer(buildPlayerState(job, videoProps))
         }
-        const onLoadedData = () => log('video loadeddata')
-        const onCanPlay = () => log('video canplay')
-        const onCanPlayThrough = () => log('video canplaythrough')
-        const onError = async () => {
-            log('video error', v.error)
-            if (!fallbackTriedRef.current) {
-                fallbackTriedRef.current = true
-                // For now, do not transcode automatically; show a simple error instead
-                setError('This file cannot be played in your browser. Please use MP4 (H.264).')
-            }
-        }
-        const onStalled = () => log('video stalled')
-        const onWaiting = () => log('video waiting')
-        const onPlay = () => log('video play')
-        const onPause = () => log('video pause')
-        const onEnded = () => log('video ended')
+        const onError = () => log('video error', v.error)
         v.addEventListener('loadedmetadata', onLoadedMetadata)
-        v.addEventListener('loadeddata', onLoadedData)
-        v.addEventListener('canplay', onCanPlay)
-        v.addEventListener('canplaythrough', onCanPlayThrough)
         v.addEventListener('error', onError)
-        v.addEventListener('stalled', onStalled)
-        v.addEventListener('waiting', onWaiting)
-        v.addEventListener('play', onPlay)
-        v.addEventListener('pause', onPause)
-        v.addEventListener('ended', onEnded)
         return () => {
             v.removeEventListener('loadedmetadata', onLoadedMetadata)
-            v.removeEventListener('loadeddata', onLoadedData)
-            v.removeEventListener('canplay', onCanPlay)
-            v.removeEventListener('canplaythrough', onCanPlayThrough)
             v.removeEventListener('error', onError)
-            v.removeEventListener('stalled', onStalled)
-            v.removeEventListener('waiting', onWaiting)
-            v.removeEventListener('play', onPlay)
-            v.removeEventListener('pause', onPause)
-            v.removeEventListener('ended', onEnded)
         }
     }, [videoUrl, log, job])
 
@@ -142,6 +110,7 @@ export const JobPlayer: React.FC<{
     }, [player?.isPlaying, player?.playbackSpeed])
 
     const togglePlay = () => setPlayer(p => (p ? { ...p, isPlaying: !p.isPlaying } : p))
+
     const bumpSpeed = (down: boolean) =>
         setPlayer(p => {
             if (!p) return p
@@ -161,15 +130,13 @@ export const JobPlayer: React.FC<{
         setPlayer(p => (p ? { ...p, isPlaying: false, currentTimeSec: t } : p))
     }
     const stepNext = () => {
-        if (!player) return
         const v = videoRef.current
-        if (!v) return
+        if (!player || !v) return
         v.currentTime = Math.min(v.duration || 0, player.currentTimeSec + 1 / 25)
     }
     const stepPrev = () => {
-        if (!player) return
         const v = videoRef.current
-        if (!v) return
+        if (!player || !v) return
         v.currentTime = Math.max(0, player.currentTimeSec - 1 / 25)
     }
     const enterDetailed = (trackId: number) => {
@@ -187,6 +154,24 @@ export const JobPlayer: React.FC<{
         })
     }
     const exitDetailed = () => setPlayer(p => (p ? { ...p, mode: 'overview', currentTrackId: null } : p))
+
+    const onWheelZoom = (absX: number, absY: number, deltaY: number) => {
+        const rect = containerRef.current?.getBoundingClientRect()
+        const cx = rect ? absX - rect.left : absX
+        const cy = rect ? absY - rect.top : absY
+        let nz = overviewZoom * (1 + (deltaY < 0 ? 0.1 : -0.1))
+        if (nz <= 1) {
+            nz = 1
+            setOverviewZoom(1)
+            setOverviewOffset({ x: 0, y: 0 })
+            return
+        }
+        const scaleChange = nz / overviewZoom
+        const nx = cx - scaleChange * (cx - overviewOffset.x)
+        const ny = cy - scaleChange * (cy - overviewOffset.y)
+        setOverviewZoom(nz)
+        setOverviewOffset({ x: nx, y: ny })
+    }
 
     // Keyboard controls mirroring Python keyPressEvent
     React.useEffect(() => {
@@ -268,14 +253,8 @@ export const JobPlayer: React.FC<{
                 {error && <div className="absolute left-2 top-2 text-red-500 text-sm">{error}</div>}
                 {videoUrl ? (
                     <div ref={containerRef} className="absolute inset-0">
-                        <video
-                            ref={videoRef}
-                            key={videoUrl}
-                            src={videoUrl}
-                            playsInline
-                            muted={false}
-                            preload="metadata"
-                            className="w-full h-full object-contain"
+                        <div
+                            className="absolute inset-0"
                             style={{
                                 transform:
                                     player?.mode === 'overview'
@@ -283,50 +262,25 @@ export const JobPlayer: React.FC<{
                                         : 'none',
                                 transformOrigin: '0 0',
                             }}
-                        />
-                        {/* Wheel zoom and pan in overview */}
-                        {player?.mode === 'overview' && (
-                            <div
-                                className="absolute inset-0"
-                                onWheel={e => {
-                                    if (!videoRef.current) return
-                                    e.preventDefault()
-                                    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
-                                    const cx = e.clientX - rect.left
-                                    const cy = e.clientY - rect.top
-                                    const factor = 1 + (e.deltaY < 0 ? 0.1 : -0.1)
-                                    const nz = Math.max(0.25, Math.min(8, overviewZoom * factor))
-                                    if (Math.abs(nz - overviewZoom) < 1e-3) return
-                                    // Keep cursor point stationary: adjust offset so that (cx,cy) maps to same video point
-                                    const scaleChange = nz / overviewZoom
-                                    const nx = cx - scaleChange * (cx - overviewOffset.x)
-                                    const ny = cy - scaleChange * (cy - overviewOffset.y)
-                                    setOverviewZoom(nz)
-                                    setOverviewOffset({ x: nx, y: ny })
-                                }}
-                                onMouseDown={e => {
-                                    if (e.button !== 0) return
-                                    const startX = e.clientX
-                                    const startY = e.clientY
-                                    const startOff = { ...overviewOffset }
-                                    const onMove = (me: MouseEvent) => {
-                                        const dx = me.clientX - startX
-                                        const dy = me.clientY - startY
-                                        setOverviewOffset({ x: startOff.x + dx, y: startOff.y + dy })
-                                    }
-                                    const onUp = () => {
-                                        window.removeEventListener('mousemove', onMove)
-                                        window.removeEventListener('mouseup', onUp)
-                                    }
-                                    window.addEventListener('mousemove', onMove)
-                                    window.addEventListener('mouseup', onUp)
-                                }}
-                                style={{ cursor: 'grab' }}
+                        >
+                            <video
+                                ref={videoRef}
+                                key={videoUrl}
+                                src={videoUrl}
+                                playsInline
+                                muted={false}
+                                preload="metadata"
+                                className="w-full h-full object-contain"
                             />
-                        )}
-                        {player && player.mode === 'overview' && (
-                            <VideoOverlay state={player} videoRef={videoRef} onEnterDetailed={enterDetailed} />
-                        )}
+                            {player && player.mode === 'overview' && (
+                                <VideoOverlay
+                                    state={player}
+                                    videoRef={videoRef}
+                                    onEnterDetailed={enterDetailed}
+                                    onWheelZoom={onWheelZoom}
+                                />
+                            )}
+                        </div>
                         {player && player.mode === 'detailed' && <DetailedCanvas state={player} videoRef={videoRef} />}
                     </div>
                 ) : (
@@ -348,6 +302,7 @@ export const JobPlayer: React.FC<{
                         onSpeedUp={() => bumpSpeed(false)}
                         isPlaying={player.isPlaying}
                         speed={player.playbackSpeed}
+                        zoom={overviewZoom}
                     />
                 </div>
             )}
