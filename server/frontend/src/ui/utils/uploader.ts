@@ -53,11 +53,12 @@ export async function uploadVideoFile(
     if (pre.exists) return 'skipped'
 
     // Preprocess
-    const processed = await preprocessVideo(file)
+    // TODO: const processed = await preprocessVideo(file)
+    const processed = file
 
     // Upload
     const form = new FormData()
-    form.append('file', new Blob([processed.arrayBuffer], { type: processed.type }), processed.name)
+    form.append('file', new Blob([await processed.arrayBuffer()], { type: processed.type }), processed.name)
     const localRelativePath = relativePathOverride || file.webkitRelativePath || file.name
     form.append('original_file_path', localRelativePath)
     form.append('original_checksum_sha256', sha256)

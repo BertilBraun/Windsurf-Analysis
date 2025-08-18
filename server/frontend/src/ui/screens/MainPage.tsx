@@ -3,9 +3,8 @@ import { useAuth } from '../auth/AuthProvider'
 import { useJobs } from '../hooks/useJobs'
 import { JobDetail, ReportType } from '../types'
 import { JobList } from '../components/JobList'
-import { UploadControls } from '../components/UploadControls'
 import { JobPlayer } from '../player/JobPlayer'
-import { useIngressScanner } from '../hooks/useIngressScanner'
+import { IngressPanel } from '../components/IngressPanel'
 import { loadDirectoryHandle, saveDirectoryHandle } from '../utils/idb'
 
 export const MainPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
@@ -25,7 +24,6 @@ export const MainPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
     const [dirHandle, setDirHandle] = React.useState<FileSystemDirectoryHandle | null>(null)
     const [dirPermission, setDirPermission] = React.useState<'granted' | 'denied' | 'prompt' | null>(null)
     const uploadCtx = React.useMemo(() => ({ authorizedFetch, authHeader }), [authorizedFetch, authHeader])
-    const scanner = useIngressScanner(dirHandle, uploadCtx, () => startPolling())
 
     // Try to restore directory handle from IndexedDB on mount
     React.useEffect(() => {
@@ -83,9 +81,14 @@ export const MainPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         startPolling()
     }
 
-    const onSubmitted = (num: number) => {
-        startPolling()
-    }
+    React.useEffect(() => {
+        if (!selectedJob) return
+        const prev = document.body.style.overflow
+        document.body.style.overflow = 'hidden'
+        return () => {
+            document.body.style.overflow = prev
+        }
+    }, [selectedJob])
 
     const handleLogout = () => {
         logout()
@@ -94,53 +97,12 @@ export const MainPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
 
     return (
         <div>
-            {/* Prominent ingress folder selector */}
-            <div
-                style={{
-                    padding: 12,
-                    border: '1px solid #ddd',
-                    borderRadius: 8,
-                    marginBottom: 16,
-                    background: '#f9fafb',
-                }}
-            >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <strong>Ingress folder</strong>
-                        <span style={{ fontSize: 12, color: '#6b7280' }}>
-                            Select your "windsurf analysis videos" folder. We'll monitor it every 10s and auto-upload
-                            new videos.
-                        </span>
-                        {dirHandle ? (
-                            <span style={{ fontSize: 12, color: '#374151', marginTop: 4 }}>
-                                Selected: {(dirHandle as any).name || 'Folder'}{' '}
-                                {dirPermission !== 'granted' ? '(permission pending)' : ''}
-                            </span>
-                        ) : (
-                            <span style={{ fontSize: 12, color: '#b91c1c', marginTop: 4 }}>No folder selected</span>
-                        )}
-                        {scanner.active && (
-                            <span style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-                                Scanning... queued {scanner.queued}, uploading {scanner.uploading}
-                                {scanner.lastRunAt
-                                    ? ` (last run ${new Date(scanner.lastRunAt).toLocaleTimeString()})`
-                                    : ''}
-                                {scanner.lastError ? ` — ${scanner.lastError}` : ''}
-                            </span>
-                        )}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={pickDirectory}>{dirHandle ? 'Change folder' : 'Select folder'}</button>
-                    </div>
-                </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div className="flex justify-between items-center mb-4">
                 <div>
                     <strong>Welcome</strong>
                     {email ? `, ${email}` : ''}
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div className="flex gap-2 items-center">
                     <button onClick={isPolling ? stopPolling : startPolling}>
                         {isPolling ? 'Stop polling' : 'Start polling'}
                     </button>
@@ -148,24 +110,34 @@ export const MainPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                 </div>
             </div>
 
-            <div style={{ marginBottom: 16 }}>
-                <UploadControls onSubmitted={onSubmitted} />
-            </div>
+            <IngressPanel
+                dirHandle={dirHandle}
+                dirPermission={dirPermission}
+                onPickDirectory={pickDirectory}
+                uploadCtx={uploadCtx}
+                onUploaded={() => startPolling()}
+            />
 
             <h3>Jobs</h3>
             <JobList jobs={jobs} onOpen={onOpen} onDelete={onDelete} deletingId={deletingId} openingId={openingId} />
 
             {selectedJob && (
-                <section style={{ marginTop: 16 }}>
-                    <h3>Player</h3>
-                    <JobPlayer
-                        job={selectedJob}
-                        dirHandle={dirHandle}
-                        onClose={() => setSelectedJob(null)}
-                        onDelete={onDelete}
-                        onReport={onReport}
-                    />
-                </section>
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center"
+                    style={{ background: 'rgba(0,0,0,0.75)' }}
+                >
+                    <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
+                        <div className="w-full h-full overflow-hidden">
+                            <JobPlayer
+                                job={selectedJob}
+                                dirHandle={dirHandle}
+                                onClose={() => setSelectedJob(null)}
+                                onDelete={onDelete}
+                                onReport={onReport}
+                            />
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     )

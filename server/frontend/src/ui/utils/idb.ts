@@ -2,9 +2,10 @@
 // and a set of processed file hashes.
 
 const DB_NAME = 'windsurf-analysis'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_SETTINGS = 'settings'
 const STORE_PROCESSED = 'processed'
+const STORE_INPROGRESS = 'inprogress'
 
 type SettingsRecord = { key: string; value: any }
 type ProcessedRecord = { hash: string; createdAt: number }
@@ -19,6 +20,9 @@ function openDb(): Promise<IDBDatabase> {
             }
             if (!db.objectStoreNames.contains(STORE_PROCESSED)) {
                 db.createObjectStore(STORE_PROCESSED, { keyPath: 'hash' })
+            }
+            if (!db.objectStoreNames.contains(STORE_INPROGRESS)) {
+                db.createObjectStore(STORE_INPROGRESS, { keyPath: 'hash' })
             }
         }
         req.onsuccess = () => resolve(req.result)
@@ -101,6 +105,63 @@ export async function removeProcessedHash(hash: string): Promise<void> {
             store.delete(hash)
             tx.oncomplete = () => resolve()
             tx.onerror = () => reject(tx.error)
+        })
+        db.close()
+    } catch {}
+}
+
+type InProgressRecord = { hash: string; owner: string; createdAt: number }
+
+export async function tryClaimUpload(hash: string, owner: string, maxAgeMs: number = 60 * 60 * 1000): Promise<boolean> {
+    try {
+        const db = await openDb()
+        const ok = await new Promise<boolean>((resolve, reject) => {
+            const tx = db.transaction(STORE_INPROGRESS, 'readwrite')
+            const store = tx.objectStore(STORE_INPROGRESS)
+            const now = Date.now()
+            const rec: InProgressRecord = { hash, owner, createdAt: now }
+            const addReq = (store as any).add(rec)
+            addReq.onsuccess = () => resolve(true)
+            addReq.onerror = () => {
+                // If exists, check staleness; if stale, replace
+                const getReq = store.get(hash)
+                getReq.onsuccess = () => {
+                    const existing = getReq.result as InProgressRecord | undefined
+                    if (existing && now - existing.createdAt > maxAgeMs) {
+                        // stale: replace ownership
+                        store.put(rec)
+                        tx.oncomplete = () => resolve(true)
+                        tx.onerror = () => reject(tx.error)
+                    } else {
+                        resolve(false)
+                    }
+                }
+                getReq.onerror = () => resolve(false)
+            }
+        })
+        db.close()
+        return ok
+    } catch {
+        return false
+    }
+}
+
+export async function releaseClaimUpload(hash: string, owner: string): Promise<void> {
+    try {
+        const db = await openDb()
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(STORE_INPROGRESS, 'readwrite')
+            const store = tx.objectStore(STORE_INPROGRESS)
+            const getReq = store.get(hash)
+            getReq.onsuccess = () => {
+                const existing = getReq.result as InProgressRecord | undefined
+                if (existing && existing.owner === owner) {
+                    store.delete(hash)
+                }
+                tx.oncomplete = () => resolve()
+                tx.onerror = () => reject(tx.error)
+            }
+            getReq.onerror = () => resolve()
         })
         db.close()
     } catch {}

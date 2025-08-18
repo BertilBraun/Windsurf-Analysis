@@ -100,6 +100,7 @@ async def jobs_upload(
 
     job = Job(user_id=user.id, video_id=video.id, model=f'{yolo_model}-{reid_model}', status=JobStatus.pending)
     await db.add(job)
+    await db.commit()
 
     complete_url = (
         f'{Settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job.id}/complete?secret={Settings.BACKEND_WEBHOOK_SECRET}'

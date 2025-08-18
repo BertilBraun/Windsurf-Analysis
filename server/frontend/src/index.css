@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+/* App-wide base tweaks can live here if needed */
+
+@layer base {
+    body { @apply text-gray-900 bg-white; }
+}
+
+@layer components {
+    /* Sensible defaults so elements don't look unstyled after Tailwind preflight */
+    button {
+        @apply px-3 py-1.5 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-sm transition;
+    }
+    button:disabled {
+        @apply opacity-60 cursor-not-allowed;
+    }
+
+    h1 { @apply text-2xl font-semibold mt-2 mb-2; }
+    h2 { @apply text-xl font-semibold mt-2 mb-2; }
+    h3 { @apply text-lg font-semibold mt-2 mb-1; }
+}
+
+
