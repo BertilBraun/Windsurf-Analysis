@@ -16,6 +16,7 @@ from .inference.src.windsurf_video_processor import (
     Tracker,
 )
 from .inference.src.util.timing import timeit
+from .inference.src.orientation_fixer import OrientationFixer
 
 inference_root_folder = Path(__file__).parent / 'inference'
 
@@ -32,7 +33,7 @@ app = modal.App('windsurf-analysis-inference', image=image)
 
 
 def clamp_percentage(p: float) -> float:
-    return max(0, min(round(p, 3), 1))
+    return max(0, min(round(p, 5), 1))
 
 
 @app.cls(gpu='L40S', max_containers=2)
@@ -41,6 +42,7 @@ class InferenceModel:
     @modal.enter()
     def setup(self):
         self.processors: dict[tuple[str, str], SurferDetector] = {}
+        self.orientation_fixer = OrientationFixer('/root/weights/orientation_fixer/best.pt')
 
     @modal.method()
     def inference(self, job_id: str, ac_bytes: bytes, yolo_model: str, reid_model: str, complete_webhook: str):
@@ -48,6 +50,8 @@ class InferenceModel:
             local_video = Path(td) / f'{job_id}.mp4'
             with open(local_video, 'wb') as f:
                 f.write(ac_bytes)
+
+            fixed_video = self.orientation_fixer.fix_video(str(local_video))
 
             key = (yolo_model, reid_model)
             processor = self.processors.get(key)
@@ -64,10 +68,10 @@ class InferenceModel:
 
             # For this invocation, write outputs to the temp job directory
 
-            props = get_video_properties(local_video)
+            props = get_video_properties(fixed_video)
 
             with timeit(f'{job_id}: Object detection'):
-                detections = processor.run_object_detection_on_video(local_video)
+                detections = processor.run_object_detection_on_video(fixed_video)
 
             with timeit(f'{job_id}: Trackers'):
                 trackers: Sequence[Tracker] = [

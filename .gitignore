@@ -4,7 +4,8 @@
 **/*.pkl
 
 train/datasets/**
-train/runs/**
+**/runs/**
+
 **/botsort.yaml
 src/individual_surfers/**
 individual_surfers/**
