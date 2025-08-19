@@ -1,11 +1,14 @@
 import React from 'react'
 import { JobDetail, ReportType } from '../types'
 import { getFileByRelativePath } from '../utils/fsAccess'
-import { buildPlayerState, PlayerState, VideoProperties, findNearestDetectionByTime } from './state'
+import { PlayerState, VideoProperties } from './state'
 import { ControlsBar } from './ControlsBar'
 import { Timeline } from './Timeline'
 import { VideoOverlay } from './VideoOverlay'
 import { DetailedCanvas } from './DetailedCanvas'
+import { useZoom } from './useZoom'
+import { usePlaybackSpeed } from './usePlaybackSpeed'
+import { useSeeker } from './useSeeker'
 
 export const JobPlayer: React.FC<{
     job: JobDetail
@@ -19,52 +22,42 @@ export const JobPlayer: React.FC<{
     const videoRef = React.useRef<HTMLVideoElement | null>(null)
     const containerRef = React.useRef<HTMLDivElement | null>(null)
     const [player, setPlayer] = React.useState<PlayerState | null>(null)
-    const [overviewZoom, setOverviewZoom] = React.useState(1)
-    const [overviewOffset, setOverviewOffset] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
-
-    const log = React.useCallback((...args: any[]) => {
-        // Prefix logs for easy filtering
-        // eslint-disable-next-line no-console
-        console.log('[JobPlayer]', ...args)
-    }, [])
+    const { zoom: overviewZoom, offset: overviewOffset, onWheelZoom } = useZoom(containerRef)
+    const { speed, bumpSpeed } = usePlaybackSpeed(1.0)
+    const { seekTo, stepNext, stepPrev, onNewFile } = useSeeker(videoRef, player, setPlayer)
 
     const resolveFileFromRelativePath = React.useCallback(async () => {
         if (!dirHandle) {
             setError('No ingress folder selected')
-            log('No dirHandle; cannot resolve', job.original_file_path)
+            console.log('No dirHandle; cannot resolve', job.original_file_path)
             return null
         }
         try {
             const file = await getFileByRelativePath(dirHandle, job.original_file_path)
-            log('Resolved file', { name: file.name, size: file.size, type: file.type })
+            console.log('Resolved file', { name: file.name, size: file.size, type: file.type })
             return file
         } catch (e: any) {
             setError(e?.message || 'Failed to access file from folder')
-            log('Error resolving file', e)
+            console.log('Error resolving file', e)
             return null
         }
-    }, [dirHandle, job.original_file_path, log])
+    }, [dirHandle, job.original_file_path])
 
     React.useEffect(() => {
         let revoked: string | null = null
         setVideoUrl(null)
         setError(null)
-        ;(async () => {
-            log('Begin resolve for job', job.id)
-            const file = await resolveFileFromRelativePath()
+        resolveFileFromRelativePath().then(file => {
             if (!file) return
             const url = URL.createObjectURL(file)
-            log('Created object URL', url)
             revoked = url
             setVideoUrl(url)
-        })()
+            onNewFile(file)
+        })
         return () => {
-            if (revoked) {
-                log('Revoking object URL', revoked)
-                URL.revokeObjectURL(revoked)
-            }
+            if (revoked) URL.revokeObjectURL(revoked)
         }
-    }, [resolveFileFromRelativePath, job.id, log])
+    }, [resolveFileFromRelativePath, job.id])
 
     React.useEffect(() => {
         const v = videoRef.current
@@ -75,152 +68,86 @@ export const JobPlayer: React.FC<{
                 height: v.videoHeight,
                 durationSeconds: v.duration,
             }
-            log('video loadedmetadata', videoProps)
-            setPlayer(buildPlayerState(job, videoProps))
+            console.log('video loadedmetadata', videoProps)
+            setPlayer(PlayerState.from(job, videoProps))
         }
-        const onError = () => log('video error', v.error)
+        const onError = () => console.log('video error', v.error)
         v.addEventListener('loadedmetadata', onLoadedMetadata)
         v.addEventListener('error', onError)
         return () => {
             v.removeEventListener('loadedmetadata', onLoadedMetadata)
             v.removeEventListener('error', onError)
         }
-    }, [videoUrl, log, job])
+    }, [videoUrl, job])
 
-    // Sync currentTimeSec to video's currentTime; control playback via video APIs
+    // Sync currentTimeSec precisely to decoded frames using requestVideoFrameCallback
     React.useEffect(() => {
-        let raf = 0
         const v = videoRef.current
         if (!player || !v) return
-        const loop = () => {
-            const t = v.currentTime
-            if (player && t !== player.currentTimeSec) setPlayer(prev => (prev ? { ...prev, currentTimeSec: t } : prev))
-            raf = requestAnimationFrame(loop)
+        let vfId: number | null = null
+
+        const onFrame = () => {
+            setPlayer(prev => (prev ? prev.copy({ currentTimeSec: v.currentTime }) : prev))
+            vfId = v.requestVideoFrameCallback(onFrame)
         }
-        raf = requestAnimationFrame(loop)
-        return () => cancelAnimationFrame(raf)
-    }, [videoRef.current, player?.currentTimeSec])
+        vfId = v.requestVideoFrameCallback(onFrame)
+        return () => {
+            if (vfId) v.cancelVideoFrameCallback(vfId)
+        }
+    }, [videoUrl, !!player])
 
     React.useEffect(() => {
         const v = videoRef.current
         if (!player || !v) return
-        v.playbackRate = player.playbackSpeed
+        v.playbackRate = speed
         if (player.isPlaying) v.play().catch(() => {})
         else v.pause()
-    }, [player?.isPlaying, player?.playbackSpeed])
+    }, [player?.isPlaying, speed])
 
-    const togglePlay = () => setPlayer(p => (p ? { ...p, isPlaying: !p.isPlaying } : p))
+    const togglePlay = () => setPlayer(p => (p ? p.togglePlay() : p))
 
-    const bumpSpeed = (down: boolean) =>
-        setPlayer(p => {
-            if (!p) return p
-            const rates = [0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
-            const idx = Math.max(
-                0,
-                Math.min(rates.length - 1, Math.max(0, rates.indexOf(p.playbackSpeed)) + (down ? -1 : 1))
-            )
-            return { ...p, playbackSpeed: rates[idx] }
-        })
-
-    const seekTime = (timeSec: number) => {
-        const v = videoRef.current
-        if (!player || !v) return
-        const t = Math.max(0, Math.min(v.duration || 0, timeSec))
-        v.currentTime = t
-        setPlayer(p => (p ? { ...p, isPlaying: false, currentTimeSec: t } : p))
-    }
-    const stepNext = () => {
-        const v = videoRef.current
-        if (!player || !v) return
-        v.currentTime = Math.min(v.duration || 0, player.currentTimeSec + 1 / 25)
-    }
-    const stepPrev = () => {
-        const v = videoRef.current
-        if (!player || !v) return
-        v.currentTime = Math.max(0, player.currentTimeSec - 1 / 25)
-    }
     const enterDetailed = (trackId: number) => {
         setPlayer(p => {
             if (!p) return p
-            const arr = p.detectionTimesByTrack.get(trackId) || []
-            const nearest = findNearestDetectionByTime(arr, p.currentTimeSec, 0.2)
+            const nearest = p.interpolateDetectionByTime(trackId, p.currentTimeSec)
             if (nearest) {
                 // Seek to the detection time so detailed mode persists
+                const t = nearest.time_percent * p.video.durationSeconds
                 const v = videoRef.current
-                if (v) v.currentTime = nearest.timeSec
-                return { ...p, currentTrackId: trackId, mode: 'detailed', currentTimeSec: nearest.timeSec }
+                if (v) v.currentTime = t
+                return p.copy({ mode: 'detailed', currentTrackId: trackId, currentTimeSec: t })
             }
-            return { ...p, currentTrackId: trackId, mode: 'detailed' }
+            return p.copy({ mode: 'detailed', currentTrackId: trackId })
         })
     }
-    const exitDetailed = () => setPlayer(p => (p ? { ...p, mode: 'overview', currentTrackId: null } : p))
+    const exitDetailed = () => setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
 
-    const onWheelZoom = (absX: number, absY: number, deltaY: number) => {
-        const rect = containerRef.current?.getBoundingClientRect()
-        const cx = rect ? absX - rect.left : absX
-        const cy = rect ? absY - rect.top : absY
-        let nz = overviewZoom * (1 + (deltaY < 0 ? 0.1 : -0.1))
-        if (nz <= 1) {
-            nz = 1
-            setOverviewZoom(1)
-            setOverviewOffset({ x: 0, y: 0 })
-            return
-        }
-        const scaleChange = nz / overviewZoom
-        const nx = cx - scaleChange * (cx - overviewOffset.x)
-        const ny = cy - scaleChange * (cy - overviewOffset.y)
-        setOverviewZoom(nz)
-        setOverviewOffset({ x: nx, y: ny })
-    }
-
-    // Keyboard controls mirroring Python keyPressEvent
     React.useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (!player) return
+
             if (e.key === ' ') {
                 e.preventDefault()
                 togglePlay()
-                return
-            }
-            if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey) {
+            } else if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey) {
                 e.preventDefault()
                 stepPrev()
-                return
-            }
-            if (e.key === 'ArrowRight' && !e.ctrlKey && !e.shiftKey) {
+            } else if (e.key === 'ArrowRight' && !e.ctrlKey && !e.shiftKey) {
                 e.preventDefault()
                 stepNext()
-                return
-            }
-            if (e.ctrlKey && e.key === 'ArrowLeft') {
+            } else if (e.ctrlKey && e.key === 'ArrowLeft') {
                 e.preventDefault()
-                const v = videoRef.current
-                if (!v) return
-                v.currentTime = Math.max(0, player.currentTimeSec - 30)
-                return
-            }
-            if (e.ctrlKey && e.key === 'ArrowRight') {
+                seekTo(player.currentTimeSec - 30, true)
+            } else if (e.ctrlKey && e.key === 'ArrowRight') {
                 e.preventDefault()
-                const v = videoRef.current
-                if (!v) return
-                v.currentTime = Math.min(v.duration || 0, player.currentTimeSec + 30)
-                return
-            }
-            if (e.shiftKey && e.key === 'ArrowLeft') {
+                seekTo(player.currentTimeSec + 30, true)
+            } else if (e.shiftKey && e.key === 'ArrowLeft') {
                 e.preventDefault()
-                const v = videoRef.current
-                if (!v) return
-                v.currentTime = Math.max(0, player.currentTimeSec - 5)
-                return
-            }
-            if (e.shiftKey && e.key === 'ArrowRight') {
+                seekTo(player.currentTimeSec - 5, true)
+            } else if (e.shiftKey && e.key === 'ArrowRight') {
                 e.preventDefault()
-                const v = videoRef.current
-                if (!v) return
-                v.currentTime = Math.min(v.duration || 0, player.currentTimeSec + 5)
-                return
-            }
-            if (e.key === '-') bumpSpeed(true)
+                seekTo(player.currentTimeSec + 5, true)
+            } else if (e.key === '-') bumpSpeed(true)
             else if (e.key === '+' || e.key === '=') bumpSpeed(false)
             else if (e.key.toLowerCase() === 'escape') exitDetailed()
         }
@@ -228,12 +155,13 @@ export const JobPlayer: React.FC<{
         return () => window.removeEventListener('keydown', onKey)
     }, [player])
 
-    // Auto-exit detailed mode if no nearby detection at current time
+    // Auto-exit detailed mode if no reasonably recent detection around current time
     React.useEffect(() => {
         if (!player || player.mode !== 'detailed' || player.currentTrackId == null) return
-        const arr = player.detectionTimesByTrack.get(player.currentTrackId) || []
-        const nearest = findNearestDetectionByTime(arr, player.currentTimeSec, 0.2)
-        if (!nearest) setPlayer(p => (p ? { ...p, mode: 'overview', currentTrackId: null } : p))
+
+        if (!player.hasDetectionAfter(player.currentTrackId, player.currentTimeSec)) {
+            setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
+        }
     }, [player?.currentTimeSec, player?.mode, player?.currentTrackId])
 
     return (
@@ -241,7 +169,7 @@ export const JobPlayer: React.FC<{
             {/* Header bar */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700 bg-black/60">
                 <div className="text-sm text-gray-200 truncate" title={job.original_file_path}>
-                    {job.original_file_path || '(unknown)'}
+                    {job.original_file_path}
                 </div>
                 <div className="flex gap-2 items-center">
                     <button onClick={onClose}>Close</button>
@@ -281,7 +209,9 @@ export const JobPlayer: React.FC<{
                                 />
                             )}
                         </div>
-                        {player && player.mode === 'detailed' && <DetailedCanvas state={player} videoRef={videoRef} />}
+                        {player && player.mode === 'detailed' && player.currentTrackId != null && (
+                            <DetailedCanvas state={player} videoRef={videoRef} />
+                        )}
                     </div>
                 ) : (
                     <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500">
@@ -290,18 +220,17 @@ export const JobPlayer: React.FC<{
                 )}
             </div>
 
-            {/* Bottom controls */}
             {player && (
                 <div className="px-3 py-2 bg-black/60 border-t border-gray-700">
                     <div className="mb-2">
-                        <Timeline state={player} onSeekTime={seekTime} />
+                        <Timeline state={player} onSeekTime={t => seekTo(t, false)} />
                     </div>
                     <ControlsBar
                         onPlayPause={togglePlay}
                         onSpeedDown={() => bumpSpeed(true)}
                         onSpeedUp={() => bumpSpeed(false)}
                         isPlaying={player.isPlaying}
-                        speed={player.playbackSpeed}
+                        speed={speed}
                         zoom={overviewZoom}
                     />
                 </div>

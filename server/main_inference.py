@@ -1,4 +1,3 @@
-import time
 import tempfile
 import requests
 from pathlib import Path

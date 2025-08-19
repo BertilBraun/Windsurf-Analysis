@@ -1,5 +1,5 @@
 import React from 'react'
-import { PlayerState, findNearestDetectionByTime } from './state'
+import { PlayerState } from './state'
 
 type Props = {
     state: PlayerState
@@ -9,7 +9,6 @@ type Props = {
 }
 
 export const VideoOverlay: React.FC<Props> = ({ state, videoRef, onEnterDetailed, onWheelZoom }) => {
-    const maxDeltaSec = 0.2
     const [hoveredTrack, setHoveredTrack] = React.useState<number | null>(null)
 
     if (state.mode !== 'overview') return null
@@ -17,21 +16,29 @@ export const VideoOverlay: React.FC<Props> = ({ state, videoRef, onEnterDetailed
     const bboxes = React.useMemo(() => {
         const v = videoRef.current
         if (!v) return [] as Array<{ x: number; y: number; w: number; h: number; id: number }>
-        const width = v.clientWidth
-        const height = v.clientHeight
+        const elemW = v.clientWidth
+        const elemH = v.clientHeight
+        const vidW = v.videoWidth
+        const vidH = v.videoHeight
+        const scale = Math.min(elemW / vidW, elemH / vidH)
+        const dispW = vidW * scale
+        const dispH = vidH * scale
+        const offX = (elemW - dispW) / 2
+        const offY = (elemH - dispH) / 2
         const boxes: Array<{ x: number; y: number; w: number; h: number; id: number }> = []
 
         for (const t of state.tracks) {
             if (!state.visibleTrackIds.has(t.track_id)) continue
-            const arr = state.detectionTimesByTrack.get(t.track_id) || []
-            const nearest = findNearestDetectionByTime(arr, state.currentTimeSec, maxDeltaSec)
-            if (!nearest) continue
-            const [x1p, y1p, x2p, y2p] = nearest.detection.bbox
-            const x1 = Math.round(x1p * width)
-            const y1 = Math.round(y1p * height)
-            const x2 = Math.round(x2p * width)
-            const y2 = Math.round(y2p * height)
-            boxes.push({ x: x1, y: y1, w: Math.max(1, x2 - x1), h: Math.max(1, y2 - y1), id: t.track_id })
+
+            const detection = state.interpolateDetectionByTime(t.track_id, state.currentTimeSec)
+            if (!detection) continue
+            const [x1p, y1p, x2p, y2p] = detection.bbox
+
+            const x1 = Math.round(offX + x1p * dispW)
+            const y1 = Math.round(offY + y1p * dispH)
+            const w = Math.max(1, Math.round((x2p - x1p) * dispW))
+            const h = Math.max(1, Math.round((y2p - y1p) * dispH))
+            boxes.push({ x: x1, y: y1, w, h, id: t.track_id })
         }
 
         return boxes

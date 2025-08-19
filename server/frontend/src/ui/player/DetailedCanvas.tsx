@@ -1,5 +1,6 @@
 import React from 'react'
-import { PlayerState, findNearestDetectionByTime } from './state'
+import { PlayerState } from './state'
+import { assert } from '../utils/assert'
 
 const TARGET_BBOX_HEIGHT_RATIO = 0.7
 const MIN_SCALE = 0.2
@@ -9,6 +10,8 @@ export const DetailedCanvas: React.FC<{
     state: PlayerState
     videoRef: React.RefObject<HTMLVideoElement>
 }> = ({ state, videoRef }) => {
+    assert(state.mode === 'detailed' && state.currentTrackId != null)
+
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null)
 
     React.useEffect(() => {
@@ -21,19 +24,10 @@ export const DetailedCanvas: React.FC<{
         if (!ctx) return
 
         const draw = () => {
-            const trackId = state.currentTrackId
-            if (state.mode !== 'detailed' || trackId == null) {
-                // hide canvas if not detailed
-                c.style.display = 'none'
-                raf = requestAnimationFrame(draw)
-                return
-            }
-            c.style.display = 'block'
-
             // canvas sizing to match displayed video size (CSS pixels), with HiDPI support
-            const outW = v.clientWidth || 1
-            const outH = v.clientHeight || 1
-            const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1))
+            const outW = v.clientWidth
+            const outH = v.clientHeight
+            const dpr = Math.max(1, Math.floor(window.devicePixelRatio))
             if (c.width !== Math.max(1, Math.floor(outW * dpr)) || c.height !== Math.max(1, Math.floor(outH * dpr))) {
                 c.width = Math.max(1, Math.floor(outW * dpr))
                 c.height = Math.max(1, Math.floor(outH * dpr))
@@ -45,27 +39,14 @@ export const DetailedCanvas: React.FC<{
             ctx.fillStyle = '#000'
             ctx.fillRect(0, 0, outW, outH)
 
-            const vidW = v.videoWidth || 1
-            const vidH = v.videoHeight || 1
+            const vidW = v.videoWidth
+            const vidH = v.videoHeight
 
-            // nearest detection around current time
-            const arr = state.detectionTimesByTrack.get(trackId) || []
-            const nearest = findNearestDetectionByTime(arr, state.currentTimeSec, 0.2)
-            if (!nearest) {
-                // fallback: draw full frame letterboxed into canvas
-                const scale = Math.min(outW / vidW, outH / vidH)
-                const dw = Math.floor(vidW * scale)
-                const dh = Math.floor(vidH * scale)
-                const dx = Math.floor((outW - dw) / 2)
-                const dy = Math.floor((outH - dh) / 2)
-                try {
-                    ctx.drawImage(v, 0, 0, vidW, vidH, dx, dy, dw, dh)
-                } catch {}
-                raf = requestAnimationFrame(draw)
-                return
-            }
+            // Interpolate between surrounding detections for smooth motion
+            const detection = state.interpolateDetectionByTime(state.currentTrackId!, state.currentTimeSec)
+            if (!detection) return
+            const [x1p, y1p, x2p, y2p] = detection.bbox
 
-            const [x1p, y1p, x2p, y2p] = nearest.detection.bbox
             const x1 = x1p * vidW
             const y1 = y1p * vidH
             const x2 = x2p * vidW
@@ -117,5 +98,5 @@ export const DetailedCanvas: React.FC<{
         return () => cancelAnimationFrame(raf)
     }, [state.mode, state.currentTrackId, state.currentTimeSec, videoRef.current])
 
-    return <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none' }} />
+    return <canvas ref={canvasRef} className="absolute inset-0 z-2 pointer-events-none" />
 }

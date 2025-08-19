@@ -2,6 +2,7 @@ import React from 'react'
 import { useIngressScanner } from '../hooks/useIngressScanner'
 import type { IngressUploadItem, IngressUploadStatus } from '../hooks/useIngressScanner'
 import type { UploadContext } from '../utils/uploader'
+import { clamp } from '../utils/clamp'
 
 type Props = {
     dirHandle: FileSystemDirectoryHandle | null
@@ -174,7 +175,7 @@ const UploadsList: React.FC<{ items: IngressUploadItem[] }> = ({ items }) => {
 }
 
 const UploadItem: React.FC<{ item: IngressUploadItem }> = ({ item }) => {
-    const percent = Math.max(0, Math.min(100, item.progress))
+    const percent = clamp(item.progress, 0, 100)
     const isError = item.status === 'error'
     return (
         <div className="flex flex-col gap-1">
