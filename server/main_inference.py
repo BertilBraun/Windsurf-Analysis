@@ -51,7 +51,7 @@ class InferenceModel:
             with open(local_video, 'wb') as f:
                 f.write(ac_bytes)
 
-            fixed_video = self.orientation_fixer.fix_video(str(local_video))
+            fixed_video, dominant_orientation = self.orientation_fixer.fix_video(str(local_video))
 
             key = (yolo_model, reid_model)
             processor = self.processors.get(key)
@@ -115,5 +115,9 @@ class InferenceModel:
 
         # POST completion webhook
         print(f'POSTing completion webhook to {complete_webhook}')
-        res = requests.post(complete_webhook, json={'status': 'succeeded', 'tracks': tracks}, timeout=60)
+        res = requests.post(
+            complete_webhook,
+            json={'status': 'succeeded', 'tracks': tracks, 'dominant_orientation': dominant_orientation},
+            timeout=60,
+        )
         print(f'Completion webhook response: {res.status_code} {res.text}')

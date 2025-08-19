@@ -8,8 +8,7 @@ from typing import Any, Literal, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 import modal
 from pydantic import BaseModel
-from sqlalchemy import and_, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import update
 
 from server.backend.auth import authenticate_user
 from server.backend.config import Settings
@@ -50,6 +49,7 @@ class JobDetail(BaseModel):
     original_file_path: str
     original_checksum_sha256: str
     tracks: Optional[list[Any]] = None
+    dominant_orientation: Optional[int] = None
 
 
 class ReportRequest(BaseModel):
@@ -160,6 +160,7 @@ async def get_job(job_id: str, db: DatabaseAccessor = Depends(get_db), user: Use
         tracks=job.tracks,
         original_file_path=video.original_file_path,
         original_checksum_sha256=video.original_checksum_sha256,
+        dominant_orientation=job.dominant_orientation,
     )
 
 
@@ -193,11 +194,17 @@ async def report_job(
 
 class JobsCompleteRequest(BaseModel):
     tracks: list[Any]
+    dominant_orientation: int
     status: Literal['succeeded', 'failed']
 
 
 @router.post('/{job_id}/complete')
-async def jobs_complete(job_id: str, payload: JobsCompleteRequest, secret: str, db: DatabaseAccessor = Depends(get_db)):
+async def jobs_complete(
+    job_id: str,
+    payload: JobsCompleteRequest,
+    secret: str,
+    db: DatabaseAccessor = Depends(get_db),
+):
     if secret != Settings.BACKEND_WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail='invalid secret')
 
@@ -206,6 +213,7 @@ async def jobs_complete(job_id: str, payload: JobsCompleteRequest, secret: str, 
         raise HTTPException(status_code=404, detail='Not found')
 
     job.tracks = payload.tracks
+    job.dominant_orientation = payload.dominant_orientation
     job.status = JobStatus(payload.status)
     job.finished_at = timestamp_now()
     await db.flush()  # Flush to update the job

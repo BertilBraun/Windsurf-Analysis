@@ -13,6 +13,7 @@ export type JobDetail = JobSummary & {
     original_file_path: string
     original_checksum_sha256: string
     tracks?: Track[] | null
+    dominant_orientation?: number | null
 }
 
 export type TrackDetection = {

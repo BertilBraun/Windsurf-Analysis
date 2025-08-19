@@ -26,6 +26,8 @@ import numpy as np
 
 from ultralytics import YOLO
 
+from server.inference.src.util.video_io import get_video_properties
+
 DEGREES = (0, 90, 180, 270)
 
 
@@ -59,44 +61,44 @@ class OrientationFixer:
                 raise ValueError(f'Expected class names 0/90/180/270, got: {names}')
             self.idx2deg = m
 
-    def fix_video(
+    def detect_orientation(
         self,
         input_video: str,
-        output_video: str | None = None,
         n_samples: int = 16,
         sampling: Literal['uniform', 'random'] = 'uniform',
-    ) -> str:
+    ) -> int:
         """
-        Returns path to the corrected video (output_video).
+        Returns the dominant orientation of the video (0, 90, 180, 270)
         """
         input_video = str(input_video)
+
+        props = get_video_properties(input_video)
+
+        # Pick indices and read frames (one batch per video)
+        indices = _sample_frame_indices(props.total_frames, n_samples, sampling)
+        frames = _read_frames_at_indices(input_video, indices)
+
+        if not frames:
+            print(f'Warning: Could not read any frames from {input_video}')
+            return 0
+
+        # One forward pass (single batch)
+        results = self.model(frames, verbose=False)
+        predicted_deg = [self.idx2deg[int(r.probs.top1)] for r in results]
+
+        return _majority_vote(predicted_deg)
+
+    def fix_video(self, input_video: str, output_video: str | None = None) -> tuple[str, int]:
+        """
+        Rotates the video so that the dominant orientation is upright (0°).
+        """
         if output_video is None:
             p = Path(input_video)
             output_video = str(p.with_name(p.stem + '_upright' + p.suffix))
 
-        # Determine total frames
-        cap = cv2.VideoCapture(input_video)
-        if not cap.isOpened():
-            raise RuntimeError(f'Could not open video: {input_video}')
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        cap.release()
-
-        # Pick indices and read frames (one batch per video)
-        idxs = _sample_frame_indices(total_frames, n_samples, sampling)
-        frames = _read_frames_at_indices(input_video, idxs)
-
-        assert frames, f'Could not read any frames from {input_video}'
-
-        # One forward pass (single batch)
-        results = self.model(frames, verbose=False)
-        preds_deg = []
-        for r in results:
-            idx = int(r.probs.top1)
-            preds_deg.append(self.idx2deg[idx])
-
-        dominant = _majority_vote(preds_deg)
+        dominant = self.detect_orientation(input_video)
         _apply_rotation_ffmpeg(input_video, output_video, dominant)
-        return output_video
+        return output_video, dominant
 
 
 # -------------------
