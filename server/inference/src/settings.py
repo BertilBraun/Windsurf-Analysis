@@ -20,8 +20,8 @@ MIN_TRACKING_FPS = 25
 MAX_OVERLAP_LENGTH_SECONDS = 10
 
 # Track postprocessing settings
-# Minimum percentage of total frames a track must appear in (default 20%)
-MIN_FRAME_PERCENTAGE = 20
+# Minimum percentage of total frames a track must appear in (default 5%)
+MIN_FRAME_PERCENTAGE = 5
 
 SMOOTHING_WINDOW_SIZE = 2  # TODO more or less?
 

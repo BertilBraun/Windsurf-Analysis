@@ -15,7 +15,6 @@ Usage example:
       --videos ./videos_upright \
       --outdir ./orientation_runs \
       --sample-prob 0.10 \
-      --resize-shorter 384 \
       --balance \
       --epochs 30 --batch 64 --imgsz 320
 
@@ -52,21 +51,6 @@ def ensure_layout(root: Path):
     for split in ('train', 'val', 'test'):
         for d in DEGREES:
             (root / split / str(d)).mkdir(parents=True, exist_ok=True)
-
-
-def resize_keep_aspect(img: np.ndarray, shorter: int | None) -> np.ndarray:
-    if not shorter:
-        return img
-    h, w = img.shape[:2]
-    if min(h, w) <= shorter:
-        return img
-    if h < w:
-        new_h = shorter
-        new_w = int(w * (shorter / h))
-    else:
-        new_w = shorter
-        new_h = int(h * (shorter / w))
-    return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
 
 def rotate_deg(img_rgb: np.ndarray, deg: int) -> np.ndarray:
@@ -106,7 +90,6 @@ def build_dataset(
     sample_prob: float,
     train_ratio: float,
     val_ratio: float,
-    resize_shorter: int | None,
     jpg_quality: int,
     balance: bool,
     seed: int,
@@ -145,7 +128,6 @@ def build_dataset(
                 deg = pick_degree(rng, deg_counts, balance)
 
                 rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-                rgb = resize_keep_aspect(rgb, resize_shorter)
                 rgb_rot = rotate_deg(rgb, deg)
                 bgr_out = cv2.cvtColor(rgb_rot, cv2.COLOR_RGB2BGR)
 
@@ -225,10 +207,9 @@ def parse_args():
     ap.add_argument('--outdir', default='runs', type=Path, help='Folder to save training runs/weights.')
     ap.add_argument('--run-name', default='yolov8-cls-orientation', help='Name for this training run.')
     # Dataset sampling
-    ap.add_argument('--sample-prob', type=float, default=0.10, help='Probability to keep any frame, e.g. 0.10 = 10%.')
-    ap.add_argument('--train-ratio', type=float, default=0.8, help='Train split ratio.')
+    ap.add_argument('--sample-prob', type=float, default=0.05, help='Probability to keep any frame, e.g. 0.05 = 5%.')
+    ap.add_argument('--train-ratio', type=float, default=0.95, help='Train split ratio.')
     ap.add_argument('--val-ratio', type=float, default=0.1, help='Val split ratio (rest goes to test).')
-    ap.add_argument('--resize-shorter', type=int, default=384, help='Resize shorter side to this (0 to disable).')
     ap.add_argument('--jpg-quality', type=int, default=92)
     ap.add_argument('--balance', action='store_true', help='Balance class counts as you sample.')
     ap.add_argument('--seed', type=int, default=1234)
@@ -236,7 +217,7 @@ def parse_args():
     ap.add_argument(
         '--weights', default='yolov8n-cls.pt', help='Init checkpoint, e.g. yolov8n-cls.pt or yolo11n-cls.pt'
     )
-    ap.add_argument('--epochs', type=int, default=30)
+    ap.add_argument('--epochs', type=int, default=10)
     ap.add_argument('--batch', type=int, default=64)
     ap.add_argument('--imgsz', type=int, default=320)
     ap.add_argument('--device', default=None, help="CUDA device like '0' or '0,1'; leave empty for auto.")
@@ -264,7 +245,6 @@ def main():
             sample_prob=args.sample_prob,
             train_ratio=args.train_ratio,
             val_ratio=args.val_ratio,
-            resize_shorter=(args.resize_shorter if args.resize_shorter > 0 else None),
             jpg_quality=args.jpg_quality,
             balance=args.balance,
             seed=args.seed,

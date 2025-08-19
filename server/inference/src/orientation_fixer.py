@@ -97,6 +97,7 @@ class OrientationFixer:
             output_video = str(p.with_name(p.stem + '_upright' + p.suffix))
 
         dominant = self.detect_orientation(input_video)
+        print(f'Dominant orientation: {dominant}')
         _apply_rotation_ffmpeg(input_video, output_video, dominant)
         return output_video, dominant
 
@@ -148,7 +149,9 @@ def _apply_rotation_ffmpeg(in_path: str, out_path: str, content_is_at_deg: int) 
             'copy',
             out_path,
         ]
+        print(f'Applying rotation with FFmpeg: {cmd}')
         subprocess.check_call(cmd)
+        print(f'Rotation applied to {in_path} and saved to {out_path}')
     else:
         # No rotation needed; copy the file
         shutil.copy(in_path, out_path)

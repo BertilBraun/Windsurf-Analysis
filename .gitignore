@@ -18,3 +18,5 @@ test_outputs/**
 **/*.log
 **/*.json
 **/.env
+
+!server/inference/weights/**

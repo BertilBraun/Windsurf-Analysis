@@ -44,6 +44,19 @@ class InferenceModel:
         self.processors: dict[tuple[str, str], SurferDetector] = {}
         self.orientation_fixer = OrientationFixer('/root/weights/orientation_fixer/best.pt')
 
+    def _get_processor(self, yolo_model: str, reid_model: str) -> SurferDetector:
+        key = (yolo_model, reid_model)
+        processor = self.processors.get(key)
+        if processor is None:
+            # Initialize and cache processor for this model pair
+            with timeit(f'Initializing processor for {yolo_model} and {reid_model}'):
+                processor = SurferDetector(
+                    yolo_model_path='/root/weights/yolo_models/' + yolo_model,
+                    reid_model_path='/root/weights/reid_models/' + reid_model,
+                )
+                self.processors[key] = processor
+        return processor
+
     @modal.method()
     def inference(self, job_id: str, ac_bytes: bytes, yolo_model: str, reid_model: str, complete_webhook: str):
         with tempfile.TemporaryDirectory() as td:
@@ -51,20 +64,10 @@ class InferenceModel:
             with open(local_video, 'wb') as f:
                 f.write(ac_bytes)
 
-            fixed_video, dominant_orientation = self.orientation_fixer.fix_video(str(local_video))
+            with timeit(f'{job_id}: Orientation detection'):
+                fixed_video, dominant_orientation = self.orientation_fixer.fix_video(str(local_video))
 
-            key = (yolo_model, reid_model)
-            processor = self.processors.get(key)
-            if processor is None:
-                # Initialize and cache processor for this model pair
-                print(f'Initializing processor for {yolo_model} and {reid_model}')
-                start = time.time()
-                processor = SurferDetector(
-                    yolo_model_path='/root/weights/yolo_models/' + yolo_model,
-                    reid_model_path='/root/weights/reid_models/' + reid_model,
-                )
-                print(f'Time taken to initialize processor: {time.time() - start} seconds')
-                self.processors[key] = processor
+            processor = self._get_processor(yolo_model, reid_model)
 
             # For this invocation, write outputs to the temp job directory
 
