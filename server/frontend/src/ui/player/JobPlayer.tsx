@@ -6,9 +6,9 @@ import { ControlsBar } from './ControlsBar'
 import { Timeline } from './Timeline'
 import { VideoOverlay } from './VideoOverlay'
 import { DetailedCanvas } from './DetailedCanvas'
-import { useZoom } from './useZoom'
-import { usePlaybackSpeed } from './usePlaybackSpeed'
-import { useSeeker } from './useSeeker'
+import { useZoom } from '../hooks/useZoom'
+import { usePlaybackSpeed } from '../hooks/usePlaybackSpeed'
+import { useSeeker } from '../hooks/useSeeker'
 
 export const JobPlayer: React.FC<{
     job: JobDetail

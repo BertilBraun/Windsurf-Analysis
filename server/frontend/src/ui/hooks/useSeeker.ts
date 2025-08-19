@@ -1,7 +1,7 @@
 import React from 'react'
 import { clamp } from '../utils/clamp'
 import { useVideoFps } from './useVideoFps'
-import type { PlayerState } from './state'
+import type { PlayerState } from '../player/state'
 
 export function useSeeker(
     videoRef: React.RefObject<HTMLVideoElement>,

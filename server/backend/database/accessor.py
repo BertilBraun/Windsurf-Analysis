@@ -75,11 +75,11 @@ class DatabaseAccessor:
 
     async def get_jobs_by_user(
         self, user: User, status_filter: Optional[str] = None, updated_after: Optional[datetime] = None
-    ) -> Sequence[Job]:
-        query = select(Job).where(Job.user_id == user.id)
+    ) -> Sequence[tuple[Job, Video]]:
+        query = select(Job, Video).join(Video, Job.video_id == Video.id).where(Job.user_id == user.id)
         if status_filter:
             query = query.where(Job.status == status_filter)
         if updated_after:
             query = query.where(Job.updated_at > updated_after)
         res = await self.db.execute(query)
-        return res.scalars().all()
+        return [row.t for row in res.all()]

@@ -29,7 +29,5 @@ export const Router: React.FC = () => {
         return <LoginPage onSignup={() => navigate('signup')} onSuccess={() => navigate('main')} />
     }
 
-    return <MainPage onLogout={() => navigate('login')} />
+    return <MainPage />
 }
-
-

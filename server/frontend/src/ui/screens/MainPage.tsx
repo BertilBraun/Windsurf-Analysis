@@ -7,7 +7,7 @@ import { JobPlayer } from '../player/JobPlayer'
 import { IngressPanel } from '../components/IngressPanel'
 import { loadDirectoryHandle, saveDirectoryHandle } from '../utils/idb'
 
-export const MainPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
+export const MainPage: React.FC = () => {
     const { logout, email, authorizedFetch, authHeader } = useAuth()
     const { jobs, isPolling, startPolling, stopPolling, refreshJobDetail, deleteJob, reportJob } = useJobs()
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
@@ -90,11 +90,6 @@ export const MainPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
         }
     }, [selectedJob])
 
-    const handleLogout = () => {
-        logout()
-        onLogout()
-    }
-
     return (
         <div>
             <div className="flex justify-between items-center mb-4">
@@ -106,7 +101,7 @@ export const MainPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
                     <button onClick={isPolling ? stopPolling : startPolling}>
                         {isPolling ? 'Stop polling' : 'Start polling'}
                     </button>
-                    <button onClick={handleLogout}>Logout</button>
+                    <button onClick={logout}>Logout</button>
                 </div>
             </div>
 
@@ -122,10 +117,7 @@ export const MainPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
             <JobList jobs={jobs} onOpen={onOpen} onDelete={onDelete} deletingId={deletingId} openingId={openingId} />
 
             {selectedJob && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center"
-                    style={{ background: 'rgba(0,0,0,0.75)' }}
-                >
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75">
                     <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
                         <div className="w-full h-full overflow-hidden">
                             <JobPlayer

@@ -13,7 +13,7 @@ export const StatusBadge: React.FC<{ status: JobStatus }> = ({ status }) => {
             ? '#f59e0b'
             : '#9ca3af'
     return (
-        <span style={{ background: color, color: 'white', borderRadius: 12, padding: '2px 8px', fontSize: 12 }}>
+        <span className="text-white rounded-md px-2 py-1 text-sm" style={{ background: color }}>
             {status}
         </span>
     )
@@ -29,19 +29,9 @@ export const JobList: React.FC<{
     return (
         <div>
             {jobs.map(j => (
-                <div
-                    key={j.id}
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: 8,
-                        borderBottom: '1px solid #eee',
-                    }}
-                >
-                    <span style={{ width: 160, fontFamily: 'monospace' }}>{j.video_id.slice(0, 8)}</span>
+                <div key={j.id} className="flex items-center gap-2 p-2 border-b border-gray-200">
+                    <span className="w-40 font-mono">{j.original_file_path}</span>
                     <StatusBadge status={j.status} />
-                    <span style={{ flex: 1 }}>{j.video_id}</span>
                     <button onClick={() => onOpen(j.id)} disabled={openingId === j.id}>
                         {openingId === j.id ? 'Opening…' : 'Open'}
                     </button>

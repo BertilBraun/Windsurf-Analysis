@@ -20,36 +20,32 @@ from server.backend.s3 import object_url, s3_client
 
 router = APIRouter(prefix='/jobs', tags=['jobs'])
 
+job_status = Literal['pending', 'running', 'succeeded', 'failed', 'canceled']
+
 
 class JobCreateUploadResponse(BaseModel):
     job_id: str
-    status: Literal['pending', 'running', 'succeeded', 'failed', 'canceled']
+    status: job_status
 
 
 class JobSummaryItem(BaseModel):
     id: str
     video_id: str
     model: str
-    status: str
+    status: job_status
     created_at: datetime
     updated_at: datetime
+    original_file_path: str
+    original_checksum_sha256: str
+    dominant_orientation: Optional[int] = None
 
 
 class JobListResponse(BaseModel):
     jobs: list[JobSummaryItem]
 
 
-class JobDetail(BaseModel):
-    id: str
-    video_id: str
-    model: str
-    status: str
-    created_at: datetime
-    updated_at: datetime
-    original_file_path: str
-    original_checksum_sha256: str
+class JobDetail(JobSummaryItem):
     tracks: Optional[list[Any]] = None
-    dominant_orientation: Optional[int] = None
 
 
 class ReportRequest(BaseModel):
@@ -128,14 +124,16 @@ async def list_jobs(
     rows = await db.get_jobs_by_user(user, status_filter, updated_after)
     items = [
         JobSummaryItem(
-            id=str(r.id),
-            video_id=str(r.video_id),
-            model=r.model,
-            status=r.status.value,
-            created_at=r.created_at,
-            updated_at=r.updated_at,
+            id=str(job.id),
+            video_id=str(job.video_id),
+            model=job.model,
+            status=job.status.value,
+            created_at=job.created_at,
+            updated_at=job.updated_at,
+            original_file_path=video.original_file_path,
+            original_checksum_sha256=video.original_checksum_sha256,
         )
-        for r in rows
+        for job, video in rows
     ]
     return JobListResponse(jobs=items)
 
