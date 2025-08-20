@@ -95,7 +95,7 @@ export const MainPage: React.FC = () => {
             <div className="flex justify-between items-center mb-4">
                 <div>
                     <strong>Welcome</strong>
-                    {email ? `, ${email}` : ''}
+                    {email ? ` ${email}` : ''}
                 </div>
                 <div className="flex gap-2 items-center">
                     <button onClick={isPolling ? stopPolling : startPolling}>

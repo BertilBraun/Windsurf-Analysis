@@ -29,8 +29,9 @@ export const JobList: React.FC<{
     return (
         <div>
             {jobs.map(j => (
-                <div key={j.id} className="flex items-center gap-2 p-2 border-b border-gray-200">
-                    <span className="w-40 font-mono">{j.original_file_path}</span>
+                <div key={j.id} className="flex items-center gap-2 p-2 border-b border-gray-300 hover:bg-gray-100">
+                    <span className="font-mono text-sm">{j.original_file_path}</span>
+                    <div className="flex-1" />
                     <StatusBadge status={j.status} />
                     <button onClick={() => onOpen(j.id)} disabled={openingId === j.id}>
                         {openingId === j.id ? 'Opening…' : 'Open'}
