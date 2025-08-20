@@ -22,7 +22,6 @@ export const IngressPanel: React.FC<Props> = ({ dirHandle, dirPermission, onPick
                 dirPermission={dirPermission}
                 onPickDirectory={onPickDirectory}
                 active={scanner.active}
-                queued={scanner.queued}
                 uploading={scanner.uploading}
                 lastRunAt={scanner.lastRunAt}
                 lastError={scanner.lastError}
@@ -40,7 +39,6 @@ type HeaderProps = {
     dirPermission: 'granted' | 'denied' | 'prompt' | null
     onPickDirectory: () => void
     active: boolean
-    queued: number
     uploading: number
     lastRunAt: number | null
     lastError: string | null
@@ -51,7 +49,6 @@ const Header: React.FC<HeaderProps> = ({
     dirPermission,
     onPickDirectory,
     active,
-    queued,
     uploading,
     lastRunAt,
     lastError,
@@ -75,7 +72,6 @@ const Header: React.FC<HeaderProps> = ({
                     dirHandle={dirHandle}
                     dirPermission={dirPermission}
                     active={active}
-                    queued={queued}
                     uploading={uploading}
                     lastRunAt={lastRunAt}
                     lastError={lastError}
@@ -124,7 +120,6 @@ type StatusLineProps = {
     dirHandle: FileSystemDirectoryHandle | null
     dirPermission: 'granted' | 'denied' | 'prompt' | null
     active: boolean
-    queued: number
     uploading: number
     lastRunAt: number | null
     lastError: string | null
@@ -134,7 +129,6 @@ const StatusLine: React.FC<StatusLineProps> = ({
     dirHandle,
     dirPermission,
     active,
-    queued,
     uploading,
     lastRunAt,
     lastError,
@@ -144,14 +138,13 @@ const StatusLine: React.FC<StatusLineProps> = ({
         if (dirPermission === 'denied') return { text: 'Permission denied', color: '#b91c1c' }
         if (lastError) return { text: `Error — ${lastError}`, color: '#b91c1c' }
         if (uploading > 0) return { text: `Uploading ${uploading} file${uploading > 1 ? 's' : ''}…`, color: '#2563eb' }
-        if (queued > 0) return { text: `Queued ${queued} file${queued > 1 ? 's' : ''}`, color: '#6b7280' }
         if (active)
             return {
                 text: `Monitoring — last scan ${lastRunAt ? new Date(lastRunAt).toLocaleTimeString() : 'just now'}`,
                 color: '#059669',
             }
         return { text: 'Idle', color: '#6b7280' }
-    }, [dirHandle, dirPermission, active, queued, uploading, lastRunAt, lastError])
+    }, [dirHandle, dirPermission, active, uploading, lastRunAt, lastError])
 
     return (
         <div className="flex items-center gap-2 mt-1">

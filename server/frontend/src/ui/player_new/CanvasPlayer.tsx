@@ -152,7 +152,15 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
             const nowSec = v.currentTime
             setPlayer(prev => (prev ? prev.copy({ currentTimeSec: nowSec }) : prev))
             // Draw the current frame immediately for smooth playback
-            drawFrame(c, container, v, player, { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId }, nowSec)
+            drawFrame(
+                c,
+                container,
+                v,
+                player,
+                { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
+                nowSec,
+                job.dominant_orientation ?? 0
+            )
             vfId = v.requestVideoFrameCallback(onFrame)
         }
         vfId = v.requestVideoFrameCallback(onFrame)
@@ -167,8 +175,25 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
         const v = videoRef.current
         const container = containerRef.current
         if (!c || !v || !player || !container) return
-        drawFrame(c, container, v, player, { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId })
-    }, [player?.currentTimeSec, player?.mode, player?.currentTrackId, zoom, offset.x, offset.y, hoveredTrackId])
+        drawFrame(
+            c,
+            container,
+            v,
+            player,
+            { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
+            undefined,
+            job.dominant_orientation ?? 0
+        )
+    }, [
+        player?.currentTimeSec,
+        player?.mode,
+        player?.currentTrackId,
+        zoom,
+        offset.x,
+        offset.y,
+        hoveredTrackId,
+        job.dominant_orientation,
+    ])
 
     // Auto-exit detailed mode if no reasonably recent detection around current time
     React.useEffect(() => {
@@ -314,7 +339,8 @@ function drawFrame(
     video: HTMLVideoElement,
     player: PlayerState,
     ov: OverviewView,
-    timeOverrideSec?: number
+    timeOverrideSec?: number,
+    dominantOrientationDeg: number = 0
 ) {
     const rect = containerEl.getBoundingClientRect()
     const cssW = Math.max(1, Math.floor(rect.width))
@@ -326,8 +352,45 @@ function drawFrame(
 
     if (!video.videoWidth || !video.videoHeight) return
 
+    // Prepare source draw surface with rotation applied
+    const srcW = video.videoWidth
+    const srcH = video.videoHeight
+    const rot = (-dominantOrientationDeg + 360) % 360
+    const offscreen = document.createElement('canvas')
+    let frameW = srcW
+    let frameH = srcH
+    if (rot === 90 || rot === 270) {
+        offscreen.width = srcH
+        offscreen.height = srcW
+        frameW = srcH
+        frameH = srcW
+    } else {
+        offscreen.width = srcW
+        offscreen.height = srcH
+        frameW = srcW
+        frameH = srcH
+    }
+    const octx = offscreen.getContext('2d')!
+    octx.setTransform(1, 0, 0, 1, 0, 0)
+    if (rot === 90) {
+        octx.translate(offscreen.width, 0)
+        octx.rotate(Math.PI / 2)
+    } else if (rot === 180) {
+        octx.translate(offscreen.width, offscreen.height)
+        octx.rotate(Math.PI)
+    } else if (rot === 270) {
+        octx.translate(0, offscreen.height)
+        octx.rotate((3 * Math.PI) / 2)
+    }
+    octx.imageSmoothingEnabled = true
+    octx.imageSmoothingQuality = 'high'
+    octx.drawImage(video, 0, 0)
+
+    // For layout, treat the rotated frame sizes
+    const rotatedVideo = { width: frameW, height: frameH }
+
     if (player.mode === 'overview') {
-        const base = computeBaseRect(cssW, cssH, player.video.width, player.video.height)
+        const base = computeBaseRect(cssW, cssH, rotatedVideo.width, rotatedVideo.height)
         const z = ov.zoom
         const dx = base.x + ov.offsetX
         const dy = base.y + ov.offsetY
@@ -335,7 +398,7 @@ function drawFrame(
         const dh = base.h * z
         ctx.imageSmoothingEnabled = true
         ctx.imageSmoothingQuality = 'high'
-        ctx.drawImage(video, dx, dy, dw, dh)
+        ctx.drawImage(offscreen, dx, dy, dw, dh)
 
         // Draw detections at current time
         const now = timeOverrideSec ?? player.currentTimeSec
@@ -372,8 +435,8 @@ function drawFrame(
         const det = player.interpolateDetectionByTime(player.currentTrackId, now)
         if (!det) return
 
-        const vidW = player.video.width
-        const vidH = player.video.height
+        const vidW = rotatedVideo.width
+        const vidH = rotatedVideo.height
         const [x1p, y1p, x2p, y2p] = det.bbox
         const x1 = x1p * vidW
         const y1 = y1p * vidH
@@ -412,7 +475,7 @@ function drawFrame(
             try {
                 ctx.imageSmoothingEnabled = true
                 ctx.imageSmoothingQuality = 'high'
-                ctx.drawImage(video, srcX1, srcY1, srcW, srcH, dstX1, dstY1, dstW, dstH)
+                ctx.drawImage(offscreen, srcX1, srcY1, srcW, srcH, dstX1, dstY1, dstW, dstH)
             } catch {}
         }
 

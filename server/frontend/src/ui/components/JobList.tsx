@@ -1,5 +1,7 @@
 import React from 'react'
 import { JobSummary, JobStatus } from '../types'
+import { AnimatedDots } from './AnimatedDots'
+import { Button } from './Button'
 
 export const StatusBadge: React.FC<{ status: JobStatus }> = ({ status }) => {
     const color =
@@ -26,6 +28,14 @@ export const JobList: React.FC<{
     deletingId?: string | null
     openingId?: string | null
 }> = ({ jobs, onOpen, onDelete, deletingId, openingId }) => {
+    if (jobs.length === 0) {
+        return (
+            <div className="text-center text-gray-500">
+                Still looking for jobs
+                <AnimatedDots />
+            </div>
+        )
+    }
     return (
         <div>
             {jobs
@@ -35,12 +45,8 @@ export const JobList: React.FC<{
                         <span className="font-mono text-sm">{j.original_file_path}</span>
                         <div className="flex-1" />
                         <StatusBadge status={j.status} />
-                        <button onClick={() => onOpen(j.id)} disabled={openingId === j.id}>
-                            {openingId === j.id ? 'Opening…' : 'Open'}
-                        </button>
-                        <button onClick={() => onDelete(j.id)} disabled={deletingId === j.id}>
-                            {deletingId === j.id ? 'Deleting…' : 'Delete'}
-                        </button>
+                        <Button text="Open" isPending={openingId === j.id} onClick={() => onOpen(j.id)} />
+                        <Button text="Delete" isPending={deletingId === j.id} onClick={() => onDelete(j.id)} />
                     </div>
                 ))}
         </div>

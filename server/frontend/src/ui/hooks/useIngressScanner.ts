@@ -22,7 +22,6 @@ export function useIngressScanner(
     const [active, setActive] = React.useState(false)
     const [lastRunAt, setLastRunAt] = React.useState<number | null>(null)
     const [lastError, setLastError] = React.useState<string | null>(null)
-    const [queued, setQueued] = React.useState(0)
     const [uploading, setUploading] = React.useState(0)
     const [uploads, setUploads] = React.useState<IngressUploadItem[]>([])
     const inProgressRef = React.useRef<Set<string>>(new Set())
@@ -35,72 +34,67 @@ export function useIngressScanner(
 
     const timerRef = React.useRef<number | null>(null)
 
+    const processFile = React.useCallback(
+        async (file: File, relPath: string) => {
+            if (!uploadCtx) throw new Error('Upload context not found')
+
+            const identifier = relPath // sha256 of the original file
+            const already = await hasProcessedHash(identifier)
+            if (already) return
+            if (failedRef.current.has(identifier)) return
+            if (inProgressRef.current.has(identifier)) return
+
+            setUploading(v => v + 1)
+            setUploads(prev => {
+                if (prev.some(u => u.id === identifier)) return prev
+                return [...prev, { id: identifier, relativePath: relPath, progress: 0, status: 'queued', error: null }]
+            })
+
+            try {
+                inProgressRef.current.add(identifier)
+                updateUpload(identifier, { status: 'uploading' })
+                await uploadVideoFile(
+                    file,
+                    uploadCtx,
+                    percent => updateUpload(identifier, { progress: percent }),
+                    relPath
+                )
+                await addProcessedHash(identifier)
+                updateUpload(identifier, { progress: 100, status: 'done' })
+                onUploaded()
+            } catch (e: any) {
+                console.error('Upload failed for', relPath, e)
+                setLastError(e?.message || String(e))
+                updateUpload(identifier, { status: 'error', error: e?.message || String(e) })
+                failedRef.current.add(identifier)
+                setSuspended(true)
+                return
+            } finally {
+                inProgressRef.current.delete(identifier)
+                setUploading(v => v - 1)
+            }
+        },
+        [dirHandle, uploadCtx, suspended]
+    )
+
     const scanOnce = React.useCallback(async () => {
         if (!dirHandle || !uploadCtx || suspended) return
-        let queued = 0
-        let uploading = 0
+
+        let promises: Promise<void>[] = []
         try {
             const entries = await listFilesRecursively(dirHandle as any, ['.mp4'])
             for (const entry of entries) {
                 const file = await entry.getFile()
                 if (file.type.toLowerCase() !== 'video/mp4') continue
-                const relPath = entry.relativePath
-                const identifier = entry.relativePath
-                // TODO const { sha256 } = await computeSha256(file)
-                const already = await hasProcessedHash(identifier)
-                if (already) continue
-                if (failedRef.current.has(identifier)) continue
-                if (inProgressRef.current.has(identifier)) continue
-
-                queued += 1
-                uploading += 1
-                setUploading(v => v + 1)
-                setQueued(v => v + 1)
-
-                // add to uploads list as queued
-                setUploads(prev => {
-                    if (prev.some(u => u.id === identifier)) return prev
-                    return [
-                        ...prev,
-                        { id: identifier, relativePath: relPath, progress: 0, status: 'queued', error: null },
-                    ]
-                })
-
-                try {
-                    // mark as in-progress (memory) and uploading
-                    inProgressRef.current.add(identifier)
-                    updateUpload(identifier, { status: 'uploading' })
-                    await uploadVideoFile(
-                        file,
-                        uploadCtx,
-                        percent => updateUpload(identifier, { progress: percent }),
-                        relPath
-                    )
-                    // success: persist processed and mark done 100%
-                    await addProcessedHash(identifier)
-                    updateUpload(identifier, { progress: 100, status: 'done' })
-                    onUploaded()
-                } catch (e: any) {
-                    console.error('Upload failed for', relPath, e)
-                    setLastError(e?.message || String(e))
-                    updateUpload(identifier, { status: 'error', error: e?.message || String(e) })
-                    failedRef.current.add(identifier)
-                    // Suspend further scanning until user resumes
-                    setSuspended(true)
-                    return
-                } finally {
-                    inProgressRef.current.delete(identifier)
-                    uploading -= 1
-                    setUploading(v => v - 1)
-                }
+                promises.push(processFile(file, entry.relativePath))
             }
+            await Promise.all(promises)
             setLastRunAt(Date.now())
-            setQueued(0)
         } catch (e: any) {
             setLastError(e?.message || String(e))
             setLastRunAt(Date.now())
         }
-    }, [dirHandle, uploadCtx, suspended])
+    }, [dirHandle, uploadCtx, suspended, processFile])
 
     React.useEffect(() => {
         if (timerRef.current) window.clearInterval(timerRef.current)
@@ -132,5 +126,5 @@ export function useIngressScanner(
         resume()
     }, [resume])
 
-    return { active, lastRunAt, lastError, queued, uploading, uploads, suspended, resume, retryFailed }
+    return { active, lastRunAt, lastError, uploading, uploads, suspended, resume, retryFailed }
 }
