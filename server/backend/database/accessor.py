@@ -1,10 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Sequence
 import uuid
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.backend.models import Job, Video, User
+
+
+def timestamp_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class DatabaseAccessor:
@@ -83,3 +87,6 @@ class DatabaseAccessor:
             query = query.where(Job.updated_at > updated_after)
         res = await self.db.execute(query)
         return [row.t for row in res.all()]
+
+    async def update_video_last_accessed_at(self, video_id: uuid.UUID):
+        await self.db.execute(update(Video).where(Video.id == video_id).values(last_accessed_at=timestamp_now()))

@@ -6,6 +6,7 @@ import { JobList } from '../components/JobList'
 import { JobPlayer } from '../player/JobPlayer'
 import { IngressPanel } from '../components/IngressPanel'
 import { loadDirectoryHandle, saveDirectoryHandle } from '../utils/idb'
+import { CanvasPlayer } from '../player_new/CanvasPlayer'
 
 export const MainPage: React.FC = () => {
     const { logout, email, authorizedFetch, authHeader } = useAuth()
@@ -120,13 +121,20 @@ export const MainPage: React.FC = () => {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75">
                     <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
                         <div className="w-full h-full overflow-hidden">
-                            <JobPlayer
+                            <CanvasPlayer
                                 job={selectedJob}
                                 dirHandle={dirHandle}
                                 onClose={() => setSelectedJob(null)}
                                 onDelete={onDelete}
                                 onReport={onReport}
                             />
+                            {/*<JobPlayer
+                               job={selectedJob}
+                               dirHandle={dirHandle}
+                               onClose={() => setSelectedJob(null)}
+                               onDelete={onDelete}
+                               onReport={onReport}
+                            />*/}
                         </div>
                     </div>
                 </div>

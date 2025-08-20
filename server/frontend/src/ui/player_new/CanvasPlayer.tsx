@@ -1,0 +1,463 @@
+import React from 'react'
+import { JobDetail, ReportType } from '../types'
+import { getFileByRelativePath } from '../utils/fsAccess'
+import { PlayerState, VideoProperties } from '../player/state'
+import { ControlsBar } from '../player/ControlsBar'
+import { Timeline } from '../player/Timeline'
+import { TARGET_BBOX_HEIGHT_RATIO, MIN_SCALE, MAX_SCALE } from '../player/constants'
+import { useZoom } from '../hooks/useZoom'
+import { usePlaybackSpeed } from '../hooks/usePlaybackSpeed'
+import { useSeeker } from '../hooks/useSeeker'
+import { clamp } from '../utils/clamp'
+
+type Props = {
+    job: JobDetail
+    dirHandle: FileSystemDirectoryHandle | null
+    onClose: () => void
+    onDelete: (id: string) => void
+    onReport: (id: string, type: ReportType, message: string) => void
+}
+
+type OverviewView = {
+    zoom: number
+    offsetX: number
+    offsetY: number
+    hoveredTrackId: number | null
+}
+
+export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
+    const [error, setError] = React.useState<string | null>(null)
+    const [videoUrl, setVideoUrl] = React.useState<string | null>(null)
+    const videoRef = React.useRef<HTMLVideoElement | null>(null)
+    const containerRef = React.useRef<HTMLDivElement | null>(null)
+    const canvasRef = React.useRef<HTMLCanvasElement | null>(null)
+    const [player, setPlayer] = React.useState<PlayerState | null>(null)
+    const { zoom, offset, onWheelZoom } = useZoom(containerRef)
+    const { speed, bumpSpeed } = usePlaybackSpeed(1.0)
+    const [hoveredTrackId, setHoveredTrackId] = React.useState<number | null>(null)
+
+    // Resolve file URL
+    const resolveFileFromRelativePath = React.useCallback(async () => {
+        if (!dirHandle) {
+            setError('No ingress folder selected')
+            console.log('No dirHandle; cannot resolve', job.original_file_path)
+            return null
+        }
+        try {
+            const file = await getFileByRelativePath(dirHandle, job.original_file_path)
+            return file
+        } catch (e: any) {
+            setError(e?.message || 'Failed to access file from folder')
+            console.log('Error resolving file', e)
+            return null
+        }
+    }, [dirHandle, job.original_file_path])
+
+    React.useEffect(() => {
+        let revoked: string | null = null
+        setVideoUrl(null)
+        setError(null)
+        resolveFileFromRelativePath().then(file => {
+            if (!file) return
+            const url = URL.createObjectURL(file)
+            revoked = url
+            setVideoUrl(url)
+            onNewFile(file)
+        })
+        return () => {
+            if (revoked) URL.revokeObjectURL(revoked)
+        }
+    }, [resolveFileFromRelativePath, job.id])
+
+    // Initialize PlayerState on loadedmetadata
+    React.useEffect(() => {
+        const v = videoRef.current
+        if (!v) return
+        const onLoadedMetadata = () => {
+            const videoProps: VideoProperties = {
+                width: v.videoWidth,
+                height: v.videoHeight,
+                durationSeconds: v.duration,
+            }
+            setPlayer(PlayerState.from(job, videoProps))
+        }
+        v.addEventListener('loadedmetadata', onLoadedMetadata)
+        return () => v.removeEventListener('loadedmetadata', onLoadedMetadata)
+    }, [videoUrl, job])
+
+    // Control playback state and speed
+    React.useEffect(() => {
+        const v = videoRef.current
+        if (!v || !player) return
+        v.playbackRate = speed
+        if (player.isPlaying) v.play().catch(() => {})
+        else v.pause()
+    }, [player?.isPlaying, speed])
+
+    const togglePlay = React.useCallback(() => setPlayer(p => (p ? p.togglePlay() : p)), [])
+
+    // Seeker (frame stepping and seeking)
+    const { seekTo, stepNext, stepPrev, onNewFile } = useSeeker(videoRef, player, setPlayer)
+
+    // Reuse hook-provided seek and frame step
+
+    // Keyboard controls
+    React.useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (!player) return
+            if (e.key === ' ') {
+                e.preventDefault()
+                togglePlay()
+            } else if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey) {
+                e.preventDefault()
+                stepPrev()
+            } else if (e.key === 'ArrowRight' && !e.ctrlKey && !e.shiftKey) {
+                e.preventDefault()
+                stepNext()
+            } else if (e.ctrlKey && e.key === 'ArrowLeft') {
+                e.preventDefault()
+                seekTo(player.currentTimeSec - 30, true)
+            } else if (e.ctrlKey && e.key === 'ArrowRight') {
+                e.preventDefault()
+                seekTo(player.currentTimeSec + 30, true)
+            } else if (e.shiftKey && e.key === 'ArrowLeft') {
+                e.preventDefault()
+                seekTo(player.currentTimeSec - 5, true)
+            } else if (e.shiftKey && e.key === 'ArrowRight') {
+                e.preventDefault()
+                seekTo(player.currentTimeSec + 5, true)
+            } else if (e.key === '-') {
+                e.preventDefault()
+                bumpSpeed(true)
+            } else if (e.key === '+' || e.key === '=') {
+                e.preventDefault()
+                bumpSpeed(false)
+            } else if (e.key.toLowerCase() === 'escape') {
+                setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
+            }
+        }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [player, togglePlay, stepPrev, stepNext, seekTo, bumpSpeed])
+
+    // Video frame callback -> sync currentTimeSec + draw
+    React.useEffect(() => {
+        const v = videoRef.current
+        const c = canvasRef.current
+        const container = containerRef.current
+        if (!v || !c || !player || !container) return
+
+        let vfId: number | null = null
+        const onFrame = () => {
+            const nowSec = v.currentTime
+            setPlayer(prev => (prev ? prev.copy({ currentTimeSec: nowSec }) : prev))
+            // Draw the current frame immediately for smooth playback
+            drawFrame(c, container, v, player, { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId }, nowSec)
+            vfId = v.requestVideoFrameCallback(onFrame)
+        }
+        vfId = v.requestVideoFrameCallback(onFrame)
+        return () => {
+            if (vfId) v.cancelVideoFrameCallback(vfId)
+        }
+    }, [player?.isPlaying, player?.mode, player?.currentTrackId, zoom, offset.x, offset.y, hoveredTrackId, videoUrl])
+
+    // Redraw on resize or when paused and state changes
+    React.useEffect(() => {
+        const c = canvasRef.current
+        const v = videoRef.current
+        const container = containerRef.current
+        if (!c || !v || !player || !container) return
+        drawFrame(c, container, v, player, { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId })
+    }, [player?.currentTimeSec, player?.mode, player?.currentTrackId, zoom, offset.x, offset.y, hoveredTrackId])
+
+    // Auto-exit detailed mode if no reasonably recent detection around current time
+    React.useEffect(() => {
+        if (!player || player.mode !== 'detailed' || player.currentTrackId == null) return
+        if (!player.hasDetectionAfter(player.currentTrackId, player.currentTimeSec)) {
+            setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
+        }
+    }, [player?.currentTimeSec, player?.mode, player?.currentTrackId])
+
+    // bumpSpeed is provided by usePlaybackSpeed
+
+    const onWheelCanvas = React.useCallback(
+        (e: React.WheelEvent<HTMLCanvasElement>) => {
+            if (!player || player.mode !== 'overview') return
+            onWheelZoom(e.clientX, e.clientY, e.deltaY)
+        },
+        [player, onWheelZoom]
+    )
+
+    const onMouseMove = React.useCallback(
+        (e: React.MouseEvent<HTMLCanvasElement>) => {
+            if (!player || player.mode !== 'overview') return
+            const c = canvasRef.current
+            if (!c) return
+            const container = containerRef.current
+            const rect = (container ?? c).getBoundingClientRect()
+            const px = e.clientX - rect.left
+            const py = e.clientY - rect.top
+            const hit = pickTrackAtScreenPoint(px, py, rect.width, rect.height, videoRef.current!, player, {
+                zoom,
+                offsetX: offset.x,
+                offsetY: offset.y,
+                hoveredTrackId,
+            })
+            setHoveredTrackId(hit)
+        },
+        [player, zoom, offset.x, offset.y, hoveredTrackId]
+    )
+
+    const onClick = React.useCallback(() => {
+        if (!player || player.mode !== 'overview') return
+        if (hoveredTrackId != null) {
+            const trackId = hoveredTrackId
+            setPlayer(p => {
+                if (!p) return p
+                const detection = p.interpolateDetectionByTime(trackId, p.currentTimeSec)
+                if (detection) {
+                    const t = detection.time_percent * p.video.durationSeconds
+                    const v = videoRef.current
+                    if (v) v.currentTime = t
+                    return p.copy({ mode: 'detailed', currentTrackId: trackId, currentTimeSec: t })
+                }
+                return p.copy({ mode: 'detailed', currentTrackId: trackId })
+            })
+        }
+    }, [player, hoveredTrackId])
+
+    return (
+        <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700 bg-black/60">
+                <div className="text-sm text-gray-200 truncate" title={job.original_file_path}>
+                    {job.original_file_path}
+                </div>
+                <div className="flex gap-2 items-center">
+                    <button onClick={onClose}>Close</button>
+                </div>
+            </div>
+
+            <div className="relative flex-1 bg-black overflow-hidden">
+                {error && <div className="absolute left-2 top-2 text-red-500 text-sm">{error}</div>}
+                <div ref={containerRef} className="absolute inset-0">
+                    <canvas
+                        ref={canvasRef}
+                        className="absolute inset-0 block"
+                        onWheel={onWheelCanvas}
+                        onMouseMove={onMouseMove}
+                        onMouseLeave={() => setHoveredTrackId(null)}
+                        onClick={onClick}
+                    />
+                    {/* Hidden video used only for decoding frames */}
+                    {videoUrl && (
+                        <video
+                            ref={videoRef}
+                            key={videoUrl}
+                            src={videoUrl}
+                            playsInline
+                            muted={false}
+                            preload="metadata"
+                            style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }}
+                        />
+                    )}
+                </div>
+            </div>
+
+            {player && (
+                <div className="px-3 py-2 bg-black/60 border-t border-gray-700">
+                    <div className="mb-2">
+                        <Timeline state={player} onSeekTime={t => seekTo(t, false)} />
+                    </div>
+                    <ControlsBar
+                        onPlayPause={togglePlay}
+                        onSpeedDown={() => bumpSpeed(true)}
+                        onSpeedUp={() => bumpSpeed(false)}
+                        isPlaying={player.isPlaying}
+                        speed={speed}
+                        zoom={zoom}
+                    />
+                </div>
+            )}
+        </div>
+    )
+}
+
+// Helpers
+function ensureCanvasSize(canvas: HTMLCanvasElement, cssWidth: number, cssHeight: number) {
+    const dpr = Math.max(1, Math.floor(window.devicePixelRatio))
+    const needW = Math.max(1, Math.floor(cssWidth * dpr))
+    const needH = Math.max(1, Math.floor(cssHeight * dpr))
+    if (canvas.width !== needW || canvas.height !== needH) {
+        canvas.width = needW
+        canvas.height = needH
+    }
+    canvas.style.width = `${cssWidth}px`
+    canvas.style.height = `${cssHeight}px`
+    const ctx = canvas.getContext('2d')!
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.scale(dpr, dpr)
+    return ctx
+}
+
+function computeBaseRect(outW: number, outH: number, vidW: number, vidH: number) {
+    const scale = Math.min(outW / vidW, outH / vidH)
+    const dispW = vidW * scale
+    const dispH = vidH * scale
+    const offX = (outW - dispW) / 2
+    const offY = (outH - dispH) / 2
+    return { x: offX, y: offY, w: dispW, h: dispH, scale }
+}
+
+function drawFrame(
+    canvas: HTMLCanvasElement,
+    containerEl: HTMLElement,
+    video: HTMLVideoElement,
+    player: PlayerState,
+    ov: OverviewView,
+    timeOverrideSec?: number
+) {
+    const rect = containerEl.getBoundingClientRect()
+    const cssW = Math.max(1, Math.floor(rect.width))
+    const cssH = Math.max(1, Math.floor(rect.height))
+    const ctx = ensureCanvasSize(canvas, cssW, cssH)
+
+    ctx.fillStyle = '#000'
+    ctx.fillRect(0, 0, cssW, cssH)
+
+    if (!video.videoWidth || !video.videoHeight) return
+
+    if (player.mode === 'overview') {
+        const base = computeBaseRect(cssW, cssH, player.video.width, player.video.height)
+        const z = ov.zoom
+        const dx = base.x + ov.offsetX
+        const dy = base.y + ov.offsetY
+        const dw = base.w * z
+        const dh = base.h * z
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
+        ctx.drawImage(video, dx, dy, dw, dh)
+
+        // Draw detections at current time
+        const now = timeOverrideSec ?? player.currentTimeSec
+        for (const t of player.tracks) {
+            if (!player.visibleTrackIds.has(t.track_id)) continue
+            const det = player.interpolateDetectionByTime(t.track_id, now)
+            if (!det) continue
+            const [x1p, y1p, x2p, y2p] = det.bbox
+            const x1 = dx + x1p * dw
+            const y1 = dy + y1p * dh
+            const w = Math.max(1, (x2p - x1p) * dw)
+            const h = Math.max(1, (y2p - y1p) * dh)
+            ctx.strokeStyle =
+                ov.hoveredTrackId === t.track_id
+                    ? '#10b981'
+                    : player.currentTrackId === t.track_id
+                    ? '#f59e0b'
+                    : '#ef4444'
+            ctx.lineWidth = 2
+            ctx.strokeRect(Math.round(x1) + 0.5, Math.round(y1) + 0.5, Math.round(w), Math.round(h))
+
+            // Track id label
+            ctx.fillStyle = 'rgba(0,0,0,0.7)'
+            const label = String(t.track_id)
+            ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto'
+            const tw = ctx.measureText(label).width
+            const th = 14
+            ctx.fillRect(x1, y1 - th, tw + 6, th)
+            ctx.fillStyle = '#fff'
+            ctx.fillText(label, x1 + 3, y1 - 3)
+        }
+    } else if (player.mode === 'detailed' && player.currentTrackId != null) {
+        const now = timeOverrideSec ?? player.currentTimeSec
+        const det = player.interpolateDetectionByTime(player.currentTrackId, now)
+        if (!det) return
+
+        const vidW = player.video.width
+        const vidH = player.video.height
+        const [x1p, y1p, x2p, y2p] = det.bbox
+        const x1 = x1p * vidW
+        const y1 = y1p * vidH
+        const x2 = x2p * vidW
+        const y2 = y2p * vidH
+        const bboxW = Math.max(1, x2 - x1)
+        const bboxH = Math.max(1, y2 - y1)
+
+        const sHeight = (TARGET_BBOX_HEIGHT_RATIO * cssH) / bboxH
+        const sWidthLimit = cssW / bboxW
+        const s = clamp(Math.min(sHeight, sWidthLimit), MIN_SCALE, MAX_SCALE)
+
+        const cx = (x1 + x2) * 0.5
+        const cy = (y1 + y2) * 0.5
+        const cropW = cssW / s
+        const cropH = cssH / s
+        const winX1 = cx - cropW / 2
+        const winY1 = cy - cropH / 2
+        const winX2 = winX1 + cropW
+        const winY2 = winY1 + cropH
+
+        const srcX1 = Math.max(0, Math.floor(winX1))
+        const srcY1 = Math.max(0, Math.floor(winY1))
+        const srcX2 = Math.min(vidW, Math.ceil(winX2))
+        const srcY2 = Math.min(vidH, Math.ceil(winY2))
+        const dstX1 = Math.max(0, Math.floor((srcX1 - winX1) * s))
+        const dstY1 = Math.max(0, Math.floor((srcY1 - winY1) * s))
+        const dstX2 = Math.min(cssW, Math.ceil((srcX2 - winX1) * s))
+        const dstY2 = Math.min(cssH, Math.ceil((srcY2 - winY1) * s))
+        const srcW = clamp(srcX2 - srcX1, 0, vidW)
+        const srcH = clamp(srcY2 - srcY1, 0, vidH)
+        const dstW = clamp(dstX2 - dstX1, 0, cssW)
+        const dstH = clamp(dstY2 - dstY1, 0, cssH)
+
+        if (srcW > 0 && srcH > 0 && dstW > 0 && dstH > 0) {
+            try {
+                ctx.imageSmoothingEnabled = true
+                ctx.imageSmoothingQuality = 'high'
+                ctx.drawImage(video, srcX1, srcY1, srcW, srcH, dstX1, dstY1, dstW, dstH)
+            } catch {}
+        }
+
+        // optional: draw a subtle bbox overlay for context
+        // TODO remove
+        ctx.strokeStyle = '#f59e0b'
+        ctx.lineWidth = 2
+        const bboxScreenX = (x1 - winX1) * s
+        const bboxScreenY = (y1 - winY1) * s
+        const bboxScreenW = bboxW * s
+        const bboxScreenH = bboxH * s
+        ctx.strokeRect(
+            Math.round(bboxScreenX) + 0.5,
+            Math.round(bboxScreenY) + 0.5,
+            Math.round(bboxScreenW),
+            Math.round(bboxScreenH)
+        )
+    }
+}
+
+function pickTrackAtScreenPoint(
+    px: number,
+    py: number,
+    outW: number,
+    outH: number,
+    video: HTMLVideoElement,
+    player: PlayerState,
+    ov: OverviewView
+): number | null {
+    const base = computeBaseRect(outW, outH, player.video.width, player.video.height)
+    const dx = base.x + ov.offsetX
+    const dy = base.y + ov.offsetY
+    const dw = base.w * ov.zoom
+    const dh = base.h * ov.zoom
+    // check from topmost to bottommost; here just iterate, but prefer smaller boxes first
+    for (const t of player.tracks) {
+        if (!player.visibleTrackIds.has(t.track_id)) continue
+        const det = player.interpolateDetectionByTime(t.track_id, player.currentTimeSec)
+        if (!det) continue
+        const [x1p, y1p, x2p, y2p] = det.bbox
+        const x1 = dx + x1p * dw
+        const y1 = dy + y1p * dh
+        const x2 = dx + x2p * dw
+        const y2 = dy + y2p * dh
+        if (px >= x1 && px <= x2 && py >= y1 && py <= y2) return t.track_id
+    }
+    return null
+}

@@ -32,7 +32,7 @@ app = modal.App('windsurf-analysis-inference', image=image)
 
 
 def clamp_percentage(p: float) -> float:
-    return max(0, min(round(p, 5), 1))
+    return max(0, min(p, 1))
 
 
 @app.cls(gpu='L40S', max_containers=2)

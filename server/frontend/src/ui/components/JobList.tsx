@@ -28,19 +28,21 @@ export const JobList: React.FC<{
 }> = ({ jobs, onOpen, onDelete, deletingId, openingId }) => {
     return (
         <div>
-            {jobs.map(j => (
-                <div key={j.id} className="flex items-center gap-2 p-2 border-b border-gray-300 hover:bg-gray-100">
-                    <span className="font-mono text-sm">{j.original_file_path}</span>
-                    <div className="flex-1" />
-                    <StatusBadge status={j.status} />
-                    <button onClick={() => onOpen(j.id)} disabled={openingId === j.id}>
-                        {openingId === j.id ? 'Opening…' : 'Open'}
-                    </button>
-                    <button onClick={() => onDelete(j.id)} disabled={deletingId === j.id}>
-                        {deletingId === j.id ? 'Deleting…' : 'Delete'}
-                    </button>
-                </div>
-            ))}
+            {jobs
+                .sort((a, b) => (b.created_at < a.created_at ? -1 : 1))
+                .map(j => (
+                    <div key={j.id} className="flex items-center gap-2 p-2 border-b border-gray-300 hover:bg-gray-100">
+                        <span className="font-mono text-sm">{j.original_file_path}</span>
+                        <div className="flex-1" />
+                        <StatusBadge status={j.status} />
+                        <button onClick={() => onOpen(j.id)} disabled={openingId === j.id}>
+                            {openingId === j.id ? 'Opening…' : 'Open'}
+                        </button>
+                        <button onClick={() => onDelete(j.id)} disabled={deletingId === j.id}>
+                            {deletingId === j.id ? 'Deleting…' : 'Delete'}
+                        </button>
+                    </div>
+                ))}
         </div>
     )
 }

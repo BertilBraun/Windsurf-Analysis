@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import hashlib
 import mimetypes
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 import modal
 from pydantic import BaseModel
-from sqlalchemy import update
 
 from server.backend.auth import authenticate_user
 from server.backend.config import Settings
-from server.backend.database.accessor import DatabaseAccessor
+from server.backend.database.accessor import DatabaseAccessor, timestamp_now
 from server.backend.database.db import get_db
 from server.backend.models import Job, JobStatus, Report, ReportType, User, Video
 from server.backend.s3 import object_url, s3_client
+from server.inference.src.util.timing import timeit
 
 
 router = APIRouter(prefix='/jobs', tags=['jobs'])
@@ -51,10 +51,6 @@ class JobDetail(JobSummaryItem):
 class ReportRequest(BaseModel):
     message: str
     type: Literal['missed_detection', 'false_association', 'other']
-
-
-def timestamp_now() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 @router.post('/upload', response_model=JobCreateUploadResponse)
@@ -121,7 +117,8 @@ async def list_jobs(
     db: DatabaseAccessor = Depends(get_db),
     user: User = Depends(authenticate_user),
 ):
-    rows = await db.get_jobs_by_user(user, status_filter, updated_after)
+    with timeit('list_jobs'):
+        rows = await db.get_jobs_by_user(user, status_filter, updated_after)
     items = [
         JobSummaryItem(
             id=str(job.id),
@@ -146,7 +143,7 @@ async def get_job(job_id: str, db: DatabaseAccessor = Depends(get_db), user: Use
 
     job, video = existing
 
-    await db.db.execute(update(Video).where(Video.id == job.video_id).values(last_accessed_at=timestamp_now()))
+    await db.update_video_last_accessed_at(job.video_id)
 
     return JobDetail(
         id=str(job.id),
