@@ -1,4 +1,5 @@
 import { JobDetail, Track, TrackDetection } from '../types'
+import { DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC } from './constants'
 
 export type VideoProperties = {
     width: number
@@ -12,8 +13,6 @@ export type DetectionTime = {
     timeSec: number
     detection: TrackDetection
 }
-
-const DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC = 1.0
 
 type PlayerStateInit = {
     mode: PlayerMode

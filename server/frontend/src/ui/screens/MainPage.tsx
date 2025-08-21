@@ -6,7 +6,7 @@ import { JobList } from '../components/JobList'
 import { JobPlayer } from '../player/JobPlayer'
 import { IngressPanel } from '../components/IngressPanel'
 import { loadDirectoryHandle, saveDirectoryHandle } from '../utils/idb'
-import { CanvasPlayer } from '../player_new/CanvasPlayer'
+import { CanvasPlayer } from '../player/CanvasPlayer'
 
 export const MainPage: React.FC = () => {
     const { logout, email, authorizedFetch, authHeader } = useAuth()
