@@ -52,12 +52,14 @@ export class PlayerState {
     }
 
     copy(patch: Partial<PlayerStateInit>): PlayerState {
+        const hasCurrentTrackId = Object.prototype.hasOwnProperty.call(patch, 'currentTrackId')
+        const hasIsPlaying = Object.prototype.hasOwnProperty.call(patch, 'isPlaying')
         return new PlayerState({
             mode: patch.mode ?? this.mode,
-            currentTrackId: patch.currentTrackId ?? this.currentTrackId,
+            currentTrackId: hasCurrentTrackId ? patch.currentTrackId! : this.currentTrackId,
             currentTimeSec: patch.currentTimeSec ?? this.currentTimeSec,
             playbackSpeed: patch.playbackSpeed ?? this.playbackSpeed,
-            isPlaying: patch.isPlaying ?? this.isPlaying,
+            isPlaying: hasIsPlaying ? patch.isPlaying! : this.isPlaying,
             video: patch.video ?? this.video,
             tracks: patch.tracks ?? this.tracks,
             visibleTrackIds: patch.visibleTrackIds ?? this.visibleTrackIds,

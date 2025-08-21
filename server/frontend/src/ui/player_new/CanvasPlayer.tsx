@@ -89,6 +89,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
     React.useEffect(() => {
         const v = videoRef.current
         if (!v || !player) return
+        v.defaultPlaybackRate = speed
         v.playbackRate = speed
         if (player.isPlaying) v.play().catch(() => {})
         else v.pause()
@@ -222,15 +223,24 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
             const rect = (container ?? c).getBoundingClientRect()
             const px = e.clientX - rect.left
             const py = e.clientY - rect.top
-            const hit = pickTrackAtScreenPoint(px, py, rect.width, rect.height, videoRef.current!, player, {
-                zoom,
-                offsetX: offset.x,
-                offsetY: offset.y,
-                hoveredTrackId,
-            })
+            const hit = pickTrackAtScreenPoint(
+                px,
+                py,
+                rect.width,
+                rect.height,
+                videoRef.current!,
+                player,
+                {
+                    zoom,
+                    offsetX: offset.x,
+                    offsetY: offset.y,
+                    hoveredTrackId,
+                },
+                job.dominant_orientation ?? 0
+            )
             setHoveredTrackId(hit)
         },
-        [player, zoom, offset.x, offset.y, hoveredTrackId]
+        [player, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation]
     )
 
     const onClick = React.useCallback(() => {
@@ -503,9 +513,14 @@ function pickTrackAtScreenPoint(
     outH: number,
     video: HTMLVideoElement,
     player: PlayerState,
-    ov: OverviewView
+    ov: OverviewView,
+    dominantOrientationDeg: number = 0
 ): number | null {
-    const base = computeBaseRect(outW, outH, player.video.width, player.video.height)
+    // Match drawFrame() rotation-aware layout
+    const rot = ((dominantOrientationDeg % 360) + 360) % 360
+    const rotatedW = rot === 90 || rot === 270 ? player.video.height : player.video.width
+    const rotatedH = rot === 90 || rot === 270 ? player.video.width : player.video.height
+    const base = computeBaseRect(outW, outH, rotatedW, rotatedH)
     const dx = base.x + ov.offsetX
     const dy = base.y + ov.offsetY
     const dw = base.w * ov.zoom
