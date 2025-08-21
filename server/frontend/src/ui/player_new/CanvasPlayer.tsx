@@ -9,6 +9,7 @@ import { useZoom } from '../hooks/useZoom'
 import { usePlaybackSpeed } from '../hooks/usePlaybackSpeed'
 import { useSeeker } from '../hooks/useSeeker'
 import { clamp } from '../utils/clamp'
+import { drawRotatedToCanvas, getRotatedDimensions } from './rotation'
 
 type Props = {
     job: JobDetail
@@ -363,41 +364,8 @@ function drawFrame(
     if (!video.videoWidth || !video.videoHeight) return
 
     // Prepare source draw surface with rotation applied
-    const srcW = video.videoWidth
-    const srcH = video.videoHeight
-    const rot = (-dominantOrientationDeg + 360) % 360
     const offscreen = document.createElement('canvas')
-    let frameW = srcW
-    let frameH = srcH
-    if (rot === 90 || rot === 270) {
-        offscreen.width = srcH
-        offscreen.height = srcW
-        frameW = srcH
-        frameH = srcW
-    } else {
-        offscreen.width = srcW
-        offscreen.height = srcH
-        frameW = srcW
-        frameH = srcH
-    }
-    const octx = offscreen.getContext('2d')!
-    octx.setTransform(1, 0, 0, 1, 0, 0)
-    if (rot === 90) {
-        octx.translate(offscreen.width, 0)
-        octx.rotate(Math.PI / 2)
-    } else if (rot === 180) {
-        octx.translate(offscreen.width, offscreen.height)
-        octx.rotate(Math.PI)
-    } else if (rot === 270) {
-        octx.translate(0, offscreen.height)
-        octx.rotate((3 * Math.PI) / 2)
-    }
-    octx.imageSmoothingEnabled = true
-    octx.imageSmoothingQuality = 'high'
-    octx.drawImage(video, 0, 0)
-
-    // For layout, treat the rotated frame sizes
-    const rotatedVideo = { width: frameW, height: frameH }
+    const rotatedVideo = drawRotatedToCanvas(video, offscreen, dominantOrientationDeg)
 
     if (player.mode === 'overview') {
         const base = computeBaseRect(cssW, cssH, rotatedVideo.width, rotatedVideo.height)
@@ -421,24 +389,13 @@ function drawFrame(
             const y1 = dy + y1p * dh
             const w = Math.max(1, (x2p - x1p) * dw)
             const h = Math.max(1, (y2p - y1p) * dh)
-            ctx.strokeStyle =
-                ov.hoveredTrackId === t.track_id
-                    ? '#10b981'
-                    : player.currentTrackId === t.track_id
-                    ? '#f59e0b'
-                    : '#ef4444'
+            const isHovered = ov.hoveredTrackId === t.track_id
+            ctx.strokeStyle = isHovered ? '#10b981' : '#ef4444'
             ctx.lineWidth = 2
             ctx.strokeRect(Math.round(x1) + 0.5, Math.round(y1) + 0.5, Math.round(w), Math.round(h))
 
             // Track id label
-            ctx.fillStyle = 'rgba(0,0,0,0.7)'
-            const label = String(t.track_id)
-            ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto'
-            const tw = ctx.measureText(label).width
-            const th = 14
-            ctx.fillRect(x1, y1 - th, tw + 6, th)
-            ctx.fillStyle = '#fff'
-            ctx.fillText(label, x1 + 3, y1 - 3)
+            drawText(ctx, String(t.track_id), x1, y1, '#fff', 'rgba(0,0,0,0.7)')
         }
     } else if (player.mode === 'detailed' && player.currentTrackId != null) {
         const now = timeOverrideSec ?? player.currentTimeSec
@@ -506,6 +463,14 @@ function drawFrame(
     }
 }
 
+function drawText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, color: string, bgColor: string) {
+    ctx.fillStyle = bgColor
+    ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto'
+    ctx.fillRect(x, y, ctx.measureText(text).width, 14)
+    ctx.fillStyle = color
+    ctx.fillText(text, x + 3, y + 11)
+}
+
 function pickTrackAtScreenPoint(
     px: number,
     py: number,
@@ -516,11 +481,8 @@ function pickTrackAtScreenPoint(
     ov: OverviewView,
     dominantOrientationDeg: number = 0
 ): number | null {
-    // Match drawFrame() rotation-aware layout
-    const rot = ((dominantOrientationDeg % 360) + 360) % 360
-    const rotatedW = rot === 90 || rot === 270 ? player.video.height : player.video.width
-    const rotatedH = rot === 90 || rot === 270 ? player.video.width : player.video.height
-    const base = computeBaseRect(outW, outH, rotatedW, rotatedH)
+    const { width, height } = getRotatedDimensions(player.video.width, player.video.height, dominantOrientationDeg)
+    const base = computeBaseRect(outW, outH, width, height)
     const dx = base.x + ov.offsetX
     const dy = base.y + ov.offsetY
     const dw = base.w * ov.zoom
