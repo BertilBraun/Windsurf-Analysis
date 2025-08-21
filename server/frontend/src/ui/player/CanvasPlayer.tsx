@@ -101,8 +101,6 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
     // Seeker (frame stepping and seeking)
     const { seekTo, stepNext, stepPrev, onNewFile } = useSeeker(videoRef, player, setPlayer)
 
-    // Reuse hook-provided seek and frame step
-
     // Keyboard controls
     React.useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -264,15 +262,6 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
 
     return (
         <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700 bg-black/60">
-                <div className="text-sm text-gray-200 truncate" title={job.original_file_path}>
-                    {job.original_file_path}
-                </div>
-                <div className="flex gap-2 items-center">
-                    <button onClick={onClose}>Close</button>
-                </div>
-            </div>
-
             <div className="relative flex-1 bg-black overflow-hidden">
                 {error && <div className="absolute left-2 top-2 text-red-500 text-sm">{error}</div>}
                 <div ref={containerRef} className="absolute inset-0">

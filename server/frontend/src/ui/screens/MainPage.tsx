@@ -3,10 +3,10 @@ import { useAuth } from '../auth/AuthProvider'
 import { useJobs } from '../hooks/useJobs'
 import { JobDetail, ReportType } from '../types'
 import { JobList } from '../components/JobList'
-import { JobPlayer } from '../player/JobPlayer'
 import { IngressPanel } from '../components/IngressPanel'
 import { loadDirectoryHandle, saveDirectoryHandle } from '../utils/idb'
 import { CanvasPlayer } from '../player/CanvasPlayer'
+import { Modal } from '../components/Modal'
 
 export const MainPage: React.FC = () => {
     const { logout, email, authorizedFetch, authHeader } = useAuth()
@@ -82,15 +82,6 @@ export const MainPage: React.FC = () => {
         startPolling()
     }
 
-    React.useEffect(() => {
-        if (!selectedJob) return
-        const prev = document.body.style.overflow
-        document.body.style.overflow = 'hidden'
-        return () => {
-            document.body.style.overflow = prev
-        }
-    }, [selectedJob])
-
     return (
         <div>
             <div className="flex justify-between items-center mb-4">
@@ -118,7 +109,7 @@ export const MainPage: React.FC = () => {
             <JobList jobs={jobs} onOpen={onOpen} onDelete={onDelete} deletingId={deletingId} openingId={openingId} />
 
             {selectedJob && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75">
+                <Modal onClose={() => setSelectedJob(null)} title={selectedJob.original_file_path}>
                     <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
                         <div className="w-full h-full overflow-hidden">
                             <CanvasPlayer
@@ -128,16 +119,9 @@ export const MainPage: React.FC = () => {
                                 onDelete={onDelete}
                                 onReport={onReport}
                             />
-                            {/*<JobPlayer
-                               job={selectedJob}
-                               dirHandle={dirHandle}
-                               onClose={() => setSelectedJob(null)}
-                               onDelete={onDelete}
-                               onReport={onReport}
-                            />*/}
                         </div>
                     </div>
-                </div>
+                </Modal>
             )}
         </div>
     )
