@@ -96,7 +96,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
         else v.pause()
     }, [player?.isPlaying, speed])
 
-    const togglePlay = React.useCallback(() => setPlayer(p => (p ? p.togglePlay() : p)), [])
+    const togglePlay = React.useCallback(() => setPlayer(p => (p ? p.copy({ isPlaying: !p.isPlaying }) : p)), [])
 
     // Seeker (frame stepping and seeking)
     const { seekTo, stepNext, stepPrev, onNewFile } = useSeeker(videoRef, player, setPlayer)
