@@ -7,11 +7,14 @@ import { IngressPanel } from '../components/IngressPanel'
 import { loadDirectoryHandle, saveDirectoryHandle } from '../utils/idb'
 import { CanvasPlayer } from '../player/CanvasPlayer'
 import { Modal } from '../components/Modal'
+import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal'
+import { Button } from '../components/Button'
 
 export const MainPage: React.FC = () => {
     const { logout, email, authorizedFetch, authHeader } = useAuth()
     const { jobs, isPolling, startPolling, stopPolling, refreshJobDetail, deleteJob, reportJob } = useJobs()
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
+    const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
 
     React.useEffect(() => {
         // Initial fetch but don't keep polling until needed
@@ -109,7 +112,13 @@ export const MainPage: React.FC = () => {
             <JobList jobs={jobs} onOpen={onOpen} onDelete={onDelete} deletingId={deletingId} openingId={openingId} />
 
             {selectedJob && (
-                <Modal onClose={() => setSelectedJob(null)} title={selectedJob.original_file_path}>
+                <Modal
+                    onClose={() => setSelectedJob(null)}
+                    title={selectedJob.original_file_path}
+                    additionalHeader={
+                        <Button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" text="Shortcuts" />
+                    }
+                >
                     <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
                         <div className="w-full h-full overflow-hidden">
                             <CanvasPlayer
@@ -123,6 +132,7 @@ export const MainPage: React.FC = () => {
                     </div>
                 </Modal>
             )}
+            {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
         </div>
     )
 }

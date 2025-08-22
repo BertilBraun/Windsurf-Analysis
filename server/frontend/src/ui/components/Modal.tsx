@@ -4,6 +4,7 @@ import { Button } from './Button'
 export type ModalProps = {
     onClose?: () => void
     children: React.ReactNode
+    additionalHeader?: React.ReactNode
     containerClassName?: string
     backdropClassName?: string
     contentClassName?: string
@@ -14,13 +15,14 @@ export type ModalProps = {
 export const Modal: React.FC<ModalProps> = ({
     onClose,
     children,
+    additionalHeader,
     containerClassName,
     backdropClassName,
     contentClassName,
     title,
     headerClassName,
 }) => {
-    const defaultContent = 'rounded-md border border-gray-700 bg-[#111] text-gray-100 shadow-xl'
+    const defaultContent = 'rounded-md border border-gray-700 bg-[#111] shadow-xl'
     const contentClasses = contentClassName ?? defaultContent
     return (
         <div
@@ -30,13 +32,15 @@ export const Modal: React.FC<ModalProps> = ({
         >
             <div className={`absolute inset-0 ${backdropClassName || 'bg-black/60'}`} onClick={onClose} />
             <div className={`relative z-10 ${contentClasses}`} onClick={e => e.stopPropagation()}>
-                {(title || onClose) && (
+                {(title || onClose || additionalHeader) && (
                     <div
                         className={`flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-black/60 rounded-t-md ${
                             headerClassName || ''
                         }`}
                     >
-                        <div className="font-semibold">{title}</div>
+                        <div className="font-semibold text-gray-100">{title}</div>
+                        <div className="flex-1" />
+                        {additionalHeader}
                         {onClose && <Button className="text-sm text-black" onClick={onClose} text="Close" />}
                     </div>
                 )}
