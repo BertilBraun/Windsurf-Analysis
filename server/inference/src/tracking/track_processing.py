@@ -12,34 +12,37 @@ from ..util.video_io import VideoInfo
 from ..common_types import Detection, Track, BoundingBox
 
 
-class TrackFilteringSmoothingRelabeling:
+class TrackFiltering:
     def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
-        """Complete track processing pipeline: merge, filter, and smooth tracks."""
-        logger = logging.getLogger(__name__)
-
-        # sort all tracks by frame index
+        """Filter tracks for minimum duration requirement"""
         tracks = [
             Track(track.track_id, list(sorted(track.sorted_detections, key=lambda x: x.frame_idx))) for track in tracks
         ]
+        return _get_valid_tracks(tracks, video_properties.total_frames)
 
-        # First, greedily merge ALL tracks based on spatial and temporal proximity
-        logger.info(f'Starting with {len(tracks)} tracks')
 
-        # Then filter merged tracks for minimum duration requirement
-        valid_tracks = _get_valid_tracks(tracks, video_properties.total_frames)
+class TrackInterpolation:
+    def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
+        """Interpolate missing detections"""
+        tracks = [
+            Track(track.track_id, list(sorted(track.sorted_detections, key=lambda x: x.frame_idx))) for track in tracks
+        ]
+        return [Track(track.track_id, _interpolate_missing_boxes(track.sorted_detections)) for track in tracks]
 
-        if not valid_tracks:
-            logger.warning('No merged tracks meet the minimum frame percentage requirement')
-            return []
 
-        logger.info(f'Found {len(valid_tracks)} valid tracks with duration >= {MIN_FRAME_PERCENTAGE}% of total frames')
+class TrackSmoothing:
+    def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
+        """Smooth the center positions of all tracks using a rolling window"""
+        tracks = [
+            Track(track.track_id, list(sorted(track.sorted_detections, key=lambda x: x.frame_idx))) for track in tracks
+        ]
+        return [Track(track.track_id, _smooth_track(track.sorted_detections)) for track in tracks]
 
-        # Apply smoothing to reduce jittery motion
-        logger.info('Smoothing track centers to reduce jittery motion...')
-        smoothed_tracks = _smooth_track_centers(valid_tracks)
 
-        # relabel tracks from 1 to n
-        return _relabel_tracks(smoothed_tracks)
+class TrackRelabeling:
+    def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
+        """Relabel tracks from 1 to n"""
+        return [Track(i, track.sorted_detections) for i, track in enumerate(tracks, start=1)]
 
 
 def _interpolate_missing_boxes(track_data: list[Detection]) -> list[Detection]:
@@ -117,11 +120,6 @@ def _smooth_track(track_data: list[Detection], window_size: int = SMOOTHING_WIND
     return smoothed_track
 
 
-def _smooth_track_centers(tracks: list[Track]) -> list[Track]:
-    """Smooth the center positions of all tracks using a rolling window"""
-    return [Track(track.track_id, _smooth_track(track.sorted_detections)) for track in tracks]
-
-
 def _get_valid_tracks(tracks: list[Track], total_frames: int) -> list[Track]:
     """Get tracks that meet minimum frame percentage requirement"""
     logger = logging.getLogger(__name__)
@@ -137,15 +135,9 @@ def _get_valid_tracks(tracks: list[Track], total_frames: int) -> list[Track]:
             continue
 
         # Calculate track duration in frames
-        duration_frames = len(track.sorted_detections)
+        duration_frames = track.end_frame - track.start_frame
 
         if duration_frames >= min_frames:
-            # Interpolate missing detections
-            valid_tracks.append(Track(track.track_id, _interpolate_missing_boxes(track.sorted_detections)))
+            valid_tracks.append(track)
 
     return valid_tracks
-
-
-def _relabel_tracks(tracks: list[Track]) -> list[Track]:
-    """Relabel tracks from 1 to n"""
-    return [Track(i, track.sorted_detections) for i, track in enumerate(tracks, start=1)]

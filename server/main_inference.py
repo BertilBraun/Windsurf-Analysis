@@ -10,7 +10,10 @@ from .inference.src.windsurf_video_processor import (
     get_video_properties,
     GreedyPreprocessor,
     DiscreteILPTracker,
-    TrackFilteringSmoothingRelabeling,
+    TrackFiltering,
+    TrackInterpolation,
+    TrackSmoothing,
+    TrackRelabeling,
     Track,
     Tracker,
 )
@@ -90,7 +93,10 @@ class InferenceModel:
                         GreedyPreprocessor(),
                         # GreedyTracker(),
                         DiscreteILPTracker(),
-                        TrackFilteringSmoothingRelabeling(),
+                        TrackFiltering(),
+                        # TrackInterpolation(), # Not needed - done in frontend
+                        # TrackSmoothing(), # Not needed - done in frontend
+                        TrackRelabeling(),
                     ]
                     processed_tracks = [
                         Track(track_id=i, sorted_detections=[detection]) for i, detection in enumerate(detections)

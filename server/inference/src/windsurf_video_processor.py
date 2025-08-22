@@ -16,7 +16,7 @@ from .visualization.annotation_drawer import Annotation, AnnotationDrawer
 
 from .tracking.detector import SurferDetector
 from .tracking.tracking import Tracker
-from .tracking.track_processing import TrackFilteringSmoothingRelabeling
+from .tracking.track_processing import TrackFiltering, TrackInterpolation, TrackSmoothing, TrackRelabeling
 from .tracking.discrete_opt_tracker import DiscreteILPTracker
 from .tracking.preprocessing.greedy_preprocessor import GreedyPreprocessor
 from .tracking.greedy_tracker import GreedyTracker  # noqa: F401 (imported for optional use)
@@ -75,7 +75,10 @@ class WindsurfingVideoProcessor:
                 GreedyPreprocessor(),
                 # GreedyTracker(),
                 DiscreteILPTracker(),
-                TrackFilteringSmoothingRelabeling(),
+                TrackFiltering(),
+                TrackInterpolation(),
+                TrackSmoothing(),
+                TrackRelabeling(),
             ],
         )
 
