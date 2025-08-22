@@ -74,7 +74,7 @@ class DatabaseAccessor:
         return result.t if result else None
 
     async def get_user_by_email(self, email: str) -> User | None:
-        res = await self.db.execute(select(User).where(User.email == email))
+        res = await self.db.execute(select(User).where(User.email == email).limit(1))
         return res.scalar_one_or_none()
 
     async def get_jobs_by_user(

@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-@app.function(secrets=[modal.Secret.from_name('backend-secret')], scaledown_window=60 * 5)
+@app.function(secrets=[modal.Secret.from_name('backend-secret')], scaledown_window=60 * 5, region='eu-west')
 @modal.concurrent(max_inputs=100)
 @modal.asgi_app()
 def fastapi_app():
