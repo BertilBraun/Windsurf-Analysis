@@ -11,13 +11,12 @@ from server.backend.config import Settings
 from server.backend.database.accessor import DatabaseAccessor
 
 engine = create_async_engine(
-    Settings.DATABASE_URL,  # + '?sslmode=require',
+    Settings.DATABASE_URL,  # + '?sslmode=require', # Does not seem to work with Neon
     echo=False,
     # keep a small reusable pool; don’t reconnect every request
     pool_size=5,
     pool_pre_ping=True,
-    # IMPORTANT with PgBouncer (transaction pooling): disable asyncpg’s prepared statement cache
-    connect_args={'statement_cache_size': 0},
+    connect_args={'statement_cache_size': 0},  # disable asyncpg’s prepared statement cache
     future=True,
 )
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
