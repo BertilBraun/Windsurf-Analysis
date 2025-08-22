@@ -68,7 +68,6 @@ class Job(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     video_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('videos.id', ondelete='RESTRICT'), nullable=False)
-    model: Mapped[str] = mapped_column(nullable=False)
     status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), default=JobStatus.pending, nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
@@ -84,7 +83,7 @@ class Job(Base):
     reports: Mapped[list[Report]] = relationship('Report', back_populates='job')
 
     __table_args__ = (
-        UniqueConstraint('user_id', 'video_id', 'model', name='uq_user_video_model'),
+        UniqueConstraint('user_id', 'video_id', name='uq_user_video'),
         Index('idx_jobs_user_created', 'user_id', text('created_at DESC')),
     )
 

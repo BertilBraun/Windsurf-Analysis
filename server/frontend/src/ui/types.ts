@@ -3,7 +3,6 @@ export type JobStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'cancel
 export type JobSummary = {
     id: string
     video_id: string
-    model: string
     status: JobStatus
     created_at: string
     updated_at: string

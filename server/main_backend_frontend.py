@@ -12,7 +12,6 @@ from server.backend.config import Settings
 from server.backend.database.db import init_db
 from server.backend.routes.jobs import router as jobs_router
 from server.backend.routes.users import router as users_router
-from server.backend.routes.videos import router as videos_router
 
 
 server_root_folder = Path(__file__).parent
@@ -52,7 +51,6 @@ def fastapi_app():
         allow_headers=['*'],
     )
 
-    api.include_router(videos_router, prefix='/api/v1')
     api.include_router(jobs_router, prefix='/api/v1')
     api.include_router(users_router, prefix='/api/v1')
 

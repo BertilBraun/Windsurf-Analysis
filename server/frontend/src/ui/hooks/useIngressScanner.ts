@@ -27,6 +27,7 @@ export function useIngressScanner(
     const inProgressRef = React.useRef<Set<string>>(new Set())
     const failedRef = React.useRef<Set<string>>(new Set())
     const [suspended, setSuspended] = React.useState(false)
+    const [lastErrorCode, setLastErrorCode] = React.useState<string | null>(null)
 
     const updateUpload = React.useCallback((id: string, partial: Partial<IngressUploadItem>) => {
         setUploads(prev => prev.map(u => (u.id === id ? { ...u, ...partial } : u)))
@@ -65,6 +66,7 @@ export function useIngressScanner(
             } catch (e: any) {
                 console.error('Upload failed for', relPath, e)
                 setLastError(e?.message || String(e))
+                setLastErrorCode(e?.code || null)
                 updateUpload(identifier, { status: 'error', error: e?.message || String(e) })
                 failedRef.current.add(identifier)
                 setSuspended(true)
@@ -126,5 +128,5 @@ export function useIngressScanner(
         resume()
     }, [resume])
 
-    return { active, lastRunAt, lastError, uploading, uploads, suspended, resume, retryFailed }
+    return { active, lastRunAt, lastError, lastErrorCode, uploading, uploads, suspended, resume, retryFailed }
 }

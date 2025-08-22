@@ -3,6 +3,7 @@ import { useIngressScanner } from '../hooks/useIngressScanner'
 import type { IngressUploadItem, IngressUploadStatus } from '../hooks/useIngressScanner'
 import type { UploadContext } from '../utils/uploader'
 import { clamp } from '../utils/clamp'
+import { Modal } from './Modal'
 
 type Props = {
     dirHandle: FileSystemDirectoryHandle | null
@@ -14,6 +15,11 @@ type Props = {
 
 export const IngressPanel: React.FC<Props> = ({ dirHandle, dirPermission, onPickDirectory, uploadCtx, onUploaded }) => {
     const scanner = useIngressScanner(dirHandle, uploadCtx, onUploaded)
+    const [showQuotaModal, setShowQuotaModal] = React.useState(false)
+
+    React.useEffect(() => {
+        if (scanner.lastErrorCode === 'quota_exceeded') setShowQuotaModal(true)
+    }, [scanner.lastErrorCode])
 
     return (
         <div className="p-3 border border-gray-300 rounded-lg mb-4 bg-gray-50">
@@ -30,6 +36,24 @@ export const IngressPanel: React.FC<Props> = ({ dirHandle, dirPermission, onPick
             {scanner.suspended && <SuspendedBanner onResume={scanner.resume} onRetryFailed={scanner.retryFailed} />}
 
             {scanner.uploads.length > 0 && <UploadsList items={scanner.uploads} />}
+
+            {showQuotaModal && (
+                <Modal onClose={() => setShowQuotaModal(false)} title="You're out of free jobs">
+                    <div className="p-4 text-gray-100">
+                        <p className="mb-3">
+                            Hey, you've gotten a sneak peek of the Windsurf Analyzer. We'd love to get in contact to
+                            hear your opinions — what you liked and what we could improve.
+                        </p>
+                        <p className="mb-3">
+                            To get full and unlimited access to the analyzer, please reach out to us at
+                            <br />
+                            <a className="text-blue-400 underline" href="mailto:bertil.braun.private@gmail.com">
+                                bertil.braun.private@gmail.com
+                            </a>
+                        </p>
+                    </div>
+                </Modal>
+            )}
         </div>
     )
 }

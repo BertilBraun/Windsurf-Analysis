@@ -42,29 +42,34 @@ export async function uploadVideoFile(
     onProgress?: (percent: number) => void,
     relativePathOverride?: string
 ): Promise<'uploaded' | 'skipped'> {
-    // Preflight duplicate check
+    // Step 1: Create job (also acts as duplicate/quota check)
     const { sha256 } = await computeSha256(file)
-    const res = await ctx.authorizedFetch('/videos/checksum', {
+    const localRelativePath = relativePathOverride || file.webkitRelativePath || file.name
+    const createRes = await ctx.authorizedFetch('/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ original_checksum_sha256: sha256 }),
+        body: JSON.stringify({ original_file_path: localRelativePath, original_checksum_sha256: sha256 }),
     })
-    const pre = (await res.json()) as { exists: boolean }
-    if (pre.exists) return 'skipped'
+    if (createRes.status === 409) return 'skipped'
+    if (createRes.status === 403) {
+        let err: any = new Error('Quota exceeded')
+        err.code = 'quota_exceeded'
+        err.status = 403
+        throw err
+    }
+    if (!createRes.ok) throw new Error(await createRes.text())
+    const { job_id } = (await createRes.json()) as { job_id: string; status: string }
 
-    // Preprocess
+    // Step 2: Preprocess
     // TODO: const processed = await preprocessVideo(file)
     const processed = file
 
-    // Upload
+    // Step 3: Upload bytes and models to the job
     const form = new FormData()
     form.append('file', new Blob([await processed.arrayBuffer()], { type: processed.type }), processed.name)
-    const localRelativePath = relativePathOverride || file.webkitRelativePath || file.name
-    form.append('original_file_path', localRelativePath)
-    form.append('original_checksum_sha256', sha256)
     form.append('yolo_model', 'windsurfing/2025_08_09_100epochs.pt')
     form.append('reid_model', 'common/osnet_ain_x1_0_msmt17.pth')
 
-    await doXhrUpload(`${API_BASE}/jobs/upload`, ctx.authHeader, form, onProgress)
+    await doXhrUpload(`${API_BASE}/jobs/${job_id}/upload`, ctx.authHeader, form, onProgress)
     return 'uploaded'
 }
