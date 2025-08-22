@@ -89,15 +89,10 @@ export const MainPage: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-4">
                 <div>
-                    <strong>Welcome</strong>
+                    <strong>Welcome to Windsurf Analysis</strong>
                     {email ? ` ${email}` : ''}
                 </div>
-                <div className="flex gap-2 items-center">
-                    <button onClick={isPolling ? stopPolling : startPolling}>
-                        {isPolling ? 'Stop polling' : 'Start polling'}
-                    </button>
-                    <button onClick={logout}>Logout</button>
-                </div>
+                <Button onClick={logout} text="Logout" />
             </div>
 
             <IngressPanel
@@ -108,15 +103,27 @@ export const MainPage: React.FC = () => {
                 onUploaded={() => startPolling()}
             />
 
-            <h3>Jobs</h3>
-            <JobList jobs={jobs} onOpen={onOpen} onDelete={onDelete} deletingId={deletingId} openingId={openingId} />
+            <h3>Analyzed Videos</h3>
+            <JobList jobs={jobs} onOpen={onOpen} openingId={openingId} dirHandle={dirHandle} />
 
             {selectedJob && (
                 <Modal
                     onClose={() => setSelectedJob(null)}
                     title={selectedJob.original_file_path}
                     additionalHeader={
-                        <Button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" text="Shortcuts" />
+                        <>
+                            <Button
+                                onClick={() => setShowShortcuts(true)}
+                                title="Keyboard shortcuts"
+                                text="Shortcuts"
+                            />
+                            <Button
+                                onClick={() => selectedJob && onDelete(selectedJob.id)}
+                                title="Delete job"
+                                text="Delete"
+                                isPending={deletingId === selectedJob.id}
+                            />
+                        </>
                     }
                 >
                     <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">

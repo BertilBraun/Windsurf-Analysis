@@ -34,7 +34,7 @@ export const Modal: React.FC<ModalProps> = ({
             <div className={`relative z-10 ${contentClasses}`} onClick={e => e.stopPropagation()}>
                 {(title || onClose || additionalHeader) && (
                     <div
-                        className={`flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-black/60 rounded-t-md ${
+                        className={`flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-black/60 rounded-t-md gap-2 ${
                             headerClassName || ''
                         }`}
                     >

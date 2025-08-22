@@ -1,4 +1,5 @@
 import React from 'react'
+import { Button } from '../components/Button'
 
 export const ControlsBar: React.FC<{
     onPlayPause: () => void
@@ -10,12 +11,12 @@ export const ControlsBar: React.FC<{
 }> = ({ onPlayPause, onSpeedDown, onSpeedUp, isPlaying, speed, zoom }) => {
     return (
         <div className="flex items-center gap-2">
-            <button onClick={onPlayPause}>{isPlaying ? 'Pause' : 'Play'}</button>
+            <Button onClick={onPlayPause} text={isPlaying ? 'Pause' : 'Play'} />
             <div className="flex-1" />
             <div className="text-sm">Zoom: {zoom.toFixed(2)}x</div>
-            <button onClick={onSpeedDown}>- Speed</button>
+            <Button onClick={onSpeedDown} text="- Speed" />
             <div className="text-sm">Speed: {speed.toFixed(2)}x</div>
-            <button onClick={onSpeedUp}>+ Speed</button>
+            <Button onClick={onSpeedUp} text="+ Speed" />
         </div>
     )
 }

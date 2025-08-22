@@ -98,6 +98,9 @@ export class PlayerState {
         const detectionTimes = this.detectionTimesByTrack.get(trackId) || []
         const n = detectionTimes.length
         if (!n) return null
+        const firstTime = detectionTimes[0].timeSec - DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
+        const lastTime = detectionTimes[n - 1].timeSec + DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
+        if (timeSec < firstTime || timeSec > lastTime) return null
         const idx = this.binSearch(detectionTimes, timeSec)
         const i2 = Math.min(n - 1, idx)
         const i1 = Math.max(0, i2 - 1)

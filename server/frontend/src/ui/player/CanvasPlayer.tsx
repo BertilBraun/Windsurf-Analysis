@@ -28,6 +28,7 @@ type OverviewView = {
 
 export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
     const [error, setError] = React.useState<string | null>(null)
+    const [fileMissing, setFileMissing] = React.useState<boolean>(false)
     const [videoUrl, setVideoUrl] = React.useState<string | null>(null)
     const videoRef = React.useRef<HTMLVideoElement | null>(null)
     const containerRef = React.useRef<HTMLDivElement | null>(null)
@@ -48,7 +49,14 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
             const file = await getFileByRelativePath(dirHandle, job.original_file_path)
             return file
         } catch (e: any) {
-            setError(e?.message || 'Failed to access file from folder')
+            const msg = String(e?.message || '')
+            const isMissing = e?.name === 'NotFoundError' || /not\s*found|no such file|could not be found/i.test(msg)
+            if (isMissing) {
+                setFileMissing(true)
+                setError('VIDEO FILE NOT FOUND')
+            } else {
+                setError(msg || 'Failed to access file from folder')
+            }
             console.log('Error resolving file', e)
             return null
         }
@@ -58,6 +66,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
         let revoked: string | null = null
         setVideoUrl(null)
         setError(null)
+        setFileMissing(false)
         resolveFileFromRelativePath().then(file => {
             if (!file) return
             const url = URL.createObjectURL(file)
@@ -264,6 +273,11 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
         <div className="flex flex-col h-full">
             <div className="relative flex-1 bg-black overflow-hidden">
                 {error && <div className="absolute left-2 top-2 text-red-500 text-sm">{error}</div>}
+                {fileMissing && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="text-red-500 text-3xl font-extrabold tracking-wide">VIDEO FILE NOT FOUND</div>
+                    </div>
+                )}
                 <div ref={containerRef} className="absolute inset-0">
                     <canvas
                         ref={canvasRef}
