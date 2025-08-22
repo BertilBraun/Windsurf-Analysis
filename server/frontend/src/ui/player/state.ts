@@ -108,10 +108,10 @@ export class PlayerState {
         const P1 = detectionTimes[i1]
         const P2 = detectionTimes[i2]
         const P3 = detectionTimes[i3]
-        const x0 = P0.timeSec,
-            x1 = P1.timeSec,
-            x2 = P2.timeSec,
-            x3 = P3.timeSec
+        const x0 = P0.timeSec
+        const x1 = P1.timeSec
+        const x2 = P2.timeSec
+        const x3 = P3.timeSec
         const bbox: [number, number, number, number] = [
             catmullRom1D(
                 P0.detection.bbox[0],
@@ -193,6 +193,8 @@ export class PlayerState {
 }
 
 // Non-uniform Catmull-Rom spline interpolation for a scalar value over time (centripetal, alpha=0.5)
+const ALPHA = 0.5
+
 const catmullRom1D = (
     p0: number,
     p1: number,
@@ -204,10 +206,17 @@ const catmullRom1D = (
     x3: number,
     x: number
 ): number => {
-    const seg = x2 - x1
-    if (Math.abs(seg) < 1e-8) return p1
-    const alpha = 0.5
-    const tj = (ti: number, xi: number, xj: number) => ti + Math.pow(Math.abs(xj - xi), alpha)
+    if (Math.abs(x2 - x1) < 1e-8) return p1
+
+    function tj(ti: number, xi: number, xj: number): number {
+        return ti + Math.pow(Math.abs(xj - xi), ALPHA)
+    }
+    function lerpParam(a: number, b: number, ta: number, tb: number, t: number): number {
+        const denom = tb - ta
+        if (Math.abs(denom) < 1e-8) return a
+        return ((tb - t) / denom) * a + ((t - ta) / denom) * b
+    }
+
     let t0 = 0
     let t1 = tj(t0, x0, x1)
     let t2 = tj(t1, x1, x2)
@@ -215,17 +224,15 @@ const catmullRom1D = (
     if (t1 <= t0) t1 = t0 + 1e-4
     if (t2 <= t1) t2 = t1 + 1e-4
     if (t3 <= t2) t3 = t2 + 1e-4
+
     const s = t1 + (t2 - t1) * ((x - x1) / (x2 - x1))
-    const lerpParam = (a: number, b: number, ta: number, tb: number, t: number) => {
-        const denom = tb - ta
-        if (Math.abs(denom) < 1e-8) return a
-        return ((tb - t) / denom) * a + ((t - ta) / denom) * b
-    }
+
     const A1 = lerpParam(p0, p1, t0, t1, s)
     const A2 = lerpParam(p1, p2, t1, t2, s)
     const A3 = lerpParam(p2, p3, t2, t3, s)
+
     const B1 = lerpParam(A1, A2, t0, t2, s)
     const B2 = lerpParam(A2, A3, t1, t3, s)
-    const C = lerpParam(B1, B2, t1, t2, s)
-    return C
+
+    return lerpParam(B1, B2, t1, t2, s)
 }
