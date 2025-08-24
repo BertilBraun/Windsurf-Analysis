@@ -97,6 +97,20 @@ export async function loadSetting<T = any>(key: string): Promise<T | null> {
     }
 }
 
+export async function deleteSetting(key: string): Promise<void> {
+    try {
+        const db = await openDb()
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(STORE_SETTINGS, 'readwrite')
+            const store = tx.objectStore(STORE_SETTINGS)
+            store.delete(key)
+            tx.oncomplete = () => resolve()
+            tx.onerror = () => reject(tx.error)
+        })
+        db.close()
+    } catch {}
+}
+
 export async function addProcessedHash(hash: string): Promise<void> {
     try {
         const db = await openDb()

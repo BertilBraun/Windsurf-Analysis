@@ -7,6 +7,7 @@ from passlib.context import CryptContext
 
 from server.backend.config import Settings
 from server.backend.models import User
+from server.backend.auth import authenticate_user
 from server.backend.database.db import get_db
 from server.backend.database.accessor import DatabaseAccessor
 
@@ -40,3 +41,13 @@ async def create_user(payload: CreateUserRequest, db: DatabaseAccessor = Depends
     await db.add(user)
 
     return CreateUserResponse(status='success', id=str(user.id), email=user.email)
+
+
+class VerifyResponse(BaseModel):
+    status: Literal['ok']
+    email: str
+
+
+@router.get('/verify', response_model=VerifyResponse)
+async def verify_credentials(user: User = Depends(authenticate_user)):
+    return VerifyResponse(status='ok', email=user.email)

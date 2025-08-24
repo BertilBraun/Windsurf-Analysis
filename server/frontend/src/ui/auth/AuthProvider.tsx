@@ -1,17 +1,18 @@
 import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react'
+import { useSettings } from '../hooks/useSettings'
 
 type AuthContextValue = {
     isAuthenticated: boolean
     authHeader: string | null
     email: string | null
-    login: (email: string, password: string) => void
+    login: (email: string, password: string) => Promise<void>
     logout: () => void
     authorizedFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>
+    settings: ReturnType<typeof useSettings>['settings']
 }
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
-const STORAGE_KEY = 'windsurf_auth'
 export const API_BASE = 'https://bertil-braun-private--windsurf-analysis-fastapi-app.modal.run/api/v1'
 
 function makeAuthHeader(email: string, password: string): string {
@@ -19,40 +20,28 @@ function makeAuthHeader(email: string, password: string): string {
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [authHeader, setAuthHeader] = useState<string | null>(null)
-    const [email, setEmail] = useState<string | null>(null)
+    const { settings, setAuth, clearAuth } = useSettings()
 
-    useEffect(() => {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY)
-            if (raw) {
-                const { email: e, authHeader: h } = JSON.parse(raw) as { email: string; authHeader: string }
-                setEmail(e)
-                setAuthHeader(h)
-            }
-        } catch {}
-    }, [])
-
-    const login = useCallback((e: string, p: string) => {
+    const login = useCallback(async (e: string, p: string) => {
         const h = makeAuthHeader(e, p)
-        setAuthHeader(h)
-        setEmail(e)
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ email: e, authHeader: h }))
-        } catch {}
+        // Try verifying credentials before committing them
+        const res = await fetch(`${API_BASE}/admin/verify`, {
+            method: 'GET',
+            headers: { Authorization: h },
+        })
+        if (!res.ok) {
+            throw new Error('Invalid credentials')
+        }
+        await setAuth(e, h)
     }, [])
 
     const logout = useCallback(() => {
-        setAuthHeader(null)
-        setEmail(null)
-        try {
-            localStorage.removeItem(STORAGE_KEY)
-        } catch {}
+        clearAuth()
     }, [])
 
     const authorizedFetch = useCallback(
         async (input: RequestInfo, init?: RequestInit) => {
-            if (!authHeader) throw new Error('Not authenticated')
+            if (!settings.authHeader) throw new Error('Not authenticated')
             // Only allow relative API paths; prefix with apiBase
             const path = typeof input === 'string' ? input : (input as Request).url
             const url = `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`
@@ -60,25 +49,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 ...init,
                 headers: {
                     ...(init?.headers || {}),
-                    Authorization: authHeader,
+                    Authorization: settings.authHeader,
                 },
             })
             if (!res.ok) throw new Error(await res.text())
             return res
         },
-        [authHeader]
+        [settings.authHeader]
     )
 
     const value = useMemo<AuthContextValue>(
         () => ({
-            isAuthenticated: !!authHeader,
-            authHeader,
-            email,
+            isAuthenticated: !!settings.authHeader,
+            authHeader: settings.authHeader,
+            email: settings.authEmail,
             login,
             logout,
             authorizedFetch,
+            settings,
         }),
-        [authHeader, email, login, logout, authorizedFetch]
+        [settings.authHeader, settings.authEmail, login, logout, authorizedFetch]
     )
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
