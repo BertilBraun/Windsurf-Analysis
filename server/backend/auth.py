@@ -6,9 +6,8 @@ from fastapi import Depends, HTTPException, Request, status
 from passlib.context import CryptContext
 
 from server.backend.database.db import get_db
-from server.backend.database.accessor import DatabaseAccessor
+from server.backend.database.accessor import DatabaseAccessor, timestamp_now
 from server.backend.models import User
-from server.inference.src.util.timing import timeit
 
 
 def parse_basic_auth(request: Request) -> tuple[str, str]:
@@ -27,17 +26,16 @@ pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
 
 async def authenticate_user(request: Request, db: DatabaseAccessor = Depends(get_db)) -> User:
-    with timeit('authenticate_user'):
-        email, password = parse_basic_auth(request)
+    email, password = parse_basic_auth(request)
 
-        with timeit('auth.get_user_by_email'):
-            user = await db.get_user_by_email(email)
-        if not user:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid credentials')
+    user = await db.get_user_by_email(email)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid credentials')
 
-        if not pwd_context.verify(password, user.password_hash):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid credentials')
+    if not pwd_context.verify(password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid credentials')
 
-        # TODO: Update user last_active_at?
+    user.last_active_at = timestamp_now()
+    await db.flush()
 
-        return user
+    return user

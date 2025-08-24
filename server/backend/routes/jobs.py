@@ -15,7 +15,6 @@ from server.backend.database.db import get_db
 from server.backend.models import Job, JobStatus, Report, ReportType, User, Video
 
 # from server.backend.s3 import object_url, s3_client
-from server.inference.src.util.timing import timeit
 
 
 router = APIRouter(prefix='/jobs', tags=['jobs'])
@@ -83,7 +82,7 @@ async def create_job(
 
     job = Job(user_id=user.id, video_id=video.id, status=JobStatus.pending)
     await db.add(job)
-    await db.commit()
+    await db.flush()
 
     return JobCreateResponse(job_id=str(job.id), status=job.status.value)
 
@@ -124,6 +123,7 @@ async def jobs_upload_for_created_job(
     # Transition job to running and spawn inference
     job.status = JobStatus.running
     job.started_at = timestamp_now()
+    await db.flush()
 
     complete_url = (
         f'{Settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job.id}/complete?secret={Settings.BACKEND_WEBHOOK_SECRET}'
@@ -138,8 +138,6 @@ async def jobs_upload_for_created_job(
         complete_webhook=complete_url,
     )
 
-    await db.flush()
-
     return {'ok': True}
 
 
@@ -150,8 +148,7 @@ async def list_jobs(
     db: DatabaseAccessor = Depends(get_db),
     user: User = Depends(authenticate_user),
 ):
-    with timeit('list_jobs'):
-        rows = await db.get_jobs_by_user(user, status_filter, updated_after)
+    rows = await db.get_jobs_by_user(user, status_filter, updated_after)
     items = [
         JobSummaryItem(
             id=str(job.id),
@@ -176,6 +173,7 @@ async def get_job(job_id: str, db: DatabaseAccessor = Depends(get_db), user: Use
     job, video = existing
 
     await db.update_video_last_accessed_at(job.video_id)
+    await db.flush()
 
     return JobDetail(
         id=str(job.id),
@@ -197,7 +195,7 @@ async def delete_job(job_id: str, db: DatabaseAccessor = Depends(get_db), user: 
         raise HTTPException(status_code=404, detail='Not found')
 
     job.deleted_at = timestamp_now()
-    await db.flush()  # Flush to update the job
+    await db.flush()
 
     return {'ok': True}
 
@@ -214,6 +212,7 @@ async def report_job(
         raise HTTPException(status_code=404, detail='Not found')
 
     await db.add(Report(job_id=job.id, type=ReportType(payload.type), message=payload.message))
+    await db.flush()
 
     return {'ok': True}
 
@@ -242,6 +241,6 @@ async def jobs_complete(
     job.dominant_orientation = payload.dominant_orientation
     job.status = JobStatus(payload.status)
     job.finished_at = timestamp_now()
-    await db.flush()  # Flush to update the job
+    await db.flush()
 
     return {'ok': True}
