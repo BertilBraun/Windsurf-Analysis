@@ -39,16 +39,14 @@ export function doXhrUpload(
 export async function uploadVideoFile(
     file: File,
     ctx: UploadContext,
-    onProgress?: (percent: number) => void,
-    relativePathOverride?: string
+    onProgress?: (percent: number) => void
 ): Promise<'uploaded' | 'skipped'> {
     // Step 1: Create job (also acts as duplicate/quota check)
     const { sha256 } = await computeSha256(file)
-    const localRelativePath = relativePathOverride || file.webkitRelativePath || file.name
     const createRes = await ctx.authorizedFetch('/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ original_file_path: localRelativePath, original_checksum_sha256: sha256 }),
+        body: JSON.stringify({ original_checksum_sha256: sha256 }),
     })
     if (createRes.status === 409) return 'skipped'
     if (createRes.status === 403) {

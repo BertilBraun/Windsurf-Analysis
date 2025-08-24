@@ -1,6 +1,7 @@
 import React from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { JobDetail, JobStatus, JobSummary, ReportType, Track, TrackDetection } from '../types'
+import { getPathForSha } from '../utils/idb'
 
 type UseJobsReturn = {
     jobs: JobSummary[]
@@ -25,8 +26,15 @@ export function useJobs(): UseJobsReturn {
     const tick = React.useCallback(async () => {
         const res = await authorizedFetch('/jobs')
         const data = (await res.json()) as { jobs: JobSummary[] }
-        setJobs(data.jobs)
-        const anyOpen = data.jobs.some(j => j.status === 'pending' || j.status === 'running')
+        // Enrich with local_relative_path from IDB mapping
+        const enriched: JobSummary[] = await Promise.all(
+            data.jobs.map(async job => ({
+                ...job,
+                local_relative_path: await getPathForSha(job.original_checksum_sha256),
+            }))
+        )
+        setJobs(enriched)
+        const anyOpen = enriched.some(job => job.status === 'pending' || job.status === 'running')
         if (!anyOpen) {
             if (pollingRef.current) window.clearInterval(pollingRef.current)
             pollingRef.current = null
@@ -50,10 +58,10 @@ export function useJobs(): UseJobsReturn {
 
     const refreshJobDetail = React.useCallback(
         async (id: string) => {
-            // TODO cache?
             const res = await authorizedFetch(`/jobs/${id}`)
             const data = (await res.json()) as JobDetail
             if (data.tracks) {
+                // TODO cache? If the job is done, we could cache the job detail
                 for (const track of data.tracks) {
                     _assertIsPercentage(track.start_percent)
                     _assertIsPercentage(track.end_percent)
@@ -65,7 +73,8 @@ export function useJobs(): UseJobsReturn {
                     }
                 }
             }
-            return data
+            const local_relative_path = await getPathForSha(data.original_checksum_sha256)
+            return { ...data, local_relative_path }
         },
         [authorizedFetch]
     )
@@ -73,7 +82,7 @@ export function useJobs(): UseJobsReturn {
     const deleteJob = React.useCallback(
         async (id: string) => {
             await authorizedFetch(`/jobs/${id}`, { method: 'DELETE' })
-            setJobs(jobs.filter(j => j.id !== id))
+            setJobs(jobs.filter(job => job.id !== id))
         },
         [authorizedFetch, jobs, setJobs]
     )

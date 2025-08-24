@@ -1,5 +1,5 @@
 import React from 'react'
-import { addProcessedHash, hasProcessedHash } from '../utils/idb'
+import { addProcessedHash, hasProcessedHash, saveShaPathMapping, getShaForPath } from '../utils/idb'
 import { UploadContext, uploadVideoFile, computeSha256 } from '../utils/uploader'
 import { listFilesRecursively } from '../utils/fsAccess'
 
@@ -39,7 +39,15 @@ export function useIngressScanner(
         async (file: File, relPath: string) => {
             if (!uploadCtx) throw new Error('Upload context not found')
 
-            const identifier = relPath // sha256 of the original file
+            // Compute or reuse sha for this path
+            let sha = await getShaForPath(relPath)
+            if (!sha) {
+                const { sha256 } = await computeSha256(file)
+                sha = sha256
+            }
+            await saveShaPathMapping(sha!, relPath)
+
+            const identifier = sha!
             const already = await hasProcessedHash(identifier)
             if (already) return
             if (failedRef.current.has(identifier)) return
@@ -54,12 +62,7 @@ export function useIngressScanner(
             try {
                 inProgressRef.current.add(identifier)
                 updateUpload(identifier, { status: 'uploading' })
-                await uploadVideoFile(
-                    file,
-                    uploadCtx,
-                    percent => updateUpload(identifier, { progress: percent }),
-                    relPath
-                )
+                await uploadVideoFile(file, uploadCtx, percent => updateUpload(identifier, { progress: percent }))
                 await addProcessedHash(identifier)
                 updateUpload(identifier, { progress: 100, status: 'done' })
                 onUploaded()

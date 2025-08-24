@@ -33,7 +33,6 @@ class JobSummaryItem(BaseModel):
     status: job_status
     created_at: datetime
     updated_at: datetime
-    original_file_path: str
     original_checksum_sha256: str
     dominant_orientation: Optional[int] = None
 
@@ -52,7 +51,6 @@ class ReportRequest(BaseModel):
 
 
 class JobCreateRequest(BaseModel):
-    original_file_path: str
     original_checksum_sha256: str
 
 
@@ -71,11 +69,9 @@ async def create_job(
     # Create placeholder video record
     video = Video(
         original_checksum_sha256=payload.original_checksum_sha256,
-        original_file_path=payload.original_file_path,
         ac_checksum_sha256='PENDING',
         size_bytes=-1,
         mime_type='video/mp4',
-        original_name=None,
         ac_storage_url='N/A',
     )
     await db.add(video)
@@ -117,7 +113,6 @@ async def jobs_upload_for_created_job(
     video.ac_checksum_sha256 = ac_checksum
     video.size_bytes = len(content)
     video.mime_type = file.content_type or 'video/mp4'
-    video.original_name = file.filename
     video.ac_storage_url = 'N/A'  # TODO? object_url(ac_key)
 
     # Transition job to running and spawn inference
@@ -156,7 +151,6 @@ async def list_jobs(
             status=job.status.value,
             created_at=job.created_at,
             updated_at=job.updated_at,
-            original_file_path=video.original_file_path,
             original_checksum_sha256=video.original_checksum_sha256,
         )
         for job, video in rows
@@ -182,7 +176,6 @@ async def get_job(job_id: str, db: DatabaseAccessor = Depends(get_db), user: Use
         created_at=job.created_at,
         updated_at=job.updated_at,
         tracks=job.tracks,
-        original_file_path=video.original_file_path,
         original_checksum_sha256=video.original_checksum_sha256,
         dominant_orientation=job.dominant_orientation,
     )

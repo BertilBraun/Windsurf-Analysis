@@ -19,7 +19,7 @@ export const PlayerModal: React.FC<{
         <>
             <Modal
                 onClose={onClose}
-                title={job.original_file_path}
+                title={job.local_relative_path?.replace(/\.mp4$/i, '') ?? 'n/a'}
                 additionalHeader={
                     <>
                         <Button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" text="Shortcuts" />

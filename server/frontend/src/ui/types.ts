@@ -6,9 +6,9 @@ export type JobSummary = {
     status: JobStatus
     created_at: string
     updated_at: string
-    original_file_path: string
     original_checksum_sha256: string
     dominant_orientation?: number | null
+    local_relative_path?: string | null
 }
 
 export type JobDetail = JobSummary & {

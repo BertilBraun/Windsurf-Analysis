@@ -42,12 +42,13 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
     const resolveFileFromRelativePath = React.useCallback(async () => {
         if (!dirHandle) {
             setError('No ingress folder selected')
-            console.log('No dirHandle; cannot resolve', job.original_file_path)
+            console.log('No dirHandle; cannot resolve', job.local_relative_path)
             return null
         }
         try {
-            const file = await getFileByRelativePath(dirHandle, job.original_file_path)
-            return file
+            const path = job.local_relative_path
+            if (!path) throw new Error('Missing local mapping for file')
+            return await getFileByRelativePath(dirHandle, path)
         } catch (e: any) {
             const msg = String(e?.message || '')
             const isMissing = e?.name === 'NotFoundError' || /not\s*found|no such file|could not be found/i.test(msg)
@@ -60,7 +61,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
             console.log('Error resolving file', e)
             return null
         }
-    }, [dirHandle, job.original_file_path])
+    }, [dirHandle, job.local_relative_path])
 
     React.useEffect(() => {
         let revoked: string | null = null

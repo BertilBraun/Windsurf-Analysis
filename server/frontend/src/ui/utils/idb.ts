@@ -2,10 +2,12 @@
 // and a set of processed file hashes.
 
 const DB_NAME = 'windsurf-analysis'
-const DB_VERSION = 2
+const DB_VERSION = 3
 const STORE_SETTINGS = 'settings'
 const STORE_PROCESSED = 'processed'
 const STORE_INPROGRESS = 'inprogress'
+const STORE_SHA_TO_PATH = 'sha_to_path'
+const STORE_PATH_TO_SHA = 'path_to_sha'
 
 type SettingsRecord = { key: string; value: any }
 type ProcessedRecord = { hash: string; createdAt: number }
@@ -23,6 +25,12 @@ function openDb(): Promise<IDBDatabase> {
             }
             if (!db.objectStoreNames.contains(STORE_INPROGRESS)) {
                 db.createObjectStore(STORE_INPROGRESS, { keyPath: 'hash' })
+            }
+            if (!db.objectStoreNames.contains(STORE_SHA_TO_PATH)) {
+                db.createObjectStore(STORE_SHA_TO_PATH, { keyPath: 'sha' })
+            }
+            if (!db.objectStoreNames.contains(STORE_PATH_TO_SHA)) {
+                db.createObjectStore(STORE_PATH_TO_SHA, { keyPath: 'path' })
             }
         }
         req.onsuccess = () => resolve(req.result)
@@ -212,4 +220,61 @@ export async function releaseClaimUpload(hash: string, owner: string): Promise<v
         })
         db.close()
     } catch {}
+}
+
+// SHA <-> Path mapping helpers
+type ShaToPathRecord = { sha: string; path: string; updatedAt: number }
+type PathToShaRecord = { path: string; sha: string; updatedAt: number }
+
+export async function saveShaPathMapping(sha: string, path: string): Promise<void> {
+    try {
+        const db = await openDb()
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction([STORE_SHA_TO_PATH, STORE_PATH_TO_SHA], 'readwrite')
+            const shaStore = tx.objectStore(STORE_SHA_TO_PATH)
+            const pathStore = tx.objectStore(STORE_PATH_TO_SHA)
+            const now = Date.now()
+            const srec: ShaToPathRecord = { sha, path, updatedAt: now }
+            const prec: PathToShaRecord = { path, sha, updatedAt: now }
+            shaStore.put(srec)
+            pathStore.put(prec)
+            tx.oncomplete = () => resolve()
+            tx.onerror = () => reject(tx.error)
+        })
+        db.close()
+    } catch {}
+}
+
+export async function getPathForSha(sha: string): Promise<string | null> {
+    try {
+        const db = await openDb()
+        const value = await new Promise<string | null>((resolve, reject) => {
+            const tx = db.transaction(STORE_SHA_TO_PATH, 'readonly')
+            const store = tx.objectStore(STORE_SHA_TO_PATH)
+            const req = store.get(sha)
+            req.onsuccess = () => resolve(((req.result as ShaToPathRecord | undefined)?.path as string) ?? null)
+            req.onerror = () => reject(req.error)
+        })
+        db.close()
+        return value
+    } catch {
+        return null
+    }
+}
+
+export async function getShaForPath(path: string): Promise<string | null> {
+    try {
+        const db = await openDb()
+        const value = await new Promise<string | null>((resolve, reject) => {
+            const tx = db.transaction(STORE_PATH_TO_SHA, 'readonly')
+            const store = tx.objectStore(STORE_PATH_TO_SHA)
+            const req = store.get(path)
+            req.onsuccess = () => resolve(((req.result as PathToShaRecord | undefined)?.sha as string) ?? null)
+            req.onerror = () => reject(req.error)
+        })
+        db.close()
+        return value
+    } catch {
+        return null
+    }
 }

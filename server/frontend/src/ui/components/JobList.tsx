@@ -52,7 +52,12 @@ const JobThumbnail: React.FC<{
 
         ;(async () => {
             try {
-                const file = await getFileByRelativePath(dirHandle, job.original_file_path)
+                const path = job.local_relative_path
+                if (!path) {
+                    setNotFound(true)
+                    return
+                }
+                const file = await getFileByRelativePath(dirHandle, path)
                 if (!file) {
                     if (!cancelled) setNotFound(true)
                     return
@@ -98,7 +103,7 @@ const JobThumbnail: React.FC<{
             cancelled = true
             if (revoked) URL.revokeObjectURL(revoked)
         }
-    }, [job.id, job.status, job.original_file_path, dirHandle])
+    }, [job.id, job.status, job.local_relative_path, dirHandle])
 
     const boxClasses = 'relative w-48 h-28 bg-gray-200 rounded-md overflow-hidden flex items-center justify-center'
 
@@ -124,7 +129,7 @@ const JobThumbnail: React.FC<{
                 <>
                     <img
                         src={thumbUrl}
-                        alt={job.original_file_path}
+                        alt={job.local_relative_path ?? job.original_checksum_sha256}
                         className="absolute inset-0 w-full h-full object-cover"
                     />
                     <PlayOverlay />
@@ -165,8 +170,9 @@ export const JobList: React.FC<{
                 // Compare ISO-like timestamps; fallback to string compare
                 cmp = a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
             } else {
-                const an = a.original_file_path.toLowerCase()
-                const bn = b.original_file_path.toLowerCase()
+                // Sort by local path when available
+                const an = a.local_relative_path?.toLowerCase() ?? 'n/a'
+                const bn = b.local_relative_path?.toLowerCase() ?? 'n/a'
                 cmp = an < bn ? -1 : an > bn ? 1 : 0
             }
             return sortDir === 'asc' ? cmp : -cmp
@@ -211,7 +217,7 @@ export const JobList: React.FC<{
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {sortedJobs.map(j => {
-                    const caption = j.original_file_path.replace(/\.mp4$/i, '')
+                    const caption = j.local_relative_path?.replace(/\.mp4$/i, '') ?? 'n/a'
                     return (
                         <div key={j.id} className="flex flex-col items-start">
                             <div

@@ -5,8 +5,6 @@ import { JobDetail, ReportType } from '../types'
 import { JobList } from '../components/JobList'
 import { IngressPanel } from '../components/IngressPanel'
 import { loadDirectoryHandle, saveDirectoryHandle } from '../utils/idb'
-import { CanvasPlayer } from '../player/CanvasPlayer'
-import { Modal } from '../components/Modal'
 import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal'
 import { Button } from '../components/Button'
 import { SettingsModal } from '../components/SettingsModal'
@@ -14,7 +12,7 @@ import { PlayerModal } from '../components/PlayerModal'
 
 export const MainPage: React.FC = () => {
     const { logout, email, authorizedFetch, authHeader } = useAuth()
-    const { jobs, isPolling, startPolling, stopPolling, refreshJobDetail, deleteJob, reportJob } = useJobs()
+    const { jobs, startPolling, stopPolling, refreshJobDetail, deleteJob, reportJob } = useJobs()
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
     const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
     const [showSettings, setShowSettings] = React.useState<boolean>(false)
