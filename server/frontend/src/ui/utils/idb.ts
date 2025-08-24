@@ -64,6 +64,39 @@ export async function loadDirectoryHandle(): Promise<FileSystemDirectoryHandle |
     }
 }
 
+// Generic settings helpers
+export async function saveSetting(key: string, value: any): Promise<void> {
+    try {
+        const db = await openDb()
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(STORE_SETTINGS, 'readwrite')
+            const store = tx.objectStore(STORE_SETTINGS)
+            const rec: SettingsRecord = { key, value }
+            store.put(rec)
+            tx.oncomplete = () => resolve()
+            tx.onerror = () => reject(tx.error)
+        })
+        db.close()
+    } catch {}
+}
+
+export async function loadSetting<T = any>(key: string): Promise<T | null> {
+    try {
+        const db = await openDb()
+        const value = await new Promise<T | null>((resolve, reject) => {
+            const tx = db.transaction(STORE_SETTINGS, 'readonly')
+            const store = tx.objectStore(STORE_SETTINGS)
+            const req = store.get(key)
+            req.onsuccess = () => resolve(((req.result as SettingsRecord | undefined)?.value as T) ?? null)
+            req.onerror = () => reject(req.error)
+        })
+        db.close()
+        return value
+    } catch {
+        return null
+    }
+}
+
 export async function addProcessedHash(hash: string): Promise<void> {
     try {
         const db = await openDb()

@@ -9,12 +9,15 @@ import { CanvasPlayer } from '../player/CanvasPlayer'
 import { Modal } from '../components/Modal'
 import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal'
 import { Button } from '../components/Button'
+import { SettingsModal } from '../components/SettingsModal'
+import { PlayerModal } from '../components/PlayerModal'
 
 export const MainPage: React.FC = () => {
     const { logout, email, authorizedFetch, authHeader } = useAuth()
     const { jobs, isPolling, startPolling, stopPolling, refreshJobDetail, deleteJob, reportJob } = useJobs()
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
     const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
+    const [showSettings, setShowSettings] = React.useState<boolean>(false)
 
     React.useEffect(() => {
         // Initial fetch but don't keep polling until needed
@@ -92,7 +95,7 @@ export const MainPage: React.FC = () => {
                     <strong>Welcome to Windsurf Analysis</strong>
                     {email ? ` ${email}` : ''}
                 </div>
-                <Button onClick={logout} text="Logout" />
+                <Button onClick={() => setShowSettings(true)} text="Settings" />
             </div>
 
             <IngressPanel
@@ -107,39 +110,17 @@ export const MainPage: React.FC = () => {
             <JobList jobs={jobs} onOpen={onOpen} openingId={openingId} dirHandle={dirHandle} />
 
             {selectedJob && (
-                <Modal
+                <PlayerModal
+                    job={selectedJob}
+                    dirHandle={dirHandle}
                     onClose={() => setSelectedJob(null)}
-                    title={selectedJob.original_file_path}
-                    additionalHeader={
-                        <>
-                            <Button
-                                onClick={() => setShowShortcuts(true)}
-                                title="Keyboard shortcuts"
-                                text="Shortcuts"
-                            />
-                            <Button
-                                onClick={() => selectedJob && onDelete(selectedJob.id)}
-                                title="Delete job"
-                                text="Delete"
-                                isPending={deletingId === selectedJob.id}
-                            />
-                        </>
-                    }
-                >
-                    <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
-                        <div className="w-full h-full overflow-hidden">
-                            <CanvasPlayer
-                                job={selectedJob}
-                                dirHandle={dirHandle}
-                                onClose={() => setSelectedJob(null)}
-                                onDelete={onDelete}
-                                onReport={onReport}
-                            />
-                        </div>
-                    </div>
-                </Modal>
+                    onDelete={onDelete}
+                    onReport={onReport}
+                    deletingId={deletingId}
+                />
             )}
             {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
+            {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onLogout={logout} />}
         </div>
     )
 }
