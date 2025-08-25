@@ -1,119 +1,203 @@
-import { FFmpeg } from '@ffmpeg/ffmpeg'
-import { toBlobURL } from '@ffmpeg/util'
+import MP4Box, { MP4File, MP4ArrayBuffer } from 'mp4box'
+import { UploadQuality } from '../types'
 
-export async function preprocessVideo(file: File): Promise<{ arrayBuffer: ArrayBuffer; type: string; name: string }> {
-    // Lazy-init a singleton ffmpeg instance (module-level cache shared via window)
-    let ffmpegInstance: FFmpeg | null = (window as any).__ffmpegSingleton || null
-    let ffmpegLoading: Promise<FFmpeg> | null = (window as any).__ffmpegLoading || null
-    const getFfmpeg = async (): Promise<FFmpeg> => {
-        if (ffmpegInstance) return ffmpegInstance
-        if (!ffmpegLoading) {
-            const instance = new FFmpeg()
-            // Load core (multi-thread build) from CDN to avoid bundler asset config
-            const baseURL = 'https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm'
-            ffmpegLoading = instance
-                .load({
-                    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-                    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-                    workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript'),
-                })
-                .then(() => instance)
-                ; (window as any).__ffmpegLoading = ffmpegLoading
-        }
-        ffmpegInstance = await ffmpegLoading
-        ;(window as any).__ffmpegSingleton = ffmpegInstance
-        return ffmpegInstance
+interface TargetSpec {
+    longSide: number
+    fps: number
+    bitrate: number
+}
+
+/**
+ * Decide target resolution & fps based on quality + source size.
+ */
+function chooseSpec(width: number, height: number, quality: UploadQuality): TargetSpec {
+    const longer = Math.max(width, height)
+
+    const bitrate = {
+        high: 4_000_000,
+        medium: 2_000_000,
+        minimum: 800_000,
     }
 
-    // Helper to get intrinsic width/height via HTMLVideoElement
-    const getElementDimensions = (blobUrl: string): Promise<{ width: number; height: number }> =>
-        new Promise((resolve, reject) => {
-            const vid = document.createElement('video')
-            const cleanup = () => {
-                URL.revokeObjectURL(blobUrl)
-                vid.removeAttribute('src')
-                try {
-                    vid.load()
-                } catch {}
-            }
-            vid.preload = 'metadata'
-            vid.onloadedmetadata = () => {
-                const width = vid.videoWidth || 0
-                const height = vid.videoHeight || 0
-                cleanup()
-                resolve({ width, height })
-            }
-            vid.onerror = () => {
-                cleanup()
-                reject(new Error('Failed to read video metadata'))
-            }
-            vid.src = blobUrl
-        })
+    if (quality === 'original') {
+        return { longSide: longer, fps: 0, bitrate: 0 } // fps=0 means "keep original"
+    }
+    if (quality === 'high') {
+        if (longer >= 1920) return { longSide: 1920, fps: 30, bitrate: bitrate.high }
+        if (longer >= 1280) return { longSide: 1280, fps: 30, bitrate: bitrate.high }
+        return { longSide: 640, fps: 30, bitrate: bitrate.high }
+    }
+    if (quality === 'medium') {
+        return { longSide: longer >= 1280 ? 1280 : 640, fps: 25, bitrate: bitrate.medium }
+    }
+    if (quality === 'minimum') {
+        return { longSide: 640, fps: 15, bitrate: bitrate.minimum }
+    }
+    throw new Error('Unknown quality ' + quality)
+}
 
-    // Fallback passthrough helper
-    const passthrough = async () => {
-        const arrayBuffer = await file.arrayBuffer()
-        return { arrayBuffer, type: file.type || 'video/mp4', name: file.name }
+/**
+ * Preprocess video client-side using WebCodecs + MP4Box.js
+ */
+export async function preprocessVideo(file: File, quality: UploadQuality): Promise<ArrayBuffer> {
+    const buf = await file.arrayBuffer()
+
+    // --- Step 1: Parse MP4 container with MP4Box.js ---
+    const mp4boxfile: MP4File = MP4Box.createFile()
+    const sourceBuffer = buf as MP4ArrayBuffer
+    ;(sourceBuffer as any).fileStart = 0
+    mp4boxfile.appendBuffer(sourceBuffer)
+    mp4boxfile.flush()
+
+    // Pick first video track
+    const videoTrack = mp4boxfile.getInfo().tracks.find(t => t.video)
+    if (!videoTrack) throw new Error('No video track found')
+    const { width, height, timescale, id: trackId, duration } = videoTrack
+
+    const spec = chooseSpec(width, height, quality)
+
+    // Compute target width/height preserving AR
+    const aspect = width / height
+    const targetW = width >= height ? spec.longSide : Math.round(spec.longSide * aspect)
+    const targetH = height > width ? spec.longSide : Math.round(spec.longSide / aspect)
+
+    // Target fps: if 0 (original), derive from track
+    const targetFps = spec.fps || Math.round((videoTrack.nb_samples || 0) / (duration / timescale))
+    // Target bitrate: if 0 (original), derive from track
+    const targetBitrate = spec.bitrate || videoTrack.bitrate
+
+    console.log(
+        'Processing video',
+        file.name,
+        'from',
+        width,
+        'x',
+        height,
+        'to',
+        targetW,
+        'x',
+        targetH,
+        '@',
+        targetFps,
+        'fps with',
+        targetBitrate,
+        'bitrate'
+    )
+
+    // --- Step 2: Set up encoder + muxer ---
+    const chunks: EncodedVideoChunk[] = []
+    let decoderConfig: VideoDecoderConfig | undefined
+
+    const encoder = new VideoEncoder({
+        output: (chunk, meta) => {
+            if (meta?.decoderConfig && !decoderConfig) {
+                decoderConfig = meta.decoderConfig
+            }
+            chunks.push(chunk)
+        },
+        error: e => console.error('Encoder error:', e),
+    })
+
+    const encCfg: VideoEncoderConfig = {
+        codec: 'avc1.42E01E', // H.264 baseline
+        width: targetW,
+        height: targetH,
+        framerate: targetFps,
+        bitrate: targetBitrate,
+        hardwareAcceleration: 'prefer-hardware',
+    }
+    encoder.configure(encCfg)
+
+    // Prepare canvas for rescaling
+    const canvas = document.createElement('canvas')
+    canvas.width = targetW
+    canvas.height = targetH
+    const ctx = canvas.getContext('2d', { alpha: false })!
+
+    // --- Step 3: Decode frames fast ---
+    const decoder = new VideoDecoder({
+        output: (frame: VideoFrame) => {
+            // draw scaled frame
+            ctx.drawImage(frame, 0, 0, targetW, targetH)
+
+            // Wrap canvas back into VideoFrame with synthetic timestamp
+            const vf = new VideoFrame(canvas, { timestamp: frame.timestamp })
+            encoder.encode(vf, { keyFrame: frame.timestamp === 0 })
+            vf.close()
+            frame.close()
+        },
+        error: e => console.error('Decoder error:', e),
+    })
+
+    decoder.configure({ codec: videoTrack.codec })
+
+    // Feed samples into decoder
+    mp4boxfile.onSamples = (id, _user, samples) => {
+        if (id !== trackId) return
+        for (const s of samples) {
+            const chunk = new EncodedVideoChunk({
+                type: s.is_sync ? 'key' : 'delta',
+                timestamp: s.dts, // microseconds if timescale = 1e6
+                duration: s.duration,
+                data: new Uint8Array(s.data),
+            })
+            decoder.decode(chunk)
+        }
     }
 
-    try {
-        const ffmpeg = await getFfmpeg()
+    // Ask MP4Box to extract all samples
+    mp4boxfile.setExtractionOptions(trackId)
+    mp4boxfile.start()
 
-        // Write input
-        const inputName = 'input'
-        const inputArray = new Uint8Array(await file.arrayBuffer())
-        await ffmpeg.writeFile(inputName, inputArray)
+    // Wait until decode/encode finishes
+    await decoder.flush()
+    await encoder.flush()
+    encoder.close()
+    decoder.close()
 
-        // Probe FPS from ffmpeg logs
-        let detectedFps: number | null = null
-        const logHandler = ({ message }: { type: string; message: string }) => {
-            const fpsMatch = message.match(/,\s*(\d+(?:\.\d+)?)\s*fps\b/i)
-            const tbrMatch = message.match(/,\s*(\d+(?:\.\d+)?)\s*tbr\b/i)
-            if (!detectedFps) {
-                const val = fpsMatch ? parseFloat(fpsMatch[1]) : tbrMatch ? parseFloat(tbrMatch[1]) : null
-                if (val && Number.isFinite(val)) detectedFps = val
-            }
+    // --- Step 4: Mux encoded chunks back into MP4 ---
+    if (!decoderConfig) throw new Error('No decoderConfig from encoder')
+
+    const muxer = MP4Box.createFile()
+    const avcC = new Uint8Array(decoderConfig.description!)
+    const outTrackId = muxer.addTrack({
+        timescale: 1_000_000,
+        width: targetW,
+        height: targetH,
+        avcDecoderConfigRecord: avcC.buffer,
+        hdlr: 'vide',
+    })
+    muxer.setSegmentOptions(outTrackId, null, { nbSamples: chunks.length })
+    muxer.initializeSegmentation()
+    muxer.start()
+
+    for (const ch of chunks) {
+        const u8 = new Uint8Array(ch.byteLength)
+        ch.copyTo(u8)
+        const sample = {
+            duration: ch.duration ?? Math.round(1e6 / targetFps),
+            dts: ch.timestamp,
+            cts: 0,
+            is_sync: ch.type === 'key',
+            size: u8.byteLength,
         }
-        ffmpeg.on('log', logHandler)
-        try {
-            await ffmpeg.exec(['-hide_banner', '-i', inputName, '-f', 'null', '-'])
-        } catch {
-            // Expected non-zero exit due to no output, but logs contain metadata
-        }
-
-        // Get dimensions via element (more reliable for width/height)
-        const blobUrl = URL.createObjectURL(file)
-        const { width: inW, height: inH } = await getElementDimensions(blobUrl)
-
-        const needsResize = inW > 1920 || inH > 1080
-        const needsFpsLimit = detectedFps !== null && detectedFps > 25
-
-        const outputName = 'output.mp4'
-        const args: string[] = ['-y', '-i', inputName, '-an'] // remove audio
-
-        if (needsResize) {
-            // Scale to fit within 1920x1080 then crop to 1920x1080 to enforce exact frame size without upscaling
-            args.push('-vf', "scale='if(gt(a,16/9),-2,1920)':'if(gt(a,16/9),1080,-2)',crop=1920:1080")
-        }
-
-        if (needsFpsLimit) {
-            args.push('-r', '25')
-        }
-
-        // Encode to MP4 (H.264). If libx264 is unavailable in this build, ffmpeg will throw and we'll fall back to passthrough.
-        args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', outputName)
-
-        await ffmpeg.exec(args)
-        const data = (await ffmpeg.readFile(outputName)) as Uint8Array
-
-        const arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
-
-        // Name output with .mp4 extension
-        const base = file.name.replace(/\.[^/.]+$/, '')
-        return { arrayBuffer, type: 'video/mp4', name: `${base}.mp4` }
-    } catch (err) {
-        // As a fail-safe, return the original file bytes
-        alert('Failed to preprocess video: ' + file.name + '\n\n' + err)
-        return await passthrough()
+        ;(u8.buffer as any).fileStart = 0
+        muxer.addSample(outTrackId, u8.buffer, sample)
     }
+
+    muxer.flush()
+
+    const segs: ArrayBuffer[] = []
+    muxer.onSegment = (_id, _user, buf: ArrayBuffer) => segs.push(buf)
+
+    // Concatenate segments
+    let total = segs.reduce((s, b) => s + b.byteLength, 0)
+    const out = new Uint8Array(total)
+    let offset = 0
+    for (const b of segs) {
+        out.set(new Uint8Array(b), offset)
+        offset += b.byteLength
+    }
+
+    return out.buffer
 }

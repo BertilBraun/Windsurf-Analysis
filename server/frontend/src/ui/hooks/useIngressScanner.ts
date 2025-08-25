@@ -2,6 +2,7 @@ import React from 'react'
 import { addProcessedHash, hasProcessedHash, saveShaPathMapping, getShaForPath } from '../utils/idb'
 import { UploadContext, uploadVideoFile, computeSha256 } from '../utils/uploader'
 import { listFilesRecursively } from '../utils/fsAccess'
+import { useSettings } from './useSettings'
 
 export type IngressUploadStatus = 'queued' | 'uploading' | 'done' | 'error' | 'skipped'
 
@@ -28,6 +29,7 @@ export function useIngressScanner(
     const failedRef = React.useRef<Set<string>>(new Set())
     const [suspended, setSuspended] = React.useState(false)
     const [lastErrorCode, setLastErrorCode] = React.useState<string | null>(null)
+    const { settings } = useSettings()
 
     const updateUpload = React.useCallback((id: string, partial: Partial<IngressUploadItem>) => {
         setUploads(prev => prev.map(u => (u.id === id ? { ...u, ...partial } : u)))
@@ -62,7 +64,9 @@ export function useIngressScanner(
             try {
                 inProgressRef.current.add(identifier)
                 updateUpload(identifier, { status: 'uploading' })
-                await uploadVideoFile(file, uploadCtx, percent => updateUpload(identifier, { progress: percent }))
+                await uploadVideoFile(file, settings.uploadQuality, uploadCtx, percent =>
+                    updateUpload(identifier, { progress: percent })
+                )
                 await addProcessedHash(identifier)
                 updateUpload(identifier, { progress: 100, status: 'done' })
                 onUploaded()

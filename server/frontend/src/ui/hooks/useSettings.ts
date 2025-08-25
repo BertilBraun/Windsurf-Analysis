@@ -1,7 +1,6 @@
 import React from 'react'
 import { loadSetting, saveSetting, deleteSetting } from '../utils/idb'
-
-export type UploadQuality = 'original' | 'high' | 'medium' | 'minimum'
+import { UploadQuality } from '../types'
 
 export const SETTINGS_KEYS = {
     uploadQuality: 'uploadQuality',

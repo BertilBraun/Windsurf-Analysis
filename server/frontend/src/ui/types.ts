@@ -31,3 +31,5 @@ export type Track = {
 }
 
 export type ReportType = 'missed_detection' | 'false_association' | 'other'
+
+export type UploadQuality = 'original' | 'high' | 'medium' | 'minimum'

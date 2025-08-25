@@ -1,5 +1,6 @@
 import { API_BASE } from '../auth/AuthProvider'
-import { preprocessVideo } from './preprocessVideoWebCodecs'
+import { preprocessVideo } from './preprocessVideo'
+import { UploadQuality } from '../types'
 
 export type UploadContext = {
     authorizedFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>
@@ -38,6 +39,7 @@ export function doXhrUpload(
 
 export async function uploadVideoFile(
     file: File,
+    quality: UploadQuality,
     ctx: UploadContext,
     onProgress?: (percent: number) => void
 ): Promise<'uploaded' | 'skipped'> {
