@@ -1,7 +1,7 @@
 import React from 'react'
 import { JobSummary, JobStatus } from '../types'
 import { AnimatedDots } from './AnimatedDots'
-import { getFileByRelativePath } from '../utils/fsAccess'
+import JobThumbnail from './JobThumbnail'
 
 export const StatusBadge: React.FC<{ status: JobStatus }> = ({ status }) => {
     const color =
@@ -30,119 +30,6 @@ const PlayOverlay: React.FC = () => (
         </div>
     </div>
 )
-
-const JobThumbnail: React.FC<{
-    job: JobSummary
-    dirHandle: FileSystemDirectoryHandle | null
-}> = ({ job, dirHandle }) => {
-    const [thumbUrl, setThumbUrl] = React.useState<string | null>(null)
-    const [notFound, setNotFound] = React.useState<boolean>(false)
-
-    React.useEffect(() => {
-        let revoked: string | null = null
-        let cancelled = false
-        setThumbUrl(null)
-        setNotFound(false)
-
-        if (job.status !== 'succeeded') return
-        if (!dirHandle) {
-            setNotFound(true)
-            return
-        }
-
-        ;(async () => {
-            try {
-                const path = job.local_relative_path
-                if (!path) {
-                    setNotFound(true)
-                    return
-                }
-                const file = await getFileByRelativePath(dirHandle, path)
-                if (!file) {
-                    if (!cancelled) setNotFound(true)
-                    return
-                }
-                const url = URL.createObjectURL(file)
-                revoked = url
-                const video = document.createElement('video')
-                video.muted = true
-                video.preload = 'metadata'
-                video.src = url
-                const captureFrame = async () => {
-                    try {
-                        // Seek a tiny bit to get a decodable frame
-                        video.currentTime = Math.min(0.1, (video.duration || 1) - 0.1)
-                    } catch {}
-                }
-                const onSeeked = () => {
-                    try {
-                        const canvas = document.createElement('canvas')
-                        const w = Math.max(1, Math.floor(video.videoWidth))
-                        const h = Math.max(1, Math.floor(video.videoHeight))
-                        const targetW = 256
-                        const scale = Math.min(1, targetW / w)
-                        canvas.width = Math.max(1, Math.floor(w * scale))
-                        canvas.height = Math.max(1, Math.floor(h * scale))
-                        const ctx = canvas.getContext('2d')!
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.7)
-                        if (!cancelled) setThumbUrl(dataUrl)
-                    } catch {
-                        if (!cancelled) setNotFound(true)
-                    }
-                }
-                video.addEventListener('loadedmetadata', captureFrame, { once: true })
-                video.addEventListener('seeked', onSeeked, { once: true })
-                video.addEventListener('error', () => !cancelled && setNotFound(true), { once: true })
-            } catch {
-                if (!cancelled) setNotFound(true)
-            }
-        })()
-
-        return () => {
-            cancelled = true
-            if (revoked) URL.revokeObjectURL(revoked)
-        }
-    }, [job.id, job.status, job.local_relative_path, dirHandle])
-
-    const boxClasses = 'relative w-48 h-28 bg-gray-200 rounded-md overflow-hidden flex items-center justify-center'
-
-    if (job.status !== 'succeeded') {
-        return (
-            <div className={boxClasses}>
-                <StatusBadge status={job.status} />
-            </div>
-        )
-    }
-
-    if (notFound) {
-        return (
-            <div className={boxClasses}>
-                <div className="text-red-600 font-bold text-center px-2">VIDEO FILE NOT FOUND</div>
-            </div>
-        )
-    }
-
-    return (
-        <div className={boxClasses}>
-            {thumbUrl ? (
-                <>
-                    <img
-                        src={thumbUrl}
-                        alt={job.local_relative_path ?? job.original_checksum_sha256}
-                        className="absolute inset-0 w-full h-full object-cover"
-                    />
-                    <PlayOverlay />
-                </>
-            ) : (
-                <div className="text-gray-500 text-sm flex items-center gap-1">
-                    Generating thumbnail
-                    <AnimatedDots />
-                </div>
-            )}
-        </div>
-    )
-}
 
 export const JobList: React.FC<{
     jobs: JobSummary[]
