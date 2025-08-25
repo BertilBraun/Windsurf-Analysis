@@ -1,4 +1,4 @@
-import tempfile
+import os
 import requests
 from pathlib import Path
 from typing import Sequence
@@ -58,7 +58,7 @@ class InferenceModel:
         return processor
 
     @modal.method()
-    def inference(self, job_id: str, ac_bytes: bytes, yolo_model: str, reid_model: str, complete_webhook: str):
+    def inference(self, job_id: str, yolo_model: str, reid_model: str, complete_webhook: str):
         def _post_completion_webhook(status: str, tracks: list[dict], dominant_orientation: int):
             print(f'POSTing completion webhook to {complete_webhook}')
             res = requests.post(
@@ -68,68 +68,64 @@ class InferenceModel:
             )
             print(f'Completion webhook response: {res.status_code} {res.text}')
 
+        local_video_path = f'/data/{job_id}.mp4'
         try:
-            with tempfile.TemporaryDirectory() as td:
-                local_video = Path(td) / f'{job_id}.mp4'
-                with open(local_video, 'wb') as f:
-                    f.write(ac_bytes)
+            with timeit(f'{job_id}: Orientation detection'):
+                fixed_video, dominant_orientation = self.orientation_fixer.fix_video(local_video_path)
 
-                with timeit(f'{job_id}: Orientation detection'):
-                    fixed_video, dominant_orientation = self.orientation_fixer.fix_video(str(local_video))
+            processor = self._get_processor(yolo_model, reid_model)
 
-                processor = self._get_processor(yolo_model, reid_model)
+            props = get_video_properties(fixed_video)
 
-                # For this invocation, write outputs to the temp job directory
+            with timeit(f'{job_id}: Object detection'):
+                detections = processor.run_object_detection_on_video(fixed_video)
 
-                props = get_video_properties(fixed_video)
-
-                with timeit(f'{job_id}: Object detection'):
-                    detections = processor.run_object_detection_on_video(fixed_video)
-
-                with timeit(f'{job_id}: Trackers'):
-                    trackers: Sequence[Tracker] = [
-                        GreedyPreprocessor(),
-                        # GreedyTracker(),
-                        DiscreteILPTracker(),
-                        TrackFiltering(),
-                        # TrackInterpolation(), # Not needed - done in frontend
-                        # TrackSmoothing(), # Not needed - done in frontend
-                        TrackRelabeling(),
-                    ]
-                    processed_tracks = [
-                        Track(track_id=i, sorted_detections=[detection]) for i, detection in enumerate(detections)
-                    ]
-                    for tracker in trackers:
-                        processed_tracks = tracker.track(processed_tracks, props)
-
-                print(f'{job_id}: Found {len(processed_tracks)} tracks')
-
-                # Convert dataclasses to primitive JSON structure
-                tracks = [
-                    {
-                        'track_id': t.track_id,
-                        'start_percent': clamp_percentage(t.start_frame / props.total_frames),
-                        'end_percent': clamp_percentage(t.end_frame / props.total_frames),
-                        'start_time_seconds': clamp_percentage(t.start_frame / props.fps),
-                        'duration_seconds': clamp_percentage(t.duration_frames / props.fps),
-                        'detections': [
-                            {
-                                'time_percent': clamp_percentage(d.frame_idx / props.total_frames),
-                                'bbox': [
-                                    clamp_percentage(d.bbox.x1 / props.width),
-                                    clamp_percentage(d.bbox.y1 / props.height),
-                                    clamp_percentage(d.bbox.x2 / props.width),
-                                    clamp_percentage(d.bbox.y2 / props.height),
-                                ],
-                                'confidence': clamp_percentage(d.confidence),
-                            }
-                            for d in t.sorted_detections
-                        ],
-                    }
-                    for t in processed_tracks
+            with timeit(f'{job_id}: Trackers'):
+                trackers: Sequence[Tracker] = [
+                    GreedyPreprocessor(),
+                    # GreedyTracker(),
+                    DiscreteILPTracker(),
+                    TrackFiltering(),
+                    # TrackInterpolation(), # Not needed - done in frontend
+                    # TrackSmoothing(), # Not needed - done in frontend
+                    TrackRelabeling(),
                 ]
+                processed_tracks = [
+                    Track(track_id=i, sorted_detections=[detection]) for i, detection in enumerate(detections)
+                ]
+                for tracker in trackers:
+                    processed_tracks = tracker.track(processed_tracks, props)
+
+            print(f'{job_id}: Found {len(processed_tracks)} tracks')
+
+            # Convert dataclasses to primitive JSON structure
+            tracks = [
+                {
+                    'track_id': t.track_id,
+                    'start_percent': clamp_percentage(t.start_frame / props.total_frames),
+                    'end_percent': clamp_percentage(t.end_frame / props.total_frames),
+                    'start_time_seconds': clamp_percentage(t.start_frame / props.fps),
+                    'duration_seconds': clamp_percentage(t.duration_frames / props.fps),
+                    'detections': [
+                        {
+                            'time_percent': clamp_percentage(d.frame_idx / props.total_frames),
+                            'bbox': [
+                                clamp_percentage(d.bbox.x1 / props.width),
+                                clamp_percentage(d.bbox.y1 / props.height),
+                                clamp_percentage(d.bbox.x2 / props.width),
+                                clamp_percentage(d.bbox.y2 / props.height),
+                            ],
+                            'confidence': clamp_percentage(d.confidence),
+                        }
+                        for d in t.sorted_detections
+                    ],
+                }
+                for t in processed_tracks
+            ]
 
             _post_completion_webhook('succeeded', tracks, dominant_orientation)
         except Exception as e:
             print(f'Error in inference: {e}')
             _post_completion_webhook('failed', [], 0)
+        finally:
+            os.remove(local_video_path)

@@ -37,11 +37,13 @@ export function doXhrUpload(
     })
 }
 
+const CHUNK_SIZE = 8 * 1024 * 1024 // 8 MiB per part
+
 export async function uploadVideoFile(
     file: File,
     quality: UploadQuality,
     ctx: UploadContext,
-    onProgress?: (percent: number) => void
+    onProgress: (percent: number) => void
 ): Promise<'uploaded' | 'skipped'> {
     // Step 1: Create job (also acts as duplicate/quota check)
     const { sha256 } = await computeSha256(file)
@@ -61,15 +63,60 @@ export async function uploadVideoFile(
     const { job_id } = (await createRes.json()) as { job_id: string; status: string }
 
     // Step 2: Preprocess
-    // TODO: const processed = await preprocessVideo(file)
-    const processed = file
+    const processed = await preprocessVideo(file, quality)
+    const processedBuffer = processed instanceof ArrayBuffer ? processed : (processed as Uint8Array).buffer
+    const totalSize = processedBuffer.byteLength
+    const totalParts = Math.ceil(totalSize / CHUNK_SIZE)
 
-    // Step 3: Upload bytes and models to the job
-    const form = new FormData()
-    form.append('file', new Blob([await processed.arrayBuffer()], { type: processed.type }), processed.name)
-    form.append('yolo_model', 'windsurfing/2025_08_09_100epochs.pt')
-    form.append('reid_model', 'common/osnet_ain_x1_0_msmt17.pth')
+    // Step 3: INIT chunked upload (also carries model params)
+    const initForm = new FormData()
+    initForm.append('total_size', String(totalSize))
+    initForm.append('chunk_size', String(CHUNK_SIZE))
+    initForm.append('total_parts', String(totalParts))
+    initForm.append('file_name', file.name)
+    initForm.append('mime_type', file.type || 'video/mp4')
+    initForm.append('yolo_model', 'windsurfing/2025_08_09_100epochs.pt')
+    initForm.append('reid_model', 'common/osnet_ain_x1_0_msmt17.pth')
 
-    await doXhrUpload(`${API_BASE}/jobs/${job_id}/upload`, ctx.authHeader, form, onProgress)
+    const initRes = await ctx.authorizedFetch(`/jobs/${job_id}/upload/init`, {
+        method: 'POST',
+        body: initForm,
+    })
+    if (!initRes.ok) throw new Error(await initRes.text())
+    const { resume_from_part } = (await initRes.json()) as { resume_from_part: number }
+
+    // Step 4: Upload parts
+    const processedView = new Uint8Array(processedBuffer)
+    let uploadedBytesBeforeCurrentPart = resume_from_part * CHUNK_SIZE
+    for (let partIndex = resume_from_part; partIndex < totalParts; partIndex++) {
+        const start = partIndex * CHUNK_SIZE
+        const end = Math.min(start + CHUNK_SIZE, totalSize)
+        const chunkBytes = processedView.subarray(start, end)
+        const partSize = end - start
+
+        const partForm = new FormData()
+        partForm.append('part_index', String(partIndex))
+        partForm.append(
+            'chunk',
+            new Blob([chunkBytes], { type: file.type || 'application/octet-stream' }),
+            `${file.name}.part${partIndex}`
+        )
+
+        await doXhrUpload(`${API_BASE}/jobs/${job_id}/upload/part`, ctx.authHeader, partForm, (percent: number) => {
+            const partUploaded = Math.round((percent / 100) * partSize)
+            const overall = Math.floor(((uploadedBytesBeforeCurrentPart + partUploaded) / totalSize) * 100)
+            onProgress(Math.min(99, overall))
+        })
+
+        uploadedBytesBeforeCurrentPart += partSize
+        onProgress(Math.min(99, Math.floor((uploadedBytesBeforeCurrentPart / totalSize) * 100)))
+    }
+
+    // Step 5: COMPLETE upload (server concatenates, checksums, and spawns inference)
+    const completeRes = await ctx.authorizedFetch(`/jobs/${job_id}/upload/complete`, {
+        method: 'POST',
+    })
+    if (!completeRes.ok) throw new Error(await completeRes.text())
+    onProgress(100)
     return 'uploaded'
 }

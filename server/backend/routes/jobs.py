@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import hashlib
 from datetime import datetime
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-import modal
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from server.backend.auth import authenticate_user
@@ -83,57 +81,8 @@ async def create_job(
     return JobCreateResponse(job_id=str(job.id), status=job.status.value)
 
 
-@router.post('/{job_id}/upload')
-async def jobs_upload_for_created_job(
-    job_id: str,
-    file: UploadFile = File(...),
-    yolo_model: str = Form(...),
-    reid_model: str = Form(...),
-    db: DatabaseAccessor = Depends(get_db),
-    user: User = Depends(authenticate_user),
-):
-    existing = await db.get_job_and_video_by_id_and_user(job_id, user)
-    if existing is None:
-        raise HTTPException(status_code=404, detail='Not found')
 
-    job, video = existing
-    if job.status not in (JobStatus.pending,):
-        raise HTTPException(status_code=409, detail='Job not in a state that accepts uploads')
 
-    # ac_key_prefix = f"{Settings.PREFIX_AC_VIDEOS}{video.original_checksum_sha256}/ac/"
-
-    content = await file.read()
-    ac_checksum = hashlib.sha256(content).hexdigest()
-
-    # ac_key = f"{ac_key_prefix}{ac_checksum}.mp4"
-    # TODO? s3 = s3_client()
-    # TODO? s3.put_object(Bucket=Settings.S3_BUCKET, Key=ac_key, Body=content, ContentType=file.content_type or 'video/mp4')
-
-    # Update video with actual uploaded info
-    video.ac_checksum_sha256 = ac_checksum
-    video.size_bytes = len(content)
-    video.mime_type = file.content_type or 'video/mp4'
-    video.ac_storage_url = 'N/A'  # TODO? object_url(ac_key)
-
-    # Transition job to running and spawn inference
-    job.status = JobStatus.running
-    job.started_at = timestamp_now()
-    await db.flush()
-
-    complete_url = (
-        f'{Settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job.id}/complete?secret={Settings.BACKEND_WEBHOOK_SECRET}'
-    )
-
-    InferenceModel = modal.Cls.from_name('windsurf-analysis', 'InferenceModel')
-    InferenceModel().inference.spawn(
-        job_id=str(job.id),
-        ac_bytes=content,
-        yolo_model=yolo_model,
-        reid_model=reid_model,
-        complete_webhook=complete_url,
-    )
-
-    return {'ok': True}
 
 
 @router.get('', response_model=JobListResponse)

@@ -21,16 +21,6 @@ export const StatusBadge: React.FC<{ status: JobStatus }> = ({ status }) => {
     )
 }
 
-const PlayOverlay: React.FC = () => (
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="w-12 h-12 rounded-full bg-black/60 flex items-center justify-center">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8 5v14l11-7L8 5z" />
-            </svg>
-        </div>
-    </div>
-)
-
 export const JobList: React.FC<{
     jobs: JobSummary[]
     onOpen: (id: string) => void
@@ -56,11 +46,13 @@ export const JobList: React.FC<{
             if (sortKey === 'date') {
                 // Compare ISO-like timestamps; fallback to string compare
                 cmp = a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
-            } else {
+            } else if (sortKey === 'name') {
                 // Sort by local path when available
                 const an = a.local_relative_path?.toLowerCase() ?? 'n/a'
                 const bn = b.local_relative_path?.toLowerCase() ?? 'n/a'
                 cmp = an < bn ? -1 : an > bn ? 1 : 0
+            } else {
+                throw new Error(`Unknown sort key: ${sortKey}`)
             }
             return sortDir === 'asc' ? cmp : -cmp
         })

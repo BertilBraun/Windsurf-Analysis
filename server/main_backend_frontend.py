@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from server.backend.config import Settings
 from server.backend.database.db import init_db
 from server.backend.routes.jobs import router as jobs_router
+from server.backend.routes.uploads import router as uploads_router
 from server.backend.routes.users import router as users_router
 
 
@@ -23,6 +24,7 @@ image = (
 )
 
 app = modal.App('windsurf-analysis-backend', image=image)
+volume = modal.Volume.from_name('windsurf-analysis-volume', create_if_missing=True)
 
 
 @asynccontextmanager
@@ -31,7 +33,12 @@ async def lifespan(app: FastAPI):
     yield
 
 
-@app.function(secrets=[modal.Secret.from_name('backend-secret')], scaledown_window=60 * 5, region='eu-west')
+@app.function(
+    secrets=[modal.Secret.from_name('backend-secret')],
+    scaledown_window=60 * 5,
+    region='eu-west',
+    volumes={'/data': volume},
+)
 @modal.concurrent(max_inputs=100)
 @modal.asgi_app()
 def fastapi_app():
@@ -52,6 +59,7 @@ def fastapi_app():
     )
 
     api.include_router(jobs_router, prefix='/api/v1')
+    api.include_router(uploads_router, prefix='/api/v1')
     api.include_router(users_router, prefix='/api/v1')
 
     api.mount('/', StaticFiles(directory='/root/frontend/dist', html=True), name='frontend')
