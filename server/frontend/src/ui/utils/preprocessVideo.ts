@@ -3,183 +3,210 @@ import { UploadQuality } from '../types'
 
 interface TargetSpec {
     longSide: number
-    fps: number
-    bitrate: number
+    fps: number // 0 => keep source FPS
+    bitrate: number // in bps; 0 => derive from source
 }
 
-/**
- * Decide target resolution & fps based on quality + source size.
- */
+interface TrackInfo {
+    id: number
+    width: number
+    height: number
+    timescale: number // track timebase
+    duration: number // in track timescale
+    codec: string // e.g., "avc1.640032"
+    nb_samples: number // number of samples in track
+    bitrate?: number
+}
+
+/* ----------------------------- logging helper ----------------------------- */
+const log = (...args: any[]) => console.log('[preprocessVideo]', ...args)
+
+/* -------------------- choose resolution / fps / bitrate ------------------- */
 function chooseSpec(width: number, height: number, quality: UploadQuality): TargetSpec {
     const longer = Math.max(width, height)
 
-    const bitrate = {
-        high: 4_000_000,
-        medium: 2_000_000,
-        minimum: 800_000,
+    const ladder = {
+        high: 4_000_000, // ~4 Mbps
+        medium: 2_000_000, // ~2 Mbps
+        minimum: 800_000, // ~0.8 Mbps
     }
 
     if (quality === 'original') {
-        return { longSide: longer, fps: 0, bitrate: 0 } // fps=0 means "keep original"
+        return { longSide: longer, fps: 0, bitrate: 0 }
     }
     if (quality === 'high') {
-        if (longer >= 1920) return { longSide: 1920, fps: 30, bitrate: bitrate.high }
-        if (longer >= 1280) return { longSide: 1280, fps: 30, bitrate: bitrate.high }
-        return { longSide: 640, fps: 30, bitrate: bitrate.high }
+        if (longer >= 1920) return { longSide: 1920, fps: 30, bitrate: ladder.high }
+        if (longer >= 1280) return { longSide: 1280, fps: 30, bitrate: ladder.high }
+        return { longSide: 640, fps: 30, bitrate: ladder.high }
     }
     if (quality === 'medium') {
-        return { longSide: longer >= 1280 ? 1280 : 640, fps: 25, bitrate: bitrate.medium }
+        return { longSide: longer >= 1280 ? 1280 : 640, fps: 25, bitrate: ladder.medium }
     }
-    if (quality === 'minimum') {
-        return { longSide: 640, fps: 15, bitrate: bitrate.minimum }
-    }
-    throw new Error('Unknown quality ' + quality)
+    // minimum
+    return { longSide: 640, fps: 15, bitrate: ladder.minimum }
 }
 
-function chooseAvcLevelHex(width: number, height: number, fps: number): string {
+/* --------- conservative AVC level (hex) selection by frame area ----------- */
+function chooseAvcLevelHex(width: number, height: number): string {
     const area = width * height
-    // Conservative thresholds by coded area; fps considered typical (<=30)
-    // L3.0 (0x1E): up to ~414,720 (e.g., 720x576)
-    // L3.1 (0x1F): up to ~921,600 (e.g., 1280x720)
-    // L4.0 (0x28): up to ~2,073,600 (e.g., 1920x1080)
+    // L3.0 (0x1E) ≈ 720x576, L3.1 (0x1F) ≈ 1280x720, L4.0 (0x28) ≈ 1920x1080
     if (area <= 414_720) return '1E' // 3.0
     if (area <= 921_600) return '1F' // 3.1
     if (area <= 2_073_600) return '28' // 4.0
-    return '29' // 4.1 as a safe upper fallback
+    return '29' // 4.1 fallback
 }
 
-/**
- * Preprocess video client-side using WebCodecs + MP4Box.js
- */
-export async function preprocessVideo(file: File, quality: UploadQuality): Promise<ArrayBuffer> {
-    const buf = await file.arrayBuffer()
+/* --------------------------- canvas draw helper --------------------------- */
+function drawScaled(ctx: CanvasRenderingContext2D, frame: VideoFrame, outW: number, outH: number) {
+    // simple fit (no letterbox): preserve AR by sizing the canvas to the exact targetW/targetH we computed
+    ctx.drawImage(frame as any, 0, 0, outW, outH)
+}
 
-    // --- Step 1: Parse MP4 container with MP4Box.js ---
-    const mp4boxfile = MP4Box.createFile()
-    // Set onReady before appending to ensure track info is available
-    let info: ReturnType<typeof mp4boxfile.getInfo> | null = null
-    await new Promise<void>((resolve, reject) => {
-        mp4boxfile.onError = () => reject(new Error('MP4Box error while parsing'))
-        mp4boxfile.onReady = _info => {
-            info = _info
-            resolve()
-        }
-        const sourceBuffer = buf as MP4Box.MP4BoxBuffer
-        sourceBuffer.fileStart = 0
-        mp4boxfile.appendBuffer(sourceBuffer)
-    })
-
-    // Pick first video track
-    const videoTrack = (info || mp4boxfile.getInfo()).tracks.find(t => t.video)
-    if (!videoTrack) throw new Error('No video track found')
-    const { video, timescale, id: trackId, duration } = videoTrack
-
-    const width = video?.width ?? 1
-    const height = video?.height ?? 1
-    const spec = chooseSpec(width, height, quality)
-
-    // Compute target width/height preserving AR
-    const aspect = width / height
-    const targetW = width >= height ? spec.longSide : Math.round(spec.longSide * aspect)
-    const targetH = height > width ? spec.longSide : Math.round(spec.longSide / aspect)
-
-    // Target fps: if 0 (original), derive from track
-    const targetFps = spec.fps || Math.round((videoTrack.nb_samples || 0) / (duration / timescale))
-    // Target bitrate: if 0 (original), derive from track
-    const targetBitrate = spec.bitrate || videoTrack.bitrate
-
-    console.log(
-        'Processing video',
-        file.name,
-        'from',
-        width,
-        'x',
-        height,
-        'to',
-        targetW,
-        'x',
-        targetH,
-        '@',
-        targetFps,
-        'fps with',
-        targetBitrate,
-        'bitrate'
-    )
-
-    // --- Step 2: Set up encoder + muxer ---
-    const chunks: EncodedVideoChunk[] = []
+/* ----------------------------- encoder factory ---------------------------- */
+function createEncoder(outW: number, outH: number, fps: number, bitrate: number) {
     let decoderConfig: VideoDecoderConfig | undefined
+    const chunks: EncodedVideoChunk[] = []
 
     const encoder = new VideoEncoder({
         output: (chunk, meta) => {
-            if (meta?.decoderConfig && !decoderConfig) {
-                decoderConfig = meta.decoderConfig
-            }
+            if (meta?.decoderConfig && !decoderConfig) decoderConfig = meta.decoderConfig
             chunks.push(chunk)
         },
-        error: e => console.error('Encoder error:', e),
+        error: e => log('Encoder error:', e),
     })
 
-    const levelHex = chooseAvcLevelHex(targetW, targetH, targetFps)
-    const encCfg: VideoEncoderConfig = {
-        codec: `avc1.42E0${levelHex}`, // H.264 Baseline, dynamic level
-        width: targetW,
-        height: targetH,
-        framerate: targetFps,
-        bitrate: targetBitrate,
+    const codec = `avc1.42E0${chooseAvcLevelHex(outW, outH)}` // H.264 Baseline + level
+    const cfg: VideoEncoderConfig = {
+        codec,
+        width: outW,
+        height: outH,
+        framerate: fps > 0 ? fps : 30, // fallback
+        bitrate: Math.max(100_000, bitrate || 2_000_000), // safety floor
         hardwareAcceleration: 'prefer-hardware',
     }
-    encoder.configure(encCfg)
 
-    // Prepare canvas for rescaling
-    const canvas = document.createElement('canvas')
-    canvas.width = targetW
-    canvas.height = targetH
-    const ctx = canvas.getContext('2d', { alpha: false })!
+    log('Encoder.configure', cfg)
+    encoder.configure(cfg)
 
-    console.log('Encoder config:', encCfg)
-    console.log('Decoder config:', { codec: videoTrack.codec })
+    return {
+        encoder,
+        chunks,
+        getDecoderConfig: () => decoderConfig,
+    }
+}
 
-    // --- Step 3: Decode frames fast ---
-    let firstEncoded = true
-    const decoder = new VideoDecoder({
-        output: (frame: VideoFrame) => {
-            // draw scaled frame
-            ctx.drawImage(frame, 0, 0, targetW, targetH)
+/* ------------------------------ muxer factory ----------------------------- */
+function createMp4Muxer(outW: number, outH: number, avcC: ArrayBufferLike) {
+    const mux = (MP4Box as any).createFile()
+    const timescale = 1_000_000 // microseconds
+    const segs: ArrayBuffer[] = []
 
-            // Wrap canvas back into VideoFrame with synthetic timestamp
-            const vf = new VideoFrame(canvas, { timestamp: frame.timestamp })
-            const makeKey = firstEncoded
-            encoder.encode(vf, { keyFrame: makeKey })
-            if (firstEncoded) firstEncoded = false
-            vf.close()
-            frame.close()
-        },
-        error: e => console.error('Decoder error:', e),
+    mux.onSegment = (_id: number, _user: any, buffer: ArrayBuffer) => {
+        segs.push(buffer)
+    }
+
+    const trackId = mux.addTrack({
+        timescale,
+        width: outW,
+        height: outH,
+        hdlr: 'vide',
+        avcDecoderConfigRecord: avcC,
     })
 
-    decoder.configure({ codec: videoTrack.codec })
+    mux.setSegmentOptions(trackId, null, { nbSamples: 1_000_000_000 })
+    mux.initializeSegmentation()
+    mux.start()
 
-    // Some encoders emit decoderConfig only after a keyframe flush; queue a forced keyframe at start
-    // by encoding a zero-area dummy frame if no real frames arrive quickly.
-    // In practice, we rely on first frame keyframe above.
+    function addChunk(ch: EncodedVideoChunk, fps: number) {
+        const u8 = new Uint8Array(ch.byteLength)
+        ch.copyTo(u8)
+        // MP4Box expects a sample-like object; dts/cts in "timescale" units
+        const sample = {
+            duration: ch.duration ?? Math.round(1e6 / fps),
+            dts: ch.timestamp,
+            cts: 0,
+            is_sync: ch.type === 'key',
+            size: u8.byteLength,
+        }
+        // hint property MP4Box uses internally (ok to set 0)
+        ;(u8.buffer as any).fileStart = 0
+        mux.addSample(trackId, u8.buffer, sample)
+    }
 
-    console.log('Feeding samples into decoder')
+    function finalize(): ArrayBuffer {
+        mux.flush()
+        let total = 0
+        for (const s of segs) total += s.byteLength
+        const out = new Uint8Array(total)
+        let off = 0
+        for (const s of segs) {
+            out.set(new Uint8Array(s), off)
+            off += s.byteLength
+        }
+        return out.buffer
+    }
 
-    // Feed samples into decoder and await completion using a dedicated extractor instance
-    const totalSamples = videoTrack.nb_samples || 0
-    let processedSamples = 0
+    return { addChunk, finalize }
+}
 
-    await new Promise<void>((resolve, reject) => {
-        const extractor = MP4Box.createFile()
-        extractor.onError = () => reject(new Error('MP4Box error during extraction'))
-        extractor.onSamples = (id, _user, samples) => {
-            if (id !== trackId) return
-            console.log('Received samples', samples.length)
+/* -------------------------- demux+decode (fast) --------------------------- */
+/**
+ * Stream the file to MP4Box in chunks so `onSamples` fires while data arrives.
+ * Push video samples into WebCodecs VideoDecoder as EncodedVideoChunk.
+ */
+async function decodeAllFramesFast(
+    fileBuf: ArrayBuffer,
+    onReadyTrack: (ti: TrackInfo) => void,
+    onDecodedFrame: (frame: VideoFrame) => void
+): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        const mp4 = (MP4Box as any).createFile()
+        const CHUNK = 1 << 20 // 1 MiB
+        let offset = 0
+        let videoTrackId: number | null = null
+        let trackInfo: TrackInfo | null = null
+        let decoder: VideoDecoder | null = null
+
+        mp4.onError = (e: any) => reject(e)
+
+        mp4.onReady = (info: any) => {
+            log('MP4Box.onReady', info)
+            const vt = info.tracks.find((t: any) => !!t.video)
+            if (!vt) {
+                reject(new Error('No video track'))
+                return
+            }
+            videoTrackId = vt.id
+            trackInfo = {
+                id: vt.id,
+                width: vt.video.width,
+                height: vt.video.height,
+                timescale: vt.timescale,
+                duration: vt.duration,
+                codec: vt.codec,
+                nb_samples: vt.nb_samples,
+                bitrate: vt.bitrate,
+            }
+            onReadyTrack(trackInfo)
+
+            // Configure decoder
+            decoder = new VideoDecoder({
+                output: frame => onDecodedFrame(frame),
+                error: e => reject(e),
+            })
+            decoder.configure({ codec: vt.codec })
+
+            // Start extraction NOW so further appended data yields samples
+            mp4.setExtractionOptions(videoTrackId, null, { nbSamples: vt.nb_samples || 0 })
+            mp4.start()
+        }
+
+        mp4.onSamples = (id: number, _user: any, samples: any[]) => {
+            if (id !== videoTrackId || !decoder) return
+            log('onSamples batch', samples.length)
             for (const s of samples) {
-                if (!s.data) throw new Error('No data in sample')
-                const tsUs = Math.round((s.dts / timescale) * 1_000_000)
-                const durUs = s.duration ? Math.round((s.duration / timescale) * 1_000_000) : undefined
+                const tsUs = Math.round((s.dts / trackInfo!.timescale) * 1_000_000)
+                const durUs = s.duration ? Math.round((s.duration / trackInfo!.timescale) * 1_000_000) : undefined
                 const chunk = new EncodedVideoChunk({
                     type: s.is_sync ? 'key' : 'delta',
                     timestamp: tsUs,
@@ -187,110 +214,169 @@ export async function preprocessVideo(file: File, quality: UploadQuality): Promi
                     data: new Uint8Array(s.data),
                 })
                 decoder.decode(chunk)
-                processedSamples += 1
-            }
-            if (totalSamples > 0 && processedSamples >= totalSamples) {
-                resolve()
             }
         }
-        // Configure extraction BEFORE appending
-        if (totalSamples > 0) {
-            extractor.setExtractionOptions(trackId, null, { nbSamples: totalSamples })
-        } else {
-            extractor.setExtractionOptions(trackId)
-        }
-        extractor.start()
-        // Append the entire file in chunks so extractor can emit samples while parsing
-        const chunkSize = 1 * 1024 * 1024
-        let offset = 0
-        while (offset < buf.byteLength) {
-            const end = Math.min(offset + chunkSize, buf.byteLength)
-            const chunk = buf.slice(offset, end) as MP4Box.MP4BoxBuffer
-            chunk.fileStart = offset
-            extractor.appendBuffer(chunk)
+
+        // Stream the file into MP4Box
+        const u8 = new Uint8Array(fileBuf)
+        const next = () => {
+            if (offset >= u8.byteLength) {
+                log('All data appended, flushing MP4Box…')
+                mp4.flush()
+                // wait for decoder to drain
+                const dec = decoder!
+                dec.flush()
+                    .then(() => {
+                        dec.close()
+                        resolve()
+                    })
+                    .catch(reject)
+                return
+            }
+            const end = Math.min(offset + CHUNK, u8.byteLength)
+            const slice = u8.subarray(offset, end)
+            // MP4Box needs a buffer that carries a fileStart property
+            const buf = slice.buffer.slice(slice.byteOffset, slice.byteOffset + slice.byteLength) as ArrayBuffer & {
+                fileStart?: number
+            }
+            ;(buf as any).fileStart = offset
+            mp4.appendBuffer(buf)
             offset = end
+            // schedule next chunk (yield to UI thread)
+            setTimeout(next, 0)
         }
-        extractor.flush()
-        if (totalSamples === 0) {
-            // If totalSamples unknown, resolve after flush completes.
-            // onSamples will have been called as needed during parsing.
-            resolve()
-        }
+
+        next()
     })
+}
 
-    console.log('Decoder flushing')
-    // Now wait until decode/encode finishes
-    await decoder.flush()
-    await encoder.flush()
-    encoder.close()
-    decoder.close()
-
-    // --- Step 4: Mux encoded chunks back into MP4 ---
-    if (!decoderConfig) {
-        // As a fallback, try to derive minimal AVC config from encoder config if available
-        // Some implementations delay decoderConfig; in that case, abort gracefully
-        throw new Error('No decoderConfig from encoder')
+/* ------------------------------- main API -------------------------------- */
+export async function preprocessVideo(file: File, quality: UploadQuality): Promise<ArrayBuffer> {
+    if (!('VideoDecoder' in window) || !('VideoEncoder' in window)) {
+        throw new Error('WebCodecs not supported in this browser.')
     }
 
-    console.log('Muxing encoded chunks back into MP4')
+    const fileBuf = await file.arrayBuffer()
+    log('Begin preprocess', { name: file.name, bytes: fileBuf.byteLength, quality })
 
-    const muxer = MP4Box.createFile()
-    // Normalize description (AllowSharedBufferSource) into a Uint8Array
-    const desc = decoderConfig.description!
-    let avcC: Uint8Array
-    if (desc instanceof ArrayBuffer) {
-        avcC = new Uint8Array(desc)
-    } else if (ArrayBuffer.isView(desc as ArrayBufferView)) {
-        const view = desc as ArrayBufferView
-        avcC = new Uint8Array(view.buffer, view.byteOffset, view.byteLength)
-    } else {
-        avcC = new Uint8Array(0)
+    let srcTrack: TrackInfo | null = null
+
+    // these will be set after we know source dimensions & target spec
+    let targetW = 0,
+        targetH = 0,
+        targetFps = 0,
+        targetBitrate = 0
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d', { alpha: false })!
+
+    // encoder/muxer will be created lazily on first decoded frame,
+    // once we have the target sizes and have configured the encoder.
+    let encoderHandle: ReturnType<typeof createEncoder> | null = null
+    let muxer: ReturnType<typeof createMp4Muxer> | null = null
+
+    // frame pacing for exact FPS output (drop/dup as needed)
+    let haveFpsPlan = false
+    let nextTsUs = 0 // synthetic DTS for output stream in microseconds
+    let frameIntervalUs = 0
+
+    const onReadyTrack = (ti: TrackInfo) => {
+        srcTrack = ti
+        const spec = chooseSpec(ti.width, ti.height, quality)
+
+        // compute target W/H preserving AR (no upscaling beyond chosen longSide)
+        const aspect = ti.width / ti.height
+        targetW = ti.width >= ti.height ? spec.longSide : Math.round(spec.longSide * aspect)
+        targetH = ti.height > ti.width ? spec.longSide : Math.round(spec.longSide / aspect)
+
+        // enforce multiples of 2 (H.264 requirement)
+        if (targetW % 2) targetW += 1
+        if (targetH % 2) targetH += 1
+
+        // fps and bitrate
+        const srcFpsApprox =
+            ti.nb_samples && ti.duration ? Math.max(1, Math.round((ti.nb_samples * ti.timescale) / ti.duration)) : 30
+
+        targetFps = spec.fps || srcFpsApprox
+        targetBitrate = spec.bitrate || ti.bitrate || 2_000_000
+
+        canvas.width = targetW
+        canvas.height = targetH
+
+        log('Source track', ti)
+        log('Target spec', { targetW, targetH, targetFps, targetBitrate })
     }
-    const outTrackId = muxer.addTrack({
-        timescale: 1_000_000,
-        width: targetW,
-        height: targetH,
-        avcDecoderConfigRecord:
-            avcC.byteOffset === 0 && avcC.byteLength === avcC.buffer.byteLength ? avcC.buffer : avcC.slice().buffer,
-        hdlr: 'vide',
-    })
-    // Prepare to collect segments BEFORE starting segmentation
-    const segs: ArrayBuffer[] = []
-    muxer.onSegment = (_id, _user, buffer /* ArrayBuffer */) => {
-        segs.push(buffer)
-    }
-    muxer.setSegmentOptions(outTrackId, null, { nbSamples: chunks.length })
-    muxer.initializeSegmentation()
-    muxer.start()
 
-    console.log('Adding samples to muxer')
-
-    for (const ch of chunks) {
-        const u8 = new Uint8Array(ch.byteLength)
-        ch.copyTo(u8)
-        const sample = {
-            duration: ch.duration ?? Math.round(1e6 / targetFps),
-            dts: ch.timestamp,
-            cts: 0,
-            is_sync: ch.type === 'key',
-            size: u8.byteLength,
+    const onDecodedFrame = (frame: VideoFrame) => {
+        // lazily create encoder/muxer when first frame arrives
+        if (!encoderHandle) {
+            encoderHandle = createEncoder(targetW, targetH, targetFps, targetBitrate)
+            const decCfg = encoderHandle.getDecoderConfig() // may be undefined until first output
+            // We'll initialize muxer once we actually get decoderConfig in encoder.output.
+            haveFpsPlan = true
+            frameIntervalUs = Math.round(1e6 / targetFps)
+            nextTsUs = 0
         }
-        muxer.addSample(outTrackId, u8, sample)
+
+        // scale into canvas
+        drawScaled(ctx, frame, targetW, targetH)
+
+        // synthesize constant-FPS timestamps (don’t rely on source dts)
+        const outTs = nextTsUs
+        nextTsUs += frameIntervalUs
+
+        // create a VideoFrame from the canvas and push to encoder
+        const outFrame = new VideoFrame(canvas, { timestamp: outTs })
+        const makeKey = outTs === 0 || (outTs / 1e6) % 2 === 0 // ~2s GOP
+        encoderHandle!.encoder.encode(outFrame, { keyFrame: makeKey })
+        outFrame.close()
+
+        // if encoder just emitted its first chunk and gave us decoderConfig, start muxer
+        const dc = encoderHandle!.getDecoderConfig()
+        if (dc && !muxer) {
+            // normalize description → Uint8Array/ArrayBuffer
+            const desc = dc.description!
+            let avcC: ArrayBufferLike
+            if (desc instanceof ArrayBuffer) avcC = desc
+            else if (ArrayBuffer.isView(desc as ArrayBufferView)) {
+                const v = desc as ArrayBufferView
+                avcC = v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength)
+            } else {
+                throw new Error('DecoderConfig.description missing')
+            }
+            muxer = createMp4Muxer(targetW, targetH, avcC)
+            log('Muxer initialized')
+        }
+
+        frame.close()
     }
 
-    muxer.flush()
-    console.log('Muxer flushed')
+    // demux+decode everything (fast path, chunked append)
+    await decodeAllFramesFast(fileBuf, onReadyTrack, onDecodedFrame)
 
-    // Concatenate segments
-    let total = segs.reduce((s, b) => s + b.byteLength, 0)
-    const out = new Uint8Array(total)
-    let offset = 0
-    for (const b of segs) {
-        out.set(new Uint8Array(b), offset)
-        offset += b.byteLength
+    // drain encoder and build mp4
+    if (!encoderHandle) {
+        throw new Error('No frames decoded.')
     }
 
-    console.log('Done')
+    log('Flushing encoder…')
+    await encoderHandle.encoder.flush()
+    encoderHandle.encoder.close()
 
-    return out.buffer
+    // feed all chunks to muxer
+    if (!muxer) {
+        // should not happen; guard anyway
+        const dc = encoderHandle.getDecoderConfig()
+        if (!dc) throw new Error('No decoderConfig for muxer')
+        const desc = dc.description! as ArrayBuffer
+        muxer = createMp4Muxer(targetW, targetH, desc)
+    }
+
+    log(`Muxing ${encoderHandle.chunks.length} chunks…`)
+    for (const ch of encoderHandle.chunks) {
+        muxer.addChunk(ch, targetFps)
+    }
+
+    const outBuf = muxer.finalize()
+    log('Done. Output bytes:', outBuf.byteLength)
+    return outBuf
 }
