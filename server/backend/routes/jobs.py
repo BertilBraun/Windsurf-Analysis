@@ -81,10 +81,6 @@ async def create_job(
     return JobCreateResponse(job_id=str(job.id), status=job.status.value)
 
 
-
-
-
-
 @router.get('', response_model=JobListResponse)
 async def list_jobs(
     status_filter: Optional[str] = Query(None, alias='status'),

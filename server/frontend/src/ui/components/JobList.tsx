@@ -95,19 +95,21 @@ export const JobList: React.FC<{
                 </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {sortedJobs.map(j => {
-                    const caption = j.local_relative_path?.replace(/\.mp4$/i, '') ?? 'n/a'
+                {sortedJobs.map(job => {
+                    const caption = job.local_relative_path?.replace(/\.mp4$/i, '') ?? 'n/a'
                     return (
-                        <div key={j.id} className="flex flex-col items-start">
+                        <div key={job.id} className="flex flex-col items-start">
                             <div
-                                className={`relative cursor-pointer ${openingId === j.id ? 'opacity-60' : ''}`}
-                                onClick={() => onOpen(j.id)}
+                                className={`relative cursor-pointer ${openingId === job.id ? 'opacity-60' : ''}`}
+                                onClick={() => {
+                                    if (job.local_relative_path) onOpen(job.id)
+                                }}
                                 role="button"
                                 tabIndex={0}
-                                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onOpen(j.id)}
+                                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onOpen(job.id)}
                             >
-                                <JobThumbnail job={j} dirHandle={dirHandle} />
-                                {openingId === j.id && (
+                                <JobThumbnail job={job} dirHandle={dirHandle} />
+                                {openingId === job.id && (
                                     <div className="absolute inset-0 flex items-center justify-center">
                                         <div className="text-white text-sm bg-black/60 rounded px-2 py-1">Opening…</div>
                                     </div>
