@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>WebCodecs MP4 → frames (no &lt;video&gt;)</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      :root { color-scheme: light dark; font: 14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+      body { margin: 24px; }
+      header { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+      canvas { display:block; margin-top:16px; border-radius:12px; box-shadow:0 6px 20px rgba(0,0,0,.15); max-width:100%; }
+      .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+      input[type='file'], input[type='url'] { padding:8px; border-radius:10px; border:1px solid #9993; }
+      button { padding:8px 12px; border-radius:10px; border:1px solid #9993; cursor:pointer; }
+      .log { white-space:pre-wrap; background:#00000008; padding:8px; border-radius:10px; margin-top:12px; max-height:30vh; overflow:auto; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+      .pill { padding:2px 8px; border-radius:999px; background:#0000000d; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>WebCodecs: Extract frames from MP4 (no &lt;video&gt;)</h1>
+      <span class="pill" id="support"></span>
+    </header>
+
+    <div class="row" style="margin-top: 8px">
+      <input id="file" type="file" accept="video/mp4,video/*" />
+      <input id="url" type="url" placeholder="…or paste a video URL (CORS-enabled MP4)" style="min-width: 340px" />
+      <button id="loadUrl">Load URL</button>
+      <button id="stop" disabled>Stop</button>
+      <span id="meta"></span>
+    </div>
+
+    <canvas id="canvas" width="640" height="360"></canvas>
+    <div class="log" id="log"></div>
+
+    <script type="module">
+        import { createFile, DataStream } from 'https://cdn.jsdelivr.net/npm/mp4box@2.1.0/+esm';
+      
+        /* ---------- small helpers ---------- */
+        const logEl = document.getElementById('log');
+        const metaEl = document.getElementById('meta');
+        const supportEl = document.getElementById('support');
+        function log(...args){ console.log(...args); logEl.textContent += args.map(String).join(' ') + '\n'; }
+        (function assertSupport(){
+          const ok = 'VideoDecoder' in window && 'EncodedVideoChunk' in window && 'VideoFrame' in window;
+          supportEl.textContent = ok ? 'WebCodecs supported ✅' : 'WebCodecs not supported ❌';
+          if (!ok) throw new Error('This browser does not support WebCodecs.');
+        })();
+      
+        /* ---------- UI refs ---------- */
+        const fileInput = document.getElementById('file');
+        const urlInput  = document.getElementById('url');
+        const loadUrlBtn= document.getElementById('loadUrl');
+        const stopBtn   = document.getElementById('stop');
+        const canvas    = document.getElementById('canvas');
+        const ctx2d     = canvas.getContext('2d');
+        const ctxBmp    = canvas.getContext('bitmaprenderer');
+      
+        /* ---------- global state ---------- */
+        let decoder = null;
+        let stopped = false;
+        let track = null;
+        let timescale = 1;
+      
+        /* ---------- wire UI ---------- */
+        fileInput.addEventListener('change', async () => {
+          if (!fileInput.files?.length) return;
+          const file = fileInput.files[0];
+          await startFromFile(file);
+        });
+        loadUrlBtn.addEventListener('click', async () => {
+          const url = urlInput.value.trim();
+          if (!url) return;
+          await startFromURL(url);
+        });
+        stopBtn.addEventListener('click', () => {
+          stopped = true; stopBtn.disabled = true; cleanupDecoder();
+        });
+      
+        /* ---------- core: start from File or URL ---------- */
+        async function startFromFile(file) {
+          stopped = false; stopBtn.disabled = false; logEl.textContent = ''; metaEl.textContent = '';
+          const arrayBuffer = await file.arrayBuffer();
+          await demuxAndDecode(arrayBuffer, `file:${file.name}`);
+        }
+        async function startFromURL(url) {
+          stopped = false; stopBtn.disabled = false; logEl.textContent = ''; metaEl.textContent = '';
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
+          const arrayBuffer = await res.arrayBuffer();
+          await demuxAndDecode(arrayBuffer, url);
+        }
+      
+        /* ---------- extract description (avcC/hvcC/...) from stsd ---------- */
+        function getDescriptionFromStsd(mp4file, vTrack) {
+          const trak = mp4file.getTrackById(vTrack.id);
+          const entries = trak?.mdia?.minf?.stbl?.stsd?.entries;
+          if (!entries?.length) return null;
+          for (const entry of entries) {
+            const box = entry.avcC || entry.hvcC || entry.vpcC || entry.av1C;
+            if (box) {
+              // Serialize the config box to bytes, then strip the 8-byte MP4 box header.
+              const stream = new DataStream(undefined, 0, DataStream.BIG_ENDIAN);
+              box.write(stream);
+              return new Uint8Array(stream.buffer, 8);
+            }
+          }
+          return null;
+        }
+      
+        /* ---------- demux with mp4box.js, decode with WebCodecs ---------- */
+        async function demuxAndDecode(buf, label='') {
+          log(`Loaded ${label} (${(buf.byteLength/1e6).toFixed(2)} MB)`);
+      
+          const mp4 = createFile(true);           // keep mdat so sample.data is present
+          mp4.onError = e => log('mp4box error:', e);
+          mp4.onReady = info => onReady(info, mp4);
+      
+          buf.fileStart = 0;
+          mp4.appendBuffer(buf);
+          mp4.flush();
+      
+          async function onReady(info, mp4file) {
+            const vTrack = info.videoTracks?.[0];
+            if (!vTrack) { log('No video track found.'); return; }
+            track = vTrack;
+            timescale = vTrack.timescale || 1;
+      
+            metaEl.textContent =
+              `Codec: ${vTrack.codec} • ${vTrack.video?.width}×${vTrack.video?.height} • ` +
+              `${Math.round(vTrack.nb_samples / (vTrack.duration / timescale))} fps (approx)`;
+      
+            // Pull decoder config from stsd and configure BEFORE feeding chunks
+            let description = getDescriptionFromStsd(mp4file, vTrack);
+            log('has description(from stsd):', !!description, 'bytes:', description?.byteLength);
+      
+            const cfg = {
+              // Normalize vp8/9 codec strings to what WebCodecs expects
+              codec: vTrack.codec.startsWith('vp08') ? 'vp8' :
+                     vTrack.codec.startsWith('vp09') ? 'vp9' : vTrack.codec,
+              codedWidth: vTrack.video?.width,
+              codedHeight: vTrack.video?.height,
+              description: description || undefined
+            };
+      
+            // If AVC and we still somehow have no description, decoding will fail unless
+            // SPS/PPS are in-band on the very first keyframe. Most MP4s have avcC, so this
+            // path should not be hit now.
+            if (!cfg.description && /^avc1/i.test(cfg.codec)) {
+              log('Warning: no avcC found in stsd; AVC may fail to start.');
+            }
+      
+            cleanupDecoder();
+            decoder = new VideoDecoder({
+              output: onFrame,
+              error: e => log('Decoder error:', e?.message || e)
+            });
+            decoder.configure(cfg);
+      
+            if (cfg.codedWidth && cfg.codedHeight) {
+              canvas.width = cfg.codedWidth;
+              canvas.height = cfg.codedHeight;
+            }
+            log('Decoder configured:', JSON.stringify({ codec: cfg.codec, w: cfg.codedWidth, h: cfg.codedHeight }));
+      
+            // Start extraction aligned to keyframes for clean startup
+            mp4file.setExtractionOptions(vTrack.id, null, { nbSamples: 1, rapAlignment: true });
+            mp4file.onSamples = (_, __, samples) => samples.forEach(onSample);
+            mp4file.start();
+          }
+        }
+      
+        /* ---------- mp4 sample → EncodedVideoChunk → decoder ---------- */
+        function onSample(sample) {
+          if (stopped || !decoder) return;
+      
+          // Use DTS for monotonic decode timestamp; fall back to CTS
+          const ts = (sample.dts ?? sample.cts);
+          const timestampUS = Math.round(ts * 1e6 / (timescale || 1));
+          const durationUS  = sample.duration ? Math.round(sample.duration * 1e6 / (timescale || 1)) : 0;
+      
+          const chunk = new EncodedVideoChunk({
+            type: sample.is_sync ? 'key' : 'delta',
+            timestamp: timestampUS,
+            duration: durationUS,
+            data: sample.data instanceof Uint8Array ? sample.data : new Uint8Array(sample.data)
+          });
+      
+          try {
+            decoder.decode(chunk);
+          } catch (e) {
+            log('decode() failed:', e);
+          }
+        }
+      
+        /* ---------- draw each VideoFrame to canvas ---------- */
+        async function onFrame(frame) {
+          try {
+            if (ctxBmp) {
+              const bmp = await createImageBitmap(frame);
+              ctxBmp.transferFromImageBitmap(bmp);
+            } else {
+              ctx2d.drawImage(frame, 0, 0, canvas.width, canvas.height);
+            }
+          } catch (e) {
+            log('Frame draw error:', e);
+          } finally {
+            frame.close();
+          }
+        }
+      
+        /* ---------- teardown ---------- */
+        function cleanupDecoder() {
+          if (decoder) {
+            try { decoder.flush?.(); } catch {}
+            try { decoder.close?.(); } catch {}
+          }
+          decoder = null;
+        }
+      </script>
+      
+  </body>
+</html>
