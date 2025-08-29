@@ -1,5 +1,5 @@
 import { API_BASE } from '../auth/AuthProvider'
-import { preprocessVideo } from './preprocessVideo'
+import { preprocessVideo } from '../../preprocess/preprocess'
 import { UploadQuality } from '../types'
 
 export type UploadContext = {
@@ -26,7 +26,7 @@ export function doXhrUpload(
         xhr.open('POST', url, true)
         if (authHeader) xhr.setRequestHeader('Authorization', authHeader)
         xhr.upload.onprogress = e => {
-            if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100))
+            if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total)
         }
         xhr.onerror = () => reject(new Error('Network error'))
         xhr.onload = () => {
@@ -38,6 +38,9 @@ export function doXhrUpload(
 }
 
 const CHUNK_SIZE = 8 * 1024 * 1024 // 8 MiB per part
+
+const PERCENT_PREPROCESS = 0.3
+const PERCENT_UPLOAD = 0.7
 
 export async function uploadVideoFile(
     file: File,
@@ -63,7 +66,7 @@ export async function uploadVideoFile(
     const { job_id } = (await createRes.json()) as { job_id: string; status: string }
 
     // Step 2: Preprocess
-    const processed = await preprocessVideo(file, quality)
+    const processed = await preprocessVideo(file, quality, progress => onProgress(progress * PERCENT_PREPROCESS))
     const processedBuffer = processed instanceof ArrayBuffer ? processed : (processed as Uint8Array).buffer
     const totalSize = processedBuffer.byteLength
     const totalParts = Math.ceil(totalSize / CHUNK_SIZE)
@@ -103,20 +106,20 @@ export async function uploadVideoFile(
         )
 
         await doXhrUpload(`${API_BASE}/jobs/${job_id}/upload/part`, ctx.authHeader, partForm, (percent: number) => {
-            const partUploaded = Math.round((percent / 100) * partSize)
-            const overall = Math.floor(((uploadedBytesBeforeCurrentPart + partUploaded) / totalSize) * 100)
-            onProgress(Math.min(99, overall))
+            const partUploaded = Math.round(percent * partSize)
+            const overall = (uploadedBytesBeforeCurrentPart + partUploaded) / totalSize
+
+            onProgress(Math.min(0.99, overall * PERCENT_UPLOAD + PERCENT_PREPROCESS))
         })
 
         uploadedBytesBeforeCurrentPart += partSize
-        onProgress(Math.min(99, Math.floor((uploadedBytesBeforeCurrentPart / totalSize) * 100)))
+        const overall = uploadedBytesBeforeCurrentPart / totalSize
+        onProgress(Math.min(0.99, overall * PERCENT_UPLOAD + PERCENT_PREPROCESS))
     }
 
     // Step 5: COMPLETE upload (server concatenates, checksums, and spawns inference)
-    const completeRes = await ctx.authorizedFetch(`/jobs/${job_id}/upload/complete`, {
-        method: 'POST',
-    })
+    const completeRes = await ctx.authorizedFetch(`/jobs/${job_id}/upload/complete`, { method: 'POST' })
     if (!completeRes.ok) throw new Error(await completeRes.text())
-    onProgress(100)
+    onProgress(1)
     return 'uploaded'
 }

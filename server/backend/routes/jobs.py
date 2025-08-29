@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import os
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -180,5 +181,8 @@ async def jobs_complete(
     job.status = JobStatus(payload.status)
     job.finished_at = timestamp_now()
     await db.flush()
+
+    # TODO optionally delete the video file
+    os.remove(f'/data/{job_id}.mp4')
 
     return {'ok': True}

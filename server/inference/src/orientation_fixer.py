@@ -88,18 +88,14 @@ class OrientationFixer:
 
         return _majority_vote(predicted_deg)
 
-    def fix_video(self, input_video: str, output_video: str | None = None) -> tuple[str, int]:
+    def fix_video(self, input_video: str, output_video: str) -> int:
         """
         Rotates the video so that the dominant orientation is upright (0°).
         """
-        if output_video is None:
-            p = Path(input_video)
-            output_video = str(p.with_name(p.stem + '_upright' + p.suffix))
-
         dominant = self.detect_orientation(input_video)
         print(f'Dominant orientation: {dominant}')
         _apply_rotation_ffmpeg(input_video, output_video, dominant)
-        return output_video, dominant
+        return dominant
 
 
 # -------------------

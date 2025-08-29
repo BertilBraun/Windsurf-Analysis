@@ -65,7 +65,7 @@ export function useIngressScanner(
                 inProgressRef.current.add(identifier)
                 updateUpload(identifier, { status: 'uploading' })
                 await uploadVideoFile(file, settings.uploadQuality, uploadCtx, percent =>
-                    updateUpload(identifier, { progress: percent })
+                    updateUpload(identifier, { progress: Math.round(percent * 100) })
                 )
                 await addProcessedHash(identifier)
                 updateUpload(identifier, { progress: 100, status: 'done' })
@@ -91,7 +91,7 @@ export function useIngressScanner(
 
         let promises: Promise<void>[] = []
         try {
-            const entries = await listFilesRecursively(dirHandle as any, ['.mp4'])
+            const entries = await listFilesRecursively(dirHandle, ['.mp4'])
             for (const entry of entries) {
                 const file = await entry.getFile()
                 if (file.type.toLowerCase() !== 'video/mp4') continue

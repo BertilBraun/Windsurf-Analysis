@@ -160,7 +160,7 @@ async def upload_complete(
         _cleanup_upload_dir(upload_dir)
         raise HTTPException(status_code=400, detail=f'Missing parts: {", ".join(missing)}')
 
-    final_path = Path(f'/data/{video.id}.mp4')
+    final_path = Path(f'/data/{job_id}.mp4')
     with timeit('concat_parts'):
         with open(final_path, 'wb') as out:
             for p in part_paths:
@@ -172,6 +172,10 @@ async def upload_complete(
                         out.write(block)
 
     _cleanup_upload_dir(upload_dir)
+
+    from server.main_backend_frontend import volume
+
+    volume.commit()
 
     # Compute checksum via streaming
     hasher = hashlib.sha256()

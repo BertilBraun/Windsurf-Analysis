@@ -1,4 +1,3 @@
-import os
 import requests
 from pathlib import Path
 from typing import Sequence
@@ -30,13 +29,19 @@ image = (
 )
 
 app = modal.App('windsurf-analysis-inference', image=image)
+volume = modal.Volume.from_name('windsurf-analysis-volume', create_if_missing=True)
 
 
 def clamp_percentage(p: float) -> float:
     return max(0, min(p, 1))
 
 
-@app.cls(gpu='L40S', max_containers=2)
+@app.cls(
+    gpu='L40S',
+    max_containers=2,
+    scaledown_window=10,  # Scaledown window is 10 seconds
+    volumes={'/data': volume.read_only()},
+)
 @modal.concurrent(max_inputs=16, target_inputs=12)
 class InferenceModel:
     @modal.enter()
@@ -68,17 +73,20 @@ class InferenceModel:
             )
             print(f'Completion webhook response: {res.status_code} {res.text}')
 
-        local_video_path = f'/data/{job_id}.mp4'
         try:
+            volume.reload()  # Reload the volume to ensure the file is available
+
+            local_video_path = f'/data/{job_id}.mp4'
+            fixed_video_path = f'{job_id}_fixed.mp4'
             with timeit(f'{job_id}: Orientation detection'):
-                fixed_video, dominant_orientation = self.orientation_fixer.fix_video(local_video_path)
+                dominant_orientation = self.orientation_fixer.fix_video(local_video_path, fixed_video_path)
 
             processor = self._get_processor(yolo_model, reid_model)
 
-            props = get_video_properties(fixed_video)
+            props = get_video_properties(fixed_video_path)
 
             with timeit(f'{job_id}: Object detection'):
-                detections = processor.run_object_detection_on_video(fixed_video)
+                detections = processor.run_object_detection_on_video(fixed_video_path)
 
             with timeit(f'{job_id}: Trackers'):
                 trackers: Sequence[Tracker] = [
@@ -127,5 +135,3 @@ class InferenceModel:
         except Exception as e:
             print(f'Error in inference: {e}')
             _post_completion_webhook('failed', [], 0)
-        finally:
-            os.remove(local_video_path)
