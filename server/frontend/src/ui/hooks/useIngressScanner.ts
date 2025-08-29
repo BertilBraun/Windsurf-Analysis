@@ -1,6 +1,6 @@
 import React from 'react'
 import { addProcessedHash, hasProcessedHash, saveShaPathMapping, getShaForPath } from '../utils/idb'
-import { UploadContext, uploadVideoFile, computeSha256 } from '../utils/uploader'
+import { UploadContext, uploadVideoFileToJob, computeSha256, createJobForChecksum } from '../utils/uploader'
 import { listFilesRecursively } from '../utils/fsAccess'
 import { useSettings } from './useSettings'
 
@@ -28,7 +28,6 @@ export function useIngressScanner(
     const inProgressRef = React.useRef<Set<string>>(new Set())
     const failedRef = React.useRef<Set<string>>(new Set())
     const [suspended, setSuspended] = React.useState(false)
-    const [lastErrorCode, setLastErrorCode] = React.useState<string | null>(null)
     const { settings } = useSettings()
 
     const updateUpload = React.useCallback((id: string, partial: Partial<IngressUploadItem>) => {
@@ -63,8 +62,17 @@ export function useIngressScanner(
 
             try {
                 inProgressRef.current.add(identifier)
+
+                // Preflight: try to create job first
+                const createResult = await createJobForChecksum(identifier, uploadCtx)
+                if (createResult === 'skipped') {
+                    updateUpload(identifier, { status: 'skipped' })
+                    await addProcessedHash(identifier)
+                    return
+                }
+
                 updateUpload(identifier, { status: 'uploading' })
-                await uploadVideoFile(file, settings.uploadQuality, uploadCtx, percent =>
+                await uploadVideoFileToJob(file, settings.uploadQuality, uploadCtx, createResult.job_id, percent =>
                     updateUpload(identifier, { progress: Math.round(percent * 100) })
                 )
                 await addProcessedHash(identifier)
@@ -73,7 +81,6 @@ export function useIngressScanner(
             } catch (e: any) {
                 console.error('Upload failed for', relPath, e)
                 setLastError(e?.message || String(e))
-                setLastErrorCode(e?.code || null)
                 updateUpload(identifier, { status: 'error', error: e?.message || String(e) })
                 failedRef.current.add(identifier)
                 setSuspended(true)
@@ -135,5 +142,5 @@ export function useIngressScanner(
         resume()
     }, [resume])
 
-    return { active, lastRunAt, lastError, lastErrorCode, uploading, uploads, suspended, resume, retryFailed }
+    return { active, lastRunAt, lastError, uploading, uploads, suspended, retryFailed }
 }

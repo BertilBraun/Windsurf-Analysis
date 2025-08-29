@@ -98,15 +98,19 @@ export const JobList: React.FC<{
                 {sortedJobs.map(job => {
                     const caption = job.local_relative_path?.replace(/\.mp4$/i, '') ?? 'n/a'
                     return (
-                        <div key={job.id} className="flex flex-col items-start">
+                        <div key={job.local_relative_path ?? job.id} className="flex flex-col items-start">
                             <div
-                                className={`relative cursor-pointer ${openingId === job.id ? 'opacity-60' : ''}`}
+                                className={`relative ${
+                                    job.status === 'succeeded' ? 'cursor-pointer' : 'cursor-default'
+                                } ${openingId === job.id ? 'opacity-60' : ''}`}
                                 onClick={() => {
-                                    if (job.local_relative_path) onOpen(job.id)
+                                    if (job.status === 'succeeded' && job.local_relative_path) onOpen(job.id)
                                 }}
                                 role="button"
                                 tabIndex={0}
-                                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onOpen(job.id)}
+                                onKeyDown={e =>
+                                    job.status === 'succeeded' && (e.key === 'Enter' || e.key === ' ') && onOpen(job.id)
+                                }
                             >
                                 <JobThumbnail job={job} dirHandle={dirHandle} />
                                 {openingId === job.id && (

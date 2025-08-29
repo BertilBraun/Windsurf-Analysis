@@ -18,8 +18,8 @@ export const IngressPanel: React.FC<Props> = ({ dirHandle, dirPermission, onPick
     const [showQuotaModal, setShowQuotaModal] = React.useState(false)
 
     React.useEffect(() => {
-        if (scanner.lastErrorCode === 'quota_exceeded') setShowQuotaModal(true)
-    }, [scanner.lastErrorCode])
+        if (scanner.lastError?.includes('quota')) setShowQuotaModal(true)
+    }, [scanner.lastError])
 
     return (
         <div className="p-3 border border-gray-300 rounded-lg mb-4 bg-gray-50">
@@ -33,7 +33,7 @@ export const IngressPanel: React.FC<Props> = ({ dirHandle, dirPermission, onPick
                 lastError={scanner.lastError}
             />
 
-            {scanner.suspended && <SuspendedBanner onResume={scanner.resume} onRetryFailed={scanner.retryFailed} />}
+            {scanner.suspended && <SuspendedBanner onRetryFailed={scanner.retryFailed} />}
 
             {scanner.uploads.length > 0 && <UploadsList items={scanner.uploads} />}
 
@@ -113,22 +113,13 @@ const Header: React.FC<HeaderProps> = ({
     )
 }
 
-const SuspendedBanner: React.FC<{ onResume: () => void; onRetryFailed: () => void }> = ({
-    onResume,
-    onRetryFailed,
-}) => {
+const SuspendedBanner: React.FC<{ onRetryFailed: () => void }> = ({ onRetryFailed }) => {
     return (
         <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-md">
             <div className="text-xs text-amber-800 mb-2">
-                Uploads paused due to an error. You can resume scanning or retry failed uploads.
+                Uploads paused due to an error. You can retry failed uploads.
             </div>
             <div className="flex gap-2">
-                <button
-                    className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 active:bg-blue-800"
-                    onClick={onResume}
-                >
-                    Resume
-                </button>
                 <button
                     className="px-3 py-1.5 rounded-md bg-gray-200 text-gray-800 text-sm hover:bg-gray-300 active:bg-gray-400"
                     onClick={onRetryFailed}
@@ -194,6 +185,7 @@ const UploadsList: React.FC<{ items: IngressUploadItem[] }> = ({ items }) => {
 const UploadItem: React.FC<{ item: IngressUploadItem }> = ({ item }) => {
     const percent = clamp(item.progress, 0, 100)
     const isError = item.status === 'error'
+    const isSkipped = item.status === 'skipped'
     return (
         <div className="flex flex-col gap-1">
             <div className="flex justify-between gap-2">
@@ -206,7 +198,7 @@ const UploadItem: React.FC<{ item: IngressUploadItem }> = ({ item }) => {
                     {item.relativePath}
                 </span>
                 <span className="text-xs text-gray-500 min-w-[36px] text-right">
-                    {isError ? 'Error' : `${percent}%`}
+                    {isError ? 'Error' : isSkipped ? 'Skipped Duplicate' : `${percent}%`}
                 </span>
             </div>
             <ProgressBar percent={percent} status={item.status} />

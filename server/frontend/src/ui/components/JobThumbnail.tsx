@@ -108,6 +108,28 @@ export const JobThumbnail: React.FC<{
         )
     }
 
+    // For non-succeeded jobs, show a status badge inside the box instead of a loading text
+    if (job.status !== 'succeeded') {
+        const color =
+            job.status === 'failed'
+                ? '#ef4444'
+                : job.status === 'running'
+                ? '#3b82f6'
+                : job.status === 'pending'
+                ? '#f59e0b'
+                : job.status === 'canceled'
+                ? '#9ca3af'
+                : '#10b981'
+
+        return (
+            <div className={boxClasses}>
+                <span className="text-white rounded-md px-2 py-1 text-sm" style={{ background: color }}>
+                    {job.status}
+                </span>
+            </div>
+        )
+    }
+
     return (
         <div className={boxClasses}>
             {thumbUrl ? (

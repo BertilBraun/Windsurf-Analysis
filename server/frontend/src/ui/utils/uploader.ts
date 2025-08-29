@@ -50,6 +50,17 @@ export async function uploadVideoFile(
 ): Promise<'uploaded' | 'skipped'> {
     // Step 1: Create job (also acts as duplicate/quota check)
     const { sha256 } = await computeSha256(file)
+    const created = await createJobForChecksum(sha256, ctx)
+    if (created === 'skipped') return 'skipped'
+    const job_id = created.job_id
+
+    return uploadVideoFileToJob(file, quality, ctx, job_id, onProgress)
+}
+
+export async function createJobForChecksum(
+    sha256: string,
+    ctx: UploadContext
+): Promise<{ job_id: string } | 'skipped'> {
     const createRes = await ctx.authorizedFetch('/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -64,7 +75,16 @@ export async function uploadVideoFile(
     }
     if (!createRes.ok) throw new Error(await createRes.text())
     const { job_id } = (await createRes.json()) as { job_id: string; status: string }
+    return { job_id }
+}
 
+export async function uploadVideoFileToJob(
+    file: File,
+    quality: UploadQuality,
+    ctx: UploadContext,
+    job_id: string,
+    onProgress: (percent: number) => void
+): Promise<'uploaded'> {
     // Step 2: Preprocess
     const processed = await preprocessVideo(file, quality, progress => onProgress(progress * PERCENT_PREPROCESS))
     const processedBuffer = processed instanceof ArrayBuffer ? processed : (processed as Uint8Array).buffer

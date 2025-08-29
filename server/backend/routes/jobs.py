@@ -33,7 +33,7 @@ class JobSummaryItem(BaseModel):
     created_at: datetime
     updated_at: datetime
     original_checksum_sha256: str
-    dominant_orientation: Optional[int] = None
+    dominant_orientation: Optional[int]
 
 
 class JobListResponse(BaseModel):
@@ -41,7 +41,7 @@ class JobListResponse(BaseModel):
 
 
 class JobDetail(JobSummaryItem):
-    tracks: Optional[list[Any]] = None
+    tracks: Optional[list[Any]]
 
 
 class ReportRequest(BaseModel):
@@ -98,6 +98,7 @@ async def list_jobs(
             created_at=job.created_at,
             updated_at=job.updated_at,
             original_checksum_sha256=video.original_checksum_sha256,
+            dominant_orientation=job.dominant_orientation,
         )
         for job, video in rows
     ]
