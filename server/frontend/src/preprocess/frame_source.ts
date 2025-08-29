@@ -80,7 +80,6 @@ export class MP4FrameSource {
 
     /**
      * Async generator yielding decoded VideoFrames in order.
-     * IMPORTANT: the caller is responsible for frame.close() after use.
      */
     public async *frames(): AsyncGenerator<VideoFrame, void, void> {
         await this.ready
@@ -93,7 +92,7 @@ export class MP4FrameSource {
             const next = await this.dequeue()
             if (next === null) break
             yield next
-            next.close()
+            // TODO: next.close()
         }
     }
 
@@ -106,9 +105,6 @@ export class MP4FrameSource {
         this.closed = true
         try {
             this.decoder.close()
-        } catch {}
-        try {
-            this.mp4.releaseUsedBoxes()
         } catch {}
         // drain any pending waiters
         this.enqueue(null)
@@ -124,7 +120,9 @@ export class MP4FrameSource {
     }
 
     private async dequeue(): Promise<VideoFrame | null> {
-        if (this.q.length) return this.q.shift()!
+        if (this.q.length) {
+            return this.q.shift()!
+        }
         return new Promise<VideoFrame | null>(res => this.waiters.push(res))
     }
 
@@ -156,7 +154,7 @@ export class MP4FrameSource {
                 this.enqueue(frame)
             },
             error: (e: any) => {
-                console.error('Decoder error:', e)
+                console.error('[MP4FrameSource] Decoder error:', e)
                 // surface error by ending the stream
                 this.enqueue(null)
             },
@@ -170,10 +168,9 @@ export class MP4FrameSource {
         })
 
         // Wire demux → decode
-        this.mp4.setExtractionOptions(this.vTrack.id, null, { nbSamples: 1, rapAlignment: true })
+        this.mp4.setExtractionOptions(this.vTrack.id, null, { nbSamples: 1 })
 
         this.mp4.onSamples = (_trackId: number, _user: any, samples: any[]) => {
-            console.log('samples', samples)
             for (const s of samples) {
                 const tsUS = Math.round(((s.dts ?? s.cts) * 1e6) / this.timescale)
                 const durUS = s.duration ? Math.round((s.duration * 1e6) / this.timescale) : 0
@@ -185,10 +182,9 @@ export class MP4FrameSource {
                     data: s.data instanceof Uint8Array ? s.data : new Uint8Array(s.data),
                 })
                 try {
-                    console.log('decode', chunk)
                     this.decoder.decode(chunk)
                 } catch (e) {
-                    console.error('decode() failed:', e)
+                    console.error('[MP4FrameSource] decode() failed:', e)
                 }
             }
             this.samplesRemaining -= samples.length
@@ -200,10 +196,6 @@ export class MP4FrameSource {
             }
         }
 
-        this.mp4.onError = (e: any) => {
-            console.error('mp4.onError', e)
-        }
-
-        console.log('init done')
+        this.mp4.onError = () => console.error('[MP4FrameSource] mp4.onError')
     }
 }
