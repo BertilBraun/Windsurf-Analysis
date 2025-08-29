@@ -113,7 +113,9 @@ export class Mp4Encoder {
         const vf = new VideoFrame(source, { timestamp })
 
         this.encoder.encode(vf, { keyFrame: this.frameIndex % this.fps === 0 })
-        if (vf !== source) vf.close()
+
+        vf.close()
+
         this.frameIndex++
     }
 
