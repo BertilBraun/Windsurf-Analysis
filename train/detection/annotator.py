@@ -6,11 +6,17 @@ Mouse:
     LMB drag : draw box
 
 Keys:
-    r        : undo last box
-    Space    : accept / save frame
-    w/a/s/d  : move/resize last box (mode: grow or shrink)
-    q        : toggle shrink/grow mode
-    Esc      : quit
+    r         : undo last box
+    Space     : accept / save frame
+    w/a/s/d   : move/resize last box (mode: grow or shrink)
+    q         : toggle shrink/grow mode
+    Esc       : quit
+    ','       : previous frame
+    '.'       : next frame
+    'x'       : skip frame
+    'e'       : empty frame
+    backspace : undo last save
+    tab       : reset box start during drawing
 """
 
 import os

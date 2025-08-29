@@ -83,10 +83,10 @@ def main():
 
 
 def _log_detection_settings(logger: logging.Logger):
-    import settings
+    from .settings import __dict__ as settings_dict
 
     settings_str = '\n'.join(
-        f'{k}: {v}' for k, v in settings.__dict__.items() if not k.startswith('__') and not callable(v) and k.isupper()
+        f'{k}: {v}' for k, v in settings_dict.items() if not k.startswith('__') and not callable(v) and k.isupper()
     )
     logger.info(f'Detection settings: \n{settings_str}')
 
