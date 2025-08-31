@@ -1,0 +1,388 @@
+from __future__ import annotations
+
+import sys
+import glob
+import pickle
+import argparse
+from pathlib import Path
+from typing import Iterable, Callable, Optional
+
+
+# Make project importable when run as a script
+this_file = Path(__file__).resolve()
+project_root = this_file.parents[3]
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+from server.inference.src.util.video_io import get_video_properties, VideoInfo
+from server.inference.src.tracking.detector import SurferDetector
+from server.inference.src.tracking.preprocessing.greedy_preprocessor import GreedyPreprocessor
+from server.inference.src.common_types import Detection, Track
+from server.inference.src.player.core.player_state import Metadata, VideoProperties, TrackLite, DetectionLite
+from server.inference.src.settings import YOLO_MODEL_PATH, REID_MODEL_PATH
+from server.inference.src.player.core.video_manager import VideoManager
+from server.inference.src.player.ui.video_widget import VideoWidget
+
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QApplication, QMainWindow
+
+
+"""USAGE:
+
+"spacebar" : next golden id
+"backspace" : undo last assignment
+"escape" : finalize and save
+"left arrow" : previous frame
+"right arrow" : next frame
+"control + left arrow" : previous 30 frames
+"control + right arrow" : next 30 frames
+"shift + left arrow" : previous 5 frames
+"shift + right arrow" : next 5 frames
+"""
+
+
+def _detections_to_initial_tracks(detections: list[Detection]) -> list[Track]:
+    return [Track(track_id=i + 1, sorted_detections=[det]) for i, det in enumerate(detections)]
+
+
+def _build_metadata(tracks: list[Track], input_path: Path, video_props: VideoInfo) -> Metadata:
+    return Metadata(
+        input_video_path=input_path.absolute().as_posix(),
+        video_properties=VideoProperties(
+            fps=video_props.fps,
+            width=video_props.width,
+            height=video_props.height,
+            total_frames=video_props.total_frames,
+        ),
+        tracks=[
+            TrackLite(
+                track_id=t.track_id,
+                start_frame=t.start_frame,
+                end_frame=t.end_frame,
+                start_time=t.start_frame / max(1, video_props.fps),
+                duration=t.duration_frames / max(1, video_props.fps),
+                detection_count=len(t.sorted_detections),
+                detections=[
+                    DetectionLite(
+                        frame_idx=det.frame_idx,
+                        bbox=[int(det.bbox.x1), int(det.bbox.y1), int(det.bbox.x2), int(det.bbox.y2)],
+                        confidence=float(det.confidence),
+                    )
+                    for det in t.sorted_detections
+                ],
+            )
+            for t in tracks
+        ],
+    )
+
+
+def _save_golden_metadata(
+    tracks: list[Track], input_path: Path, output_dir: Path, video_props: VideoInfo, *, filename: str | None = None
+) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if filename is None:
+        filename = f'{input_path.stem}.golden.tracks.pkl'
+    out_path = output_dir / filename
+    metadata = _build_metadata(tracks, input_path, video_props)
+    with open(out_path, 'wb') as f:
+        pickle.dump(metadata, f)
+    return out_path
+
+
+def _to_tracklites(tracks: list[Track], video_props: VideoInfo) -> list[TrackLite]:
+    out: list[TrackLite] = []
+    for t in tracks:
+        out.append(
+            TrackLite(
+                # Initialize with negative IDs so labels are hidden until assigned
+                track_id=-int(t.track_id),
+                start_frame=int(t.start_frame),
+                end_frame=int(t.end_frame),
+                start_time=float(t.start_frame / max(1, video_props.fps)),
+                duration=float(t.duration_frames / max(1, video_props.fps)),
+                detection_count=len(t.sorted_detections),
+                detections=[
+                    DetectionLite(
+                        frame_idx=int(d.frame_idx),
+                        bbox=[int(d.bbox.x1), int(d.bbox.y1), int(d.bbox.x2), int(d.bbox.y2)],
+                        confidence=float(d.confidence),
+                    )
+                    for d in t.sorted_detections
+                ],
+            )
+        )
+    return out
+
+
+class TrackAnnotatorWindow(QMainWindow):
+    def __init__(
+        self,
+        input_video: Path,
+        video_props: VideoInfo,
+        preprocessed_tracks: list[Track],
+        output_dir: Path,
+        on_finished: Optional[Callable[[], None]] = None,
+    ):
+        super().__init__()
+        self.setWindowTitle('Windsurf Tracklet Annotator')
+
+        from server.inference.src.player.core.player_state import PlayerState
+
+        self.state = PlayerState()
+        self.state.reset(
+            input_video_path=input_video.as_posix(),
+            video_properties=VideoProperties(
+                fps=video_props.fps,
+                width=video_props.width,
+                height=video_props.height,
+                total_frames=video_props.total_frames,
+            ),
+            loaded_tracks=_to_tracklites(preprocessed_tracks, video_props),
+        )
+
+        self.video = VideoManager(input_video)
+        self.output_dir = output_dir
+        self.input_video = input_video
+        self.video_props = video_props
+        self.pre_tracks = preprocessed_tracks
+        self.on_finished = on_finished
+
+        # golden assignments: preprocessed track id -> golden id
+        self.assignments: dict[int, int] = {}
+        self.history: list[tuple[int, int | None]] = []  # (pre_id, prev_golden_or_None)
+        self.current_golden_id: int = 1
+
+        self.video_widget = VideoWidget(self.state, on_track_selected=self._on_track_clicked)
+        self.setCentralWidget(self.video_widget)
+
+        # Show first frame
+        self.state.current_frame = 0
+        self._on_seek(0)
+
+        # Small timer for HUD fading consistency
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(lambda: None)
+        self.timer.start(100)
+
+        self._update_hud()
+
+    # -------------------------- Interaction logic -------------------------- #
+    def _on_seek(self, frame: int) -> None:
+        self.state.current_frame = max(0, min(frame, self.video.total_frames - 1))
+        self.video.seek_frame(self.state.current_frame)
+        _, frame_img = self.video.read_frame()
+        if frame_img is not None:
+            self.video_widget.set_frame(frame_img)
+        # keep overlays consistent
+        self.video_widget.update()
+
+    def _step(self, delta: int) -> None:
+        idx, frame_img = self.video.advance_by(max(1, abs(delta)))
+        if idx >= 0 and frame_img is not None:
+            self.state.current_frame = idx
+            self.video_widget.set_frame(frame_img)
+            self.video_widget.update()
+
+    def _on_track_clicked(self, track_id: int) -> None:
+        # Only accept clicks on unassigned (negative-labeled) tracklets
+        if int(track_id) > 0:
+            self._update_hud(brief=f'Already assigned (golden {track_id})')
+            return
+        pre_id = int(-track_id)
+        prev = self.assignments.get(pre_id)
+        self.history.append((pre_id, prev))
+        self.assignments[pre_id] = self.current_golden_id
+        # Update displayed IDs for this preprocessed tracklet to the golden ID
+        self._apply_display_id(pre_id, self.current_golden_id)
+        self._update_hud(brief=f'Assigned pre {pre_id} -> golden {self.current_golden_id}')
+
+    def _undo(self) -> None:
+        if not self.history:
+            self._update_hud(brief='Nothing to undo')
+            return
+        pre_id, prev_golden = self.history.pop()
+        if prev_golden is None:
+            self.assignments.pop(pre_id, None)
+            # revert display to negative id (hidden)
+            self._apply_display_id(pre_id, -pre_id)
+        else:
+            self.assignments[pre_id] = prev_golden
+            self._apply_display_id(pre_id, prev_golden)
+        self._update_hud(brief='Undone last assignment')
+
+    def _update_hud(self, brief: str | None = None) -> None:
+        total = len(self.pre_tracks)
+        assigned = len(self.assignments)
+        base = f'Golden ID: {self.current_golden_id} | assigned {assigned}/{total}'
+        text = f'{brief} | {base}' if brief else base
+        self.video_widget.show_hud(text)
+
+    def keyPressEvent(self, event):  # type: ignore[override]
+        key = event.key()
+        mods = event.modifiers()
+        if key == Qt.Key.Key_Space:
+            self.current_golden_id += 1
+            self._update_hud(brief='Next golden id')
+            total = len(self.pre_tracks)
+            assigned = len(self.assignments)
+            if assigned == total:
+                self._finalize_and_save()
+            return
+        if key == Qt.Key.Key_Backspace:
+            self._undo()
+            return
+        if key == Qt.Key.Key_Escape:
+            self._finalize_and_save()
+            return
+        if key == Qt.Key.Key_Left and not (
+            mods & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+        ):
+            self._on_seek(self.state.current_frame - 1)
+            return
+        if key == Qt.Key.Key_Right and not (
+            mods & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+        ):
+            self._step(+1)
+            return
+        if (mods & Qt.KeyboardModifier.ControlModifier) and key == Qt.Key.Key_Left:
+            self._on_seek(
+                self.state.current_frame - int(self.state.video_properties.fps * 30)
+                if self.state.video_properties
+                else 0
+            )
+            return
+        if (mods & Qt.KeyboardModifier.ControlModifier) and key == Qt.Key.Key_Right:
+            self._on_seek(
+                self.state.current_frame + int(self.state.video_properties.fps * 30)
+                if self.state.video_properties
+                else 0
+            )
+            return
+        if (mods & Qt.KeyboardModifier.ShiftModifier) and key == Qt.Key.Key_Left:
+            self._on_seek(
+                self.state.current_frame - int(self.state.video_properties.fps * 5)
+                if self.state.video_properties
+                else 0
+            )
+            return
+        if (mods & Qt.KeyboardModifier.ShiftModifier) and key == Qt.Key.Key_Right:
+            self._on_seek(
+                self.state.current_frame + int(self.state.video_properties.fps * 5)
+                if self.state.video_properties
+                else 0
+            )
+            return
+        super().keyPressEvent(event)
+
+    # --------------------------- Display management ------------------------- #
+    def _apply_display_id(self, pre_id: int, new_id: int) -> None:
+        # Update track ids in loaded_tracks for the given preprocessed track
+        for t in self.state.loaded_tracks:
+            if int(t.track_id) == -int(pre_id) or (new_id < 0 and int(t.track_id) == int(new_id)):
+                t.track_id = int(new_id)
+        # Rebuild fast lookups
+        self.state.visible_tracks = self.state._extract_visible_tracks()
+        self.state.detections_by_frame = self.state._rebuild_detection_index()
+        # Refresh overlay
+        self.video_widget.update()
+
+    # ----------------------------- Finalization ----------------------------- #
+    def _finalize_and_save(self) -> None:
+        # Ensure all preprocessed tracks have an assignment
+        unassigned = [int(t.track_id) for t in self.pre_tracks if int(t.track_id) not in self.assignments]
+        if unassigned:
+            msg = f'Cannot save: {len(unassigned)} unassigned tracklets remain. Assign all before saving.'
+            print(msg)
+            self._update_hud(brief='Unassigned tracklets remain. Assign all before saving.')
+            return
+
+        # Group detections by golden id
+        group_to_dets: dict[int, list] = {}
+        for t in self.pre_tracks:
+            gid = self.assignments[int(t.track_id)]
+            group_to_dets.setdefault(gid, []).extend(t.sorted_detections)
+
+        merged: list[Track] = []
+        for gid, dets in group_to_dets.items():
+            dets.sort(key=lambda d: d.frame_idx)
+            merged.append(Track(track_id=int(gid), sorted_detections=dets))
+
+        golden_path = _save_golden_metadata(merged, self.input_video, self.output_dir, self.video_props)
+        print(f'Saved golden metadata: {golden_path}')
+        print(f'Saved player metadata: {self.output_dir / f"{self.input_video.stem}.tracks.pkl"}')
+        try:
+            if self.on_finished is not None:
+                self.on_finished()
+        finally:
+            self.close()
+
+
+class _BatchAnnotatorController:
+    def __init__(self, video_paths: list[Path], output_dir: Path):
+        self.video_paths = video_paths
+        self.output_dir = output_dir
+        self._app: QApplication | None = None
+        self._idx: int = -1
+        self._win: TrackAnnotatorWindow | None = None
+
+    def _next(self) -> None:
+        self._idx += 1
+        if self._idx >= len(self.video_paths):
+            if self._app is not None:
+                self._app.quit()
+            return
+        video = self.video_paths[self._idx]
+
+        # if already processed, skip
+        if (self.output_dir / f'{video.stem}.golden.tracks.pkl').exists():
+            self._next()
+            return
+
+        video_props = get_video_properties(video)
+        detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH, reid_model_path=REID_MODEL_PATH)
+        detections = detector.run_object_detection_on_video(video)
+        tracks: list[Track] = _detections_to_initial_tracks(detections)
+        tracks = GreedyPreprocessor().track(tracks, video_props)
+
+        self._win = TrackAnnotatorWindow(video, video_props, tracks, self.output_dir, on_finished=self._next)
+        self._win.show()
+
+    def run(self) -> None:
+        self._app = QApplication(sys.argv)
+        self._next()
+        self._app.exec()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description='Run detection + greedy preprocessor, then interactively merge tracklets to build a golden standard.'
+    )
+    parser.add_argument('videos', type=str, nargs='+', help='Path(s) or glob pattern(s) to input video(s)')
+    parser.add_argument('--output-dir', type=str, default='tmp', help='Directory to write golden metadata')
+
+    args = parser.parse_args()
+
+    output_dir = Path(args.output_dir)
+
+    # Expand patterns
+    video_paths: list[Path] = []
+    for pat in args.videos:
+        expanded = [Path(p) for p in glob.glob(pat)]
+        if not expanded:
+            # allow literal path that may not glob-expand on Windows
+            p = Path(pat)
+            if p.exists():
+                expanded = [p]
+        video_paths.extend(expanded)
+    video_paths = sorted({p.resolve() for p in video_paths if p.suffix.lower() in {'.mp4', '.mov', '.avi', '.mkv'}})
+    if not video_paths:
+        print('No input videos found for given patterns.')
+        return
+
+    # Batch GUI annotator over multiple videos
+    controller = _BatchAnnotatorController(video_paths, output_dir)
+    controller.run()
+
+
+if __name__ == '__main__':
+    main()

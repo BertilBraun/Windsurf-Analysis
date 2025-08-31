@@ -124,11 +124,12 @@ class VideoWidget(QWidget):
                     pen.setWidth(2)
                     painter.setPen(pen)
                     painter.drawRect(QRect(rx1, ry1, rx2 - rx1, ry2 - ry1))
-                    painter.drawText(
-                        QRect(rx1, max(0, ry1 - 18), 80, 16),
-                        Qt.AlignmentFlag.AlignLeft,
-                        f'ID:{track_id}_conf={d.confidence:.2f}',
-                    )
+                    if int(track_id) > 0:
+                        painter.drawText(
+                            QRect(rx1, max(0, ry1 - 18), 80, 16),
+                            Qt.AlignmentFlag.AlignLeft,
+                            f'ID:{track_id}',
+                        )
 
         # HUD text
         if self._hud_text:
