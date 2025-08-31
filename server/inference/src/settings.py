@@ -12,7 +12,7 @@ YOLO_MODEL_PATH = inference_root_folder / 'weights/yolo_models/windsurfing/best.
 REID_MODEL_PATH = inference_root_folder / 'weights/reid_models/common/osnet_ain_x1_0_msmt17.pth'
 
 IOU_THRESHOLD = 0.2
-CONFIDENCE_THRESHOLD = 0.25
+CONFIDENCE_THRESHOLD = 0.5
 BATCH_SIZE = 32
 
 # Tracking preprocessing settings

@@ -35,10 +35,9 @@ class SurferDetector:
         reid_model_path = Path(reid_model_path)
 
         if not yolo_model_path.exists():
-            logging.warning(f'YOLO model {yolo_model_path} not found. Falling back to ultralytics default yolov8n.pt')
-            self.model = YOLO(model='yolov8n.pt', verbose=False)
-        else:
-            self.model = YOLO(model=yolo_model_path, verbose=False)
+            raise FileNotFoundError(f'YOLO model {yolo_model_path} not found')
+
+        self.yolo_model = YOLO(model=yolo_model_path, verbose=False)
         self.reid_model = ReID(model_path=reid_model_path)
 
     @cache_to_file('yolo_detections', ignore_args=[0], additional_args=[YOLO_MODEL_PATH, REID_MODEL_PATH])
@@ -51,9 +50,9 @@ class SurferDetector:
         """
 
         video_props = get_video_properties(video_path)
-        skip_frames = video_props.fps // MIN_TRACKING_FPS
+        skip_frames = max(1, video_props.fps // MIN_TRACKING_FPS)
 
-        results = self.model.predict(
+        results = self.yolo_model.predict(
             str(video_path),
             iou=IOU_THRESHOLD,
             conf=CONFIDENCE_THRESHOLD,

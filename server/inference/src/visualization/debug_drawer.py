@@ -486,7 +486,7 @@ def debug_track_similarities(
                     center_view.draw_box(
                         most_recent_det.bbox,
                         BOX_COLOR_CUR,
-                        label=f'T{t.track_id}',
+                        label=f'T{t.track_id}_conf={most_recent_det.confidence:.2f}',
                     )
 
                 past_tracks: List[Track] = get_tracks_ended_in_last_n_frames(tracks, f_idx, max_gap)
