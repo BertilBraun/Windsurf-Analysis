@@ -12,7 +12,7 @@ tqdm>=4.65.0
 # Configuration files
 PyYAML>=6.0
 
-vidstab>=2.0.0
+vidstab
 
 
 torch>=2.0.0
