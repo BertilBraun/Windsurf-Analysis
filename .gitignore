@@ -3,7 +3,6 @@
 **/*.pt
 **/*.pkl
 
-train/datasets/**
 **/runs/**
 
 **/botsort.yaml
@@ -11,6 +10,7 @@ src/individual_surfers/**
 individual_surfers/**
 
 !train/models/**
+train/detection/datasets/**
 
 run.bat
 test_outputs/**

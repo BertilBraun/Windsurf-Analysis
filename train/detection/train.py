@@ -171,10 +171,10 @@ def prepare_dataset(src: Path, dst: Path, val_ratio: float = 0.02, seed: int = 0
 # ────────────────────────────────────────────────────────────────────────────
 # Training
 # ────────────────────────────────────────────────────────────────────────────
-def train_model(yaml_file: Path, epochs: int, imgsz: int, batch: float, device: str):
+def train_model(base_model: str, yaml_file: Path, epochs: int, imgsz: int, batch: float, device: str):
     logger = logging.getLogger(__name__)
 
-    model = YOLO('yolo11n.pt')  # choose e.g. yolo11s.pt or yolo11m.pt for bigger models
+    model = YOLO(base_model)  # choose e.g. yolo11n.pt or yolo11s.pt or yolo11m.pt for bigger models
     logger.info('🚀  Starting training …')
 
     if device == 'auto':
@@ -198,10 +198,11 @@ def main():
     setup_logging()
 
     parser = argparse.ArgumentParser(description='Prepare windsurfer detection dataset and train YOLO v11.')
-    parser.add_argument('--src', type=Path, help='Raw dataset directory')
+    parser.add_argument('--src', type=Path, required=True, help='Raw dataset directory')
     parser.add_argument('--dst', type=Path, default=Path('./datasets/windsurfers'), help='Output dataset root')
     parser.add_argument('--val-ratio', type=float, default=0.02, help='Validation split fraction')
     parser.add_argument('--seed', type=int, default=0, help='Random seed for splitting')
+    parser.add_argument('--base-model', type=str, default='yolo11s.pt', help='Base model')
 
     # training hyper-parameters
     parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
@@ -212,7 +213,7 @@ def main():
     args = parser.parse_args()
 
     yaml_path = prepare_dataset(args.src, args.dst, args.val_ratio, args.seed)
-    train_model(yaml_path, args.epochs, args.imgsz, args.batch, args.device)
+    train_model(args.base_model, yaml_path, args.epochs, args.imgsz, args.batch, args.device)
     shutil.rmtree(args.dst)
 
 
