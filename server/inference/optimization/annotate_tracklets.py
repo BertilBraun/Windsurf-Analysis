@@ -147,6 +147,12 @@ class TrackAnnotatorWindow(QMainWindow):
         self.pre_tracks = preprocessed_tracks
         self.on_finished = on_finished
 
+        # Map from original preprocessed track id -> TrackLite object (stable reference)
+        self.pre_id_to_tracklite: dict[int, TrackLite] = {}
+        for tl in self.state.loaded_tracks:
+            if int(tl.track_id) < 0:
+                self.pre_id_to_tracklite[-int(tl.track_id)] = tl
+
         # golden assignments: preprocessed track id -> golden id
         self.assignments: dict[int, int] = {}
         self.history: list[tuple[int, int | None]] = []  # (pre_id, prev_golden_or_None)
@@ -189,6 +195,11 @@ class TrackAnnotatorWindow(QMainWindow):
             self._update_hud(brief=f'Already assigned (golden {track_id})')
             return
         pre_id = int(-track_id)
+
+        # Check temporal overlap with existing assignments for this golden id
+        if not self._can_assign_without_overlap(pre_id, self.current_golden_id):
+            self._update_hud(brief='Overlap conflict: cannot assign to this golden id')
+            return
         prev = self.assignments.get(pre_id)
         self.history.append((pre_id, prev))
         self.assignments[pre_id] = self.current_golden_id
@@ -227,6 +238,9 @@ class TrackAnnotatorWindow(QMainWindow):
             assigned = len(self.assignments)
             if assigned == total:
                 self._finalize_and_save()
+            else:
+                # Seek to beginning for next assignment round
+                self._on_seek(0)
             return
         if key == Qt.Key.Key_Backspace:
             self._undo()
@@ -276,15 +290,36 @@ class TrackAnnotatorWindow(QMainWindow):
 
     # --------------------------- Display management ------------------------- #
     def _apply_display_id(self, pre_id: int, new_id: int) -> None:
-        # Update track ids in loaded_tracks for the given preprocessed track
-        for t in self.state.loaded_tracks:
-            if int(t.track_id) == -int(pre_id) or (new_id < 0 and int(t.track_id) == int(new_id)):
-                t.track_id = int(new_id)
+        # Update track id for this specific preprocessed track's TrackLite
+        tl = self.pre_id_to_tracklite.get(int(pre_id))
+        if tl is not None:
+            tl.track_id = int(new_id)
         # Rebuild fast lookups
         self.state.visible_tracks = self.state._extract_visible_tracks()
         self.state.detections_by_frame = self.state._rebuild_detection_index()
         # Refresh overlay
         self.video_widget.update()
+
+    def _can_assign_without_overlap(self, pre_id: int, golden_id: int) -> bool:
+        # Frames of the candidate preprocessed track
+        frames_candidate: set[int] = set()
+        for t in self.pre_tracks:
+            if int(t.track_id) == int(pre_id):
+                frames_candidate = {int(d.frame_idx) for d in t.sorted_detections}
+                break
+        if not frames_candidate:
+            return False
+        # Frames already used by tracks assigned to this golden id
+        frames_used: set[int] = set()
+        for assigned_pre_id, gid in self.assignments.items():
+            if int(gid) != int(golden_id):
+                continue
+            for t in self.pre_tracks:
+                if int(t.track_id) == int(assigned_pre_id):
+                    frames_used.update(int(d.frame_idx) for d in t.sorted_detections)
+                    break
+        # No overlap allowed
+        return frames_candidate.isdisjoint(frames_used)
 
     # ----------------------------- Finalization ----------------------------- #
     def _finalize_and_save(self) -> None:
