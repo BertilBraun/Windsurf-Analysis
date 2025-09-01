@@ -26,6 +26,7 @@ import random
 import argparse
 import numpy as np
 from typing import Optional, Tuple
+from .screen_utils import get_screen_size, overlay_screen_warning
 
 from pathlib import Path
 
@@ -71,6 +72,7 @@ orig_img: Optional[np.ndarray] = None
 scale_factor: float = 1.0
 grow_mode = False  # True: grow (green), False: shrink (red)
 last_saved: Optional[Tuple[Path, int, int]] = None  # (vpath, frame_no, sid)
+screen_size: Optional[Tuple[int, int]] = get_screen_size()
 
 
 def mouse_cb(event, x, y, flags, param):
@@ -229,6 +231,7 @@ while sample_count < args.samples:
             'annotate', f'annotate [{sample_count}/{args.samples}] {vpath.name} (frame {frame_no + 1}/{fcnt})'
         )
         to_show = disp if disp is not None else (img if img is not None else np.zeros((10, 10, 3), dtype=np.uint8))
+        to_show = overlay_screen_warning(to_show, screen_size)
         cv2.imshow('annotate', to_show)
         key = cv2.waitKey(20) & 0xFF
 

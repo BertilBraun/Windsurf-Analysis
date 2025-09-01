@@ -29,6 +29,7 @@ import numpy as np
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
+from .screen_utils import get_screen_size, overlay_screen_warning
 
 
 SUPPORTED_IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp'}
@@ -85,6 +86,9 @@ class ImageBboxEditor:
         self.start_y: int = 0
         self.mouse_x: int = 0
         self.mouse_y: int = 0
+
+        # Screen info (width, height) in pixels; None if unavailable
+        self.screen_size: Optional[Tuple[int, int]] = get_screen_size()
 
         cv2.namedWindow('bbox-editor')
         cv2.setMouseCallback('bbox-editor', self._mouse_cb)
@@ -184,6 +188,9 @@ class ImageBboxEditor:
             y2 = max(self.start_y, self.mouse_y)
             cv2.rectangle(canvas, (x1, y1), (x2, y2), (255, 255, 0), 2)
 
+        # Warn if the display image is larger than the screen (allow modest margins)
+        canvas = overlay_screen_warning(canvas, self.screen_size)
+
         title = f'bbox-editor [{self.index + 1}/{len(self.image_paths)}] {self.image_paths[self.index].name}'
         cv2.setWindowTitle('bbox-editor', title)
         cv2.imshow('bbox-editor', canvas)
@@ -267,6 +274,12 @@ class ImageBboxEditor:
     def run(self) -> None:
         self._load_image_and_labels()
         while True:
+            # Allow closing via window close (X) button
+            try:
+                if cv2.getWindowProperty('bbox-editor', cv2.WND_PROP_VISIBLE) < 1:
+                    break
+            except cv2.error:
+                break
             self._draw()
             key = cv2.waitKey(20) & 0xFF
 
