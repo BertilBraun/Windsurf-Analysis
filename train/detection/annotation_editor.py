@@ -13,6 +13,7 @@ Keys:
     w/a/s/d  : move/resize selected box edge (mode: grow or shrink)
     q        : toggle shrink/grow mode
     Esc      : quit
+    backspace: delete sample
 
 Notes:
     - Loads and saves YOLO format labels: class cx cy w h (normalized)
@@ -22,6 +23,7 @@ Notes:
 from __future__ import annotations
 
 import argparse
+import os
 import cv2
 import numpy as np
 from dataclasses import dataclass
@@ -253,6 +255,14 @@ class ImageBboxEditor:
             self.selected_idx = min(idx, len(self.boxes) - 1)
         self.grow_mode = False
 
+    def _delete_image(self) -> None:
+        os.remove(self.image_paths[self.index])
+        os.remove(self._label_path_for(self.image_paths[self.index]))
+        self.image_paths.pop(self.index)
+        if self.index == len(self.image_paths):
+            self.index -= 1
+        self._load_image_and_labels()
+
     # ---------- main loop --------------------------------------------------
     def run(self) -> None:
         self._load_image_and_labels()
@@ -295,6 +305,9 @@ class ImageBboxEditor:
                 if self.index < len(self.image_paths) - 1:
                     self.index += 1
                     self._load_image_and_labels()
+
+            elif key == 8:
+                self._delete_image()
 
         cv2.destroyAllWindows()
 
