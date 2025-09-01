@@ -5,7 +5,7 @@ import glob
 import pickle
 import argparse
 from pathlib import Path
-from typing import Iterable, Callable, Optional
+from typing import Callable, Optional
 
 
 # Make project importable when run as a script

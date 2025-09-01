@@ -40,7 +40,11 @@ class SurferDetector:
         self.yolo_model = YOLO(model=yolo_model_path, verbose=False)
         self.reid_model = ReID(model_path=reid_model_path)
 
-    @cache_to_file('yolo_detections', ignore_args=[0], additional_args=[YOLO_MODEL_PATH, REID_MODEL_PATH])
+    @cache_to_file(
+        'yolo_detections',
+        ignore_args=[0],
+        additional_args=[YOLO_MODEL_PATH, REID_MODEL_PATH, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE],
+    )
     def run_object_detection_on_video(self, video_path: os.PathLike | str) -> list[Detection]:
         """Run batched inference on entire video and return all detections as a list.
 
