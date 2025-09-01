@@ -22,7 +22,7 @@ tensorboard
 
 pillow
 
-cpython
+cython
 
 pulp
  
