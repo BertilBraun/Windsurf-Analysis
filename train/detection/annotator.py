@@ -24,6 +24,8 @@ import re
 import cv2
 import random
 import argparse
+import numpy as np
+from typing import Optional, Tuple
 
 from pathlib import Path
 
@@ -49,13 +51,13 @@ for v in videos:
 weights = [c / sum(fcounts) for c in fcounts]
 
 
-def resize_to_max(img, max_side=2048):
+def resize_to_max(img, max_side=2048) -> Tuple[np.ndarray, float]:
     h, w = img.shape[:2]
     scale = min(1.0, max_side / max(h, w))
     if scale < 1.0:
         new_w, new_h = int(w * scale), int(h * scale)
         img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
-    return img
+    return img, scale
 
 
 # ---------- globals ---------------------------------------------------------
@@ -63,9 +65,12 @@ drawing = False
 ix = iy = 0
 mx, my = 0, 0
 boxes = []  # list of [x1,y1,x2,y2] floats
-img = disp = None
+img: Optional[np.ndarray] = None
+disp: Optional[np.ndarray] = None
+orig_img: Optional[np.ndarray] = None
+scale_factor: float = 1.0
 grow_mode = False  # True: grow (green), False: shrink (red)
-last_saved = None  # (vpath, frame_no, sid)
+last_saved: Optional[Tuple[Path, int, int]] = None  # (vpath, frame_no, sid)
 
 
 def mouse_cb(event, x, y, flags, param):
@@ -78,6 +83,8 @@ def mouse_cb(event, x, y, flags, param):
         redraw(img, boxes + [[ix, iy, x, y]])
     elif event == cv2.EVENT_LBUTTONUP:
         drawing = False
+        if img is None:
+            return
         h, w = img.shape[:2]
         x1 = float(max(0, min(ix, x)))
         y1 = float(max(0, min(iy, y)))
@@ -92,7 +99,10 @@ def mouse_cb(event, x, y, flags, param):
 def redraw(base, bx_list, highlight_last=True):
     """draw all boxes on a copy of base, highlight last box if any"""
     global disp
-    disp = base.copy()
+    if base is None:
+        disp = None
+        return
+    canvas: np.ndarray = base.copy()
     n = len(bx_list)
     for i, bx in enumerate(bx_list):
         color = (0, 255, 0)  # green for normal
@@ -100,12 +110,15 @@ def redraw(base, bx_list, highlight_last=True):
         if highlight_last and i == n - 1 and not drawing:
             color = (0, 255, 0) if grow_mode else (0, 0, 255)  # green or red
             thickness = 3
-        cv2.rectangle(disp, (int(bx[0]), int(bx[1])), (int(bx[2]), int(bx[3])), color, thickness)
+        cv2.rectangle(canvas, (int(bx[0]), int(bx[1])), (int(bx[2]), int(bx[3])), color, thickness)
+    disp = canvas
 
 
 def adjust_last(dx1=0, dy1=0, dx2=0, dy2=0):
     """Fine-tune the last box, clamped to image, by ADJUST_BB_SIZE% of bbox size."""
     if not boxes:
+        return
+    if img is None:
         return
     h, w = img.shape[:2]
     x1, y1, x2, y2 = boxes[-1]
@@ -137,14 +150,26 @@ def save_sample(vpath: Path):
     stem = f'{vpath.stem}_sample_{last_sid:04d}'
     jpg = args.output_dir / f'{stem}.jpg'
     txt = args.output_dir / f'{stem}.txt'
-    cv2.imwrite(str(jpg), img)
-    h, w = img.shape[:2]
+
+    # Ensure we have an original image to save
+    if orig_img is None:
+        print('⚠ Original image not available; skipping save')
+        return False
+
+    cv2.imwrite(str(jpg), orig_img)
+    h0, w0 = orig_img.shape[:2]
     with open(txt, 'w') as f:
         for x1, y1, x2, y2 in boxes:
-            cx = (x1 + x2) / 2 / w
-            cy = (y1 + y2) / 2 / h
-            bw = (x2 - x1) / w
-            bh = (y2 - y1) / h
+            # Map from resized/display coords back to original coords
+            ox1 = max(0.0, min(w0 - 1.0, x1 / max(1e-8, scale_factor)))
+            oy1 = max(0.0, min(h0 - 1.0, y1 / max(1e-8, scale_factor)))
+            ox2 = max(0.0, min(w0 - 1.0, x2 / max(1e-8, scale_factor)))
+            oy2 = max(0.0, min(h0 - 1.0, y2 / max(1e-8, scale_factor)))
+
+            cx = (ox1 + ox2) / 2.0 / w0
+            cy = (oy1 + oy2) / 2.0 / h0
+            bw = (ox2 - ox1) / w0
+            bh = (oy2 - oy1) / h0
             f.write(f'0 {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}\n')
     print(f'✔ {jpg.name} ({len(boxes)} boxes)')
     os.system(f"notify-send 'Saved' '{jpg.name}'")
@@ -193,7 +218,8 @@ while sample_count < args.samples:
         continue
 
     grow_mode = False
-    img = resize_to_max(frame)
+    orig_img = frame
+    img, scale_factor = resize_to_max(frame)
     boxes.clear()
     redraw(img, boxes)
     h, w = img.shape[:2]
@@ -202,7 +228,8 @@ while sample_count < args.samples:
         cv2.setWindowTitle(
             'annotate', f'annotate [{sample_count}/{args.samples}] {vpath.name} (frame {frame_no + 1}/{fcnt})'
         )
-        cv2.imshow('annotate', disp)
+        to_show = disp if disp is not None else (img if img is not None else np.zeros((10, 10, 3), dtype=np.uint8))
+        cv2.imshow('annotate', to_show)
         key = cv2.waitKey(20) & 0xFF
 
         if key == 27:  # Esc
@@ -250,7 +277,8 @@ while sample_count < args.samples:
             ok, frame = cap.read()
             cap.release()
             if ok:
-                img = resize_to_max(frame)
+                orig_img = frame
+                img, scale_factor = resize_to_max(frame)
                 boxes.clear()
                 redraw(img, boxes)
             # Stay in this frame for annotation
@@ -265,7 +293,8 @@ while sample_count < args.samples:
             ok, frame = cap.read()
             cap.release()
             if ok:
-                img = resize_to_max(frame)
+                orig_img = frame
+                img, scale_factor = resize_to_max(frame)
                 boxes.clear()
                 redraw(img, boxes)
             # Stay in this frame for annotation
@@ -279,7 +308,8 @@ while sample_count < args.samples:
             ok, frame = cap.read()
             cap.release()
             if ok:
-                img = resize_to_max(frame)
+                orig_img = frame
+                img, scale_factor = resize_to_max(frame)
                 boxes.clear()
                 redraw(img, boxes)
 
@@ -318,7 +348,8 @@ while sample_count < args.samples:
                 ok, frame = cap.read()
                 cap.release()
                 if ok:
-                    img = resize_to_max(frame)
+                    orig_img = frame
+                    img, scale_factor = resize_to_max(frame)
                     redraw(img, boxes)
                     vpath = vpath_del
                     fcnt = fcounts[videos.index(vpath)]
