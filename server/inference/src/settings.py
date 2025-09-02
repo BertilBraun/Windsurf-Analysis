@@ -11,8 +11,8 @@ inference_root_folder = Path(__file__).parent.parent
 YOLO_MODEL_PATH = inference_root_folder / 'weights/yolo_models/windsurfing/best.pt'
 REID_MODEL_PATH = inference_root_folder / 'weights/reid_models/common/osnet_ain_x1_0_msmt17.pth'
 
-IOU_THRESHOLD = 0.5
-CONFIDENCE_THRESHOLD = 0.5
+IOU_THRESHOLD = 0.3
+CONFIDENCE_THRESHOLD = 0.75
 BATCH_SIZE = 32
 
 # Tracking preprocessing settings
@@ -29,9 +29,9 @@ VIDEO_SUFFIX_SECONDS = 1.0
 
 # Greedy preprocessor settings
 GREEDY_PREPROCESSOR_MIN_IOU = 0.5
-GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY = 0.7
+GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY = 0.85
 GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE = 5
-GREEDY_PREPROCESSOR_MIN_IOU_MATCHES_SINGLE_TRACK = 0.1
+GREEDY_PREPROCESSOR_MIN_IOU_MATCHES_SINGLE_TRACK = 0.02
 
 # Greedy tracker settings
 # Greedy tracker merges tracks by average embedding cosine similarity of the tracks until no more possible merges exist, or the max average embedding cosine similarity is below the threshold

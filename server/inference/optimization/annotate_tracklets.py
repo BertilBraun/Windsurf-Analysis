@@ -32,8 +32,8 @@ from PySide6.QtWidgets import QApplication, QMainWindow
 "spacebar" : next golden id
 "backspace" : undo last assignment
 "escape" : finalize and save
-"left arrow" : previous frame
-"right arrow" : next frame
+"left arrow" : previous unassigned tracklet start
+"right arrow" : next unassigned tracklet start
 "control + left arrow" : previous 30 frames
 "control + right arrow" : next 30 frames
 "shift + left arrow" : previous 5 frames
@@ -251,26 +251,18 @@ class TrackAnnotatorWindow(QMainWindow):
         if key == Qt.Key.Key_Left and not (
             mods & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
         ):
-            self._on_seek(self.state.current_frame - 1)
+            self._seek_to_unassigned(-1)
             return
         if key == Qt.Key.Key_Right and not (
             mods & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
         ):
-            self._step(+1)
+            self._seek_to_unassigned(+1)
             return
         if (mods & Qt.KeyboardModifier.ControlModifier) and key == Qt.Key.Key_Left:
-            self._on_seek(
-                self.state.current_frame - int(self.state.video_properties.fps * 30)
-                if self.state.video_properties
-                else 0
-            )
+            self._on_seek(self.state.current_frame - 1)
             return
         if (mods & Qt.KeyboardModifier.ControlModifier) and key == Qt.Key.Key_Right:
-            self._on_seek(
-                self.state.current_frame + int(self.state.video_properties.fps * 30)
-                if self.state.video_properties
-                else 0
-            )
+            self._on_seek(self.state.current_frame + 1)
             return
         if (mods & Qt.KeyboardModifier.ShiftModifier) and key == Qt.Key.Key_Left:
             self._on_seek(
@@ -320,6 +312,37 @@ class TrackAnnotatorWindow(QMainWindow):
                     break
         # No overlap allowed
         return frames_candidate.isdisjoint(frames_used)
+
+    # ------------------------- Unassigned navigation ------------------------ #
+    def _seek_to_unassigned(self, direction: int) -> None:
+        # Build list of (start_frame, pre_id) for unassigned tracks
+        unassigned: list[tuple[int, int]] = []
+        for t in self.pre_tracks:
+            pre_id = int(t.track_id)
+            if pre_id not in self.assignments:
+                unassigned.append((int(t.start_frame), pre_id))
+
+        if not unassigned:
+            self._update_hud(brief='All tracklets assigned')
+            return
+
+        curr = int(self.state.current_frame)
+        if direction > 0:
+            # Next with start > current
+            candidates = [u for u in unassigned if u[0] > curr]
+            if not candidates:
+                self._update_hud(brief='No next unassigned')
+                return
+            target_frame, target_pre = min(candidates, key=lambda x: x[0])
+        else:
+            candidates = [u for u in unassigned if u[0] < curr]
+            if not candidates:
+                self._update_hud(brief='No previous unassigned')
+                return
+            target_frame, target_pre = max(candidates, key=lambda x: x[0])
+
+        self._on_seek(int(target_frame))
+        self._update_hud(brief=f'Go to unassigned pre {int(target_pre)} @ {int(target_frame)}')
 
     # ----------------------------- Finalization ----------------------------- #
     def _finalize_and_save(self) -> None:

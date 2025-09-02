@@ -128,7 +128,7 @@ class VideoWidget(QWidget):
                         painter.drawText(
                             QRect(rx1, max(0, ry1 - 18), 80, 16),
                             Qt.AlignmentFlag.AlignLeft,
-                            f'ID:{track_id}',
+                            f'ID:{track_id} conf:{d.confidence:.2f}',
                         )
 
         # HUD text
