@@ -10,8 +10,8 @@ Keys:
     r        : delete selected box (or last if none selected)
     Space    : save labels (.txt) for this image
     , / .    : previous / next image
-    w/a/s/d  : move/resize selected box edge (mode: grow or shrink)
-    q        : toggle shrink/grow mode
+    w/a/s/d  : move/resize selected box edge (mode: grow)
+    W/A/S/D  : move/resize selected box edge (mode: shrink)
     Esc      : quit
     backspace: delete sample
 
@@ -29,21 +29,10 @@ import numpy as np
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
-from .screen_utils import get_screen_size, overlay_screen_warning
+from screen_utils import get_screen_size, overlay_screen_warning
 
 
 SUPPORTED_IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp'}
-
-
-def resize_to_max(image, max_side: int = 2048) -> Tuple:  # (img_resized, scale)
-    h, w = image.shape[:2]
-    side = max(h, w)
-    if side <= max_side:
-        return image, 1.0
-    scale = max_side / float(side)
-    new_w, new_h = int(w * scale), int(h * scale)
-    resized = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
-    return resized, scale
 
 
 @dataclass
@@ -72,13 +61,10 @@ class ImageBboxEditor:
             raise SystemExit(f'No images found in {images_dir}')
 
         self.index: int = 0
-        self.orig_img: Optional[np.ndarray] = None  # original image
-        self.disp_img: Optional[np.ndarray] = None  # displayed (possibly resized)
-        self.scale: float = 1.0  # disp = orig * scale
+        self.img: Optional[np.ndarray] = None  # image
 
         self.boxes: List[BBox] = []
         self.selected_idx: Optional[int] = None
-        self.grow_mode: bool = False  # False: shrink, True: grow
 
         # drawing state
         self.is_drawing: bool = False
@@ -86,9 +72,6 @@ class ImageBboxEditor:
         self.start_y: int = 0
         self.mouse_x: int = 0
         self.mouse_y: int = 0
-
-        # Screen info (width, height) in pixels; None if unavailable
-        self.screen_size: Optional[Tuple[int, int]] = get_screen_size()
 
         cv2.namedWindow('bbox-editor')
         cv2.setMouseCallback('bbox-editor', self._mouse_cb)
@@ -103,10 +86,9 @@ class ImageBboxEditor:
 
     def _load_image_and_labels(self) -> None:
         img_path = self.image_paths[self.index]
-        self.orig_img = cv2.imread(str(img_path))
-        if self.orig_img is None:
+        self.img = cv2.imread(str(img_path))
+        if self.img is None:
             raise SystemExit(f'Failed to read image: {img_path}')
-        self.disp_img, self.scale = resize_to_max(self.orig_img, self.max_side)
 
         self.boxes = self._load_labels_for(img_path)
         self.selected_idx = len(self.boxes) - 1 if self.boxes else None
@@ -117,8 +99,8 @@ class ImageBboxEditor:
         if not label_path.exists():
             return boxes
 
-        assert self.orig_img is not None
-        H_orig, W_orig = self.orig_img.shape[:2]
+        assert self.img is not None
+        H_orig, W_orig = self.img.shape[:2]
         with open(label_path, 'r') as f:
             for line in f:
                 parts = line.strip().split()
@@ -135,25 +117,21 @@ class ImageBboxEditor:
                 y1 = center_y - abs_h / 2.0
                 x2 = center_x + abs_w / 2.0
                 y2 = center_y + abs_h / 2.0
-                # Map to DISPLAY space
-                sx = self.scale
-                boxes.append(BBox(x1 * sx, y1 * sx, x2 * sx, y2 * sx, cls_id))
+                boxes.append(BBox(x1, y1, x2, y2, cls_id))
         return boxes
 
     def _save_labels(self) -> None:
         img_path = self.image_paths[self.index]
         label_path = self._label_path_for(img_path)
-        assert self.orig_img is not None
-        H_orig, W_orig = self.orig_img.shape[:2]
-        inv_scale = 1.0 / self.scale
+        assert self.img is not None
+        H_orig, W_orig = self.img.shape[:2]
 
         with open(label_path, 'w') as f:
             for b in self.boxes:
-                # Map DISPLAY -> ORIGINAL
-                x1 = b.x1 * inv_scale
-                y1 = b.y1 * inv_scale
-                x2 = b.x2 * inv_scale
-                y2 = b.y2 * inv_scale
+                x1 = b.x1
+                y1 = b.y1
+                x2 = b.x2
+                y2 = b.y2
                 # Clamp
                 x1 = max(0.0, min(x1, W_orig - 1.0))
                 y1 = max(0.0, min(y1, H_orig - 1.0))
@@ -169,13 +147,13 @@ class ImageBboxEditor:
 
     # ---------- drawing / UI ----------------------------------------------
     def _draw(self) -> None:
-        assert self.disp_img is not None
-        canvas = self.disp_img.copy()
+        assert self.img is not None
+        canvas = self.img.copy()
         for i, b in enumerate(self.boxes):
             color = (0, 255, 0)
             thickness = 2
             if self.selected_idx is not None and i == self.selected_idx:
-                color = (0, 255, 0) if self.grow_mode else (0, 0, 255)
+                color = (0, 0, 255)
                 thickness = 3
             x1, y1, x2, y2 = b.as_int_tuple()
             cv2.rectangle(canvas, (x1, y1), (x2, y2), color, thickness)
@@ -189,7 +167,7 @@ class ImageBboxEditor:
             cv2.rectangle(canvas, (x1, y1), (x2, y2), (255, 255, 0), 2)
 
         # Warn if the display image is larger than the screen (allow modest margins)
-        canvas = overlay_screen_warning(canvas, self.screen_size)
+        canvas = overlay_screen_warning(canvas, get_screen_size())
 
         title = f'bbox-editor [{self.index + 1}/{len(self.image_paths)}] {self.image_paths[self.index].name}'
         cv2.setWindowTitle('bbox-editor', title)
@@ -206,7 +184,6 @@ class ImageBboxEditor:
                     break
             if clicked_idx is not None:
                 self.selected_idx = clicked_idx
-                self.grow_mode = False
                 self.is_drawing = False
             else:
                 # start drawing a new box
@@ -226,7 +203,6 @@ class ImageBboxEditor:
             if x2 > x1 + 1 and y2 > y1 + 1:
                 self.boxes.append(BBox(x1, y1, x2, y2, 0))
                 self.selected_idx = len(self.boxes) - 1
-                self.grow_mode = False
 
     def _adjust_selected(self, dx1=0, dy1=0, dx2=0, dy2=0) -> None:
         if not self.boxes:
@@ -234,21 +210,19 @@ class ImageBboxEditor:
         idx = self.selected_idx if self.selected_idx is not None else len(self.boxes) - 1
         self.selected_idx = idx
         b = self.boxes[idx]
-        assert self.disp_img is not None
-        H, W = self.disp_img.shape[:2]
+        assert self.img is not None
+        H, W = self.img.shape[:2]
 
         # step based on bbox size
         box_w = max(1.0, abs(b.x2 - b.x1))
         box_h = max(1.0, abs(b.y2 - b.y1))
-        step_x = max(1.0, 0.02 * box_w)
-        step_y = max(1.0, 0.02 * box_h)
+        step_x = max(1.0, 0.01 * box_w)
+        step_y = max(1.0, 0.01 * box_h)
 
-        factor = 1.0 if self.grow_mode else -1.0
-
-        nx1 = max(0.0, min(b.x1 + factor * dx1 * step_x, b.x2 - 1.0))
-        ny1 = max(0.0, min(b.y1 + factor * dy1 * step_y, b.y2 - 1.0))
-        nx2 = min(W - 1.0, max(b.x2 + factor * dx2 * step_x, nx1 + 1.0))
-        ny2 = min(H - 1.0, max(b.y2 + factor * dy2 * step_y, ny1 + 1.0))
+        nx1 = max(0.0, min(b.x1 + dx1 * step_x, b.x2 - 1.0))
+        ny1 = max(0.0, min(b.y1 + dy1 * step_y, b.y2 - 1.0))
+        nx2 = min(W - 1.0, max(b.x2 + dx2 * step_x, nx1 + 1.0))
+        ny2 = min(H - 1.0, max(b.y2 + dy2 * step_y, ny1 + 1.0))
         self.boxes[idx] = BBox(nx1, ny1, nx2, ny2, b.cls_id)
 
     def _delete_selected(self) -> None:
@@ -260,7 +234,6 @@ class ImageBboxEditor:
             self.selected_idx = None
         else:
             self.selected_idx = min(idx, len(self.boxes) - 1)
-        self.grow_mode = False
 
     def _delete_image(self) -> None:
         os.remove(self.image_paths[self.index])
@@ -281,13 +254,10 @@ class ImageBboxEditor:
             except cv2.error:
                 break
             self._draw()
-            key = cv2.waitKey(20) & 0xFF
+            key = cv2.waitKey(20)
 
             if key == 27:  # Esc
                 break
-
-            elif key == ord('q'):
-                self.grow_mode = not self.grow_mode
 
             elif key == ord('r'):
                 self._delete_selected()
@@ -300,14 +270,29 @@ class ImageBboxEditor:
                 self._load_image_and_labels()
 
             # adjust selected
-            elif key == ord('w'):
+            elif (key) == ord('w'):
                 self._adjust_selected(dy1=-1)
+            elif key == ord('W'):
+                self._adjust_selected(dy1=1)
             elif key == ord('a'):
                 self._adjust_selected(dx1=-1)
+            elif key == ord('A'):
+                self._adjust_selected(dx1=1)
             elif key == ord('s'):
                 self._adjust_selected(dy2=1)
+            elif key == ord('S'):
+                self._adjust_selected(dy2=-1)
             elif key == ord('d'):
                 self._adjust_selected(dx2=1)
+            elif key == ord('D'):
+                self._adjust_selected(dx2=-1)
+
+            elif key == ord('n'):
+                # select next box
+                self.selected_idx = min(self.selected_idx or 0 + 1, len(self.boxes) - 1)
+            elif key == ord('p'):
+                # select previous box
+                self.selected_idx = max(self.selected_idx or 0 - 1, 0)
 
             # previous / next image
             elif key == ord(','):
@@ -325,17 +310,13 @@ class ImageBboxEditor:
         cv2.destroyAllWindows()
 
 
-def parse_args(argv: Optional[List[str]] = None):
+def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument('images_dir', type=Path, help='Directory containing images and YOLO .txt labels')
     p.add_argument(
         '--max-side', type=int, default=2048, help='Resize longest side for display (labels saved in original size)'
     )
-    return p.parse_args(argv)
-
-
-def main() -> None:
-    args = parse_args()
+    args = p.parse_args()
     editor = ImageBboxEditor(args.images_dir, max_side=args.max_side)
     editor.run()
 
