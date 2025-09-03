@@ -200,9 +200,14 @@ def main():
     parser = argparse.ArgumentParser(description='Prepare windsurfer detection dataset and train YOLO v11.')
     parser.add_argument('--src', type=Path, required=True, help='Raw dataset directory')
     parser.add_argument('--dst', type=Path, default=Path('./datasets/windsurfers'), help='Output dataset root')
-    parser.add_argument('--val-ratio', type=float, default=0.02, help='Validation split fraction')
+    parser.add_argument('--val-ratio', type=float, default=0.05, help='Validation split fraction')
     parser.add_argument('--seed', type=int, default=0, help='Random seed for splitting')
-    parser.add_argument('--base-model', type=str, default='yolo11s.pt', help='Base model')
+    parser.add_argument(
+        '--base-model',
+        type=str,
+        default='yolo11s.pt',  # yolo11n, yolo11s, yolo11m etc.
+        help='Base model',
+    )
 
     # training hyper-parameters
     parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
