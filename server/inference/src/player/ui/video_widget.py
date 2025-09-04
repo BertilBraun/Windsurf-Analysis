@@ -133,7 +133,11 @@ class VideoWidget(QWidget):
 
         # HUD text
         if self._hud_text:
-            painter.setPen(QPen(QColor(255, 255, 255)))
+            text_width = painter.fontMetrics().boundingRect(self._hud_text).width()
+            text_height = 10
+            print(self._hud_text, text_width, text_height)
+            painter.fillRect(QRect(10, 10, 10 + text_width, 10 + text_height), QColor(255, 255, 255))
+            painter.setPen(QPen(QColor(0, 0, 0)))
             painter.drawText(
                 self.rect().adjusted(10, 10, -10, -10),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,

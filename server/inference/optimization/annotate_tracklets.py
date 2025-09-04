@@ -240,7 +240,9 @@ class TrackAnnotatorWindow(QMainWindow):
                 self._finalize_and_save()
             else:
                 # Seek to beginning for next assignment round
-                self._on_seek(0)
+                unassigned = self._unassigned_tracks()
+                earliest_unassigned_frame = min(unassigned, key=lambda x: x[0])[0]
+                self._on_seek(earliest_unassigned_frame)
             return
         if key == Qt.Key.Key_Backspace:
             self._undo()
@@ -314,13 +316,13 @@ class TrackAnnotatorWindow(QMainWindow):
         return frames_candidate.isdisjoint(frames_used)
 
     # ------------------------- Unassigned navigation ------------------------ #
+    def _unassigned_tracks(self) -> list[tuple[int, int]]:
+        return [
+            (int(t.start_frame), int(t.track_id)) for t in self.pre_tracks if int(t.track_id) not in self.assignments
+        ]
+
     def _seek_to_unassigned(self, direction: int) -> None:
-        # Build list of (start_frame, pre_id) for unassigned tracks
-        unassigned: list[tuple[int, int]] = []
-        for t in self.pre_tracks:
-            pre_id = int(t.track_id)
-            if pre_id not in self.assignments:
-                unassigned.append((int(t.start_frame), pre_id))
+        unassigned = self._unassigned_tracks()
 
         if not unassigned:
             self._update_hud(brief='All tracklets assigned')
