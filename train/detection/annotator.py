@@ -8,8 +8,8 @@ Mouse:
 Keys:
     r         : undo last box
     Space     : accept / save frame
-    w/a/s/d   : move/resize last box (mode: grow or shrink)
-    q         : toggle shrink/grow mode
+    w/a/s/d  : move/resize selected box edge (mode: grow)
+    W/A/S/D  : move/resize selected box edge (mode: shrink)
     Esc       : quit
     ','       : previous frame
     '.'       : next frame
@@ -70,16 +70,14 @@ img: Optional[np.ndarray] = None
 disp: Optional[np.ndarray] = None
 orig_img: Optional[np.ndarray] = None
 scale_factor: float = 1.0
-grow_mode = False  # True: grow (green), False: shrink (red)
 last_saved: Optional[Tuple[Path, int, int]] = None  # (vpath, frame_no, sid)
 screen_size: Optional[Tuple[int, int]] = get_screen_size()
 
 
 def mouse_cb(event, x, y, flags, param):
-    global drawing, ix, iy, boxes, disp, grow_mode, mx, my
+    global drawing, ix, iy, boxes, disp, mx, my
     mx, my = x, y
     if event == cv2.EVENT_LBUTTONDOWN:
-        grow_mode = False
         drawing, ix, iy = True, x, y
     elif event == cv2.EVENT_MOUSEMOVE and drawing:
         redraw(img, boxes + [[ix, iy, x, y]])
@@ -110,7 +108,7 @@ def redraw(base, bx_list, highlight_last=True):
         color = (0, 255, 0)  # green for normal
         thickness = 2
         if highlight_last and i == n - 1 and not drawing:
-            color = (0, 255, 0) if grow_mode else (0, 0, 255)  # green or red
+            color = (0, 0, 255)  # red
             thickness = 3
         cv2.rectangle(canvas, (int(bx[0]), int(bx[1])), (int(bx[2]), int(bx[3])), color, thickness)
     disp = canvas
@@ -130,13 +128,10 @@ def adjust_last(dx1=0, dy1=0, dx2=0, dy2=0):
     step_x = max(1, int(ADJUST_BB_SIZE * box_w))
     step_y = max(1, int(ADJUST_BB_SIZE * box_h))
 
-    # In grow mode, move border outward; in shrink, move inward.
-    factor = 1 if grow_mode else -1
-
-    nx1 = max(0, min(x1 + factor * dx1 * step_x, x2 - 1))
-    ny1 = max(0, min(y1 + factor * dy1 * step_y, y2 - 1))
-    nx2 = min(w - 1, max(x2 + factor * dx2 * step_x, nx1 + 1))
-    ny2 = min(h - 1, max(y2 + factor * dy2 * step_y, ny1 + 1))
+    nx1 = max(0, min(x1 + dx1 * step_x, x2 - 1))
+    ny1 = max(0, min(y1 + dy1 * step_y, y2 - 1))
+    nx2 = min(w - 1, max(x2 + dx2 * step_x, nx1 + 1))
+    ny2 = min(h - 1, max(y2 + dy2 * step_y, ny1 + 1))
     boxes[-1] = [nx1, ny1, nx2, ny2]
     redraw(img, boxes)
 
@@ -219,7 +214,6 @@ while sample_count < args.samples:
         frame_no = random.randint(0, fcnt - 1)
         continue
 
-    grow_mode = False
     orig_img = frame
     img, scale_factor = resize_to_max(frame)
     boxes.clear()
@@ -233,20 +227,18 @@ while sample_count < args.samples:
         to_show = disp if disp is not None else (img if img is not None else np.zeros((10, 10, 3), dtype=np.uint8))
         to_show = overlay_screen_warning(to_show, screen_size)
         cv2.imshow('annotate', to_show)
-        key = cv2.waitKey(20) & 0xFF
+        key = cv2.waitKey(20)
 
         if key == 27:  # Esc
             cv2.destroyAllWindows()
             raise SystemExit('Aborted')
 
         elif key == ord('r'):
-            grow_mode = False
             if boxes:
                 boxes.pop()
                 redraw(img, boxes)
 
         elif key == 32:  # Space -> accept/save
-            grow_mode = False
             if save_sample(vpath):
                 # Next: Pick random frame/video
                 idx = random.choices(range(len(videos)), weights)[0]
@@ -254,21 +246,23 @@ while sample_count < args.samples:
                 frame_no = random.randint(0, fcnt - 1)
             break
 
-        elif key == ord('q'):  # toggle grow/shrink
-            grow_mode = not grow_mode
-            mode = 'Grow' if grow_mode else 'Shrink'
-            print(f'Mode: {mode}')
-            redraw(img, boxes)
-
         # Fine-tune last box
         elif key == ord('w'):
             adjust_last(dy1=-1)
+        elif key == ord('W'):
+            adjust_last(dy1=1)
         elif key == ord('a'):
             adjust_last(dx1=-1)
+        elif key == ord('A'):
+            adjust_last(dx1=1)
         elif key == ord('s'):
             adjust_last(dy2=1)
+        elif key == ord('S'):
+            adjust_last(dy2=-1)
         elif key == ord('d'):
             adjust_last(dx2=1)
+        elif key == ord('D'):
+            adjust_last(dx2=-1)
 
         # Previous frame
         elif key == ord(','):

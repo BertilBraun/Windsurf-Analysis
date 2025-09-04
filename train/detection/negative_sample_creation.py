@@ -22,7 +22,6 @@ Notes:
 from __future__ import annotations
 
 import argparse
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -149,13 +148,10 @@ class NegativeSampleCreator:
         right = pad_w - left
         return cv2.copyMakeBorder(crop, top, bottom, left, right, borderType=cv2.BORDER_REPLICATE)
 
-    def _save_crops(self) -> int:
-        if not self.boxes:
-            return 0
+    def _save_crops(self) -> None:
         assert self.img is not None
         H, W = self.img.shape[:2]
         img_path = self.image_paths[self.index]
-        saved = 0
 
         for i, b in enumerate(self.boxes, start=1):
             x1, y1, x2, y2 = b.as_int_tuple()
@@ -181,9 +177,6 @@ class NegativeSampleCreator:
             # Create empty label file for negative sample
             with open(out_lbl_path, 'w'):
                 pass
-            saved += 1
-
-        return saved
 
     # ---------- drawing / UI ----------------------------------------------
     def _draw(self) -> None:
@@ -277,7 +270,7 @@ class NegativeSampleCreator:
                 self._delete_selected()
 
             elif key == ord(' '):
-                saved = self._save_crops()
+                self._save_crops()
                 # advance to next image after saving
                 if self.index < len(self.image_paths) - 1:
                     self.index += 1
