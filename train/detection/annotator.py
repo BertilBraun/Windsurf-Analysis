@@ -26,7 +26,7 @@ import random
 import argparse
 import numpy as np
 from typing import Optional, Tuple
-from .screen_utils import get_screen_size, overlay_screen_warning
+from screen_utils import get_screen_size, overlay_screen_warning
 
 from pathlib import Path
 
