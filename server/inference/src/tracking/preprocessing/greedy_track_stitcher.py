@@ -6,12 +6,6 @@ from collections import defaultdict
 from ...util.video_io import VideoInfo
 from ...common_types import Detection, FrameIndex, Track, TrackId
 from ...util.similarity_helpers import cosine_similarity
-from ...settings import (
-    GREEDY_PREPROCESSOR_MIN_IOU,
-    GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY,
-    GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE,
-    GREEDY_PREPROCESSOR_MIN_IOU_MATCHES_SINGLE_TRACK,
-)
 
 
 class _ComparisonResult(Enum):
@@ -23,10 +17,10 @@ class _ComparisonResult(Enum):
 class GreedyTrackStitcher:
     def __init__(
         self,
-        greedy_min_iou: float = GREEDY_PREPROCESSOR_MIN_IOU,
-        greedy_min_cosine_similarity: float = GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY,
-        greedy_max_frame_distance: int = GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE,
-        greedy_min_iou_matches_single_track: float = GREEDY_PREPROCESSOR_MIN_IOU_MATCHES_SINGLE_TRACK,
+        greedy_min_iou: float,
+        greedy_min_cosine_similarity: float,
+        greedy_max_frame_distance: int,
+        greedy_min_iou_matches_single_track: float,
     ):
         self.greedy_min_iou = greedy_min_iou
         self.greedy_min_cosine_similarity = greedy_min_cosine_similarity

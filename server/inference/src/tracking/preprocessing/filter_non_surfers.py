@@ -27,11 +27,7 @@ from ...util.video_io import VideoInfo
 
 
 class FilterNonSurfers:
-    def __init__(
-        self,
-        min_frames: int = 5,
-        similarity_thresh: float = 0.8,
-    ):
+    def __init__(self, min_frames: int, similarity_thresh: float):
         self.min_frames = min_frames
         self.similarity_thresh = similarity_thresh
 
