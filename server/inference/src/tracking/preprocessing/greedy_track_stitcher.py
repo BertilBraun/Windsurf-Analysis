@@ -4,7 +4,6 @@ from collections import defaultdict
 
 
 from ...util.video_io import VideoInfo
-from .filter_non_surfers import filter_non_surfers_from_tracks
 from ...common_types import Detection, FrameIndex, Track, TrackId
 from ...util.similarity_helpers import cosine_similarity
 from ...settings import (
@@ -21,7 +20,7 @@ class _ComparisonResult(Enum):
     NO_MATCH = 'no_match'
 
 
-class GreedyPreprocessor:
+class GreedyTrackStitcher:
     def __init__(
         self,
         greedy_min_iou: float = GREEDY_PREPROCESSOR_MIN_IOU,
@@ -36,20 +35,8 @@ class GreedyPreprocessor:
         self.min_iou_matches_single_track = greedy_min_iou_matches_single_track
 
     def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
-        logging.info(f'{"=" * 30} Running greedy preprocessor with {len(tracks)} tracks {"=" * 30}')
-
-        tracks = self._preprocess_tracks(tracks)
-
-        if False:  # TODO: reenable? seems to work well without it
-            kept, removed = filter_non_surfers_from_tracks(tracks)
-            logging.info(f'Greedy preprocessor kept {len(kept)} tracks and removed {len(removed)} tracks')
-        else:
-            kept = tracks
-
-        return kept
-
-    def _preprocess_tracks(self, tracks: list[Track]) -> list[Track]:
         """Greedily stiches detections onto tracks as long as both IOU and cosine similarity are high."""
+        logging.info(f'{"=" * 30} Running greedy preprocessor with {len(tracks)} tracks {"=" * 30}')
 
         # We match greedily if:
         # the bounding box of a detection overlaps only with a single active track

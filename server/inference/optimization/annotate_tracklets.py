@@ -16,7 +16,7 @@ if str(project_root) not in sys.path:
 
 from server.inference.src.util.video_io import get_video_properties, VideoInfo
 from server.inference.src.tracking.detector import SurferDetector
-from server.inference.src.tracking.preprocessing.greedy_preprocessor import GreedyPreprocessor
+from server.inference.src.tracking.preprocessing.preprocessor import Preprocessor
 from server.inference.src.common_types import Detection, Track
 from server.inference.src.player.core.player_state import Metadata, VideoProperties, TrackLite, DetectionLite
 from server.inference.src.settings import YOLO_MODEL_PATH, REID_MODEL_PATH
@@ -402,7 +402,7 @@ class _BatchAnnotatorController:
         detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH, reid_model_path=REID_MODEL_PATH)
         detections = detector.run_object_detection_on_video(video)
         tracks: list[Track] = _detections_to_initial_tracks(detections)
-        tracks = GreedyPreprocessor().track(tracks, video_props)
+        tracks = Preprocessor().track(tracks, video_props)
 
         self._win = TrackAnnotatorWindow(video, video_props, tracks, self.output_dir, on_finished=self._next)
         self._win.show()

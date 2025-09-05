@@ -7,7 +7,7 @@ import modal
 from .inference.src.windsurf_video_processor import (
     SurferDetector,
     get_video_properties,
-    GreedyPreprocessor,
+    Preprocessor,
     DiscreteILPTracker,
     TrackFiltering,
     TrackRelabeling,
@@ -90,7 +90,7 @@ class InferenceModel:
 
             with timeit(f'{job_id}: Trackers'):
                 trackers: Sequence[Tracker] = [
-                    GreedyPreprocessor(),
+                    Preprocessor(),
                     # GreedyTracker(),
                     DiscreteILPTracker(),
                     TrackFiltering(),

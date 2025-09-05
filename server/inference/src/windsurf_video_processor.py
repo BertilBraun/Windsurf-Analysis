@@ -18,7 +18,7 @@ from .tracking.detector import SurferDetector
 from .tracking.tracking import Tracker
 from .tracking.track_processing import TrackFiltering, TrackInterpolation, TrackSmoothing, TrackRelabeling
 from .tracking.discrete_opt_tracker import DiscreteILPTracker
-from .tracking.preprocessing.greedy_preprocessor import GreedyPreprocessor
+from .tracking.preprocessing.preprocessor import Preprocessor
 from .tracking.greedy_tracker import GreedyTracker  # noqa: F401 (imported for optional use)
 
 
@@ -72,13 +72,13 @@ class WindsurfingVideoProcessor:
             detections,
             props,
             trackers=[
-                GreedyPreprocessor(),
                 # GreedyTracker(),
                 DiscreteILPTracker(),
                 TrackFiltering(),
                 TrackInterpolation(),
                 TrackSmoothing(),
                 TrackRelabeling(),
+                Preprocessor(),
             ],
         )
 

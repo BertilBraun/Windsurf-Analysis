@@ -19,56 +19,61 @@ instead of—the inflation test.
 from __future__ import annotations
 
 import numpy as np
-from typing import List, Sequence, Tuple
+from typing import List
 
 from ...common_types import Track, TrackId
 from ...util.similarity_helpers import cosine_similarity, mean_embedding
+from ...util.video_io import VideoInfo
 
 
-def filter_non_surfers_from_tracks(
-    tracks: Sequence[Track],
-    *,
-    min_frames: int = 5,
-    similarity_thresh: float = 0.2,
-) -> Tuple[List[Track], List[Track]]:
-    """Return *(kept, removed)* after pruning short, isolated tracks.
+class FilterNonSurfers:
+    def __init__(
+        self,
+        min_frames: int = 5,
+        similarity_thresh: float = 0.8,
+    ):
+        self.min_frames = min_frames
+        self.similarity_thresh = similarity_thresh
 
-    A track is *removed* when **both** conditions hold:
-    1. It has ``len(track) < min_frames`` detections.
-    2. Its average embedding cosine similarity with any *long* track (≥ *min_frames*) is less than *similarity_thresh*.
+    def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
+        """Return *(kept, removed)* after pruning short, isolated tracks.
 
-    Parameters
-    ----------
-    min_frames      : int
-        Threshold separating *long* vs. *short* tracks.
-    similarity_thresh : float
-        Minimum cosine similarity between average embeddings of tracks to consider merging.
-    """
-    if min_frames <= 0:
-        raise ValueError('min_frames must be positive.')
-    if similarity_thresh <= 0:
-        raise ValueError('similarity_thresh must be positive.')
+        A track is *removed* when **both** conditions hold:
+        1. It has ``len(track) < min_frames`` detections.
+        2. Its average embedding cosine similarity with any *long* track (≥ *min_frames*) is less than *similarity_thresh*.
 
-    kept: List[Track] = []
-    removed: List[Track] = []
+        Parameters
+        ----------
+        min_frames      : int
+            Threshold separating *long* vs. *short* tracks.
+        similarity_thresh : float
+            Minimum cosine similarity between average embeddings of tracks to consider merging.
+        """
+        if self.min_frames <= 0:
+            raise ValueError('min_frames must be positive.')
+        if self.similarity_thresh <= 0:
+            raise ValueError('similarity_thresh must be positive.')
 
-    track_id_to_average_embedding: dict[TrackId, np.ndarray] = {}
-    for track in tracks:
-        if len(track.sorted_detections) >= min_frames:
-            track_id_to_average_embedding[track.track_id] = mean_embedding(track)
+        kept: List[Track] = []
 
-    for track in tracks:
-        if len(track.sorted_detections) >= min_frames:
-            kept.append(track)  # always keep long tracks
-            continue
+        track_id_to_average_embedding: dict[TrackId, np.ndarray] = {}
+        for track in tracks:
+            if len(track.sorted_detections) >= self.min_frames:
+                track_id_to_average_embedding[track.track_id] = mean_embedding(track)
 
-        short_track_average_embedding = mean_embedding(track)
+        for track in tracks:
+            if len(track.sorted_detections) >= self.min_frames:
+                kept.append(track)  # always keep long tracks
+                continue
 
-        for long_track_average_embedding in track_id_to_average_embedding.values():
-            if cosine_similarity(short_track_average_embedding, long_track_average_embedding) > similarity_thresh:
-                kept.append(track)
-                break
-        else:
-            removed.append(track)
+            short_track_average_embedding = mean_embedding(track)
 
-    return kept, removed
+            for long_track_average_embedding in track_id_to_average_embedding.values():
+                if (
+                    cosine_similarity(short_track_average_embedding, long_track_average_embedding)
+                    > self.similarity_thresh
+                ):
+                    kept.append(track)
+                    break
+
+        return kept
