@@ -37,7 +37,7 @@ def clamp_percentage(p: float) -> float:
 
 
 @app.cls(
-    gpu='L40S',
+    gpu='T4',
     max_containers=2,
     scaledown_window=10,  # Scaledown window is 10 seconds
     volumes={'/data': volume.read_only()},
