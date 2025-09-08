@@ -27,9 +27,11 @@ def _detections_to_initial_tracks(detections: list[Detection]) -> list[Track]:
     return [Track(track_id=i + 1, sorted_detections=[det]) for i, det in enumerate(detections)]
 
 
+detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH, reid_model_path=REID_MODEL_PATH)
+
+
 def _run_pipeline(video_path: Path, tracker_name: str) -> list[Track]:
     video_props = get_video_properties(video_path)
-    detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH, reid_model_path=REID_MODEL_PATH)
     detections = detector.run_object_detection_on_video(video_path)
 
     tracks: list[Track] = _detections_to_initial_tracks(detections)

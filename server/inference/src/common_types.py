@@ -48,6 +48,10 @@ class BoundingBox:
     def center(self) -> Point:
         return Point(int((self.x1 + self.x2) / 2), int((self.y1 + self.y2) / 2))
 
+    @property
+    def diagonal_length(self) -> float:
+        return math.sqrt(self.width**2 + self.height**2)
+
     def __iter__(self) -> Iterator[int]:
         return iter((self.x1, self.y1, self.x2, self.y2))
 

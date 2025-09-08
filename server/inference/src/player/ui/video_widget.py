@@ -378,6 +378,8 @@ class VideoWidget(QWidget):
     def _color_for_track(self, track_id: int) -> QColor:
         if track_id in self._color_cache:
             return self._color_cache[track_id]
+        if track_id < 0:
+            return QColor(255, 0, 0)
         # Golden-ratio distributed hue for distinct colors
         golden = 0.618033988749895
         h = (hash(track_id) * golden) % 1.0

@@ -66,7 +66,9 @@ class GreedyTrackStitcher:
                 mby_matches: list[Track] = []
 
                 for track in active_tracks:
-                    comparison_result = self._compare_detection_to_track(track, detection)
+                    comparison_result = self._compare_detection_to_track(
+                        track, detection, [tr for tr in active_tracks if tr != track]
+                    )
                     if comparison_result == _ComparisonResult.MATCH:
                         # Track matches the detection, continue it
                         clean_matches.append(track)
@@ -123,16 +125,34 @@ class GreedyTrackStitcher:
 
         return stale_tracks + active_tracks
 
-    def _compare_detection_to_track(self, track: Track, detection: Detection) -> _ComparisonResult:
+    def _compare_detection_to_track(
+        self, track: Track, detection: Detection, all_other_tracks: list[Track]
+    ) -> _ComparisonResult:
         iou = track.end.bbox.iou(detection.bbox)
 
         if iou < self.min_iou_matches_single_track:
             return _ComparisonResult.NO_MATCH
 
         n = len(track.sorted_detections)
+        ema_embedding = track.start.embedding
+        ALPHA = 0.5
+        for d in track.sorted_detections:
+            ema_embedding = ALPHA * ema_embedding + (1 - ALPHA) * d.embedding
         average_sim = sum(cosine_similarity(d.embedding, detection.embedding) for d in track.sorted_detections) / n
+        average_sim = cosine_similarity(ema_embedding, detection.embedding)
 
-        if iou >= self.greedy_min_iou and average_sim >= self.greedy_min_cosine_similarity:
+        if average_sim < self.greedy_min_cosine_similarity:
+            return _ComparisonResult.NO_MATCH
+
+        if iou >= self.greedy_min_iou:
             return _ComparisonResult.MATCH
 
-        return _ComparisonResult.MAY_MATCH
+        # if the bbox is so far away from all other tracks, we can match it
+        if all(
+            detection.bbox.iou(other_track.end.bbox) == 0
+            and detection.bbox.center.distance_to(other_track.end.bbox.center) > detection.bbox.width * 2.0
+            for other_track in all_other_tracks
+        ):
+            return _ComparisonResult.MATCH
+
+        return _ComparisonResult.NO_MATCH  # TODO change back to MAY_MATCH?
