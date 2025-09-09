@@ -42,7 +42,7 @@ def get_screen_size() -> Optional[Tuple[int, int]]:
 def overlay_screen_warning(
     image: np.ndarray,
     screen_size: Optional[Tuple[int, int]],
-    margins: Tuple[int, int] = (160, 220),
+    margins: Tuple[int, int] = (50, 50),
 ) -> np.ndarray:
     """Overlay a prominent red warning if image exceeds screen bounds.
 
