@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-import glob
 import pickle
 import argparse
 from pathlib import Path
@@ -131,44 +130,26 @@ def _pairwise_scores(gold: dict, pred: dict) -> dict[str, float]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description='Evaluate a tracker against golden tracklet associations.')
-    parser.add_argument('videos', type=str, nargs='+', help='Path(s) or glob(s) to input video(s)')
     parser.add_argument('--golden-dir', type=str, required=True, help='Directory containing golden .golden.tracks.pkl')
     parser.add_argument('--tracker', type=str, default='greedy', choices=['none', 'greedy', 'ilp'])
 
     args = parser.parse_args()
-    golden_dir = Path(args.golden_dir)
-
-    # Expand videos
-    video_paths: list[Path] = []
-    for pat in args.videos:
-        expanded = [Path(p) for p in glob.glob(pat)]
-        if not expanded:
-            p = Path(pat)
-            if p.exists():
-                expanded = [p]
-        video_paths.extend(expanded)
-    video_paths = sorted({p.resolve() for p in video_paths if p.suffix.lower() in {'.mp4', '.mov', '.avi', '.mkv'}})
-    if not video_paths:
-        print('No input videos found for given patterns.')
-        return
 
     # Aggregate metrics
     metrics_list = []
-    for video_path in video_paths:
-        pred_tracks = _run_pipeline(video_path, args.tracker)
-        golden_path = golden_dir / f'{video_path.stem}.golden.tracks.pkl'
-        if not golden_path.exists():
-            print(f'SKIP: golden not found for {video_path.name} -> {golden_path.name}')
-            continue
+    for golden_path in Path(args.golden_dir).glob('*.golden.tracks.pkl'):
         gold_meta = _load_golden(golden_path)
+        pred_tracks = _run_pipeline(Path(gold_meta.input_video_path), args.tracker)
         gold_assign = _build_assignment_from_metadata(gold_meta)
         pred_assign = _build_assignment_from_tracks(pred_tracks)
+
         # Require same keys; if not, skip and warn
         if set(gold_assign.keys()) != set(pred_assign.keys()):
-            print(f'SKIP: key mismatch for {video_path.name} (detections differ).')
+            print(f'SKIP: key mismatch for {golden_path.name} (detections differ).')
             continue
+
         scores = _pairwise_scores(gold_assign, pred_assign)
-        metrics_list.append((video_path.name, scores))
+        metrics_list.append((golden_path.name, scores))
 
     if not metrics_list:
         print('No comparable videos evaluated (missing goldens or key mismatches).')

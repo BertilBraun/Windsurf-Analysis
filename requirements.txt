@@ -30,3 +30,5 @@ pulp
 PySide6>=6.6.0
 
 modal
+
+optuna
