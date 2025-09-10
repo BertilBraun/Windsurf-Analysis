@@ -7,12 +7,13 @@ export type JobSummary = {
     created_at: string
     updated_at: string
     original_checksum_sha256: string
-    dominant_orientation?: number | null
+    dominant_orientation: number
     local_relative_path?: string | null
 }
 
 export type JobDetail = JobSummary & {
-    tracks?: Track[] | null
+    tracks: Track[]
+    stabilization_transforms: StabilizationTransform[]
 }
 
 export type TrackDetection = {
@@ -33,3 +34,10 @@ export type Track = {
 export type ReportType = 'missed_detection' | 'false_association' | 'other'
 
 export type UploadQuality = 'original' | 'high' | 'medium' | 'minimum'
+
+export type StabilizationTransform = {
+    time_percent: number
+    dx: number
+    dy: number
+    da: number // radians
+}

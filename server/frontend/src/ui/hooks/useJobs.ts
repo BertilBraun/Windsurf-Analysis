@@ -1,7 +1,8 @@
 import React from 'react'
 import { useAuth } from '../auth/AuthProvider'
-import { JobDetail, JobStatus, JobSummary, ReportType, Track, TrackDetection } from '../types'
+import { JobDetail, JobSummary, ReportType } from '../types'
 import { getPathForSha } from '../utils/idb'
+import { assert } from '../utils/assert'
 
 type UseJobsReturn = {
     jobs: JobSummary[]
@@ -14,7 +15,7 @@ type UseJobsReturn = {
 }
 
 const _assertIsPercentage = (p: number) => {
-    if (p < 0 || p > 1) throw new Error(`Percentage must be between 0 and 1: ${p}`)
+    assert(0 <= p && p <= 1, `Percentage must be between 0 and 1: ${p}`)
 }
 
 export function useJobs(): UseJobsReturn {
@@ -57,21 +58,27 @@ export function useJobs(): UseJobsReturn {
     }, [])
 
     const refreshJobDetail = React.useCallback(
-        async (id: string) => {
+        async (id: string): Promise<JobDetail> => {
             const res = await authorizedFetch(`/jobs/${id}`)
             const data = (await res.json()) as JobDetail
-            if (data.tracks) {
-                // TODO cache? If the job is done, we could cache the job detail
-                for (const track of data.tracks) {
-                    _assertIsPercentage(track.start_percent)
-                    _assertIsPercentage(track.end_percent)
-                    for (const detection of track.detections) {
-                        _assertIsPercentage(detection.time_percent)
-                        for (const b of detection.bbox) {
-                            _assertIsPercentage(b)
-                        }
+            assert(data.status === 'succeeded')
+
+            // TODO cache? If the job is done, we could cache the job detail
+            for (const track of data.tracks) {
+                _assertIsPercentage(track.start_percent)
+                _assertIsPercentage(track.end_percent)
+                for (const detection of track.detections) {
+                    _assertIsPercentage(detection.time_percent)
+                    for (const b of detection.bbox) {
+                        _assertIsPercentage(b)
                     }
                 }
+            }
+            for (const transform of data.stabilization_transforms) {
+                _assertIsPercentage(transform.time_percent)
+                assert(Number.isFinite(transform.dx))
+                assert(Number.isFinite(transform.dy))
+                assert(Number.isFinite(transform.da))
             }
             const local_relative_path = await getPathForSha(data.original_checksum_sha256)
             return { ...data, local_relative_path }

@@ -24,7 +24,7 @@ from .tracking.greedy_tracker import GreedyTracker  # noqa: F401 (imported for o
 
 from .visualization.debug_drawer import generate_debug_video_worker_function, debug_track_similarities
 from .visualization.video_splicing import generate_individual_videos
-from .visualization.stabilize import compute_vidstab_transforms
+from .visualization.stabilize import compute_stabilization_transforms
 from .visualization.track_graph_viz import visualize_tracks  # noqa: F401 (optional debugging import)
 
 from .common_types import Detection, Track
@@ -156,7 +156,7 @@ def _generate_individual_videos_worker_function(args: tuple[list[Track], os.Path
     individual_videos = generate_individual_videos(tracks, input_path, output_dir)
 
     if stabilize:
-        video_stabilizer = compute_vidstab_transforms(input_path)
+        video_stabilizer = compute_stabilization_transforms(input_path)
         for individual_video in individual_videos:
             output_file = Path(individual_video).with_suffix('.stabilized.mp4')
             video_stabilizer.stabilize(input_path=individual_video, output_path=output_file, use_stored_transforms=True)

@@ -33,7 +33,7 @@ class JobSummaryItem(BaseModel):
     created_at: datetime
     updated_at: datetime
     original_checksum_sha256: str
-    dominant_orientation: Optional[int]
+    dominant_orientation: int
 
 
 class JobListResponse(BaseModel):
@@ -41,7 +41,8 @@ class JobListResponse(BaseModel):
 
 
 class JobDetail(JobSummaryItem):
-    tracks: Optional[list[Any]]
+    tracks: list[Any]
+    stabilization_transforms: list[Any]
 
 
 class ReportRequest(BaseModel):
@@ -98,7 +99,7 @@ async def list_jobs(
             created_at=job.created_at,
             updated_at=job.updated_at,
             original_checksum_sha256=video.original_checksum_sha256,
-            dominant_orientation=job.dominant_orientation,
+            dominant_orientation=job.results['dominant_orientation'] if job.results else 0,
         )
         for job, video in rows
     ]
@@ -116,15 +117,19 @@ async def get_job(job_id: str, db: DatabaseAccessor = Depends(get_db), user: Use
     await db.update_video_last_accessed_at(job.video_id)
     await db.flush()
 
+    if job.status != JobStatus.succeeded or job.results is None:
+        raise HTTPException(status_code=405, detail='Results not found')
+
     return JobDetail(
         id=str(job.id),
         video_id=str(job.video_id),
         status=job.status.value,
         created_at=job.created_at,
         updated_at=job.updated_at,
-        tracks=job.tracks,
+        tracks=job.results['tracks'],
+        stabilization_transforms=job.results['stabilization_transforms'],
         original_checksum_sha256=video.original_checksum_sha256,
-        dominant_orientation=job.dominant_orientation,
+        dominant_orientation=job.results['dominant_orientation'],
     )
 
 
@@ -157,10 +162,15 @@ async def report_job(
     return {'ok': True}
 
 
-class JobsCompleteRequest(BaseModel):
+class JobsCompleteResults(BaseModel):
     tracks: list[Any]
     dominant_orientation: int
+    stabilization_transforms: list[Any]
+
+
+class JobsCompleteRequest(BaseModel):
     status: Literal['succeeded', 'failed']
+    results: JobsCompleteResults | None
 
 
 @router.post('/{job_id}/complete')
@@ -177,9 +187,19 @@ async def jobs_complete(
     if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
-    job.tracks = payload.tracks
-    job.dominant_orientation = payload.dominant_orientation
-    job.status = JobStatus(payload.status)
+    if payload.status != 'succeeded' or payload.results is None:
+        job.error_message = 'Failed to complete job'
+        job.status = JobStatus.failed
+        job.finished_at = timestamp_now()
+        await db.flush()
+        return {'ok': True}
+
+    job.results = {
+        'tracks': payload.results.tracks,
+        'dominant_orientation': payload.results.dominant_orientation,
+        'stabilization_transforms': payload.results.stabilization_transforms,
+    }
+    job.status = JobStatus.succeeded
     job.finished_at = timestamp_now()
     await db.flush()
 

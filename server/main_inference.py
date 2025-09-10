@@ -1,8 +1,11 @@
+import os
 import requests
 from pathlib import Path
 from typing import Sequence
 
 import modal
+
+from server.inference.src.visualization.stabilize import stabilize_video, compute_stabilization_transforms
 
 from .inference.src.windsurf_video_processor import (
     SurferDetector,
@@ -64,11 +67,11 @@ class InferenceModel:
 
     @modal.method()
     def inference(self, job_id: str, yolo_model: str, reid_model: str, complete_webhook: str):
-        def _post_completion_webhook(status: str, tracks: list[dict], dominant_orientation: int):
+        def _post_completion_webhook(status: str, results: dict | None):
             print(f'POSTing completion webhook to {complete_webhook}')
             res = requests.post(
                 complete_webhook,
-                json={'status': status, 'tracks': tracks, 'dominant_orientation': dominant_orientation},
+                json={'status': status, 'results': results},
                 timeout=60,
             )
             print(f'Completion webhook response: {res.status_code} {res.text}')
@@ -77,16 +80,25 @@ class InferenceModel:
             volume.reload()  # Reload the volume to ensure the file is available
 
             local_video_path = f'/data/{job_id}.mp4'
-            fixed_video_path = f'{job_id}_fixed.mp4'
+            orientation_fixed_video_path = f'{job_id}_fixed_orientation.mp4'
+            stabilized_video_path = f'{job_id}_stabilized.mp4'
             with timeit(f'{job_id}: Orientation detection'):
-                dominant_orientation = self.orientation_fixer.fix_video(local_video_path, fixed_video_path)
+                dominant_orientation = self.orientation_fixer.fix_video(local_video_path, orientation_fixed_video_path)
+
+            with timeit(f'{job_id}: Stabilization'):
+                transforms = compute_stabilization_transforms(orientation_fixed_video_path)
+                stabilize_video(
+                    orientation_fixed_video_path,
+                    stabilized_video_path,
+                    transforms,
+                )
 
             processor = self._get_processor(yolo_model, reid_model)
 
-            props = get_video_properties(fixed_video_path)
+            props = get_video_properties(stabilized_video_path)
 
             with timeit(f'{job_id}: Object detection'):
-                detections = processor.run_object_detection_on_video(fixed_video_path)
+                detections = processor.run_object_detection_on_video(stabilized_video_path)
 
             with timeit(f'{job_id}: Trackers'):
                 trackers: Sequence[Tracker] = [
@@ -131,7 +143,24 @@ class InferenceModel:
                 for t in processed_tracks
             ]
 
-            _post_completion_webhook('succeeded', tracks, dominant_orientation)
+            results = {
+                'tracks': tracks,
+                'dominant_orientation': dominant_orientation,
+                'stabilization_transforms': [
+                    {
+                        'time_percent': clamp_percentage(i / len(transforms)),
+                        'dx': t.dx,
+                        'dy': t.dy,
+                        'da': t.da,
+                    }
+                    for i, t in enumerate(transforms)
+                ],
+            }
+
+            os.remove(orientation_fixed_video_path)
+            os.remove(stabilized_video_path)
+
+            _post_completion_webhook('succeeded', results)
         except Exception as e:
             print(f'Error in inference: {e}')
-            _post_completion_webhook('failed', [], 0)
+            _post_completion_webhook('failed', None)

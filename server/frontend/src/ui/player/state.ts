@@ -1,4 +1,4 @@
-import { JobDetail, Track, TrackDetection } from '../types'
+import { JobDetail, Track, TrackDetection, StabilizationTransform } from '../types'
 import { DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC } from './constants'
 
 export type VideoProperties = {
@@ -22,8 +22,7 @@ type PlayerStateInit = {
     isPlaying: boolean
     video: VideoProperties
     tracks: Track[]
-    visibleTrackIds: Set<number>
-    detectionTimesByTrack: Map<number, Array<DetectionTime>>
+    stabilizationTransforms: StabilizationTransform[]
 }
 
 export class PlayerState {
@@ -34,9 +33,8 @@ export class PlayerState {
     isPlaying: boolean
     video: VideoProperties
     tracks: Track[]
+    stabilizationTransforms: StabilizationTransform[]
     visibleTrackIds: Set<number>
-    // per track sorted by time seconds for fast nearest lookup
-    detectionTimesByTrack: Map<number, Array<DetectionTime>>
 
     constructor(params: PlayerStateInit) {
         this.mode = params.mode
@@ -46,8 +44,12 @@ export class PlayerState {
         this.isPlaying = params.isPlaying
         this.video = params.video
         this.tracks = params.tracks
-        this.visibleTrackIds = params.visibleTrackIds
-        this.detectionTimesByTrack = params.detectionTimesByTrack
+        this.stabilizationTransforms = params.stabilizationTransforms.sort((a, b) => a.time_percent - b.time_percent)
+        this.visibleTrackIds = new Set(params.tracks.map(t => t.track_id))
+
+        for (const track of this.tracks) {
+            track.detections.sort((a, b) => a.time_percent - b.time_percent)
+        }
     }
 
     copy(patch: Partial<PlayerStateInit>): PlayerState {
@@ -61,26 +63,11 @@ export class PlayerState {
             isPlaying: hasIsPlaying ? patch.isPlaying! : this.isPlaying,
             video: patch.video ?? this.video,
             tracks: patch.tracks ?? this.tracks,
-            visibleTrackIds: patch.visibleTrackIds ?? this.visibleTrackIds,
-            detectionTimesByTrack: patch.detectionTimesByTrack ?? this.detectionTimesByTrack,
+            stabilizationTransforms: patch.stabilizationTransforms ?? this.stabilizationTransforms,
         })
     }
 
     static from(job: JobDetail, video: VideoProperties): PlayerState {
-        const tracks = job.tracks || []
-        const visibleTrackIds = new Set<number>(tracks.map(t => t.track_id))
-        const detectionTimesByTrack = new Map<number, Array<DetectionTime>>()
-
-        for (const t of tracks) {
-            const arrTimes: Array<DetectionTime> = []
-            for (const det of t.detections) {
-                const timeSec = det.time_percent * video.durationSeconds
-                arrTimes.push({ timeSec, detection: det })
-            }
-            arrTimes.sort((a, b) => a.timeSec - b.timeSec)
-            detectionTimesByTrack.set(t.track_id, arrTimes)
-        }
-
         return new PlayerState({
             mode: 'overview',
             currentTrackId: null,
@@ -88,84 +75,45 @@ export class PlayerState {
             playbackSpeed: 1.0,
             isPlaying: false,
             video,
-            tracks,
-            visibleTrackIds,
-            detectionTimesByTrack,
+            tracks: job.tracks,
+            stabilizationTransforms: job.stabilization_transforms,
         })
     }
 
     interpolateDetectionByTime(trackId: number, timeSec: number): TrackDetection | null {
-        const detectionTimes = this.detectionTimesByTrack.get(trackId) || []
+        const detectionTimes = this.tracks.find(t => t.track_id === trackId)?.detections || []
         const n = detectionTimes.length
         if (!n) return null
-        const firstTime = detectionTimes[0].timeSec - DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
-        const lastTime = detectionTimes[n - 1].timeSec + DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
+
+        const firstTime = this.time(detectionTimes[0]) - DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
+        const lastTime = this.time(detectionTimes[n - 1]) + DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
         if (timeSec < firstTime || timeSec > lastTime) return null
-        const idx = this.binSearch(detectionTimes, timeSec)
+
+        const idx = binSearch(detectionTimes, timeSec, this.time)
         const i2 = Math.min(n - 1, idx)
         const i1 = Math.max(0, i2 - 1)
-        if (i1 === i2) return detectionTimes[i1].detection
+        if (i1 === i2) return detectionTimes[i1]
         const i0 = Math.max(0, i1 - 1)
         const i3 = Math.min(n - 1, i2 + 1)
         const P0 = detectionTimes[i0]
         const P1 = detectionTimes[i1]
         const P2 = detectionTimes[i2]
         const P3 = detectionTimes[i3]
-        const x0 = P0.timeSec
-        const x1 = P1.timeSec
-        const x2 = P2.timeSec
-        const x3 = P3.timeSec
+        const x0 = this.time(P0)
+        const x1 = this.time(P1)
+        const x2 = this.time(P2)
+        const x3 = this.time(P3)
         const bbox: [number, number, number, number] = [
-            catmullRom1D(
-                P0.detection.bbox[0],
-                P1.detection.bbox[0],
-                P2.detection.bbox[0],
-                P3.detection.bbox[0],
-                x0,
-                x1,
-                x2,
-                x3,
-                timeSec
-            ),
-            catmullRom1D(
-                P0.detection.bbox[1],
-                P1.detection.bbox[1],
-                P2.detection.bbox[1],
-                P3.detection.bbox[1],
-                x0,
-                x1,
-                x2,
-                x3,
-                timeSec
-            ),
-            catmullRom1D(
-                P0.detection.bbox[2],
-                P1.detection.bbox[2],
-                P2.detection.bbox[2],
-                P3.detection.bbox[2],
-                x0,
-                x1,
-                x2,
-                x3,
-                timeSec
-            ),
-            catmullRom1D(
-                P0.detection.bbox[3],
-                P1.detection.bbox[3],
-                P2.detection.bbox[3],
-                P3.detection.bbox[3],
-                x0,
-                x1,
-                x2,
-                x3,
-                timeSec
-            ),
+            catmullRom1D(P0.bbox[0], P1.bbox[0], P2.bbox[0], P3.bbox[0], x0, x1, x2, x3, timeSec),
+            catmullRom1D(P0.bbox[1], P1.bbox[1], P2.bbox[1], P3.bbox[1], x0, x1, x2, x3, timeSec),
+            catmullRom1D(P0.bbox[2], P1.bbox[2], P2.bbox[2], P3.bbox[2], x0, x1, x2, x3, timeSec),
+            catmullRom1D(P0.bbox[3], P1.bbox[3], P2.bbox[3], P3.bbox[3], x0, x1, x2, x3, timeSec),
         ]
         const confRaw = catmullRom1D(
-            P0.detection.confidence,
-            P1.detection.confidence,
-            P2.detection.confidence,
-            P3.detection.confidence,
+            P0.confidence,
+            P1.confidence,
+            P2.confidence,
+            P3.confidence,
             x0,
             x1,
             x2,
@@ -178,20 +126,39 @@ export class PlayerState {
     }
 
     hasDetectionAfter(trackId: number, timeSec: number): boolean {
-        const detectionTimes = this.detectionTimesByTrack.get(trackId) || []
-        return detectionTimes[detectionTimes.length - 1].timeSec > timeSec - DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
+        const detectionTimes = this.tracks.find(t => t.track_id === trackId)?.detections || []
+        return (
+            this.time(detectionTimes[detectionTimes.length - 1]) > timeSec - DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
+        )
     }
 
-    binSearch(arr: Array<DetectionTime>, timeSec: number): number {
-        let lo = 0
-        let hi = arr.length - 1
-        while (lo <= hi) {
-            const mid = (lo + hi) >> 1
-            const t = arr[mid].timeSec
-            if (t < timeSec) lo = mid + 1
-            else hi = mid - 1
-        }
-        return lo
+    getStabilizationAt(timeSec: number): { dx: number; dy: number; da: number } {
+        const arr = this.stabilizationTransforms
+        const n = arr.length
+        if (!n) return { dx: 0, dy: 0, da: 0 }
+        // indices for Catmull–Rom interpolation
+        const idx = binSearch(arr, timeSec, this.time)
+        const i2 = Math.min(n - 1, idx)
+        const i1 = Math.max(0, i2 - 1)
+        if (i1 === i2) return { dx: arr[i1].dx, dy: arr[i1].dy, da: arr[i1].da }
+        const i0 = Math.max(0, i1 - 1)
+        const i3 = Math.min(n - 1, i2 + 1)
+        const P0 = arr[i0]
+        const P1 = arr[i1]
+        const P2 = arr[i2]
+        const P3 = arr[i3]
+        const x0 = this.time(P0)
+        const x1 = this.time(P1)
+        const x2 = this.time(P2)
+        const x3 = this.time(P3)
+        const dx = catmullRom1D(P0.dx, P1.dx, P2.dx, P3.dx, x0, x1, x2, x3, timeSec)
+        const dy = catmullRom1D(P0.dy, P1.dy, P2.dy, P3.dy, x0, x1, x2, x3, timeSec)
+        const da = catmullRom1D(P0.da, P1.da, P2.da, P3.da, x0, x1, x2, x3, timeSec)
+        return { dx, dy, da }
+    }
+
+    time(t: { time_percent: number }): number {
+        return t.time_percent * this.video.durationSeconds
     }
 }
 
@@ -238,4 +205,18 @@ const catmullRom1D = (
     const B2 = lerpParam(A2, A3, t1, t3, s)
 
     return lerpParam(B1, B2, t1, t2, s)
+}
+
+function binSearch<T>(arr: Array<T>, value: number, accessor: (t: T) => number): number {
+    /* Performs a binary search on an array of objects, using a provided accessor function to get the value to search for.
+    Returns the index of the element in the array that is the closest to the given value. */
+    let lo = 0
+    let hi = arr.length - 1
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1
+        const t = accessor(arr[mid])
+        if (t < value) lo = mid + 1
+        else hi = mid - 1
+    }
+    return lo
 }

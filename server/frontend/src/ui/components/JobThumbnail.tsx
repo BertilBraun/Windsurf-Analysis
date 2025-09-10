@@ -61,7 +61,7 @@ export const JobThumbnail: React.FC<{
                     try {
                         // Draw rotated frame to offscreen then scale to target size
                         const oriented = document.createElement('canvas')
-                        drawRotatedToCanvas(video, oriented, job.dominant_orientation ?? 0)
+                        drawRotatedToCanvas(video, oriented, job.dominant_orientation)
 
                         const targetW = 256
                         const w = Math.max(1, oriented.width)

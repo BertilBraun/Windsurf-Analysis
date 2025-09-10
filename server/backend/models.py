@@ -72,8 +72,7 @@ class Job(Base):
     started_at: Mapped[datetime | None] = mapped_column(nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
     error_message: Mapped[str | None] = mapped_column(nullable=True)
-    tracks: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
-    dominant_orientation: Mapped[int | None] = mapped_column(nullable=True)
+    results: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     user: Mapped[User] = relationship('User', back_populates='jobs')
