@@ -121,10 +121,21 @@ export const JobThumbnail: React.FC<{
                 ? '#9ca3af'
                 : '#10b981'
 
+        const text =
+            job.status === 'canceled'
+                ? 'Canceled'
+                : job.status === 'failed'
+                ? 'Failed'
+                : job.status === 'running'
+                ? 'Currently Processing'
+                : job.status === 'pending'
+                ? 'Pending'
+                : 'Succeeded'
+
         return (
             <div className={boxClasses}>
                 <span className="text-white rounded-md px-2 py-1 text-sm" style={{ background: color }}>
-                    {job.status}
+                    {text}
                 </span>
             </div>
         )
