@@ -66,7 +66,15 @@ class InferenceModel:
         return processor
 
     @modal.method()
-    def inference(self, job_id: str, yolo_model: str, reid_model: str, complete_webhook: str):
+    def inference_after_stabilization(
+        self,
+        job_id: str,
+        yolo_model: str,
+        reid_model: str,
+        dominant_orientation: int,
+        transforms: list[dict],
+        complete_webhook: str,
+    ):
         def _post_completion_webhook(status: str, results: dict | None):
             print(f'POSTing completion webhook to {complete_webhook}')
             res = requests.post(
@@ -77,21 +85,9 @@ class InferenceModel:
             print(f'Completion webhook response: {res.status_code} {res.text}')
 
         try:
-            volume.reload()  # Reload the volume to ensure the file is available
+            volume.reload()
 
-            local_video_path = f'/data/{job_id}.mp4'
-            orientation_fixed_video_path = f'{job_id}_fixed_orientation.mp4'
-            stabilized_video_path = f'{job_id}_stabilized.mp4'
-            with timeit(f'{job_id}: Orientation detection'):
-                dominant_orientation = self.orientation_fixer.fix_video(local_video_path, orientation_fixed_video_path)
-
-            with timeit(f'{job_id}: Stabilization'):
-                transforms = compute_stabilization_transforms(orientation_fixed_video_path)
-                stabilize_video(
-                    orientation_fixed_video_path,
-                    stabilized_video_path,
-                    transforms,
-                )
+            stabilized_video_path = f'/data/{job_id}_stabilized.mp4'
 
             processor = self._get_processor(yolo_model, reid_model)
 
@@ -118,7 +114,6 @@ class InferenceModel:
 
             print(f'{job_id}: Found {len(processed_tracks)} tracks')
 
-            # Convert dataclasses to primitive JSON structure
             tracks = [
                 {
                     'track_id': t.track_id,
@@ -143,24 +138,24 @@ class InferenceModel:
                 for t in processed_tracks
             ]
 
+            # Convert transforms payload into result with time_percent
+            stabilization_transforms = [
+                {
+                    'time_percent': clamp_percentage(i / max(1, len(transforms))),
+                    'dx': t['dx'],
+                    'dy': t['dy'],
+                    'da': t['da'],
+                }
+                for i, t in enumerate(transforms)
+            ]
+
             results = {
                 'tracks': tracks,
                 'dominant_orientation': dominant_orientation,
-                'stabilization_transforms': [
-                    {
-                        'time_percent': clamp_percentage(i / len(transforms)),
-                        'dx': t.dx,
-                        'dy': t.dy,
-                        'da': t.da,
-                    }
-                    for i, t in enumerate(transforms)
-                ],
+                'stabilization_transforms': stabilization_transforms,
             }
-
-            os.remove(orientation_fixed_video_path)
-            os.remove(stabilized_video_path)
 
             _post_completion_webhook('succeeded', results)
         except Exception as e:
-            print(f'Error in inference: {e}')
+            print(f'Error in inference_after_stabilization: {e}')
             _post_completion_webhook('failed', None)

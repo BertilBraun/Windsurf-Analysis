@@ -200,9 +200,9 @@ async def upload_complete(
         f'{Settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job.id}/complete?secret={Settings.BACKEND_WEBHOOK_SECRET}'
     )
 
-    with timeit('spawn_inference'):
-        InferenceModel = modal.Cls.from_name('windsurf-analysis', 'InferenceModel')
-        InferenceModel().inference.spawn(
+    with timeit('spawn_stabilization'):
+        StabilizeFn = modal.Function.from_name('windsurf-analysis', 'stabilize_and_enqueue')
+        StabilizeFn.spawn(
             job_id=str(job.id),
             yolo_model=meta.yolo_model,
             reid_model=meta.reid_model,

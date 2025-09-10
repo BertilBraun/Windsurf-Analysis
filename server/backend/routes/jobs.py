@@ -203,7 +203,14 @@ async def jobs_complete(
     job.finished_at = timestamp_now()
     await db.flush()
 
-    # TODO optionally delete the video file
-    os.remove(f'/data/{job_id}.mp4')
+    # Optionally delete the video files
+    try:
+        os.remove(f'/data/{job_id}.mp4')
+    except Exception:
+        pass
+    try:
+        os.remove(f'/data/{job_id}_stabilized.mp4')
+    except Exception:
+        pass
 
     return {'ok': True}
