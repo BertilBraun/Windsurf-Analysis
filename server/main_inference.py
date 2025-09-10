@@ -1,11 +1,8 @@
-import os
 import requests
 from pathlib import Path
 from typing import Sequence
 
 import modal
-
-from server.inference.src.visualization.stabilize import stabilize_video, compute_stabilization_transforms
 
 from .inference.src.windsurf_video_processor import (
     SurferDetector,
