@@ -171,7 +171,16 @@ def prepare_dataset(src: Path, dst: Path, val_ratio: float = 0.02, seed: int = 0
 # ────────────────────────────────────────────────────────────────────────────
 # Training
 # ────────────────────────────────────────────────────────────────────────────
-def train_model(base_model: str, yaml_file: Path, epochs: int, imgsz: int, batch: float, device: str):
+def train_model(
+    base_model: str,
+    yaml_file: Path,
+    epochs: int,
+    imgsz: int,
+    batch: float,
+    device: str,
+    degrees: float,
+    shear: float,
+):
     logger = logging.getLogger(__name__)
 
     model = YOLO(base_model)  # choose e.g. yolo11n.pt or yolo11s.pt or yolo11m.pt for bigger models
@@ -187,6 +196,8 @@ def train_model(base_model: str, yaml_file: Path, epochs: int, imgsz: int, batch
         batch=batch,
         device=device,
         single_cls=True,
+        degrees=degrees,
+        shear=shear,
     )
     logger.info('✓ Training finished')
 
@@ -214,11 +225,22 @@ def main():
     parser.add_argument('--imgsz', type=int, default=640, help='Image size')
     parser.add_argument('--batch', type=float, default=0.7, help='Batch-size fraction (0 = auto)')
     parser.add_argument('--device', default='auto', help='GPU id, -1 for CPU, or "auto"')
+    parser.add_argument('--degrees', type=float, default=15.0, help='Random rotation degrees for augmentation')
+    parser.add_argument('--shear', type=float, default=15.0, help='Random shear degrees for augmentation')
 
     args = parser.parse_args()
 
     yaml_path = prepare_dataset(args.src, args.dst, args.val_ratio, args.seed)
-    train_model(args.base_model, yaml_path, args.epochs, args.imgsz, args.batch, args.device)
+    train_model(
+        args.base_model,
+        yaml_path,
+        args.epochs,
+        args.imgsz,
+        args.batch,
+        args.device,
+        args.degrees,
+        args.shear,
+    )
     shutil.rmtree(args.dst)
 
 
