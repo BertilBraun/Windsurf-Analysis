@@ -33,5 +33,5 @@ class Preprocessor:
 
     def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
         tracks = self.greedy_track_stitcher.track(tracks, video_properties)
-        tracks = self.filter_non_surfers.track(tracks, video_properties)
+        # tracks = self.filter_non_surfers.track(tracks, video_properties)
         return tracks

@@ -20,7 +20,7 @@ app = modal.App('windsurf-analysis-stabilization', image=inference_image)
     cpu=2.0,
 )
 @modal.concurrent(max_inputs=16, target_inputs=12)
-def stabilize_and_enqueue(job_id: str, yolo_model: str, reid_model: str, complete_webhook: str):
+def stabilize_and_enqueue(job_id: str, yolo_model: str, complete_webhook: str):
     try:
         shared_volume.reload()
 
@@ -61,7 +61,6 @@ def stabilize_and_enqueue(job_id: str, yolo_model: str, reid_model: str, complet
         InferenceModel().inference_after_stabilization.spawn(
             job_id=job_id,
             yolo_model=yolo_model,
-            reid_model=reid_model,
             dominant_orientation=dominant_orientation,
             transforms=transforms_payload,
             complete_webhook=complete_webhook,

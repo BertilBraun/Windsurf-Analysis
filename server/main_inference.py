@@ -46,19 +46,16 @@ def clamp_percentage(p: float) -> float:
 class InferenceModel:
     @modal.enter()
     def setup(self):
-        self.processors: dict[tuple[str, str], SurferDetector] = {}
+        self.processors: dict[str, SurferDetector] = {}
         self.orientation_fixer = OrientationFixer('/root/weights/orientation_fixer/best.pt')
 
-    def _get_processor(self, yolo_model: str, reid_model: str) -> SurferDetector:
-        key = (yolo_model, reid_model)
+    def _get_processor(self, yolo_model: str) -> SurferDetector:
+        key = yolo_model
         processor = self.processors.get(key)
         if processor is None:
             # Initialize and cache processor for this model pair
-            with timeit(f'Initializing processor for {yolo_model} and {reid_model}'):
-                processor = SurferDetector(
-                    yolo_model_path='/root/weights/yolo_models/' + yolo_model,
-                    reid_model_path='/root/weights/reid_models/' + reid_model,
-                )
+            with timeit(f'Initializing processor for {yolo_model}'):
+                processor = SurferDetector(yolo_model_path='/root/weights/yolo_models/' + yolo_model)
                 self.processors[key] = processor
         return processor
 
@@ -67,7 +64,6 @@ class InferenceModel:
         self,
         job_id: str,
         yolo_model: str,
-        reid_model: str,
         dominant_orientation: int,
         transforms: list[dict],
         complete_webhook: str,
@@ -86,7 +82,7 @@ class InferenceModel:
 
             stabilized_video_path = f'/data/{job_id}_stabilized.mp4'
 
-            processor = self._get_processor(yolo_model, reid_model)
+            processor = self._get_processor(yolo_model)
 
             props = get_video_properties(stabilized_video_path)
 

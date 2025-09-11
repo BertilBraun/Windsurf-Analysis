@@ -30,7 +30,6 @@ class UploadMeta(BaseModel):
     file_name: str
     mime_type: str = 'video/mp4'
     yolo_model: str
-    reid_model: str
 
 
 def _upload_dir_for_job(job_id: str) -> Path:
@@ -48,7 +47,6 @@ async def upload_init(
     file_name: str = Form(...),
     mime_type: str = Form('video/mp4'),
     yolo_model: str = Form(...),
-    reid_model: str = Form(...),
     db: DatabaseAccessor = Depends(get_db),
     user: User = Depends(authenticate_user),
 ):
@@ -67,7 +65,6 @@ async def upload_init(
         file_name=file_name,
         mime_type=mime_type,
         yolo_model=yolo_model,
-        reid_model=reid_model,
     )
 
     upload_dir = _upload_dir_for_job(job_id)
@@ -205,7 +202,6 @@ async def upload_complete(
         StabilizeFn.spawn(
             job_id=str(job.id),
             yolo_model=meta.yolo_model,
-            reid_model=meta.reid_model,
             complete_webhook=complete_url,
         )
 

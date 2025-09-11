@@ -22,7 +22,7 @@ from server.inference.src.tracking.preprocessing.preprocessor import Preprocesso
 from server.inference.src.tracking.discrete_opt_tracker import DiscreteILPTracker
 from server.inference.src.common_types import Detection, Track
 from server.inference.src.player.core.player_state import Metadata, TrackLite, DetectionLite
-from server.inference.src.settings import YOLO_MODEL_PATH, REID_MODEL_PATH
+from server.inference.src.settings import YOLO_MODEL_PATH
 
 
 def _detections_to_initial_tracks(detections: List[Detection]) -> List[Track]:
@@ -110,7 +110,7 @@ def _pairwise_scores(gold: Dict, pred: Dict) -> Dict[str, float]:
 
 class DetectionCache:
     def __init__(self) -> None:
-        self._detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH, reid_model_path=REID_MODEL_PATH)
+        self._detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH)
         self._detections_by_video: Dict[Path, List[Detection]] = {}
         self._preprocessed_tracks_by_video: Dict[Path, Tuple[List[Track], Any]] = {}
 

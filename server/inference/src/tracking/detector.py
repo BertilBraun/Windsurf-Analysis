@@ -15,7 +15,6 @@ from .reid import ReID
 from ..settings import (
     USE_GPU,
     YOLO_MODEL_PATH,
-    REID_MODEL_PATH,
     MIN_TRACKING_FPS,
     IOU_THRESHOLD,
     CONFIDENCE_THRESHOLD,
@@ -29,21 +28,20 @@ from ..common_types import BoundingBox, Detection
 class SurferDetector:
     """Pure detection and tracking class for surfers in video"""
 
-    def __init__(self, yolo_model_path: os.PathLike | str, reid_model_path: os.PathLike | str):
+    def __init__(self, yolo_model_path: os.PathLike | str):
         logging.info(f'Using model: {yolo_model_path}')
         yolo_model_path = Path(yolo_model_path)
-        reid_model_path = Path(reid_model_path)
 
         if not yolo_model_path.exists():
             raise FileNotFoundError(f'YOLO model {yolo_model_path} not found')
 
         self.yolo_model = YOLO(model=yolo_model_path, verbose=False)
-        self.reid_model = ReID(model_path=reid_model_path)
+        self.reid_model = ReID()
 
     @cache_to_file(
         'yolo_detections',
         ignore_args=[0],
-        additional_args=[YOLO_MODEL_PATH, REID_MODEL_PATH, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE],
+        additional_args=[YOLO_MODEL_PATH, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE],
     )
     def run_object_detection_on_video(self, video_path: os.PathLike | str) -> list[Detection]:
         """Run batched inference on entire video and return all detections as a list.

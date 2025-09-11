@@ -99,7 +99,6 @@ export async function uploadVideoFileToJob(
     initForm.append('file_name', file.name)
     initForm.append('mime_type', file.type || 'video/mp4')
     initForm.append('yolo_model', 'windsurfing/best.pt')
-    initForm.append('reid_model', 'common/osnet_ain_x1_0_msmt17.pth')
 
     const initRes = await ctx.authorizedFetch(`/jobs/${job_id}/upload/init`, {
         method: 'POST',

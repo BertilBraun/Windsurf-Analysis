@@ -26,7 +26,6 @@ from server.inference.src.tracking.preprocessing.preprocessor import Preprocesso
 from server.inference.src.common_types import Detection, Track
 from server.inference.src.settings import (
     YOLO_MODEL_PATH,
-    REID_MODEL_PATH,
     GREEDY_PREPROCESSOR_MIN_IOU,
     GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY,
     GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE,
@@ -81,7 +80,7 @@ class GreedyTunerWindow(QMainWindow):
         self.video_props = get_video_properties(video_path)
 
         # Load/cached detections once
-        self.detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH, reid_model_path=REID_MODEL_PATH)
+        self.detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH)
         self.detections: list[Detection] = self.detector.run_object_detection_on_video(video_path)
         self.initial_tracks: list[Track] = _detections_to_initial_tracks(self.detections)
 

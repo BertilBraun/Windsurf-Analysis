@@ -16,7 +16,6 @@ vidstab
 
 
 torch>=2.0.0
-torchreid # For feature extraction of detections
 gdown
 tensorboard
 

@@ -9,7 +9,6 @@ NUM_PARALLEL_VIDEO_WORKERS = 4
 # YOLO settings
 inference_root_folder = Path(__file__).parent.parent
 YOLO_MODEL_PATH = inference_root_folder / 'weights/yolo_models/windsurfing/best.pt'
-REID_MODEL_PATH = inference_root_folder / 'weights/reid_models/common/osnet_ain_x1_0_msmt17.pth'
 
 IOU_THRESHOLD = 0.5
 CONFIDENCE_THRESHOLD = 0.65

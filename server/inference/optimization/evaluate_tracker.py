@@ -19,14 +19,14 @@ from server.inference.src.tracking.greedy_tracker import GreedyTracker
 from server.inference.src.tracking.discrete_opt_tracker import DiscreteILPTracker
 from server.inference.src.common_types import Detection, Track
 from server.inference.src.player.core.player_state import Metadata, TrackLite, DetectionLite
-from server.inference.src.settings import YOLO_MODEL_PATH, REID_MODEL_PATH
+from server.inference.src.settings import YOLO_MODEL_PATH
 
 
 def _detections_to_initial_tracks(detections: list[Detection]) -> list[Track]:
     return [Track(track_id=i + 1, sorted_detections=[det]) for i, det in enumerate(detections)]
 
 
-detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH, reid_model_path=REID_MODEL_PATH)
+detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH)
 
 
 def _run_pipeline(video_path: Path, tracker_name: str) -> list[Track]:

@@ -9,8 +9,6 @@ PyYAML>=6.0
 vidstab>=1.7.0
 
 torch>=2.0.0
-# ReID for feature extraction
-torchreid
 
 gdown
 pillow
@@ -19,3 +17,6 @@ pulp
 Cython
 
 tensorboard
+
+
+open-clip-torch

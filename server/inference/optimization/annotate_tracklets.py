@@ -19,7 +19,7 @@ from server.inference.src.tracking.detector import SurferDetector
 from server.inference.src.tracking.preprocessing.preprocessor import Preprocessor
 from server.inference.src.common_types import Detection, Track
 from server.inference.src.player.core.player_state import Metadata, VideoProperties, TrackLite, DetectionLite
-from server.inference.src.settings import YOLO_MODEL_PATH, REID_MODEL_PATH
+from server.inference.src.settings import YOLO_MODEL_PATH
 from server.inference.src.player.core.video_manager import VideoManager
 from server.inference.src.player.ui.video_widget import VideoWidget
 
@@ -399,7 +399,7 @@ class _BatchAnnotatorController:
             return
 
         video_props = get_video_properties(video)
-        detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH, reid_model_path=REID_MODEL_PATH)
+        detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH)
         detections = detector.run_object_detection_on_video(video)
         tracks: list[Track] = _detections_to_initial_tracks(detections)
         tracks = Preprocessor().track(tracks, video_props)
