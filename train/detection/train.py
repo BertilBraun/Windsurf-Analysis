@@ -225,8 +225,18 @@ def main():
     parser.add_argument('--imgsz', type=int, default=640, help='Image size')
     parser.add_argument('--batch', type=float, default=0.85, help='Batch-size fraction (0 = auto)')
     parser.add_argument('--device', default='auto', help='GPU id, -1 for CPU, or "auto"')
-    parser.add_argument('--degrees', type=float, default=0.0, help='Random rotation degrees for augmentation')
-    parser.add_argument('--shear', type=float, default=0.0, help='Random shear degrees for augmentation')
+    parser.add_argument(
+        '--degrees',
+        type=float,
+        default=0.0,
+        help='Random rotation degrees for augmentation (NOTE: These did not work well for me - increased training time a lot and the resulting BBoxes were far from the tight labels)',
+    )
+    parser.add_argument(
+        '--shear',
+        type=float,
+        default=0.0,
+        help='Random shear degrees for augmentation (NOTE: These did not work well for me - increased training time a lot and the resulting BBoxes were far from the tight labels)',
+    )
 
     args = parser.parse_args()
 
