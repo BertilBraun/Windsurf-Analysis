@@ -24,7 +24,15 @@ image = (
     modal.Image.debian_slim(python_version='3.10')
     .apt_install('ffmpeg', 'libgl1', 'git')
     .add_local_dir(inference_root_folder / 'src', remote_path='/root/src', copy=True)
-    .add_local_dir(inference_root_folder / 'weights', remote_path='/root/weights', copy=True)
+    .add_local_dir(
+        inference_root_folder / 'weights/orientation_fixer', remote_path='/root/weights/orientation_fixer', copy=True
+    )
+    .add_local_dir(
+        inference_root_folder / 'weights/yolo_models',
+        remote_path='/root/weights/yolo_models',
+        copy=True,
+        ignore=lambda p: p.name != 'best.pt',
+    )
     .pip_install_from_requirements(str(inference_root_folder / 'requirements.txt'))
 )
 
