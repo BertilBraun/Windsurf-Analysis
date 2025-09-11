@@ -7,7 +7,7 @@ from tqdm import tqdm
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 
-from .settings import REID_MODEL_PATH, YOLO_MODEL_PATH
+from .settings import YOLO_MODEL_PATH
 from .util.helpers import log_and_reraise
 
 from .player.core.player_state import DetectionLite, Metadata, TrackLite, VideoProperties
@@ -24,7 +24,7 @@ from .tracking.greedy_tracker import GreedyTracker  # noqa: F401 (imported for o
 
 from .visualization.debug_drawer import generate_debug_video_worker_function, debug_track_similarities
 from .visualization.video_splicing import generate_individual_videos
-from .visualization.stabilize import compute_stabilization_transforms
+from .visualization.stabilize import compute_stabilization_transforms, stabilize_video
 from .visualization.track_graph_viz import visualize_tracks  # noqa: F401 (optional debugging import)
 
 from .common_types import Detection, Track
@@ -46,9 +46,8 @@ class WindsurfingVideoProcessor:
         parallel_workers: int,
         stabilize: bool,
         yolo_model_path: os.PathLike | str = YOLO_MODEL_PATH,
-        reid_model_path: os.PathLike | str = REID_MODEL_PATH,
     ):
-        self.surf_detector = SurferDetector(yolo_model_path=yolo_model_path, reid_model_path=reid_model_path)
+        self.surf_detector = SurferDetector(yolo_model_path=yolo_model_path)
         self.executor = ProcessPoolExecutor(max_workers=parallel_workers)
         self.draw_annotations = draw_annotations
         self.output_dir = Path(output_dir)
@@ -159,7 +158,7 @@ def _generate_individual_videos_worker_function(args: tuple[list[Track], os.Path
         video_stabilizer = compute_stabilization_transforms(input_path)
         for individual_video in individual_videos:
             output_file = Path(individual_video).with_suffix('.stabilized.mp4')
-            video_stabilizer.stabilize(input_path=individual_video, output_path=output_file, use_stored_transforms=True)
+            stabilize_video(input_video=individual_video, output_video=output_file, transforms=video_stabilizer)
 
 
 def _generate_annotated_video_worker_function(args: tuple[list[Track], os.PathLike, Path]) -> None:

@@ -11,7 +11,7 @@ inference_root_folder = Path(__file__).parent.parent
 YOLO_MODEL_PATH = inference_root_folder / 'weights/yolo_models/windsurfing/best.pt'
 
 IOU_THRESHOLD = 0.5
-CONFIDENCE_THRESHOLD = 0.65
+CONFIDENCE_THRESHOLD = 0.6
 BATCH_SIZE = 32
 
 # Tracking preprocessing settings
