@@ -216,17 +216,17 @@ def main():
     parser.add_argument(
         '--base-model',
         type=str,
-        default='yolo11s.pt',  # yolo11n, yolo11s, yolo11m etc.
+        default='yolo11m.pt',  # yolo11n, yolo11s, yolo11m etc.
         help='Base model',
     )
 
     # training hyper-parameters
-    parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
+    parser.add_argument('--epochs', type=int, default=500, help='Training epochs')
     parser.add_argument('--imgsz', type=int, default=640, help='Image size')
-    parser.add_argument('--batch', type=float, default=0.7, help='Batch-size fraction (0 = auto)')
+    parser.add_argument('--batch', type=float, default=0.85, help='Batch-size fraction (0 = auto)')
     parser.add_argument('--device', default='auto', help='GPU id, -1 for CPU, or "auto"')
-    parser.add_argument('--degrees', type=float, default=15.0, help='Random rotation degrees for augmentation')
-    parser.add_argument('--shear', type=float, default=15.0, help='Random shear degrees for augmentation')
+    parser.add_argument('--degrees', type=float, default=10.0, help='Random rotation degrees for augmentation')
+    parser.add_argument('--shear', type=float, default=10.0, help='Random shear degrees for augmentation')
 
     args = parser.parse_args()
 
