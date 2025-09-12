@@ -6,8 +6,7 @@
 **/runs/**
 
 **/botsort.yaml
-src/individual_surfers/**
-individual_surfers/**
+tmp/**
 
 !train/models/**
 train/detection/datasets/**
@@ -20,3 +19,4 @@ test_outputs/**
 **/.env
 
 !server/inference/weights/**
+!.vscode/tasks.json

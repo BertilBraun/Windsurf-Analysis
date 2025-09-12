@@ -24,7 +24,7 @@ def main():
     parser.add_argument(
         '--output-dir',
         default=STANDARD_OUTPUT_DIR,
-        help='Directory for individual surfer videos (default: individual_surfers)',
+        help='Directory for individual surfer videos (default: tmp/standard)',
     )
     parser.add_argument('--generate-videos', action='store_true', help='Generate individual videos')
     parser.add_argument('--draw-annotations', action='store_true', help='Draw annotations on the video')

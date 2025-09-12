@@ -3,7 +3,7 @@ from pathlib import Path
 
 USE_GPU = torch.cuda.is_available()
 
-STANDARD_OUTPUT_DIR = 'individual_surfers'
+STANDARD_OUTPUT_DIR = 'tmp/standard'
 NUM_PARALLEL_VIDEO_WORKERS = 4
 
 # YOLO settings

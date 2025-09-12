@@ -1,0 +1,51 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "evaluate_tracker",
+            "type": "shell",
+            "command": "python server/inference/optimization/evaluate_tracker.py --golden-dir ${input:golden-dir} --tracker ${input:tracker}",
+            "problemMatcher": []
+        },
+        {
+            "label": "annotate_tracklets",
+            "type": "shell",
+            "command": "python server/inference/optimization/annotate_tracklets.py --golden-dir ${input:golden-dir}",
+            "problemMatcher": []
+        },
+        {
+            "label": "optimize_discrete_tracker",
+            "type": "shell",
+            "command": "python server/inference/optimization/optimize_discrete_tracker.py --golden-dir ${input:golden-dir}",
+            "problemMatcher": []
+        },
+        {
+            "label": "optimize_preprocessor",
+            "type": "shell",
+            "command": "python server/inference/optimization/optimize_preprocessor.py --golden-dir ${input:golden-dir}",
+            "problemMatcher": []
+        },
+        {
+            "label": "optimize_detection_thresholds",
+            "type": "shell",
+            "command": "python server/inference/optimization/optimize_detection_thresholds.py --golden-dir ${input:golden-dir}",
+            "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {
+            "id": "golden-dir",
+            "default": "tmp/golden",
+            "type": "promptString",
+            "description": "Golden directory"
+        },
+        {
+            "id": "tracker",
+            "default": "ilp",
+            "type": "promptString",
+            "description": "Tracker"
+        }
+    ]
+}
