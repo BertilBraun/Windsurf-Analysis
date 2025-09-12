@@ -178,7 +178,7 @@ def _evaluate_params_on_goldens(
 def main() -> None:
     parser = argparse.ArgumentParser(description='Bayesian optimization for Discrete ILP tracker.')
     parser.add_argument('--golden-dir', type=str, required=True, help='Directory with *.golden.tracks.pkl files')
-    parser.add_argument('--trials', type=int, default=500, help='Number of Optuna trials')
+    parser.add_argument('--trials', type=int, default=100, help='Number of Optuna trials')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument(
         '--metric', type=str, default='pairwise_f1', choices=['pairwise_f1'], help='Optimization metric'
@@ -251,7 +251,7 @@ def main() -> None:
         v = best_params[k]
         comma = ',' if i < len(best_params) - 1 else ''
         print(
-            f"    '{k}': {int(v) if isinstance(v, bool) or isinstance(v, int) else (f'{v:.4f}' if isinstance(v, float) else repr(v))}{comma}"
+            f"    '{k}': {int(v) if isinstance(v, bool) or isinstance(v, int) else (f'{v:.3f}' if isinstance(v, float) else repr(v))}{comma}"
         )
     print('}')
 
