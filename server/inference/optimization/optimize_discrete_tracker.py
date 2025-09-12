@@ -178,7 +178,7 @@ def _evaluate_params_on_goldens(
 def main() -> None:
     parser = argparse.ArgumentParser(description='Bayesian optimization for Discrete ILP tracker.')
     parser.add_argument('--golden-dir', type=str, required=True, help='Directory with *.golden.tracks.pkl files')
-    parser.add_argument('--trials', type=int, default=80, help='Number of Optuna trials')
+    parser.add_argument('--trials', type=int, default=500, help='Number of Optuna trials')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument(
         '--metric', type=str, default='pairwise_f1', choices=['pairwise_f1'], help='Optimization metric'
@@ -232,6 +232,7 @@ def main() -> None:
     if study.best_trial is not None:
         best_score = float(study.best_value)
         best_params = dict(study.best_trial.params)
+        best_params['long_link_cost_appearance_window_radius'] = 999999
         # Evaluate per-video once for reporting
         _, per_video = _evaluate_params_on_goldens(best_params, golden_paths, cache)
         all_results.append({'trial': 'best', 'params': best_params, 'score': best_score, 'per_video': per_video})
@@ -250,7 +251,7 @@ def main() -> None:
         v = best_params[k]
         comma = ',' if i < len(best_params) - 1 else ''
         print(
-            f"    '{k}': {int(v) if isinstance(v, bool) or isinstance(v, int) else (f'{v:.6f}' if isinstance(v, float) else repr(v))}{comma}"
+            f"    '{k}': {int(v) if isinstance(v, bool) or isinstance(v, int) else (f'{v:.4f}' if isinstance(v, float) else repr(v))}{comma}"
         )
     print('}')
 
