@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import os
+import shutil
 
 import modal
-import requests
 
 from server.inference.src.visualization.stabilize import compute_stabilization_transforms, stabilize_video
 from .inference.src.util.timing import timeit
 from .inference.src.orientation_fixer import OrientationFixer
-from .main_inference import image as inference_image, volume as shared_volume
+from .main_inference import failure_webhook, image as inference_image, volume as shared_volume
 
 
 app = modal.App('windsurf-analysis-stabilization', image=inference_image)
@@ -21,7 +21,7 @@ app = modal.App('windsurf-analysis-stabilization', image=inference_image)
 )
 @modal.concurrent(max_inputs=16, target_inputs=12)
 def stabilize_and_enqueue(job_id: str, yolo_model: str, complete_webhook: str):
-    try:
+    with failure_webhook(complete_webhook):
         shared_volume.reload()
 
         input_video_path = f'/data/{job_id}.mp4'
@@ -30,13 +30,15 @@ def stabilize_and_enqueue(job_id: str, yolo_model: str, complete_webhook: str):
 
         # Work in ephemeral container FS for intermediates; write final stabilized to /data
         orientation_fixed_video_path = f'{job_id}_fixed_orientation.mp4'
-        stabilized_video_path = f'/data/{job_id}_stabilized.mp4'
+        stabilized_video_path = f'{job_id}_stabilized.mp4'
 
         with timeit(f'{job_id}: Orientation detection'):
+            print(f'{job_id}: Starting Orientation detection')
             orientation_fixer = OrientationFixer('/root/weights/orientation_fixer/best.pt')
             dominant_orientation = orientation_fixer.fix_video(input_video_path, orientation_fixed_video_path)
 
         with timeit(f'{job_id}: Stabilization (CPU)'):
+            print(f'{job_id}: Starting Stabilization')
             transforms = compute_stabilization_transforms(orientation_fixed_video_path)
             stabilize_video(
                 orientation_fixed_video_path,
@@ -44,17 +46,18 @@ def stabilize_and_enqueue(job_id: str, yolo_model: str, complete_webhook: str):
                 transforms,
             )
 
+        # Cleanup temporary file and move the stabilized video to the original video path
+        os.remove(input_video_path)
+        # copy to original video path
+        shutil.copy(stabilized_video_path, input_video_path)
+        os.remove(stabilized_video_path)
+        os.remove(orientation_fixed_video_path)
+
         # Persist stabilized video into shared volume
         shared_volume.commit()
 
         # Convert transforms to primitive structure for cross-process call
         transforms_payload = [{'dx': t.dx, 'dy': t.dy, 'da': t.da} for t in transforms]
-
-        # Cleanup temporary file
-        try:
-            os.remove(orientation_fixed_video_path)
-        except Exception:
-            pass
 
         # Enqueue GPU inference continuation
         InferenceModel = modal.Cls.from_name('windsurf-analysis', 'InferenceModel')
@@ -65,15 +68,3 @@ def stabilize_and_enqueue(job_id: str, yolo_model: str, complete_webhook: str):
             transforms=transforms_payload,
             complete_webhook=complete_webhook,
         )
-    except Exception as e:
-        # If something fails here, forward failure directly to backend webhook to unblock job
-        try:
-            print(f'Error in stabilization: {e}')
-            res = requests.post(
-                complete_webhook,
-                json={'status': 'failed', 'results': None},
-                timeout=60,
-            )
-            print(f'Completion webhook response (stabilization failed): {res.status_code} {res.text}')
-        except Exception as inner:
-            print(f'Error posting failure webhook: {inner}')

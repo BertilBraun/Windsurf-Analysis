@@ -17,7 +17,7 @@ def compute_stabilization_transforms(input_video: str | os.PathLike) -> list[Tra
     """
     video_properties = get_video_properties(input_video)
 
-    stabilizer = VidStab('DENSE')
+    stabilizer = VidStab()  # TODO: 'DENSE')
     stabilizer.gen_transforms(input_path=input_video, smoothing_window=min(20, video_properties.total_frames - 1))
 
     assert stabilizer.transforms is not None

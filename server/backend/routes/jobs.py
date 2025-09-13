@@ -187,6 +187,12 @@ async def jobs_complete(
     if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
+    # Optionally delete the video files
+    try:
+        os.remove(f'/data/{job_id}.mp4')
+    except Exception as e:
+        print(f'Error deleting video file: {e}')
+
     if payload.status != 'succeeded' or payload.results is None:
         job.error_message = 'Failed to complete job'
         job.status = JobStatus.failed
@@ -202,15 +208,5 @@ async def jobs_complete(
     job.status = JobStatus.succeeded
     job.finished_at = timestamp_now()
     await db.flush()
-
-    # Optionally delete the video files
-    try:
-        os.remove(f'/data/{job_id}.mp4')
-    except Exception:
-        pass
-    try:
-        os.remove(f'/data/{job_id}_stabilized.mp4')
-    except Exception:
-        pass
 
     return {'ok': True}

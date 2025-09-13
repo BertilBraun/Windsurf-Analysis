@@ -1,3 +1,4 @@
+import contextlib
 import requests
 from pathlib import Path
 from typing import Sequence
@@ -44,6 +45,19 @@ def clamp_percentage(p: float) -> float:
     return max(0, min(p, 1))
 
 
+# failure webhook context manager
+@contextlib.contextmanager
+def failure_webhook(webhook: str):
+    try:
+        yield
+    except Exception as e:
+        print(f'Error in failure_webhook: {e}')
+        try:
+            requests.post(webhook, json={'status': 'failed', 'error': str(e), 'results': None}, timeout=60)
+        except Exception as e:
+            print(f'Error posting failure webhook: {e}')
+
+
 @app.cls(
     gpu='T4',
     max_containers=2,
@@ -76,19 +90,10 @@ class InferenceModel:
         transforms: list[dict],
         complete_webhook: str,
     ):
-        def _post_completion_webhook(status: str, results: dict | None):
-            print(f'POSTing completion webhook to {complete_webhook}')
-            res = requests.post(
-                complete_webhook,
-                json={'status': status, 'results': results},
-                timeout=60,
-            )
-            print(f'Completion webhook response: {res.status_code} {res.text}')
-
-        try:
+        with failure_webhook(complete_webhook):
             volume.reload()
 
-            stabilized_video_path = f'/data/{job_id}_stabilized.mp4'
+            stabilized_video_path = f'/data/{job_id}.mp4'
 
             processor = self._get_processor(yolo_model)
 
@@ -156,7 +161,9 @@ class InferenceModel:
                 'stabilization_transforms': stabilization_transforms,
             }
 
-            _post_completion_webhook('succeeded', results)
-        except Exception as e:
-            print(f'Error in inference_after_stabilization: {e}')
-            _post_completion_webhook('failed', None)
+            res = requests.post(
+                complete_webhook,
+                json={'status': 'succeeded', 'results': results},
+                timeout=60,
+            )
+            print(f'Completion webhook response: {res.status_code} {res.text}')
