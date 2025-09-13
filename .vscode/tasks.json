@@ -38,6 +38,12 @@
             "type": "shell",
             "command": "python deploy.py",
             "problemMatcher": []
+        },
+        {
+            "label": "serve",
+            "type": "shell",
+            "command": "cd server/frontend && npm run preview",
+            "problemMatcher": []
         }
     ],
     "inputs": [
