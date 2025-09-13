@@ -12,7 +12,7 @@
         {
             "label": "annotate_tracklets",
             "type": "shell",
-            "command": "python server/inference/optimization/annotate_tracklets.py --golden-dir ${input:golden-dir}",
+            "command": "python server/inference/optimization/annotate_tracklets.py ${input:video-dir} --output-dir ${input:golden-dir}",
             "problemMatcher": []
         },
         {
@@ -32,6 +32,12 @@
             "type": "shell",
             "command": "python server/inference/optimization/optimize_detection_thresholds.py --golden-dir ${input:golden-dir}",
             "problemMatcher": []
+        },
+        {
+            "label": "deploy",
+            "type": "shell",
+            "command": "python deploy.py",
+            "problemMatcher": []
         }
     ],
     "inputs": [
@@ -40,6 +46,12 @@
             "default": "tmp/golden",
             "type": "promptString",
             "description": "Golden directory"
+        },
+        {
+            "id": "video-dir",
+            "default": "tmp/test/*.mp4",
+            "type": "promptString",
+            "description": "Video directory"
         },
         {
             "id": "tracker",
