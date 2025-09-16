@@ -89,7 +89,7 @@ export class PlayerState {
         const lastTime = this.time(detectionTimes[n - 1]) + DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
         if (timeSec < firstTime || timeSec > lastTime) return null
 
-        const idx = binSearch(detectionTimes, timeSec, this.time)
+        const idx = binSearch(detectionTimes, timeSec, t => this.time(t))
         const i2 = Math.min(n - 1, idx)
         const i1 = Math.max(0, i2 - 1)
         if (i1 === i2) return detectionTimes[i1]
@@ -137,8 +137,11 @@ export class PlayerState {
         const n = arr.length
         if (!n) return { dx: 0, dy: 0, da: 0 }
         // indices for Catmull–Rom interpolation
-        const idx = binSearch(arr, timeSec, this.time)
+        const idx = binSearch(arr, timeSec, t => this.time(t))
         const i2 = Math.min(n - 1, idx)
+
+        return { dx: arr[i2].dx, dy: arr[i2].dy, da: arr[i2].da } // TODO temporary without interpolation
+
         const i1 = Math.max(0, i2 - 1)
         if (i1 === i2) return { dx: arr[i1].dx, dy: arr[i1].dy, da: arr[i1].da }
         const i0 = Math.max(0, i1 - 1)

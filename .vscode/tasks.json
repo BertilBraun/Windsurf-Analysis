@@ -34,6 +34,18 @@
             "problemMatcher": []
         },
         {
+            "label": "run_local_inference",
+            "type": "shell",
+            "command": "python -m server.inference.src.local_inference_main ${input:video-dir}",
+            "problemMatcher": []
+        },
+        {
+            "label": "local_player",
+            "type": "shell",
+            "command": "python -m server.inference.src.local_player_main",
+            "problemMatcher": []
+        },
+        {
             "label": "deploy",
             "type": "shell",
             "command": "python deploy.py",
@@ -42,7 +54,7 @@
         {
             "label": "serve",
             "type": "shell",
-            "command": "cd server/frontend && npm run preview",
+            "command": "cd server/frontend && npm run build && npm run preview",
             "problemMatcher": []
         }
     ],

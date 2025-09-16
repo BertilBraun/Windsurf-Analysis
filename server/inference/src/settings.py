@@ -10,7 +10,7 @@ NUM_PARALLEL_VIDEO_WORKERS = 4
 inference_root_folder = Path(__file__).parent.parent
 YOLO_MODEL_PATH = inference_root_folder / 'weights/yolo_models/windsurfing/best.pt'
 
-IOU_THRESHOLD = 0.5
+IOU_THRESHOLD = 0.2
 CONFIDENCE_THRESHOLD = 0.6
 BATCH_SIZE = 32
 

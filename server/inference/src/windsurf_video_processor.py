@@ -71,13 +71,13 @@ class WindsurfingVideoProcessor:
             detections,
             props,
             trackers=[
+                Preprocessor(),
                 # GreedyTracker(),
                 DiscreteILPTracker(),
                 TrackFiltering(),
                 TrackInterpolation(),
                 TrackSmoothing(),
                 TrackRelabeling(),
-                Preprocessor(),
             ],
         )
 

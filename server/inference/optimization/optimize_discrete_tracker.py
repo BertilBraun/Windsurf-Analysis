@@ -164,6 +164,7 @@ def _evaluate_params_on_goldens(
         pred_assign = _build_assignment_from_tracks(pred_tracks)
         if set(gold_assign.keys()) != set(pred_assign.keys()):
             # Skip if detections differ
+            print(f'Detections differ for {golden_path.name}')
             continue
         s = _pairwise_scores(gold_assign, pred_assign)
         metrics_list.append((golden_path.name, s))

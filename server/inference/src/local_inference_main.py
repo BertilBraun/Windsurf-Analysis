@@ -12,7 +12,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from .util.helpers import setup_logging
 
-from .settings import NUM_PARALLEL_VIDEO_WORKERS, STANDARD_OUTPUT_DIR
+from .settings import NUM_PARALLEL_VIDEO_WORKERS
 from .windsurf_video_processor import WindsurfingVideoProcessor
 
 
@@ -21,11 +21,7 @@ def main():
     parser.add_argument(
         'input_pattern', nargs='+', help='Path pattern for input video files (e.g., "videos/*.mp4" or single file)'
     )
-    parser.add_argument(
-        '--output-dir',
-        default=STANDARD_OUTPUT_DIR,
-        help='Directory for individual surfer videos (default: tmp/standard)',
-    )
+    parser.add_argument('--output-dir', help='Directory for individual surfer videos (default: input directory)')
     parser.add_argument('--generate-videos', action='store_true', help='Generate individual videos')
     parser.add_argument('--draw-annotations', action='store_true', help='Draw annotations on the video')
     parser.add_argument('--debug-views', action='store_true', help='Output debug views of the video processing steps')
@@ -34,7 +30,10 @@ def main():
 
     args = parser.parse_args()
 
-    output_dir_path = Path(args.output_dir)
+    # Expand glob pattern to find matching video files
+    video_files = list(chain(*(glob.glob(p) for p in args.input_pattern)))
+
+    output_dir_path = Path(args.output_dir) if args.output_dir else Path(video_files[0]).parent
     output_dir_path.mkdir(parents=True, exist_ok=True)
 
     logger = setup_logging(output_dir_path)
@@ -43,9 +42,6 @@ def main():
         logger.warning('=' * 80)
         logger.warning('WARNING: CUDA is not available. This will be slow.')
         logger.warning('=' * 80)
-
-    # Expand glob pattern to find matching video files
-    video_files = list(chain(*(glob.glob(p) for p in args.input_pattern)))
 
     if not video_files:
         logger.error(f'No video files found matching pattern: {args.input_pattern}')
@@ -94,7 +90,7 @@ def _log_detection_settings(logger: logging.Logger):
 def _process_videos(
     video_files: list[str],
     indices_to_process: list[int],
-    output_dir: Path | None,
+    output_dir: Path,
     draw_annotations: bool,
     generate_videos: bool,
     debug_views: bool,
@@ -104,7 +100,7 @@ def _process_videos(
 
     processor = WindsurfingVideoProcessor(
         draw_annotations=draw_annotations,
-        output_dir=str(output_dir) if output_dir else STANDARD_OUTPUT_DIR,
+        output_dir=str(output_dir),
         generate_videos=generate_videos,
         debug_views=debug_views,
         parallel_workers=NUM_PARALLEL_VIDEO_WORKERS,
