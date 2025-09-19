@@ -16,15 +16,21 @@
             "problemMatcher": []
         },
         {
-            "label": "optimize_discrete_tracker",
+            "label": "optimize_ILP",
             "type": "shell",
-            "command": "python server/inference/optimization/optimize_discrete_tracker.py --golden-dir ${input:golden-dir}",
+            "command": "python server/inference/optimization/optimize_tracker.py --golden-dir ${input:golden-dir} --mode ilp",
+            "problemMatcher": []
+        },
+        {
+            "label": "optimize_BoTSort",
+            "type": "shell",
+            "command": "python server/inference/optimization/optimize_tracker.py --golden-dir ${input:golden-dir} --mode botsort",
             "problemMatcher": []
         },
         {
             "label": "optimize_preprocessor",
             "type": "shell",
-            "command": "python server/inference/optimization/optimize_preprocessor.py --golden-dir ${input:golden-dir}",
+            "command": "python server/inference/optimization/optimize_tracker.py --golden-dir ${input:golden-dir} --mode preprocessor",
             "problemMatcher": []
         },
         {

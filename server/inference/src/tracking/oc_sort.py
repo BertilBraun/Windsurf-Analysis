@@ -3,14 +3,14 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
-from scipy.optimize import linear_sum_assignment
-
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 
 from ..common_types import BoundingBox, Detection, Point, Track
 from ..tracking.tracking import Tracker
 from ..util.video_io import VideoInfo
-from ..visualization.stabilize import Transform
+from ..visualization.stabilize import Transform  # dx, dy, da (radians), frame_idx
+
 
 # =========================
 # Math helpers
@@ -22,9 +22,10 @@ def rotmat(theta_rad: float) -> np.ndarray:
     return np.array([[c, -s], [s, c]], dtype=np.float64)
 
 
-def apply_cmc_center(pt: Point, dx: float, dy: float, angle_deg: float, img_cx: float, img_cy: float) -> Point:
+def apply_cmc_center(pt: Point, dx: float, dy: float, angle_rad: float, img_cx: float, img_cy: float) -> Point:
+    """Rotate around image center by angle_rad, then translate by (dx, dy)."""
     v = np.array([pt.x - img_cx, pt.y - img_cy], dtype=np.float64)
-    v = rotmat(math.radians(angle_deg)).dot(v)
+    v = rotmat(angle_rad).dot(v)
     v += np.array([img_cx + dx, img_cy + dy], dtype=np.float64)
     return Point(int(round(v[0])), int(round(v[1])))
 
@@ -41,8 +42,41 @@ def cosine(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.clip(a @ b, -1.0, 1.0))
 
 
+def H_from_transform(t: Transform) -> np.ndarray:
+    """Affine 3x3 from (dx, dy, da_rad)."""
+    c, s = math.cos(t.da), math.sin(t.da)
+    return np.array([[c, -s, t.dx], [s, c, t.dy], [0.0, 0.0, 1.0]], dtype=np.float64)
+
+
+def transform_from_H(H: np.ndarray, frame_idx: int) -> Transform:
+    """Extract (dx, dy, da_rad) from 3x3 SE(2) matrix."""
+    da = math.atan2(H[1, 0], H[0, 0])
+    dx = float(H[0, 2])
+    dy = float(H[1, 2])
+    return Transform(dx=dx, dy=dy, da=da, frame_idx=frame_idx)
+
+
+def compute_delta_transforms(transforms: List[Transform]) -> Dict[int, Transform]:
+    if not transforms:
+        return {}
+    transforms_sorted = sorted(transforms, key=lambda x: x.frame_idx)
+    H = {t.frame_idx: H_from_transform(t) for t in transforms_sorted}
+    idxs = [t.frame_idx for t in transforms_sorted]
+    first = min(idxs)
+    deltas: Dict[int, Transform] = {first: Transform(0.0, 0.0, 0.0, first)}
+    for f in idxs[1:]:
+        prev = f - 1
+        if prev not in H:
+            deltas[f] = Transform(0.0, 0.0, 0.0, f)
+            continue
+        # delta = H_{t-1}^{-1} @ H_t   (maps t-1 -> t)
+        B = np.linalg.inv(H[prev]) @ H[f]
+        deltas[f] = transform_from_H(B, f)
+    return deltas
+
+
 # =========================
-# Kalman box filter (SORT-style)
+# Kalman box filter (SORT-style) + gating
 # =========================
 
 
@@ -93,6 +127,13 @@ class KalmanBox:
         I = np.eye(7)
         self.P = (I - K @ self.H) @ self.P
 
+    def maha(self, bb: BoundingBox) -> float:
+        """Mahalanobis distance of bbox measurement to current state prediction."""
+        z = self.z_from_bbox(bb)
+        y = z - self.H @ self.x  # assuming self.x already predicted
+        S = self.H @ self.P @ self.H.T + self.R
+        return float(y.T @ np.linalg.inv(S) @ y)
+
 
 # =========================
 # OC-SORT + embeddings
@@ -109,31 +150,57 @@ class Tracklet:
     hits: int = 1
     miss: int = 0
     confirmed: bool = False
+    hit_streak: int = 0
     vdir: Optional[np.ndarray] = None  # unit 2D
-    gallery: List[np.ndarray] = field(default_factory=list)  # embeddings
+    gallery: List[np.ndarray] = field(default_factory=list)  # embeddings (L2-normalized)
     last_det: Optional[Detection] = None  # full detection object of last match
+    born_at: int = 0
 
 
 class OCSortEmbed:
-    """OC-SORT with observation-centric virtual boxes, BYTE second pass, OCR re-association, embeddings fusion, and CMC."""
+    """
+    OC-SORT with:
+      - observation-centric virtual boxes
+      - motion-consistency penalty (soft)
+      - soft mutual-nearest tie filter (not strict)
+      - BYTE second pass
+      - OCR re-association
+      - embedding fusion and ReID revive
+      - camera-motion compensation (per-frame delta)
+      - softer association + early output option
+    """
 
     def __init__(
         self,
         det_hi: float = 0.6,
-        det_lo: float = 0.1,
-        iou_thr: float = 0.3,
-        inertia: float = 0.2,
+        det_lo: float = 0.05,
+        iou_thr: float = 0.30,
+        inertia: float = 0.18,
         delta_t: int = 3,
         max_age: int = 30,
-        min_hits: int = 3,
+        min_hits: int = 2,
         use_byte: bool = True,
         gallery_size: int = 10,
-        reid_sim_thr: float = 0.8,
-        iou_gate_min: float = 0.05,
-        ambig_iou_margin: float = 0.1,
+        reid_sim_thr: float = 0.80,
+        reid_sim_thr_tent: float = 0.85,
+        iou_thr_tent: float = 0.35,
+        iou_gate_min: float = 0.02,
+        ambig_iou_margin: float = 0.12,
+        sim_margin: float = 0.04,
+        obs_hist_cap: int = 100,
+        spawn_suppress_iou: float = 0.60,
+        spawn_suppress_sim: float = 0.75,
+        w_mot: float = 0.15,
+        maha_gate: float = 16.0,  # ~chi2(4, 0.99)=13.3; 16 is lenient
+        output_tentative: bool = True,  # reduce startup lag
+        output_tentative_max: int = 2,  # frames after birth to allow tentative output
+        dedup_enable: bool = False,  # disable aggressive dedup to avoid drops
+        dup_iou: float = 0.65,
+        dup_sim: float = 0.90,
     ):
         self.det_hi, self.det_lo = det_hi, det_lo
         self.iou_thr = iou_thr
+        self.iou_thr_tent = iou_thr_tent
         self.inertia = inertia
         self.delta_t = delta_t
         self.max_age = max_age
@@ -141,8 +208,20 @@ class OCSortEmbed:
         self.use_byte = use_byte
         self.gallery_size = gallery_size
         self.reid_sim_thr = reid_sim_thr
+        self.reid_sim_thr_tent = reid_sim_thr_tent
         self.iou_gate_min = iou_gate_min
         self.ambig_iou_margin = ambig_iou_margin
+        self.sim_margin = sim_margin
+        self.obs_hist_cap = obs_hist_cap
+        self.spawn_suppress_iou = spawn_suppress_iou
+        self.spawn_suppress_sim = spawn_suppress_sim
+        self.w_mot = w_mot
+        self.maha_gate = maha_gate
+        self.output_tentative = output_tentative
+        self.output_tentative_max = output_tentative_max
+        self.dedup_enable = dedup_enable
+        self.dup_iou = dup_iou
+        self.dup_sim = dup_sim
 
         self.tracks: List[Tracklet] = []
         self.next_tid = 1
@@ -157,34 +236,36 @@ class OCSortEmbed:
         frame_idx: int,
         img_w: int,
         img_h: int,
-        T: Transform,
+        T_delta: Transform,  # per-frame delta (dx, dy, da_rad) mapping t-1 -> t
     ) -> List[Tuple[BoundingBox, int]]:
         self.t = frame_idx
         self.img_cx, self.img_cy = (img_w - 1) / 2.0, (img_h - 1) / 2.0
 
+        # L2-normalize embeddings at ingest
+        for d in detections:
+            e = d.embedding.astype(np.float64)
+            d.embedding = e / (np.linalg.norm(e) + 1e-8)
+
         # 1) CMC then predict
         for tr in self.tracks:
             c = tr.kf.bbox_from_x(tr.kf.x).center
-            c_cmc = apply_cmc_center(c, T.dx, T.dy, T.da, self.img_cx, self.img_cy)
+            c_cmc = apply_cmc_center(c, T_delta.dx, T_delta.dy, T_delta.da, self.img_cx, self.img_cy)
             tr.kf.x[0] += c_cmc.x - c.x
             tr.kf.x[1] += c_cmc.y - c.y
             if tr.vdir is not None:
-                vdir = tr.vdir
-                vdir = rotmat(math.radians(T.da)).dot(vdir)
-                vdir /= np.linalg.norm(vdir) + 1e-8
-                tr.vdir = vdir
+                vdir = rotmat(T_delta.da).dot(tr.vdir)
+                tr.vdir = vdir / (np.linalg.norm(vdir) + 1e-8)
             tr.kf.predict()
 
         # 2) split detections
         D_hi = [d for d in detections if d.confidence >= self.det_hi]
         D_lo = [d for d in detections if self.det_lo <= d.confidence < self.det_hi]
 
-        # 3) Stage-A: OC virtual boxes + fused cost
+        # 3) Stage-A: OC virtual boxes + fused cost + motion penalty + soft MN filter + KF gating
         M_A, U_hi, U_trk = self._assoc_oc_fused(D_hi)
-
         self._apply_matches(D_hi, M_A)
-        # unmatched tracks carry over to next stages
-        # 4) BYTE-style pass on low-score detections, fused to break ties
+
+        # 4) BYTE-style pass on low-score detections, fused + motion penalty
         if self.use_byte and len(D_lo) and len(U_trk):
             M_B, U_lo, U_trk = self._assoc_byte_fused(D_lo, U_trk)
             self._apply_matches(D_lo, M_B)
@@ -204,20 +285,39 @@ class OCSortEmbed:
             U_hi = [i for i in U_hi if i not in set(used_hi)]
             U_lo = [i for i in U_lo if (i + len(D_hi)) not in set(used_lo)]
 
-        # 7) Init new tracks from remaining high-score detections
+        # 7) Init new tracks from remaining high-score detections, with softer suppression
         for i in U_hi:
-            self._start_track(D_hi[i])
+            di = D_hi[i]
+            suppress = False
+            for tr in self.tracks:
+                if not tr.confirmed:
+                    continue
+                pred = tr.kf.bbox_from_x(tr.kf.x)
+                if di.bbox.iou(pred) >= self.spawn_suppress_iou:
+                    suppress = True
+                    break
+                sim = max(cosine(di.embedding, g) for g in tr.gallery) if tr.gallery else 0.0
+                if (
+                    sim >= self.spawn_suppress_sim
+                    and di.bbox.center.distance_to(tr.last_obs.center) <= 0.6 * tr.last_obs.diagonal_length
+                ):
+                    suppress = True
+                    break
+            if not suppress:
+                self._start_track(di)
 
-        # 8) Ageing
+        # 8) Ageing and confirmation
         alive: List[Tracklet] = []
         for tr in self.tracks:
             if tr.last_seen == self.t:
                 tr.miss = 0
                 tr.hits += 1
-                if tr.hits >= self.min_hits:
+                tr.hit_streak = tr.hit_streak + 1
+                if tr.hit_streak >= self.min_hits:
                     tr.confirmed = True
             else:
                 tr.miss += 1
+                tr.hit_streak = 0
             if tr.miss <= self.max_age:
                 alive.append(tr)
         self.tracks = alive
@@ -233,6 +333,23 @@ class OCSortEmbed:
 
     # ----- associations -----
 
+    @staticmethod
+    def _soft_mutual_filter(
+        C: np.ndarray, ri: np.ndarray, ci: np.ndarray, eps: float = 0.05
+    ) -> Tuple[List[int], List[int]]:
+        """Keep pairs close to both row and col minima; softer than strict mutual-NN."""
+        if len(ri) == 0:
+            return [], []
+        row_min = C.min(axis=1, keepdims=True)
+        col_min = C.min(axis=0, keepdims=True)
+        fr: List[int] = []
+        fc: List[int] = []
+        for r, c in zip(ri, ci):
+            if C[r, c] <= row_min[r, 0] + eps and C[r, c] <= col_min[0, c] + eps:
+                fr.append(int(r))
+                fc.append(int(c))
+        return fr, fc
+
     def _assoc_oc_fused(self, dets: List[Detection]):
         if not dets or not self.tracks:
             return [], list(range(len(dets))), list(range(len(self.tracks)))
@@ -243,69 +360,99 @@ class OCSortEmbed:
             last = tr.last_obs
             vdir = self._estimate_vdir(tr)
             step = last.center.distance_to(pred.center)
-            step = min(
-                step, 2.0 * last.diagonal_length
-            )  # clamp step to 2x the diagonal length to not explode after long misses
+            step = min(step, 2.0 * last.diagonal_length)
             shift = self.inertia * step * vdir
             vb = bbox_from_center_wh(last.center.x + shift[0], last.center.y + shift[1], last.width, last.height)
             virt.append(vb)
 
-        I = np.zeros((len(dets), len(self.tracks)), dtype=np.float64)
-        S = np.zeros_like(I)
-        L = np.zeros_like(I)
+        I = np.zeros((len(dets), len(self.tracks)), dtype=np.float64)  # IoU
+        S = np.zeros_like(I)  # appearance sim
+        L = np.zeros_like(I)  # lambda
+        M = np.zeros_like(I)  # motion penalty
+        G = np.zeros_like(I)  # KF gating penalty (0 ok, 1 block)
+        big = 1e6
+
         for i, d in enumerate(dets):
             for j, tr in enumerate(self.tracks):
                 I[i, j] = d.bbox.iou(virt[j])
-                sim = max(cosine(d.embedding, g) for g in tr.gallery) if tr.gallery else 0.0
-                S[i, j] = sim
+                S[i, j] = max(cosine(d.embedding, g) for g in tr.gallery) if tr.gallery else 0.0
+                # motion
+                if tr.vdir is not None and np.linalg.norm(tr.vdir) > 1e-6:
+                    disp = np.array(
+                        [d.bbox.center.x - tr.last_obs.center.x, d.bbox.center.y - tr.last_obs.center.y],
+                        dtype=np.float64,
+                    )
+                    n = np.linalg.norm(disp) + 1e-8
+                    dir_cos = float(np.dot(tr.vdir, disp / n))
+                    M[i, j] = 0.5 * (1.0 - max(-1.0, min(1.0, dir_cos)))
+                # KF gate (lenient)
+                if tr.kf.maha(d.bbox) > self.maha_gate:
+                    G[i, j] = 1.0
 
-        # adaptive lambda: shift weight to embeddings when IoU is ambiguous or track has gaps
+        # adaptive lambda
         iou_max = I.max(axis=1, keepdims=True)
         iou_2nd = np.partition(I, -2, axis=1)[:, -2][:, None] if I.shape[1] >= 2 else np.zeros_like(iou_max)
-        ambig = (iou_max - iou_2nd) < self.ambig_iou_margin
+        ambig_row = (iou_max - iou_2nd) < self.ambig_iou_margin
         for i in range(len(dets)):
             for j, tr in enumerate(self.tracks):
-                lam = 0.6
+                lam = 0.55
                 if tr.miss >= 5:
                     lam = 0.35
-                if ambig[i, 0] or I[i, j] < 0.2:
-                    lam = min(lam, 0.35)
+                if ambig_row[i, 0] or I[i, j] < 0.2 or I[i, j] > 0.6:
+                    lam = min(lam, 0.30)
                 L[i, j] = lam
 
-        big = 1e6
-        C = L * (1.0 - I) + (1.0 - L) * (1.0 - S)
-        for i, d in enumerate(dets):
+        C = L * (1.0 - I) + (1.0 - L) * (1.0 - S) + self.w_mot * M
+        # weak spatial + KF gating
+        for i in range(len(dets)):
             for j, tr in enumerate(self.tracks):
-                # weak spatial gate
                 if (
                     I[i, j] < self.iou_gate_min
-                    and d.bbox.center.distance_to(tr.kf.bbox_from_x(tr.kf.x).center) > 3.0 * tr.last_obs.diagonal_length
+                    and dets[i].bbox.center.distance_to(tr.kf.bbox_from_x(tr.kf.x).center)
+                    > 3.0 * tr.last_obs.diagonal_length
                 ):
+                    C[i, j] = big
+                if G[i, j] > 0.5:
                     C[i, j] = big
 
         ri, ci = linear_sum_assignment(C)
+        ri, ci = self._soft_mutual_filter(C, ri, ci, eps=0.05)
+
         matches: List[Tuple[int, int]] = []
         U_det: List[int] = []
         U_trk: List[int] = []
-        matched_det, matched_trk = set(), set()
+        ri_set = set(ri)
+        ci_set = set(ci)
         for i in range(len(dets)):
-            if i not in ri:
+            if i not in ri_set:
                 U_det.append(i)
         for j in range(len(self.tracks)):
-            if j not in ci:
+            if j not in ci_set:
                 U_trk.append(j)
+
         for r, c in zip(ri, ci):
-            iou_ok = I[r, c] >= self.iou_thr
-            sim_ok = S[r, c] >= self.reid_sim_thr if not iou_ok else True
-            if iou_ok or sim_ok:
-                matches.append((r, c))
-                matched_det.add(r)
-                matched_trk.add(c)
+            tr = self.tracks[c]
+            iou_ok = I[r, c] >= (self.iou_thr if tr.confirmed else self.iou_thr_tent)
+            if tr.confirmed:
+                if iou_ok:
+                    # if IoU ambiguous, require small appearance margin
+                    row = I[r]
+                    if I.shape[1] >= 2:
+                        top2 = np.partition(row, -2)[-2]
+                        if (row.max() - top2) < self.ambig_iou_margin:
+                            s_row = S[r]
+                            s2 = np.partition(s_row, -2)[-2] if s_row.size >= 2 else -1.0
+                            if S[r, c] < s2 + self.sim_margin:
+                                # allow anyway if cost is clearly best
+                                if not (C[r, c] <= C[r].min() + 0.02 and C[r, c] <= C[:, c].min() + 0.02):
+                                    continue
+                    matches.append((r, c))
+                elif S[r, c] >= self.reid_sim_thr:
+                    matches.append((r, c))
             else:
-                if r not in matched_det:
-                    U_det.append(r)
-                if c not in matched_trk:
-                    U_trk.append(c)
+                # tentative: OR rule to avoid missing early frames
+                if iou_ok or S[r, c] >= self.reid_sim_thr_tent:
+                    matches.append((r, c))
         return matches, U_det, U_trk
 
     def _assoc_byte_fused(self, dets_lo: List[Detection], u_trk_idx: List[int]):
@@ -314,6 +461,8 @@ class OCSortEmbed:
         I = np.zeros((len(dets_lo), len(u_trk_idx)))
         S = np.zeros_like(I)
         L = np.zeros_like(I)
+        M = np.zeros_like(I)
+        big = 1e6
         for i, d in enumerate(dets_lo):
             for jj, idx in enumerate(u_trk_idx):
                 tr = self.tracks[idx]
@@ -323,29 +472,44 @@ class OCSortEmbed:
                 if I[i, jj] < 0.2:
                     lam = min(lam, 0.3)
                 L[i, jj] = lam
-        C = L * (1.0 - I) + (1.0 - L) * (1.0 - S)
+                if tr.vdir is not None and np.linalg.norm(tr.vdir) > 1e-6:
+                    disp = np.array(
+                        [d.bbox.center.x - tr.last_obs.center.x, d.bbox.center.y - tr.last_obs.center.y],
+                        dtype=np.float64,
+                    )
+                    n = np.linalg.norm(disp) + 1e-8
+                    dir_cos = float(np.dot(tr.vdir, disp / n))
+                    M[i, jj] = 0.5 * (1.0 - max(-1.0, min(1.0, dir_cos)))
+                # lenient KF gate
+                if tr.kf.maha(d.bbox) > self.maha_gate:
+                    I[i, jj] = 0.0
+                    S[i, jj] = 0.0
+                    M[i, jj] = 1.0
+
+        C = L * (1.0 - I) + (1.0 - L) * (1.0 - S) + self.w_mot * M
+        C[np.isnan(C)] = big
+
         ri, ci = linear_sum_assignment(C)
+        ri, ci = self._soft_mutual_filter(C, ri, ci, eps=0.05)
+
         matches: List[Tuple[int, int]] = []
         U_det: List[int] = []
         U_trk: List[int] = []
-        matched_det, matched_trk = set(), set()
+        ri_set = set(ri)
+        ci_set = set(ci)
         for i in range(len(dets_lo)):
-            if i not in ri:
+            if i not in ri_set:
                 U_det.append(i)
         for j in range(len(u_trk_idx)):
-            if j not in ci:
+            if j not in ci_set:
                 U_trk.append(u_trk_idx[j])
+
         for r, c in zip(ri, ci):
-            # accept if IoU ok OR strong appearance
-            if (I[r, c] >= self.iou_thr - 0.05) or (S[r, c] >= self.reid_sim_thr):
+            tr = self.tracks[u_trk_idx[c]]
+            thr_iou = self.iou_thr if tr.confirmed else self.iou_thr_tent
+            thr_sim = self.reid_sim_thr if tr.confirmed else self.reid_sim_thr_tent
+            if (I[r, c] >= (thr_iou - 0.10)) or (S[r, c] >= (thr_sim - 0.05)):
                 matches.append((r, u_trk_idx[c]))
-                matched_det.add(r)
-                matched_trk.add(c)
-            else:
-                if r not in matched_det:
-                    U_det.append(r)
-                if c not in matched_trk:
-                    U_trk.append(u_trk_idx[c])
         return matches, U_det, U_trk
 
     def _assoc_ocr_direct(self, D_hi: List[Detection], U_hi: List[int], U_trk: List[int]):
@@ -361,7 +525,7 @@ class OCSortEmbed:
         keep_hi = set(range(len(U_hi)))
         keep_trk = set(range(len(U_trk)))
         for r, c in zip(ri, ci):
-            if I[r, c] >= self.iou_thr - 0.1:
+            if I[r, c] >= self.iou_thr - 0.15:
                 matches.append((U_hi[r], U_trk[c]))
                 keep_hi.discard(r)
                 keep_trk.discard(c)
@@ -369,39 +533,12 @@ class OCSortEmbed:
         U_trk2 = [U_trk[i] for i in sorted(keep_trk)]
         return matches, U_hi2, U_trk2
 
-    def _assoc_ocr(self, dets: List[Detection], u_trk_idx: List[int]):
-        if not dets or not u_trk_idx:
-            return [], list(range(len(dets))), u_trk_idx[:]
-        I = np.zeros((len(dets), len(u_trk_idx)))
-        for i, d in enumerate(dets):
-            for j, ti in enumerate(u_trk_idx):
-                I[i, j] = d.bbox.iou(self.tracks[ti].last_obs)
-        C = 1.0 - I
-        ri, ci = linear_sum_assignment(C)
-        matches: List[Tuple[int, int]] = []
-        U_det: List[int] = []
-        keep = set(range(len(u_trk_idx)))
-        for r, c in zip(ri, ci):
-            if I[r, c] >= self.iou_thr - 0.1:
-                matches.append((r, u_trk_idx[c]))
-                keep.discard(c)
-            else:
-                U_det.append(r)
-        U_trk = [u_trk_idx[j] for j in sorted(keep)]
-        # unmatched dets
-        for i in range(len(dets)):
-            if i not in ri and i not in U_det:
-                U_det.append(i)
-        return matches, U_det, U_trk
-
     def _reid_revive(
         self, D_hi: List[Detection], U_hi: List[int], D_lo: List[Detection], U_lo: List[int], U_trk: List[int]
     ):
-        # build full detection list index space
         dets_all = [D_hi[i] for i in U_hi] + [D_lo[i] for i in U_lo]
         if not dets_all or not U_trk:
             return [], [], []
-        # similarity matrix
         S = np.zeros((len(dets_all), len(U_trk)))
         for i, d in enumerate(dets_all):
             for j, ti in enumerate(U_trk):
@@ -413,8 +550,7 @@ class OCSortEmbed:
         used_hi_local: List[int] = []
         used_lo_local: List[int] = []
         for r, c in zip(ri, ci):
-            if S[r, c] >= self.reid_sim_thr:
-                # map back to global det index
+            if S[r, c] >= max(0.8, self.reid_sim_thr - 0.05):
                 if r < len(U_hi):
                     di_global = U_hi[r]
                     used_hi_local.append(r)
@@ -431,7 +567,6 @@ class OCSortEmbed:
         for di, ti in matches:
             d = dets[di]
             tr = self.tracks[ti]
-            # vdir from k-previous observation
             kprev = self._k_prev_obs(tr, self.delta_t)
             if kprev is not None:
                 v = np.array([d.bbox.center.x - kprev.center.x, d.bbox.center.y - kprev.center.y], dtype=np.float64)
@@ -442,7 +577,8 @@ class OCSortEmbed:
             tr.last_seen = self.t
             tr.last_det = d
             tr.obs_hist[self.t] = tr.last_obs
-            # gallery
+            if len(tr.obs_hist) > self.obs_hist_cap:
+                del tr.obs_hist[min(tr.obs_hist.keys())]
             tr.gallery.append(d.embedding.astype(np.float64))
             if len(tr.gallery) > self.gallery_size:
                 tr.gallery.pop(0)
@@ -450,6 +586,8 @@ class OCSortEmbed:
     def _start_track(self, det: Detection) -> None:
         cx, cy, s, r = KalmanBox.z_from_bbox(det.bbox)
         kf = KalmanBox(cx, cy, s, r)
+        e = det.embedding.astype(np.float64)
+        e /= np.linalg.norm(e) + 1e-8
         tr = Tracklet(
             tid=self.next_tid,
             kf=kf,
@@ -459,9 +597,11 @@ class OCSortEmbed:
             hits=1,
             miss=0,
             confirmed=False,
+            hit_streak=1,
             vdir=None,
-            gallery=[det.embedding.astype(np.float64)],
+            gallery=[e],
             last_det=det,
+            born_at=self.t,
         )
         self.tracks.append(tr)
         self.next_tid += 1
@@ -495,15 +635,26 @@ class OCSortEmbedTracker(Tracker):
     def __init__(
         self,
         det_hi: float = 0.6,
-        det_lo: float = 0.1,
-        iou_thr: float = 0.3,
-        inertia: float = 0.2,
+        det_lo: float = 0.05,
+        iou_thr: float = 0.30,
+        inertia: float = 0.18,
         delta_t: int = 3,
         max_age_seconds: float = 10.0,
         min_hits: int = 2,
         use_byte: bool = True,
-        reid_sim_thr: float = 0.8,
+        reid_sim_thr: float = 0.80,
         gallery_size: int = 10,
+        ambig_iou_margin: float = 0.12,
+        sim_margin: float = 0.04,
+        spawn_suppress_iou: float = 0.60,
+        spawn_suppress_sim: float = 0.75,
+        w_mot: float = 0.15,
+        maha_gate: float = 16.0,
+        output_tentative: bool = True,
+        output_tentative_max: int = 2,
+        dedup_enable: bool = False,
+        dup_iou: float = 0.65,
+        dup_sim: float = 0.90,
     ):
         self.params = dict(
             det_hi=det_hi,
@@ -515,6 +666,17 @@ class OCSortEmbedTracker(Tracker):
             use_byte=use_byte,
             reid_sim_thr=reid_sim_thr,
             gallery_size=gallery_size,
+            ambig_iou_margin=ambig_iou_margin,
+            sim_margin=sim_margin,
+            spawn_suppress_iou=spawn_suppress_iou,
+            spawn_suppress_sim=spawn_suppress_sim,
+            w_mot=w_mot,
+            maha_gate=maha_gate,
+            output_tentative=output_tentative,
+            output_tentative_max=output_tentative_max,
+            dedup_enable=dedup_enable,
+            dup_iou=dup_iou,
+            dup_sim=dup_sim,
         )
         self.max_age_seconds = max_age_seconds
 
@@ -526,12 +688,13 @@ class OCSortEmbedTracker(Tracker):
             d = t.sorted_detections[0]
             by_frame.setdefault(d.frame_idx, []).append(d)
 
-        # map frame -> transform (identity default)
-        T_by_frame: Dict[int, Transform] = {tr.frame_idx: tr for tr in transforms}
+        # compute per-frame delta transforms (mapping t-1->t); identity for first frame
+        delta_by_frame: Dict[int, Transform] = compute_delta_transforms(transforms)
 
-        def get_T(f: int) -> Transform:
-            assert f in T_by_frame, f'Transform not found for frame {f}, {list(T_by_frame.keys())}'
-            return T_by_frame[f]
+        def get_delta(f: int) -> Transform:
+            if f in delta_by_frame:
+                return delta_by_frame[f]
+            return Transform(0.0, 0.0, 0.0, f)
 
         W, H, FPS = video_properties.width, video_properties.height, video_properties.fps
         oc_max_age = int(round(self.max_age_seconds * max(1, FPS)))
@@ -542,13 +705,14 @@ class OCSortEmbedTracker(Tracker):
 
         for f in range(video_properties.total_frames):
             dets_f = by_frame.get(f, [])
-            T = get_T(f)
-            core.update(dets_f, f, W, H, T)
+            T_delta = get_delta(f)
+            core.update(dets_f, f, W, H, T_delta)
 
-            # collect matches/inits for this frame
+            # collect matches/inits for this frame (include tentative if enabled)
             for tr in core.tracks:
                 if tr.last_seen == f and tr.last_det is not None:
-                    tid2dets.setdefault(tr.tid, []).append(tr.last_det)
+                    if tr.confirmed or (core.output_tentative and (f - tr.born_at) <= core.output_tentative_max):
+                        tid2dets.setdefault(tr.tid, []).append(tr.last_det)
 
         # build final tracks
         out_tracks: List[Track] = []
