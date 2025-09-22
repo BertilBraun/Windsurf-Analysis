@@ -20,13 +20,12 @@ class GreedyTrackStitcher:
         greedy_min_iou: float,
         greedy_min_cosine_similarity: float,
         greedy_max_frame_distance: int,
-        greedy_min_iou_matches_single_track: float,
+        greedy_ema_alpha: float,
     ):
-        self.greedy_min_iou = greedy_min_iou
-        self.greedy_min_cosine_similarity = greedy_min_cosine_similarity
-        self.greedy_max_frame_distance = greedy_max_frame_distance
-        self.greedy_min_iou_matches_single_track = greedy_min_iou_matches_single_track
-        self.min_iou_matches_single_track = greedy_min_iou_matches_single_track
+        self.min_iou = greedy_min_iou
+        self.min_cosine_similarity = greedy_min_cosine_similarity
+        self.max_frame_distance = greedy_max_frame_distance
+        self.ema_alpha = greedy_ema_alpha
 
     def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
         """Greedily stiches detections onto tracks as long as both IOU and cosine similarity are high."""
@@ -116,7 +115,7 @@ class GreedyTrackStitcher:
 
             # Too old tracks are stale
             for track in active_tracks:
-                if track.end.frame_idx + self.greedy_max_frame_distance < frame_idx:
+                if track.end.frame_idx + self.max_frame_distance < frame_idx:
                     if track.track_id not in stale_track_ids:
                         stale_track_ids.add(track.track_id)
                         stale_tracks.append(track)
@@ -130,29 +129,27 @@ class GreedyTrackStitcher:
     ) -> _ComparisonResult:
         iou = track.end.bbox.iou(detection.bbox)
 
-        if iou < self.min_iou_matches_single_track:
-            return _ComparisonResult.NO_MATCH
+        # if iou < self.min_iou_matches_single_track:
+        #     return _ComparisonResult.NO_MATCH
 
-        n = len(track.sorted_detections)
         ema_embedding = track.start.embedding
-        ALPHA = 0.5
         for d in track.sorted_detections:
-            ema_embedding = ALPHA * ema_embedding + (1 - ALPHA) * d.embedding
-        average_sim = sum(cosine_similarity(d.embedding, detection.embedding) for d in track.sorted_detections) / n
+            ema_embedding = self.ema_alpha * ema_embedding + (1 - self.ema_alpha) * d.embedding
+        # average_sim = sum(cosine_similarity(d.embedding, detection.embedding) for d in track.sorted_detections) / len(track.sorted_detections)
         average_sim = cosine_similarity(ema_embedding, detection.embedding)
 
-        if average_sim < self.greedy_min_cosine_similarity:
+        if average_sim < self.min_cosine_similarity:
             return _ComparisonResult.NO_MATCH
 
-        if iou >= self.greedy_min_iou:
+        if iou >= self.min_iou:
             return _ComparisonResult.MATCH
 
         # if the bbox is so far away from all other tracks, we can match it
         if all(
-            detection.bbox.iou(other_track.end.bbox) == 0
+            detection.bbox.iou(other_track.end.bbox) <= 1e-6
             and detection.bbox.center.distance_to(other_track.end.bbox.center) > detection.bbox.width * 2.0
             for other_track in all_other_tracks
         ):
-            return _ComparisonResult.MATCH
+            return _ComparisonResult.MAY_MATCH
 
         return _ComparisonResult.NO_MATCH  # TODO change back to MAY_MATCH?

@@ -29,7 +29,7 @@ from server.inference.src.settings import (
     GREEDY_PREPROCESSOR_MIN_IOU,
     GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY,
     GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE,
-    GREEDY_PREPROCESSOR_MIN_IOU_MATCHES_SINGLE_TRACK,
+    GREEDY_PREPROCESSOR_EMA_ALPHA,
 )
 
 
@@ -66,7 +66,7 @@ class GreedyParams:
     min_iou: float
     min_cos: float
     max_gap: int
-    min_iou_match: float
+    ema_alpha: float
     step_f: float = 0.02
 
 
@@ -81,7 +81,7 @@ class GreedyTunerWindow(QMainWindow):
 
         # Load/cached detections once
         self.detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH)
-        self.detections: list[Detection] = self.detector.run_object_detection_on_video(video_path)
+        self.detections: list[Detection] = self.detector.run_object_detection_on_video(video_path.as_posix())
         self.initial_tracks: list[Track] = _detections_to_initial_tracks(self.detections)
 
         # Player state + widget
@@ -128,7 +128,7 @@ class GreedyTunerWindow(QMainWindow):
             greedy_min_iou=self.params.min_iou,
             greedy_min_cosine_similarity=self.params.min_cos,
             greedy_max_frame_distance=self.params.max_gap,
-            greedy_min_iou_matches_single_track=self.params.min_iou_match,
+            greedy_ema_alpha=self.params.ema_alpha,
         )
         tracks = pre.track(list(self.initial_tracks), self.video_props)
         self.state.loaded_tracks = _to_tracklites(tracks, self.video_props)
@@ -140,7 +140,7 @@ class GreedyTunerWindow(QMainWindow):
     def _update_hud(self, num_tracks: int, num_dets: int) -> None:
         msg = (
             f'Greedy: IOU {self.params.min_iou:.2f} | COS {self.params.min_cos:.2f} | '
-            f'maxGap {self.params.max_gap} | IOU_match {self.params.min_iou_match:.2f} | '
+            f'maxGap {self.params.max_gap} | EMA_alpha {self.params.ema_alpha:.2f} | '
             f'tracks {num_tracks} | dets {num_dets} | frame {self.state.current_frame + 1}/{self.video.total_frames}'
         )
         self.video_widget.show_hud(msg)
@@ -157,7 +157,7 @@ class GreedyTunerWindow(QMainWindow):
             '  1 / 2: decrease / increase min IOU\n'
             '  3 / 4: decrease / increase min cosine similarity\n'
             '  5 / 6: decrease / increase max frame distance\n'
-            '  7 / 8: decrease / increase min IOU match per det\n'
+            '  7 / 8: decrease / increase EMA alpha\n'
         )
         QMessageBox.information(self, 'Keybinds', text)
 
@@ -218,11 +218,11 @@ class GreedyTunerWindow(QMainWindow):
             self._recompute_and_update()
             return
         if key == Qt.Key.Key_7:
-            self.params.min_iou_match = float(np.clip(self.params.min_iou_match - self.params.step_f, 0.0, 1.0))
+            self.params.ema_alpha = float(np.clip(self.params.ema_alpha - self.params.step_f, 0.0, 1.0))
             self._recompute_and_update()
             return
         if key == Qt.Key.Key_8:
-            self.params.min_iou_match = float(np.clip(self.params.min_iou_match + self.params.step_f, 0.0, 1.0))
+            self.params.ema_alpha = float(np.clip(self.params.ema_alpha + self.params.step_f, 0.0, 1.0))
             self._recompute_and_update()
             return
 
@@ -249,9 +249,9 @@ def main() -> None:
         '--gap', type=int, default=int(GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE), help='max frame distance'
     )
     parser.add_argument(
-        '--iou-match',
+        '--ema-alpha',
         type=float,
-        default=float(GREEDY_PREPROCESSOR_MIN_IOU_MATCHES_SINGLE_TRACK),
+        default=float(GREEDY_PREPROCESSOR_EMA_ALPHA),
         help='min IOU to consider same track',
     )
     parser.add_argument('--step', type=float, default=0.02, help='float step for thresholds')
@@ -266,7 +266,7 @@ def main() -> None:
         min_iou=float(args.iou),
         min_cos=float(args.cos),
         max_gap=int(args.gap),
-        min_iou_match=float(args.iou_match),
+        ema_alpha=float(args.ema_alpha),
         step_f=float(args.step),
     )
 

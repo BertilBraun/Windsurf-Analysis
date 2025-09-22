@@ -78,14 +78,14 @@ def _evaluate_params(
         video_path = Path(meta.input_video_path)
 
         props = get_video_properties(video_path)
-        dets = detector.run_object_detection_on_video(video_path)
+        dets = detector.run_object_detection_on_video(video_path.as_posix())
 
         # Preprocess only (no tracker) with proposed params
         pre = Preprocessor(
             greedy_min_iou=float(params['greedy_min_iou']),
             greedy_min_cosine_similarity=float(params['greedy_min_cos']),
             greedy_max_frame_distance=int(params['greedy_max_gap']),
-            greedy_min_iou_matches_single_track=float(params['greedy_min_iou_match']),
+            greedy_ema_alpha=float(params['greedy_ema_alpha']),
         )
         initial_tracks = _detections_to_initial_tracks(dets)
         pred_tracks = pre.track(list(initial_tracks), props)
@@ -151,7 +151,7 @@ def main() -> None:
             'greedy_min_iou': trial.suggest_float('greedy_min_iou', 0.0, 0.7),
             'greedy_min_cos': trial.suggest_float('greedy_min_cos', 0.5, 0.99),
             'greedy_max_gap': trial.suggest_int('greedy_max_gap', 0, 30),
-            'greedy_min_iou_match': trial.suggest_float('greedy_min_iou_match', 0.0, 0.5),
+            'greedy_ema_alpha': trial.suggest_float('greedy_ema_alpha', 0.0, 1.0),
         }
         score, _ = _evaluate_params(params, golden_paths, detector)
         return float(score)
