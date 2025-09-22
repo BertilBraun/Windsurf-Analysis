@@ -7,13 +7,15 @@ maintaining any state, making it easier to test and reason about.
 
 import logging
 
+from server.inference.src.visualization.stabilize import Transform
+
 from ..settings import MIN_FRAME_PERCENTAGE, SMOOTHING_WINDOW_SIZE
 from ..util.video_io import VideoInfo
 from ..common_types import Detection, Track, BoundingBox
 
 
 class TrackFiltering:
-    def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
+    def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
         """Filter tracks for minimum duration requirement"""
         tracks = [
             Track(track.track_id, list(sorted(track.sorted_detections, key=lambda x: x.frame_idx))) for track in tracks
@@ -22,7 +24,7 @@ class TrackFiltering:
 
 
 class TrackInterpolation:
-    def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
+    def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
         """Interpolate missing detections"""
         tracks = [
             Track(track.track_id, list(sorted(track.sorted_detections, key=lambda x: x.frame_idx))) for track in tracks
@@ -31,7 +33,7 @@ class TrackInterpolation:
 
 
 class TrackSmoothing:
-    def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
+    def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
         """Smooth the center positions of all tracks using a rolling window"""
         tracks = [
             Track(track.track_id, list(sorted(track.sorted_detections, key=lambda x: x.frame_idx))) for track in tracks
@@ -40,7 +42,7 @@ class TrackSmoothing:
 
 
 class TrackRelabeling:
-    def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
+    def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
         """Relabel tracks from 1 to n"""
         return [Track(i, track.sorted_detections) for i, track in enumerate(tracks, start=1)]
 

@@ -6,6 +6,10 @@ from typing import Callable, Sequence, TypeVar
 from tqdm import tqdm
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
+import numpy as np
+
+from server.inference.src.tracking.oc_sort import OCSortEmbedTracker
+from server.inference.src.tracking.bot_sort import BotSortTracker
 
 from .settings import YOLO_MODEL_PATH
 from .util.helpers import log_and_reraise
@@ -24,7 +28,12 @@ from .tracking.greedy_tracker import GreedyTracker  # noqa: F401 (imported for o
 
 from .visualization.debug_drawer import generate_debug_video_worker_function, debug_track_similarities
 from .visualization.video_splicing import generate_individual_videos
-from .visualization.stabilize import compute_stabilization_transforms, stabilize_video
+from .visualization.stabilize import (
+    Transform,
+    compute_stabilization_transforms,
+    stabilize_video,
+    compute_stabilization_transforms_gmc,
+)
 from .visualization.track_graph_viz import visualize_tracks  # noqa: F401 (optional debugging import)
 
 from .common_types import Detection, Track
@@ -67,13 +76,52 @@ class WindsurfingVideoProcessor:
         # run detection and tracking
         detections = self.surf_detector.run_object_detection_on_video(input_path.as_posix())
 
+        # Prefer GMC-based transforms for parity with BoTSORT's internal GMC
+        try:
+            # Build per-frame detection masks for GMC
+            dets_by_frame: dict[int, list[list[float]]] = {}
+            for d in detections:
+                dets_by_frame.setdefault(d.frame_idx, []).append(
+                    [d.bbox.x1, d.bbox.y1, d.bbox.x2, d.bbox.y2, d.confidence]
+                )
+            dets_by_frame_np = {k: np.array(v, dtype=np.float32) for k, v in dets_by_frame.items()}
+
+            transforms = compute_stabilization_transforms_gmc(
+                input_path.as_posix(), method='sparseOptFlow', downscale=2, detections_by_frame=dets_by_frame_np
+            )
+        except Exception:
+            print('Failed to compute GMC-based transforms, falling back to VidStab')
+            transforms = compute_stabilization_transforms(input_path.as_posix())
+
+        bot_sort_tracker = BotSortTracker(input_path.as_posix())
+
         processed_tracks = _process_detections_into_tracks(
             detections,
             props,
+            transforms,
             trackers=[
-                Preprocessor(),
-                # GreedyTracker(),
-                DiscreteILPTracker(),
+                # Preprocessor(),
+                # # GreedyTracker(),
+                # DiscreteILPTracker(),
+                #  OCSortEmbedTracker(
+                #      det_hi=0.60,
+                #      det_lo=0.05,
+                #      iou_thr=0.40,
+                #      inertia=0.12,
+                #      delta_t=3,
+                #      min_hits=2,
+                #      reid_sim_thr=0.82,
+                #      ambig_iou_margin=0.25,
+                #      sim_margin=0.12,
+                #      w_mot=0.10,
+                #      spawn_suppress_iou=0.55,
+                #      spawn_suppress_sim=0.85,
+                #      maha_gate=20.0,
+                #      output_tentative=True,
+                #      output_tentative_max=3,
+                #      dedup_enable=False,
+                #  ),
+                bot_sort_tracker,
                 TrackFiltering(),
                 TrackInterpolation(),
                 TrackSmoothing(),
@@ -118,7 +166,7 @@ class WindsurfingVideoProcessor:
 
 
 def _process_detections_into_tracks(
-    detections: list[Detection], video_properties: VideoInfo, trackers: Sequence[Tracker]
+    detections: list[Detection], video_properties: VideoInfo, transforms: list[Transform], trackers: Sequence[Tracker]
 ) -> list[Track]:
     """Process collected tracks and return processed track data for video generation"""
     logger = logging.getLogger(__name__)
@@ -129,7 +177,7 @@ def _process_detections_into_tracks(
 
     processed_tracks = [Track(track_id=i, sorted_detections=[detection]) for i, detection in enumerate(detections)]
     for tracker in trackers:
-        processed_tracks = tracker.track(processed_tracks, video_properties)
+        processed_tracks = tracker.track(processed_tracks, video_properties, transforms)
 
         # Show a timeline of the tracks with all possible merge options
         # visualize_tracks(processed_tracks, str(original_video_path))
