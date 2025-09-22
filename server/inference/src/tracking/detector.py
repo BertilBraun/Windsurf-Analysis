@@ -43,7 +43,7 @@ class SurferDetector:
         ignore_args=[0],
         additional_args=[YOLO_MODEL_PATH, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE],
     )
-    def run_object_detection_on_video(self, video_path: os.PathLike | str) -> list[Detection]:
+    def run_object_detection_on_video(self, video_path: str) -> list[Detection]:
         """Run batched inference on entire video and return all detections as a list.
 
         This performs YOLO inference in a streamed fashion but accumulates lightweight

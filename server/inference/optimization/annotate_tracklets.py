@@ -400,7 +400,7 @@ class _BatchAnnotatorController:
 
         video_props = get_video_properties(video)
         detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH)
-        detections = detector.run_object_detection_on_video(video)
+        detections = detector.run_object_detection_on_video(video.as_posix())
         tracks: list[Track] = _detections_to_initial_tracks(detections)
         tracks = Preprocessor().track(tracks, video_props)
 

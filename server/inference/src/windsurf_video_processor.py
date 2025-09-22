@@ -65,7 +65,7 @@ class WindsurfingVideoProcessor:
         logger.info(f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.total_frames} frames')
 
         # run detection and tracking
-        detections = self.surf_detector.run_object_detection_on_video(input_path)
+        detections = self.surf_detector.run_object_detection_on_video(input_path.as_posix())
 
         processed_tracks = _process_detections_into_tracks(
             detections,

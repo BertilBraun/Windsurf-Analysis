@@ -21,7 +21,7 @@ from server.inference.src.tracking.detector import SurferDetector
 from server.inference.src.tracking.preprocessing.preprocessor import Preprocessor
 from server.inference.src.tracking.discrete_opt_tracker import DiscreteILPTracker
 from server.inference.src.common_types import Detection, Track
-from server.inference.src.player.core.player_state import Metadata, TrackLite, DetectionLite
+from server.inference.src.player.core.player_state import Metadata
 from server.inference.src.settings import YOLO_MODEL_PATH
 
 
@@ -49,9 +49,7 @@ def _build_assignment_from_tracks(tracks: List[Track]) -> Dict[Tuple[int, int, i
 def _build_assignment_from_metadata(meta: Metadata) -> Dict[Tuple[int, int, int, int, int], int]:
     assignment: Dict[Tuple[int, int, int, int, int], int] = {}
     for t in meta.tracks:
-        assert isinstance(t, TrackLite)
         for det in t.detections:
-            assert isinstance(det, DetectionLite)
             x1, y1, x2, y2 = det.bbox
             k = (int(det.frame_idx), int(x1), int(y1), int(x2), int(y2))
             assignment[k] = int(t.track_id)
@@ -121,7 +119,7 @@ class DetectionCache:
         video_props = get_video_properties(video_path)
         dets = self._detections_by_video.get(video_path)
         if dets is None:
-            dets = self._detector.run_object_detection_on_video(video_path)
+            dets = self._detector.run_object_detection_on_video(video_path.as_posix())
             self._detections_by_video[video_path] = dets
 
         initial_tracks = _detections_to_initial_tracks(dets)
