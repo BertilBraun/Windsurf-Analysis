@@ -20,3 +20,5 @@ tensorboard
 
 
 open-clip-torch
+
+scipy
