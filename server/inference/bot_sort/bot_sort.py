@@ -222,7 +222,6 @@ class BoTSORT(object):
         self.debug_vis = getattr(args, 'debug_vis', True)
         self.debug_trail_len = int(getattr(args, 'debug_trail_len', 30))
         self.camera_translation_history = deque([], maxlen=self.debug_trail_len)
-        self._prev_debug_image: np.ndarray | None = None
 
     def update(
         self,
@@ -340,7 +339,7 @@ class BoTSORT(object):
 
             for track in strack_pool:
                 bbox = track.tlwh  # externally-warped bbox
-                draw_box_with_label(to_display, bbox, (0, 255, 0), f'Warp id={track.track_id}')
+                draw_box_with_label(to_display, bbox, (0, 255, 0), f'KF + GMC id={track.track_id}')
 
                 kf_bbox = kf_tlwh_by_id.get(track.track_id)
                 if kf_bbox is not None:
@@ -527,57 +526,9 @@ class BoTSORT(object):
                 pass
 
             cv2.imshow('strack_pool', to_display)
-            # Overlay previous frame warped onto current for visual verification (try H and H^{-1})
-            try:
-                if self._prev_debug_image is not None:
-                    # Option A: assume H maps prev -> curr
-                    warped_prev_A = cv2.warpAffine(self._prev_debug_image, H.astype(np.float32), (img_w, img_h))
-                    red_tint_A = np.zeros_like(warped_prev_A, dtype=warped_prev_A.dtype)
-                    red_tint_A[:, :, 2] = 255
-                    tinted_prev_A = cv2.addWeighted(warped_prev_A, 0.7, red_tint_A, 0.3, 0)
-                    overlay_A = cv2.addWeighted(to_display, 0.6, tinted_prev_A, 0.4, 0)
-                    cv2.putText(
-                        overlay_A,
-                        'prev->curr (H)',
-                        (10, 20),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.6,
-                        (0, 255, 255),
-                        1,
-                        cv2.LINE_AA,
-                    )
-                    cv2.imshow('prev_overlay_A', overlay_A)
 
-                    # Option B: assume H maps curr -> prev, use inverse for prev->curr
-                    H3 = np.eye(3, dtype=np.float32)
-                    H3[:2, :3] = H.astype(np.float32)
-                    try:
-                        H3_inv = np.linalg.inv(H3)
-                        H_inv = H3_inv[:2, :3]
-                        warped_prev_B = cv2.warpAffine(self._prev_debug_image, H_inv.astype(np.float32), (img_w, img_h))
-                        red_tint_B = np.zeros_like(warped_prev_B, dtype=warped_prev_B.dtype)
-                        red_tint_B[:, :, 2] = 255
-                        tinted_prev_B = cv2.addWeighted(warped_prev_B, 0.7, red_tint_B, 0.3, 0)
-                        overlay_B = cv2.addWeighted(to_display, 0.6, tinted_prev_B, 0.4, 0)
-                        cv2.putText(
-                            overlay_B,
-                            'prev->curr (H^{-1})',
-                            (10, 20),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.6,
-                            (0, 255, 255),
-                            1,
-                            cv2.LINE_AA,
-                        )
-                        cv2.imshow('prev_overlay_B', overlay_B)
-                    except np.linalg.LinAlgError:
-                        pass
-            except Exception:
-                pass
             cv2.waitKey(0)
             cv2.destroyAllWindows()
-            # Store current frame for next overlay
-            self._prev_debug_image = debug_image.copy()
         # Associate with high score detection boxes
         ious_dists = matching.iou_distance(strack_pool, detections)
         ious_dists_mask = ious_dists > self.proximity_thresh
