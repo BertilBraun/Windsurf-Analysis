@@ -371,58 +371,24 @@ function drawFrame(
     const offscreen = document.createElement('canvas')
     const rotatedVideo = drawRotatedToCanvas(video, offscreen, dominantOrientationDeg)
 
-    // Optionally apply stabilization transform for current time, with reflected borders like VidStab
+    // Optionally apply stabilization transform for current time
     const now = timeOverrideSec ?? player.currentTimeSec
     const stab = player.getStabilizationAt(now)
     let sourceCanvas: HTMLCanvasElement = offscreen
     if (stab.dx !== 0 || stab.dy !== 0 || stab.da !== 0) {
-        const w = offscreen.width
-        const h = offscreen.height
-
-        // Build a 3x3 reflected mosaic to simulate BORDER_REFLECT
-        const mosaic = document.createElement('canvas')
-        mosaic.width = w * 3
-        mosaic.height = h * 3
-        const mctx = mosaic.getContext('2d')!
-        mctx.imageSmoothingEnabled = true
-        mctx.imageSmoothingQuality = 'high'
-        for (let ty = -1; ty <= 1; ty++) {
-            for (let tx = -1; tx <= 1; tx++) {
-                mctx.save()
-                // Move to tile origin
-                mctx.translate((tx + 1) * w, (ty + 1) * h)
-                const reflectX = Math.abs(tx) % 2 === 1
-                const reflectY = Math.abs(ty) % 2 === 1
-                if (reflectX && reflectY) {
-                    mctx.scale(-1, -1)
-                    mctx.translate(-w, -h)
-                } else if (reflectX) {
-                    mctx.scale(-1, 1)
-                    mctx.translate(-w, 0)
-                } else if (reflectY) {
-                    mctx.scale(1, -1)
-                    mctx.translate(0, -h)
-                }
-                mctx.drawImage(offscreen, 0, 0)
-                mctx.restore()
-            }
-        }
-
-        // Now apply the stabilization transform and draw the mosaic so that the center tile is aligned at (0,0)
         const stabCanvas = document.createElement('canvas')
-        stabCanvas.width = w
-        stabCanvas.height = h
+        stabCanvas.width = offscreen.width
+        stabCanvas.height = offscreen.height
         const sctx = stabCanvas.getContext('2d')!
         sctx.setTransform(1, 0, 0, 1, 0, 0)
-        sctx.clearRect(0, 0, w, h)
+        sctx.clearRect(0, 0, stabCanvas.width, stabCanvas.height)
         const cos = Math.cos(stab.da)
         const sin = Math.sin(stab.da)
         sctx.imageSmoothingEnabled = true
         sctx.imageSmoothingQuality = 'high'
         // Apply rotation and translation in one affine transform
         sctx.setTransform(cos, sin, -sin, cos, stab.dx, stab.dy)
-        // Shift so that the center tile (index 1,1) is drawn centered at destination origin
-        sctx.drawImage(mosaic, -w, -h)
+        sctx.drawImage(offscreen, 0, 0)
         sourceCanvas = stabCanvas
     }
 
