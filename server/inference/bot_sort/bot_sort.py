@@ -227,7 +227,7 @@ class BoTSORT(object):
         self,
         output_results: list[Detection],
         last_detections: list[Detection],
-        external_warp: np.ndarray | None = None,
+        external_warp: np.ndarray,
         debug_image: np.ndarray | None = None,
     ):
         self.frame_id += 1
@@ -282,27 +282,17 @@ class BoTSORT(object):
         kf_tlwh_by_id = {track.track_id: track.tlwh.copy() for track in strack_pool}
 
         # Apply external camera motion compensation
-        H = None
-        try:
-            if isinstance(external_warp, np.ndarray):
-                H = external_warp.astype(np.float64, copy=False)
-        except Exception:
-            H = None
-        if H is None:
-            H = np.eye(2, 3, dtype=np.float64)
+        H = external_warp.astype(np.float64, copy=False)
         STrack.multi_gmc(strack_pool, H)
         STrack.multi_gmc(unconfirmed, H)
-
-        # Update camera trail history (accumulate per-frame deltas)
-        try:
-            t = H[:2, 2]
-            self.camera_translation_history.append(np.array([float(t[0]), float(t[1])], dtype=float))
-        except Exception:
-            pass
 
         # Debug visualization only if an image is provided
         if self.debug_vis and (debug_image is not None):
             import cv2
+
+            # Update camera trail history (accumulate per-frame deltas)
+            t = H[:2, 2]
+            self.camera_translation_history.append(np.array([float(t[0]), float(t[1])], dtype=float))
 
             to_display = debug_image.copy()
             img_h, img_w = to_display.shape[:2]
