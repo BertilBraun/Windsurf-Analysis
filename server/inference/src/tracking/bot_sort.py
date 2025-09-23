@@ -69,6 +69,11 @@ class BotSortTracker(Tracker):
             by_frame.setdefault(d.frame_idx, []).append(d)
 
         bot_sort = BoTSORT(self.args, video_properties.fps)
+        # Provide total frames so BoTSORT can print stats at the end
+        try:
+            bot_sort.expected_total_frames = int(video_properties.total_frames)
+        except Exception:
+            pass
 
         # Collect per-track detections over time
         tid2dets: Dict[int, List[Detection]] = {}
@@ -146,6 +151,12 @@ class BotSortTracker(Tracker):
                             emb = np.zeros(128, dtype=np.float32)
                         det = Detection(bbox=bbox, embedding=emb, confidence=float(st.score), frame_idx=last_frame_idx)
                         tid2dets.setdefault(int(st.track_id), []).append(det)
+
+        # Ensure stats are printed (in case expected_total_frames wasn't met exactly)
+        try:
+            bot_sort.print_stats()
+        except Exception:
+            pass
 
         # Build final Track objects
         out_tracks: List[Track] = []
