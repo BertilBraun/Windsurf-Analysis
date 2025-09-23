@@ -8,6 +8,7 @@ from datetime import datetime
 from sqlalchemy import Enum, ForeignKey, Index, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import CITEXT, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from server.backend.config import Settings
 
 
 class Base(DeclarativeBase):
@@ -34,6 +35,12 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(CITEXT, unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(nullable=False)
+    # Per-user quota for maximum concurrent/total jobs allowed
+    max_jobs_per_user: Mapped[int] = mapped_column(
+        nullable=False,
+        default=Settings.MAX_JOBS_PER_USER,
+        server_default=text(str(Settings.MAX_JOBS_PER_USER)),
+    )
     last_active_at: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 

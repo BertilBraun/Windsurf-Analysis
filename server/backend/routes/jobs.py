@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
 import os
+from datetime import datetime
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -60,7 +60,7 @@ async def create_job(
     db: DatabaseAccessor = Depends(get_db),
     user: User = Depends(authenticate_user),
 ):
-    if await db.get_job_count(user) >= Settings.MAX_JOBS_PER_USER:
+    if await db.get_job_count(user) >= user.max_jobs_per_user:
         raise HTTPException(status_code=403, detail={'code': 'quota_exceeded', 'message': 'Job quota exceeded'})
 
     if await db.does_video_exist(payload.original_checksum_sha256):
