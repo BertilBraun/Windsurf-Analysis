@@ -38,6 +38,8 @@ class KalmanFilter:
         proc_std_weight_vel: float = 1.0 / 80.0,
         meas_std_weight_pos: float = 1.0 / 400.0,
         q_growth: float = 1.05,
+        growth_per_miss: float = 0.05,  # gentle scaling with sqrt(missed)
+        growth_cap: float = 4.0,  # max positional inflation scale multiplier
     ) -> None:
         self.ndim = 4
         self.dt = float(dt)
@@ -282,6 +284,7 @@ class KalmanFilter:
         covariance: NDArrayF,
         alpha: float = 0.95,
         include_size_unc: bool = True,
+        pos_scale: float = 1.0,
     ) -> NDArrayF:
         """
         Inflate around the current box using projected covariance.
