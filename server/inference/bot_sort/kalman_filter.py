@@ -35,10 +35,9 @@ class KalmanFilter:
         self,
         dt: float = 1.0,
         proc_std_weight_pos: float = 1.0 / 20.0,
-        proc_std_weight_vel: float = 1.0 / 100.0,
+        proc_std_weight_vel: float = 1.0 / 80.0,
         meas_std_weight_pos: float = 1.0 / 400.0,
-        q_growth: float = 1.01,
-        max_inflation_ratio: Optional[float] = 3.0,  # clamp display growth; None disables
+        q_growth: float = 1.05,
     ) -> None:
         self.ndim = 4
         self.dt = float(dt)
@@ -53,7 +52,8 @@ class KalmanFilter:
         self._proc_std_weight_vel = float(proc_std_weight_vel)
         self._meas_std_weight_pos = float(meas_std_weight_pos)
         self._q_growth = float(q_growth)
-        self._max_inflation_ratio = max_inflation_ratio
+        self._growth_per_miss = float(growth_per_miss)
+        self._growth_cap = float(growth_cap)
 
     # ---------------------------- Utilities ---------------------------- #
 
@@ -294,22 +294,18 @@ class KalmanFilter:
         rx = np.sqrt(max(S[0, 0], 0.0)) * k_pos
         ry = np.sqrt(max(S[1, 1], 0.0)) * k_pos
 
+        growth = min(rx, ry) * max(pos_scale, 0.0)
+
         x, y, w, h = z_mean
         w_base, h_base = float(w), float(h)
 
-        w_out = w_base + 2.0 * rx
-        h_out = h_base + 2.0 * ry
+        w_out = w_base + 2.0 * growth
+        h_out = h_base + 2.0 * growth
 
         if include_size_unc:
             k_size = np.sqrt(CHI2_QUANTILES[alpha][1])
             w_out += k_size * np.sqrt(max(S[2, 2], 0.0))
             h_out += k_size * np.sqrt(max(S[3, 3], 0.0))
-
-        # Optional clamp to prevent extreme growth.
-        clamp = self._max_inflation_ratio
-        if clamp is not None and clamp > 1.0:
-            w_out = min(w_out, clamp * w_base)
-            h_out = min(h_out, clamp * h_base)
 
         return np.array([float(x), float(y), max(w_out, 1e-3), max(h_out, 1e-3)], dtype=np.float64)
 
@@ -319,8 +315,8 @@ class KalmanFilter:
         covariance: NDArrayF,
         missed_count: int,
         alpha_seen: float = 0.0,
-        alpha_missed: float = 0.95,
-        include_size_unc_on_miss: bool = True,
+        alpha_missed: float = 0.90,
+        include_size_unc_on_miss: bool = False,
     ) -> NDArrayF:
         """
         Policy: no inflation when a detection was just used (missed_count==0),
@@ -334,7 +330,15 @@ class KalmanFilter:
                 return np.array([float(x), float(y), float(max(w, 1e-3)), float(max(h, 1e-3))], dtype=np.float64)
             return self.inflated_bbox(mean, covariance, alpha=alpha_seen, include_size_unc=False)
         else:
-            return self.inflated_bbox(mean, covariance, alpha=alpha_missed, include_size_unc=include_size_unc_on_miss)
+            # Scale positional inflation gently with sqrt of misses
+            pos_scale = min(1.0 + self._growth_per_miss * np.sqrt(float(max(missed_count, 0))), self._growth_cap)
+            return self.inflated_bbox(
+                mean,
+                covariance,
+                alpha=alpha_missed,
+                include_size_unc=include_size_unc_on_miss,
+                pos_scale=pos_scale,
+            )
 
 
 # ------------------------------ Example ------------------------------ #
@@ -345,7 +349,6 @@ if __name__ == '__main__':
         proc_std_weight_vel=1 / 100,
         meas_std_weight_pos=1 / 400,
         q_growth=1.05,
-        max_inflation_ratio=2.0,  # at most 2x the box size when missed
     )
 
     # Init with first detection.

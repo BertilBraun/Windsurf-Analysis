@@ -12,6 +12,9 @@ class STrack(BaseTrack):
     # Updated each BoTSORT.update call so tracks can compute missed_count locally
     current_frame_id: int = 0
 
+    current_frame_width: int = 0
+    current_frame_height: int = 0
+
     def __init__(self, tlwh, score, feat=None, feat_history=50):
         # wait activate
         self._tlwh = np.asarray(tlwh, dtype=np.float32)
@@ -135,12 +138,49 @@ class STrack(BaseTrack):
         """Get current position in bounding box format `(top left x, top left y,
         width, height)`.
         """
-        if not self.mean or not self.covariance:
-            return self._tlwh.copy()
+        if self.mean is None or self.covariance is None:
+            ret = self._tlwh.copy()
+            # Clamp to current frame dimensions if available
+            fw = int(self.current_frame_width)
+            fh = int(self.current_frame_height)
+            if fw > 0 and fh > 0:
+                x1 = float(ret[0])
+                y1 = float(ret[1])
+                x2 = float(ret[0] + ret[2])
+                y2 = float(ret[1] + ret[3])
+                x1 = max(0.0, min(x1, float(fw)))
+                y1 = max(0.0, min(y1, float(fh)))
+                x2 = max(0.0, min(x2, float(fw)))
+                y2 = max(0.0, min(y2, float(fh)))
+                if x2 < x1:
+                    x2 = x1
+                if y2 < y1:
+                    y2 = y1
+                ret = np.array([x1, y1, x2 - x1, y2 - y1], dtype=np.float32)
+            return ret
         # Number of consecutive frames since the last successful update of this track
         missed_count = max(0, int(STrack.current_frame_id) - int(self.frame_id) - 1)
         inflated = self.kalman_filter.display_bbox(self.mean, self.covariance, missed_count=missed_count)
         inflated[:2] -= inflated[2:] / 2  # cx, cy to top left
+        # Clamp to current frame dimensions if available
+        fw = int(self.current_frame_width)
+        fh = int(self.current_frame_height)
+        if fw > 0 and fh > 0:
+            x1 = float(inflated[0])
+            y1 = float(inflated[1])
+            x2 = float(inflated[0] + inflated[2])
+            y2 = float(inflated[1] + inflated[3])
+            # Clamp corners into [0, W] x [0, H]
+            x1 = max(0.0, min(x1, float(fw)))
+            y1 = max(0.0, min(y1, float(fh)))
+            x2 = max(0.0, min(x2, float(fw)))
+            y2 = max(0.0, min(y2, float(fh)))
+            # Ensure non-negative width/height after clamping
+            if x2 < x1:
+                x2 = x1
+            if y2 < y1:
+                y2 = y1
+            inflated = np.array([x1, y1, x2 - x1, y2 - y1], dtype=np.float32)
         return inflated
 
     @property
@@ -237,6 +277,14 @@ class BoTSORT(object):
         self.frame_id += 1
         # Make current frame globally visible to STrack for missed_count computation
         STrack.current_frame_id = self.frame_id
+        # Set current frame dimensions for bbox clamping if an image is provided
+        try:
+            if debug_image is not None:
+                h, w = debug_image.shape[:2]
+                STrack.current_frame_width = int(w)
+                STrack.current_frame_height = int(h)
+        except Exception:
+            pass
         activated_starcks = []
         refind_stracks = []
         lost_stracks = []
