@@ -75,7 +75,7 @@ class BotSortTracker(Tracker):
 
         # Index transforms by frame for O(1) access
         frame_to_transform: Dict[int, Transform] = {int(t.frame_idx): t for t in transforms}
-        prev_cumulative_H3: np.ndarray | None = None
+        # We use per-frame delta camera motion (prev -> curr)
 
         if 1:
             # Process with video frames for debug overlays
@@ -88,20 +88,10 @@ class BotSortTracker(Tracker):
                     if t is not None:
                         c, s = float(np.cos(t.da)), float(np.sin(t.da))
                         dx, dy = float(t.dx), float(t.dy)
-                        cumulative_H3 = np.array([[c, -s, dx], [s, c, dy], [0.0, 0.0, 1.0]], dtype=np.float64)
+                        H3 = np.array([[c, -s, dx], [s, c, dy], [0.0, 0.0, 1.0]], dtype=np.float64)
                     else:
-                        cumulative_H3 = np.eye(3, dtype=np.float64)
-
-                    if prev_cumulative_H3 is None:
-                        delta_H3 = np.eye(3, dtype=np.float64)
-                    else:
-                        try:
-                            # prev->curr delta should be inv(C_curr) @ C_prev
-                            delta_H3 = np.linalg.inv(cumulative_H3) @ prev_cumulative_H3
-                        except np.linalg.LinAlgError:
-                            delta_H3 = np.eye(3, dtype=np.float64)
-                    prev_cumulative_H3 = cumulative_H3
-                    ext_warp = delta_H3[:2, :3]
+                        H3 = np.eye(3, dtype=np.float64)
+                    ext_warp = H3[:2, :3]
 
                     active_tracks = bot_sort.update(dets, last_detections, ext_warp, frame)
 
@@ -116,6 +106,7 @@ class BotSortTracker(Tracker):
                             tid2dets.setdefault(int(st.track_id), []).append(det)
         else:
             # Process per frame without re-reading the video
+            active_tracks = []
             for f in range(video_properties.total_frames):
                 dets = by_frame.get(f, [])
                 last_detections = by_frame.get(f - 1, [])
@@ -124,19 +115,10 @@ class BotSortTracker(Tracker):
                 if t is not None:
                     c, s = float(np.cos(t.da)), float(np.sin(t.da))
                     dx, dy = float(t.dx), float(t.dy)
-                    cumulative_H3 = np.array([[c, -s, dx], [s, c, dy], [0.0, 0.0, 1.0]], dtype=np.float64)
+                    H3 = np.array([[c, -s, dx], [s, c, dy], [0.0, 0.0, 1.0]], dtype=np.float64)
                 else:
-                    cumulative_H3 = np.eye(3, dtype=np.float64)
-
-                if prev_cumulative_H3 is None:
-                    delta_H3 = np.eye(3, dtype=np.float64)
-                else:
-                    try:
-                        delta_H3 = np.linalg.inv(cumulative_H3) @ prev_cumulative_H3
-                    except np.linalg.LinAlgError:
-                        delta_H3 = np.eye(3, dtype=np.float64)
-                prev_cumulative_H3 = cumulative_H3
-                ext_warp = delta_H3[:2, :3]
+                    H3 = np.eye(3, dtype=np.float64)
+                ext_warp = H3[:2, :3]
 
                 active_tracks = bot_sort.update(dets, last_detections, ext_warp, None)
 
@@ -151,16 +133,19 @@ class BotSortTracker(Tracker):
                         tid2dets.setdefault(int(st.track_id), []).append(det)
 
             # Record matched updates (those updated at current internal frame)
-            for st in active_tracks:
-                if st.frame_id == bot_sort.frame_id and st.is_activated:
-                    tlbr = st.tlbr  # (x1,y1,x2,y2)
-                    bbox = BoundingBox(int(tlbr[0]), int(tlbr[1]), int(tlbr[2]), int(tlbr[3]))
-                    emb = st.curr_feat if st.curr_feat is not None else st.smooth_feat
-                    if emb is None:
-                        # Fallback to zeros if no feature is available (should be rare)
-                        emb = np.zeros(128, dtype=np.float32)
-                    det = Detection(bbox=bbox, embedding=emb, confidence=float(st.score), frame_idx=f)
-                    tid2dets.setdefault(int(st.track_id), []).append(det)
+            # Use the last processed frame index, if any
+            last_frame_idx = max(by_frame.keys()) if by_frame else None
+            if last_frame_idx is not None:
+                for st in active_tracks:
+                    if st.frame_id == bot_sort.frame_id and st.is_activated:
+                        tlbr = st.tlbr  # (x1,y1,x2,y2)
+                        bbox = BoundingBox(int(tlbr[0]), int(tlbr[1]), int(tlbr[2]), int(tlbr[3]))
+                        emb = st.curr_feat if st.curr_feat is not None else st.smooth_feat
+                        if emb is None:
+                            # Fallback to zeros if no feature is available (should be rare)
+                            emb = np.zeros(128, dtype=np.float32)
+                        det = Detection(bbox=bbox, embedding=emb, confidence=float(st.score), frame_idx=last_frame_idx)
+                        tid2dets.setdefault(int(st.track_id), []).append(det)
 
         # Build final Track objects
         out_tracks: List[Track] = []
