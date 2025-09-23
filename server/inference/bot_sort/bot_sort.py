@@ -9,6 +9,8 @@ from server.inference.src.common_types import Detection
 
 class STrack(BaseTrack):
     shared_kalman = KalmanFilter()
+    # Updated each BoTSORT.update call so tracks can compute missed_count locally
+    current_frame_id: int = 0
 
     def __init__(self, tlwh, score, feat=None, feat_history=50):
         # wait activate
@@ -133,12 +135,13 @@ class STrack(BaseTrack):
         """Get current position in bounding box format `(top left x, top left y,
         width, height)`.
         """
-        if self.mean is None:
+        if not self.mean or not self.covariance:
             return self._tlwh.copy()
-        inflated = self.kalman_filter.inflated_bbox(self.mean, self.covariance)
-        ret = inflated.copy()
-        ret[:2] -= ret[2:] / 2
-        return ret
+        # Number of consecutive frames since the last successful update of this track
+        missed_count = max(0, int(STrack.current_frame_id) - int(self.frame_id) - 1)
+        inflated = self.kalman_filter.display_bbox(self.mean, self.covariance, missed_count=missed_count)
+        inflated[:2] -= inflated[2:] / 2  # cx, cy to top left
+        return inflated
 
     @property
     def tlbr(self):
@@ -232,6 +235,8 @@ class BoTSORT(object):
         debug_image: np.ndarray | None = None,
     ):
         self.frame_id += 1
+        # Make current frame globally visible to STrack for missed_count computation
+        STrack.current_frame_id = self.frame_id
         activated_starcks = []
         refind_stracks = []
         lost_stracks = []
