@@ -15,7 +15,7 @@ CONFIDENCE_THRESHOLD = 0.6
 BATCH_SIZE = 32
 
 # Tracking preprocessing settings
-MIN_TRACKING_FPS = 25
+MIN_TRACKING_FPS = 300  # Disabled for now
 MAX_OVERLAP_LENGTH_SECONDS = 10
 
 # Track postprocessing settings
