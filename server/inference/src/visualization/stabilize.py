@@ -41,26 +41,18 @@ def stabilize_video(input_video: str | os.PathLike, output_video: str | os.PathL
 
 
 @cache_to_file('gmc_transforms')
-def compute_stabilization_transforms_gmc(
-    input_video: str | os.PathLike,
-    method: str = 'sparseOptFlow',
-    downscale: int = 2,
-    detections_by_frame: Optional[Dict[int, np.ndarray]] = None,
-) -> list[Transform]:
+def compute_stabilization_transforms_gmc(input_video: str | os.PathLike, downscale: int = 2) -> list[Transform]:
     """
     Compute stabilization transforms using the same GMC method used by BoTSORT (e.g., sparseOptFlow),
     and return cumulative absolute offsets for dx, dy, da per frame.
     """
-    gmc = GMC(method=method, downscale=downscale)
+    gmc = GMC(downscale=downscale)
     cumulative = np.eye(3, dtype=np.float64)
     transforms: list[Transform] = []
 
     with VideoReader(input_video) as reader:
         for f, frame in reader.read_frames():
-            dets = None
-            if detections_by_frame is not None:
-                dets = detections_by_frame.get(int(f))
-            H_delta = gmc.apply(frame, dets)
+            H_delta = gmc.apply(frame)
             if not isinstance(H_delta, np.ndarray) or H_delta.shape != (2, 3):
                 H_delta = np.eye(2, 3, dtype=np.float64)
             H_delta3 = np.eye(3, dtype=np.float64)

@@ -76,22 +76,8 @@ class WindsurfingVideoProcessor:
         # run detection and tracking
         detections = self.surf_detector.run_object_detection_on_video(input_path.as_posix())
 
-        # Prefer GMC-based transforms for parity with BoTSORT's internal GMC
-        try:
-            # Build per-frame detection masks for GMC
-            dets_by_frame: dict[int, list[list[float]]] = {}
-            for d in detections:
-                dets_by_frame.setdefault(d.frame_idx, []).append(
-                    [d.bbox.x1, d.bbox.y1, d.bbox.x2, d.bbox.y2, d.confidence]
-                )
-            dets_by_frame_np = {k: np.array(v, dtype=np.float32) for k, v in dets_by_frame.items()}
-
-            transforms = compute_stabilization_transforms_gmc(
-                input_path.as_posix(), method='sparseOptFlow', downscale=2, detections_by_frame=dets_by_frame_np
-            )
-        except Exception:
-            print('Failed to compute GMC-based transforms, falling back to VidStab')
-            transforms = compute_stabilization_transforms(input_path.as_posix())
+        transforms = compute_stabilization_transforms_gmc(input_path.as_posix(), downscale=2)
+        # transforms = compute_stabilization_transforms(input_path.as_posix())
 
         bot_sort_tracker = BotSortTracker(input_path.as_posix())
 
