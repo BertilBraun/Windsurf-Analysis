@@ -269,85 +269,6 @@ class BoTSORT(object):
         self.prev_kf_tlwh_by_id: dict[int, np.ndarray] = {}
         self.prev_kf_vel_by_id: dict[int, np.ndarray] = {}
 
-        # Stats collection
-        self._stats_initialized = False
-        self.expected_total_frames: int | None = None
-        self._printed_stats = False
-        self._kf_iou_list: list[float] = []
-        self._warped_iou_list: list[float] = []
-        self._lastdet_iou_list: list[float] = []
-        # cache last frame's detection bbox per track id
-        self._last_det_tlwh_by_id: dict[int, np.ndarray] = {}
-
-    # --------------------- Stats helpers ---------------------
-    @staticmethod
-    def _tlbr_to_tlwh(b: np.ndarray) -> np.ndarray:
-        ret = np.asarray(b, dtype=float).copy()
-        ret[2:] -= ret[:2]
-        return ret.astype(np.float32)
-
-    @staticmethod
-    def _iou_tlwh(a: np.ndarray, b: np.ndarray) -> float:
-        if a is None or b is None:
-            return 0.0
-        ax1, ay1, aw, ah = float(a[0]), float(a[1]), float(a[2]), float(a[3])
-        bx1, by1, bw, bh = float(b[0]), float(b[1]), float(b[2]), float(b[3])
-        if aw <= 0 or ah <= 0 or bw <= 0 or bh <= 0:
-            return 0.0
-        ax2, ay2 = ax1 + aw, ay1 + ah
-        bx2, by2 = bx1 + bw, by1 + bh
-        ix1, iy1 = max(ax1, bx1), max(ay1, by1)
-        ix2, iy2 = min(ax2, bx2), min(ay2, by2)
-        iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
-        inter = iw * ih
-        if inter <= 0.0:
-            return 0.0
-        union = aw * ah + bw * bh - inter
-        if union <= 0.0:
-            return 0.0
-        return float(inter / union)
-
-    def _record_match_stats(self, track: 'STrack', det_tlwh: np.ndarray, kf_pre_tlwh: np.ndarray | None):
-        try:
-            # IoU for KF-only prediction vs current detection
-            if kf_pre_tlwh is not None:
-                self._kf_iou_list.append(self._iou_tlwh(kf_pre_tlwh, det_tlwh))
-            # IoU for KF+warp current track bbox vs detection
-            self._warped_iou_list.append(self._iou_tlwh(track.tlwh, det_tlwh))
-            # IoU for last detection bbox vs current detection
-            last_det = self._last_det_tlwh_by_id.get(track.track_id)
-            if last_det is not None:
-                self._lastdet_iou_list.append(self._iou_tlwh(last_det, det_tlwh))
-            # Update last detection cache for this track
-            self._last_det_tlwh_by_id[track.track_id] = det_tlwh.copy()
-        except Exception:
-            pass
-
-    def _print_stats_if_ready(self):
-        if self._printed_stats:
-            return
-        if self.expected_total_frames is not None and int(self.frame_id) >= int(self.expected_total_frames):
-            self.print_stats()
-
-    def print_stats(self):
-        if self._printed_stats:
-            return
-
-        def mean_std(vals: list[float]) -> tuple[float, float]:
-            if len(vals) == 0:
-                return 0.0, 0.0
-            arr = np.asarray(vals, dtype=np.float64)
-            return float(np.nanmean(arr)), float(np.nanstd(arr))
-
-        kf_m, kf_s = mean_std(self._kf_iou_list)
-        wp_m, wp_s = mean_std(self._warped_iou_list)
-        ld_m, ld_s = mean_std(self._lastdet_iou_list)
-        print('[BoTSORT] IoU stats over video:')
-        print(f'  KF prediction vs det:   mean={kf_m:.4f} std={kf_s:.4f} n={len(self._kf_iou_list)}')
-        print(f'  Warped bbox vs det:     mean={wp_m:.4f} std={wp_s:.4f} n={len(self._warped_iou_list)}')
-        print(f'  Last det bbox vs det:   mean={ld_m:.4f} std={ld_s:.4f} n={len(self._lastdet_iou_list)}')
-        self._printed_stats = True
-
     def update(
         self,
         output_results: list[Detection],
@@ -483,18 +404,13 @@ class BoTSORT(object):
                 if prev_kf_bbox is not None:
                     draw_box_with_label(to_display, prev_kf_bbox, (255, 0, 255), f'KF prev id={track.track_id}')
                     # Draw previous velocity vector from previous KF bbox center
-                    try:
-                        prev_vel = self.prev_kf_vel_by_id.get(track.track_id)
-                        if prev_vel is not None:
-                            cx = int(prev_kf_bbox[0] + prev_kf_bbox[2] / 2)
-                            cy = int(prev_kf_bbox[1] + prev_kf_bbox[3] / 2)
-                            scale = 1.0
-                            end_pt = (int(round(cx + prev_vel[0] * scale)), int(round(cy + prev_vel[1] * scale)))
-                            import cv2
-
-                            cv2.arrowedLine(to_display, (cx, cy), end_pt, (255, 0, 255), 2, tipLength=0.3)
-                    except Exception:
-                        pass
+                    prev_vel = self.prev_kf_vel_by_id.get(track.track_id)
+                    if prev_vel is not None:
+                        cx = int(prev_kf_bbox[0] + prev_kf_bbox[2] / 2)
+                        cy = int(prev_kf_bbox[1] + prev_kf_bbox[3] / 2)
+                        scale = 1.0
+                        end_pt = (int(round(cx + prev_vel[0] * scale)), int(round(cy + prev_vel[1] * scale)))
+                        cv2.arrowedLine(to_display, (cx, cy), end_pt, (255, 0, 255), 2, tipLength=0.3)
 
             for i, det in enumerate(detections):
                 bbox = det.tlwh
@@ -706,13 +622,6 @@ class BoTSORT(object):
         for itracked, idet in matches:
             track = strack_pool[itracked]
             det = detections[idet]
-            # Stats: compare prediction variants vs current detection
-            try:
-                det_tlwh = det.tlwh
-                kf_pre_tlwh = kf_tlwh_by_id.get(track.track_id)
-                self._record_match_stats(track, det_tlwh, kf_pre_tlwh)
-            except Exception:
-                pass
             if track.state == TrackState.Tracked:
                 track.update(detections[idet], self.frame_id)
                 activated_starcks.append(track)
@@ -744,13 +653,6 @@ class BoTSORT(object):
         for itracked, idet in matches:
             track = r_tracked_stracks[itracked]
             det = detections_second[idet]
-            # Stats: second-association matches too
-            try:
-                det_tlwh = det.tlwh
-                kf_pre_tlwh = kf_tlwh_by_id.get(track.track_id)
-                self._record_match_stats(track, det_tlwh, kf_pre_tlwh)
-            except Exception:
-                pass
             if track.state == TrackState.Tracked:
                 track.update(det, self.frame_id)
                 activated_starcks.append(track)
@@ -778,17 +680,8 @@ class BoTSORT(object):
 
         matches, u_unconfirmed, u_detection = matching.linear_assignment(dists, thresh=0.7)
         for itracked, idet in matches:
-            track = unconfirmed[itracked]
-            det = detections[idet]
-            # Stats: unconfirmed matches
-            try:
-                det_tlwh = det.tlwh
-                kf_pre_tlwh = kf_tlwh_by_id.get(track.track_id)
-                self._record_match_stats(track, det_tlwh, kf_pre_tlwh)
-            except Exception:
-                pass
-            track.update(det, self.frame_id)
-            activated_starcks.append(track)
+            unconfirmed[itracked].update(detections[idet], self.frame_id)
+            activated_starcks.append(unconfirmed[itracked])
         for it in u_unconfirmed:
             track = unconfirmed[it]
             track.mark_removed()
@@ -828,9 +721,6 @@ class BoTSORT(object):
         except Exception:
             self.prev_kf_tlwh_by_id = {}
             self.prev_kf_vel_by_id = {}
-
-        # Possibly print stats when we reach expected_total_frames
-        self._print_stats_if_ready()
 
         return output_stracks
 
