@@ -13,7 +13,7 @@ class STrack(BaseTrack):
     def __init__(self, tlwh, score, feat=None, feat_history=50):
         # wait activate
         self._tlwh = np.asarray(tlwh, dtype=np.float32)
-        self.kalman_filter = None
+        self.kalman_filter: KalmanFilter = None  # type: ignore
         self.mean, self.covariance = None, None
         self.is_activated = False
 
@@ -135,7 +135,8 @@ class STrack(BaseTrack):
         """
         if self.mean is None:
             return self._tlwh.copy()
-        ret = self.mean[:4].copy()
+        inflated = self.kalman_filter.inflated_bbox(self.mean, self.covariance)
+        ret = inflated.copy()
         ret[:2] -= ret[2:] / 2
         return ret
 
