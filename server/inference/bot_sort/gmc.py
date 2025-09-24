@@ -49,7 +49,7 @@ class GMC:
         assert self.prevKeyPoints is not None
 
         # find correspondences
-        matchedKeypoints, status, err = cv2.calcOpticalFlowPyrLK(self.prevFrame, frame, self.prevKeyPoints, None)
+        matchedKeypoints, status, err = cv2.calcOpticalFlowPyrLK(self.prevFrame, frame, self.prevKeyPoints, None)  # type: ignore
 
         # leave good correspondences only
         prevPoints: list[np.ndarray] = []
@@ -65,7 +65,7 @@ class GMC:
 
         # Find rigid matrix
         if (prevPointsNp.shape[0] > 4) and (prevPointsNp.shape[0] == currPointsNp.shape[0]):
-            H, inliers = cv2.estimateAffinePartial2D(prevPointsNp, currPointsNp, cv2.RANSAC)
+            H, inliers = cv2.estimateAffinePartial2D(prevPointsNp, currPointsNp, None, cv2.RANSAC)
 
             # Handle downscale
             if self.downscale > 1.0:
