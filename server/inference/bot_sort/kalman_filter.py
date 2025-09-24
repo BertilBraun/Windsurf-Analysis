@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Tuple, Optional, Union
+from typing import Dict, Literal, Tuple
 import numpy as np
 import numpy.typing as npt
 import scipy.linalg
@@ -38,8 +38,6 @@ class KalmanFilter:
         proc_std_weight_vel: float = 1.0 / 80.0,
         meas_std_weight_pos: float = 1.0 / 400.0,
         q_growth: float = 1.05,
-        growth_per_miss: float = 0.05,  # gentle scaling with sqrt(missed)
-        growth_cap: float = 4.0,  # max positional inflation scale multiplier
     ) -> None:
         self.ndim = 4
         self.dt = float(dt)
@@ -54,8 +52,6 @@ class KalmanFilter:
         self._proc_std_weight_vel = float(proc_std_weight_vel)
         self._meas_std_weight_pos = float(meas_std_weight_pos)
         self._q_growth = float(q_growth)
-        self._growth_per_miss = float(growth_per_miss)
-        self._growth_cap = float(growth_cap)
 
     # ---------------------------- Utilities ---------------------------- #
 
@@ -185,7 +181,7 @@ class KalmanFilter:
         covariance: NDArrayF,
         measurements: NDArrayF,
         only_position: bool = False,
-        metric: str = 'maha',
+        metric: Literal['maha', 'gaussian'] = 'maha',
     ) -> NDArrayF:
         """
         Squared distance between state distribution and candidate detections.
@@ -200,7 +196,6 @@ class KalmanFilter:
         Returns:
             (N,) distances
         """
-        assert metric in ['maha', 'gaussian']
         z_pred, S, _ = self.project(mean, covariance)
         if only_position:
             z_pred = z_pred[:2]
@@ -230,7 +225,6 @@ class KalmanFilter:
         covariance: NDArrayF,
         alpha: float = 0.95,
         include_size_unc: bool = True,
-        pos_scale: float = 1.0,
     ) -> NDArrayF:
         """
         Inflate around the current box using projected covariance.
@@ -239,24 +233,21 @@ class KalmanFilter:
         """
         z_mean, S, _ = self.project(mean, covariance)
 
-        k_pos = np.sqrt(CHI2_QUANTILES[alpha][2])
-        rx = np.sqrt(max(S[0, 0], 0.0)) * k_pos
-        ry = np.sqrt(max(S[1, 1], 0.0)) * k_pos
+        x, y, w, h = map(float, z_mean)
+        k = np.sqrt(CHI2_QUANTILES[alpha][2])
 
-        growth = min(rx, ry) * max(pos_scale, 0.0)
+        dx = k * np.sqrt(max(S[0, 0], 0.0))
+        dy = k * np.sqrt(max(S[1, 1], 0.0))
 
-        x, y, w, h = z_mean
-        w_base, h_base = float(w), float(h)
-
-        w_out = w_base + 2.0 * growth
-        h_out = h_base + 2.0 * growth
+        w_out = w + 2.0 * dx
+        h_out = h + 2.0 * dy
 
         if include_size_unc:
             k_size = np.sqrt(CHI2_QUANTILES[alpha][1])
             w_out += k_size * np.sqrt(max(S[2, 2], 0.0))
             h_out += k_size * np.sqrt(max(S[3, 3], 0.0))
 
-        return np.array([float(x), float(y), max(w_out, 1e-3), max(h_out, 1e-3)], dtype=np.float64)
+        return np.array([x, y, max(w_out, 1e-3), max(h_out, 1e-3)], dtype=np.float64)
 
     def display_bbox(
         self,
@@ -280,14 +271,7 @@ class KalmanFilter:
             return self.inflated_bbox(mean, covariance, alpha=alpha_seen, include_size_unc=False)
         else:
             # Scale positional inflation gently with sqrt of misses
-            pos_scale = min(1.0 + self._growth_per_miss * np.sqrt(float(max(missed_count, 0))), self._growth_cap)
-            return self.inflated_bbox(
-                mean,
-                covariance,
-                alpha=alpha_missed,
-                include_size_unc=include_size_unc_on_miss,
-                pos_scale=pos_scale,
-            )
+            return self.inflated_bbox(mean, covariance, alpha=alpha_missed, include_size_unc=include_size_unc_on_miss)
 
 
 # ------------------------------ Example ------------------------------ #
