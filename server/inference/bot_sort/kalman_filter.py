@@ -224,60 +224,6 @@ class KalmanFilter:
         z = scipy.linalg.solve_triangular(L, d.T, lower=True, check_finite=False, overwrite_b=True)
         return np.sum(z * z, axis=0)
 
-    def multi_predict(
-        self,
-        mean: NDArrayF,  # (N,8)
-        covariance: NDArrayF,  # (N,8,8)
-        missed_frames: Optional[Union[int, npt.NDArray[np.int_]]] = 0,
-    ) -> Tuple[NDArrayF, NDArrayF]:
-        """
-        Vectorized predict. missed_frames is the gap LENGTH per track for this call.
-        Pass scalar or (N,) ints. Do not also loop per frame with missed_frames>0.
-        """
-        N = mean.shape[0]
-        assert covariance.shape == (N, 8, 8)
-
-        # Build per-track F and Q
-        gaps = (np.zeros(N, dtype=int) + (missed_frames if np.isscalar(missed_frames) else missed_frames)).astype(int)
-        gaps[gaps < 1] = 1
-
-        # Means
-        mean_pred = mean.copy()
-        cov_pred = covariance.copy()
-        for i in range(N):
-            F = self._F_gap(int(gaps[i]))
-
-            w = max(mean[i, 2], 1e-6)
-            h = max(mean[i, 3], 1e-6)
-            std_pos = np.array(
-                [
-                    self._proc_std_weight_pos * w,
-                    self._proc_std_weight_pos * h,
-                    self._proc_std_weight_pos * w,
-                    self._proc_std_weight_pos * h,
-                ],
-                dtype=np.float64,
-            )
-            std_vel = np.array(
-                [
-                    self._proc_std_weight_vel * w,
-                    self._proc_std_weight_vel * h,
-                    self._proc_std_weight_vel * w,
-                    self._proc_std_weight_vel * h,
-                ],
-                dtype=np.float64,
-            )
-            q_scale = self._q_growth ** int(gaps[i])
-            Q = np.diag(np.square(np.r_[std_pos, std_vel])) * q_scale
-
-            mean_pred[i] = mean[i] @ F.T
-            cov_pred[i] = F @ covariance[i] @ F.T + Q
-            cov_pred[i] = 0.5 * (cov_pred[i] + cov_pred[i].T)
-
-        return mean_pred, cov_pred
-
-    # ------------------------ Display / Inflation ------------------------ #
-
     def inflated_bbox(
         self,
         mean: NDArrayF,
