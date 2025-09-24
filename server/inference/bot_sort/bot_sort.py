@@ -48,9 +48,9 @@ class STrack(BaseTrack):
         if self.mean is None or self.covariance is None:
             return
         mean_state = self.mean.copy()
-        if self.state != TrackState.Tracked:
-            mean_state[6] = 0
-            mean_state[7] = 0
+        # if self.state != TrackState.Tracked:
+        #     mean_state[6] = 0
+        #     mean_state[7] = 0
 
         self.mean, self.covariance = self.kalman_filter.predict(mean_state, self.covariance)
 
@@ -141,36 +141,22 @@ class STrack(BaseTrack):
                 y1 = max(0.0, min(y1, float(fh)))
                 x2 = max(0.0, min(x2, float(fw)))
                 y2 = max(0.0, min(y2, float(fh)))
-                if x2 < x1:
-                    x2 = x1
-                if y2 < y1:
-                    y2 = y1
-                ret = np.array([x1, y1, x2 - x1, y2 - y1], dtype=np.float32)
+                ret = np.array([x1, y1, max(x2 - x1, 1e-3), max(y2 - y1, 1e-3)], dtype=np.float32)
             return ret
         # Number of consecutive frames since the last successful update of this track
         missed_count = max(0, int(STrack.current_frame_id) - int(self.frame_id) - 1)
-        inflated = self.kalman_filter.display_bbox(self.mean, self.covariance, missed_count=missed_count)
-        inflated[:2] -= inflated[2:] / 2  # cx, cy to top left
-        # Clamp to current frame dimensions if available
-        fw = int(self.current_frame_width)
-        fh = int(self.current_frame_height)
-        if fw > 0 and fh > 0:
-            x1 = float(inflated[0])
-            y1 = float(inflated[1])
-            x2 = float(inflated[0] + inflated[2])
-            y2 = float(inflated[1] + inflated[3])
-            # Clamp corners into [0, W] x [0, H]
-            x1 = max(0.0, min(x1, float(fw)))
-            y1 = max(0.0, min(y1, float(fh)))
-            x2 = max(0.0, min(x2, float(fw)))
-            y2 = max(0.0, min(y2, float(fh)))
-            # Ensure non-negative width/height after clamping
-            if x2 < x1:
-                x2 = x1
-            if y2 < y1:
-                y2 = y1
-            inflated = np.array([x1, y1, x2 - x1, y2 - y1], dtype=np.float32)
-        return inflated
+
+        cx, cy, w, h = self.kalman_filter.display_bbox(self.mean, self.covariance, missed_count=missed_count)
+
+        x1, y1, x2, y2 = cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2
+        assert self.current_frame_width is not None and self.current_frame_height is not None
+        fw, fh = self.current_frame_width, self.current_frame_height
+        # Clamp corners into [0, W] x [0, H]
+        x1 = max(0.0, min(x1, float(fw)))
+        y1 = max(0.0, min(y1, float(fh)))
+        x2 = max(0.0, min(x2, float(fw)))
+        y2 = max(0.0, min(y2, float(fh)))
+        return np.array([x1, y1, max(x2 - x1, 1e-3), max(y2 - y1, 1e-3)], dtype=np.float32)
 
     @property
     def tlbr(self):
