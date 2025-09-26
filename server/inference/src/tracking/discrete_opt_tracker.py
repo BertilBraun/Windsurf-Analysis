@@ -111,7 +111,7 @@ class DiscreteOptTracker:
     def track(self, tracks: List[Track], video_properties: VideoInfo, transforms: List[Transform]) -> List[Track]:
         """Track objects using discrete optimization."""
         graph = self._build_fragment_graph(tracks, video_properties.fps)
-        return ILPGraphSolver(self.w_start).optimize_graph(graph)
+        return ILPGraphSolver(self.w_start).optimize_graph(graph)[0]
 
     def _build_fragment_graph(self, fragments: List[Track], video_fps: int) -> FragmentGraph:
         """Build a graph of possible fragment connections with their costs."""

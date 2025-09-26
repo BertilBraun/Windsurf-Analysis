@@ -49,7 +49,7 @@ class ILPGraphSolver:
     def __init__(self, w_start: float):
         self.w_start = w_start
 
-    def optimize_graph(self, graph: FragmentGraph) -> List[Track]:
+    def optimize_graph(self, graph: FragmentGraph) -> Tuple[List[Track], float]:
         """Solve the fragment linking optimization problem using ILP."""
         # Create the ILP problem
         problem = pulp.LpProblem('Fragment_Linking', pulp.LpMinimize)
@@ -161,7 +161,7 @@ class ILPGraphSolver:
 
     def _solve_and_extract_solution(
         self, problem: pulp.LpProblem, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], pulp.LpVariable]
-    ) -> List[Track]:
+    ) -> Tuple[List[Track], float]:
         """Solve the optimization problem and extract the solution."""
         # Get solver
         solver = pulp.PULP_CBC_CMD(timeLimit=OPTIMIZER_TIMEOUT_SECONDS, msg=False)  # don't print solver output
@@ -171,11 +171,12 @@ class ILPGraphSolver:
 
         # Check solution status
         status = pulp.LpStatus[problem.status]
+        solution_cost = pulp.value(problem.objective)
 
         if status == 'Optimal':
-            logging.info(f'ILP solver found optimal solution with cost: {pulp.value(problem.objective)}')
+            logging.info(f'ILP solver found optimal solution with cost: {solution_cost}')
         elif status == 'Feasible':
-            logging.warning(f'ILP solver found feasible solution with cost: {pulp.value(problem.objective)}')
+            logging.warning(f'ILP solver found feasible solution with cost: {solution_cost}')
         elif status == 'Infeasible':
             raise UnsatisfiableException('Fragment linking problem is infeasible')
         elif status == 'Unbounded':
@@ -192,7 +193,9 @@ class ILPGraphSolver:
             if var.varValue is not None and var.varValue > 0.5:  # Binary variable is 1
                 successor_of[i] = j
 
-        return self._reconstruct_tracks_from_solution(graph.fragments, successor_of)
+        assert isinstance(solution_cost, float), f'Solution cost is not a float: {solution_cost}'
+
+        return self._reconstruct_tracks_from_solution(graph.fragments, successor_of), solution_cost
 
     def _reconstruct_tracks_from_solution(
         self, fragments: List[Track], successor_of: Dict[int, int | None]
