@@ -226,6 +226,7 @@ class KalmanFilter:
             # Add tiny jitter if numerical issues.
             jitter = 1e-9 * np.eye(S.shape[0], dtype=np.float64)
             L = np.linalg.cholesky(S + jitter)
+
         z = scipy.linalg.solve_triangular(L, d.T, lower=True, check_finite=False, overwrite_b=True)
         return np.sum(z * z, axis=0)
 

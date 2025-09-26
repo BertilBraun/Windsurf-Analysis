@@ -55,12 +55,21 @@ class _KFCacheEntry:
 
 
 class IterativeILPTracker:
-    """
-    Offline iterative ILP tracker with:
-      - motion cost: KF Mahalanobis NLL (position-only) + 0.5*log|S_pos|
-      - appearance cost: Lab χ² → Platt prob → NLLR
-      - gap cost: per-frame miss NLL
-    Edges only go forward in time (no frame overlap).
+    """Iterative ILP tracker.
+
+    Plan:
+    1. Build a graph of possible fragment connections with their costs.
+        - Possible connections (A -> B) are based on:
+            - A.end_frame < B.start_frame and B.start_frame <= A.end_frame + MAX_OVERLAP_LENGTH_SECONDS * video_fps
+        - Costs are based on:
+            To calculate the actual cost, we use the sum of the NLL for motion, appearance and gap.
+            - Motion: KF Mahalanobis NLL + GMC (position-only) + 0.5*log|S_pos|. We apply the appropriate Camera Transforms on each frame. Transfors are defined as: Transform = NamedTuple('Transform', [('dx', float), ('dy', float), ('da', float), ('frame_idx', int)]) # dx, dy, da for each frame relative to the previous frame.
+            - Appearance: embedding is a LAB color histogram, we compute the mean histogram for both A and B and then use the chi-squared distance to get the appearance similarity probability by calculating platt_prob_from_dist. Lab χ² → Platt prob → NLLR
+            - Gap: per-frame miss NLL
+    2. Solve the ILP problem with a pretty low start_cost (no need to link up everything - it's fine to have some split tracks or even unassigned detections - it's iterative).
+    3. Repeat from Step 1. but this time with the solution of the previous iteration as the starting point. We increase the start_cost by a small amount each time.
+    4. Stop when the solution is stable (i.e. the cost of the solution is not changing much) or we have reached a maximum number of iterations (4 iterations).
+    5. Return the solution.
     """
 
     def __init__(
@@ -102,7 +111,7 @@ class IterativeILPTracker:
             graph = self._build_fragment_graph(tracks, video_properties.fps, transforms)
             # TODO increase start cost iteratively
             new_tracks, new_cost = ILPGraphSolver(self.w_start * (it + 1)).optimize_graph(graph)
-            if new_cost >= best_cost:
+            if new_cost >= best_cost:  # TODO smarter stopping condition (no assignment changes?)
                 # no improvement → stop
                 print(f'No improvement in iteration {it}, stopping. {new_cost} >= {best_cost}')
                 break
@@ -235,7 +244,7 @@ class IterativeILPTracker:
             )
             # add 0.5 * log|S_pos|
             _, S_full, _ = kf.project(m_pred, P_pred)
-            S_pos = S_full[:2, :2]
+            S_pos = S_full[:2, :2] if self.use_position_only else S_full
             logdet = 0.5 * math.log(max(np.linalg.det(S_pos), EPS))
 
             total += 0.5 * d2 + logdet
@@ -280,7 +289,7 @@ class IterativeILPTracker:
         If disabled, returns input unchanged.
         """
         G = self.internal_split_gap_frames
-        if G <= 0:
+        if G <= 0:  # Skip splitting - disabled # TODO what about other parameters for KF or Appearance uncertainty?
             return tracks
 
         out: List[Track] = []
@@ -294,6 +303,7 @@ class IterativeILPTracker:
                 if last_f is None or (d.frame_idx - last_f) <= G:  # TODO also split on KF or Appearance uncertainty
                     run.append(d)
                 else:
+                    # TODO does that work with multiple tracks with the same track_id?
                     out.append(Track(track_id=tr.track_id, sorted_detections=run))
                     run = [d]
                 last_f = d.frame_idx
