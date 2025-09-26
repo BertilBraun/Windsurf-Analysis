@@ -13,6 +13,7 @@ import scipy.linalg
 NDArrayF = npt.NDArray[np.float64]
 
 CHI2_QUANTILES: Dict[float, Dict[int, float]] = {
+    0.0: {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0},
     0.90: {1: 2.7055, 2: 4.6052, 3: 6.2514, 4: 7.779},
     0.95: {1: 3.8415, 2: 5.9915, 3: 7.8147, 4: 9.4877},
 }
@@ -36,7 +37,8 @@ class KalmanFilter:
         dt: float = 1.0,
         proc_std_weight_pos: float = 1.0 / 20.0,
         proc_std_weight_vel: float = 1.0 / 80.0,
-        meas_std_weight_pos: float = 1.0 / 400.0,
+        meas_std_weight_pos: float = 1.0 / 50.0,
+        meas_std_weight_size: float = 1.0 / 20.0,
         q_growth: float = 1.05,
     ) -> None:
         self.ndim = 4
@@ -51,6 +53,7 @@ class KalmanFilter:
         self._proc_std_weight_pos = float(proc_std_weight_pos)
         self._proc_std_weight_vel = float(proc_std_weight_vel)
         self._meas_std_weight_pos = float(meas_std_weight_pos)
+        self._meas_std_weight_size = float(meas_std_weight_size)
         self._q_growth = float(q_growth)
 
     # ---------------------------- Utilities ---------------------------- #
@@ -69,8 +72,8 @@ class KalmanFilter:
             [
                 self._meas_std_weight_pos * max(mean[2], 1e-6),
                 self._meas_std_weight_pos * max(mean[3], 1e-6),
-                self._meas_std_weight_pos * max(mean[2], 1e-6),
-                self._meas_std_weight_pos * max(mean[3], 1e-6),
+                self._meas_std_weight_size * max(mean[2], 1e-6),
+                self._meas_std_weight_size * max(mean[3], 1e-6),
             ],
             dtype=np.float64,
         )
@@ -180,7 +183,7 @@ class KalmanFilter:
         mean: NDArrayF,
         covariance: NDArrayF,
         measurements: NDArrayF,
-        only_position: bool = False,
+        only_position: bool = True,
         metric: Literal['maha', 'gaussian'] = 'maha',
     ) -> NDArrayF:
         """
@@ -219,12 +222,12 @@ class KalmanFilter:
         z = scipy.linalg.solve_triangular(L, d.T, lower=True, check_finite=False, overwrite_b=True)
         return np.sum(z * z, axis=0)
 
-    def inflated_bbox(
+    def display_bbox(
         self,
         mean: NDArrayF,
         covariance: NDArrayF,
-        alpha: float = 0.95,
-        include_size_unc: bool = True,
+        alpha: float = 0.90,
+        include_size_unc: bool = False,
     ) -> NDArrayF:
         """
         Inflate around the current box using projected covariance.
@@ -248,70 +251,3 @@ class KalmanFilter:
             h_out += k_size * np.sqrt(max(S[3, 3], 0.0))
 
         return np.array([x, y, max(w_out, 1e-3), max(h_out, 1e-3)], dtype=np.float64)
-
-    def display_bbox(
-        self,
-        mean: NDArrayF,
-        covariance: NDArrayF,
-        missed_count: int,
-        alpha_seen: float = 0.0,
-        alpha_missed: float = 0.90,
-        include_size_unc_on_miss: bool = False,
-    ) -> NDArrayF:
-        """
-        Policy: no inflation when a detection was just used (missed_count==0),
-        inflate when misses>0. This guarantees shrink after solid updates.
-        """
-        if missed_count <= 0:
-            # alpha_seen=0 => no inflation. Use raw mean box.
-            if alpha_seen <= 0:
-                z, _, _ = self.project(mean, covariance)
-                x, y, w, h = z
-                return np.array([float(x), float(y), float(max(w, 1e-3)), float(max(h, 1e-3))], dtype=np.float64)
-            return self.inflated_bbox(mean, covariance, alpha=alpha_seen, include_size_unc=False)
-        else:
-            # Scale positional inflation gently with sqrt of misses
-            return self.inflated_bbox(mean, covariance, alpha=alpha_missed, include_size_unc=include_size_unc_on_miss)
-
-
-# ------------------------------ Example ------------------------------ #
-if __name__ == '__main__':
-    kf = KalmanFilter(
-        dt=1.0,
-        proc_std_weight_pos=1 / 20,
-        proc_std_weight_vel=1 / 100,
-        meas_std_weight_pos=1 / 400,
-        q_growth=1.05,
-    )
-
-    # Init with first detection.
-    z0 = np.array([320.0, 200.0, 80.0, 160.0], dtype=np.float64)
-    mean, cov = kf.initiate(z0)
-    missed = 0
-
-    # Frame 2: miss once. Advance a single gap of 1 (do NOT loop and also set missed_frames>0).
-    mean, cov = kf.predict(mean, cov, missed_frames=1)
-    missed += 1
-    disp1 = kf.display_bbox(mean, cov, missed_count=missed)  # inflated
-    print('After 1 miss:', disp1.tolist())
-
-    # Frame 3: got a detection, gate then update.
-    z1 = np.array([330.0, 205.0, 80.0, 160.0], dtype=np.float64)
-
-    # Gate at 0.90 with 4 dof.
-    z_pred, S, _ = kf.project(mean, cov)
-    d = z1 - z_pred
-    chol, lower = scipy.linalg.cho_factor(S, lower=True, check_finite=False)
-    maha2 = np.sum(scipy.linalg.cho_solve((chol, lower), d, check_finite=False) * d)
-    if maha2 <= CHI2_QUANTILES[0.90][4]:
-        mean, cov = kf.update(mean, cov, z1)
-        missed = 0  # reset misses after successful update
-
-    disp2 = kf.display_bbox(mean, cov, missed_count=missed)  # no inflation, shrinks back
-    print('After update:', disp2.tolist())
-
-    # Jump 3 missed frames in one call (gap=3). Do not also loop per-frame.
-    mean, cov = kf.predict(mean, cov, missed_frames=3)
-    missed = 3
-    disp3 = kf.display_bbox(mean, cov, missed_count=missed)
-    print('After 3-miss jump:', disp3.tolist())
