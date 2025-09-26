@@ -1,7 +1,9 @@
 import os
 import logging
 from pathlib import Path
+from typing import Literal
 import numpy as np
+from dataclasses import dataclass
 
 current_dir = Path(__file__).parent
 server_root_dir = current_dir.parent.parent.parent
@@ -11,7 +13,7 @@ os.environ['YOLO_CONFIG_DIR'] = str(server_root_dir / 'ultralytics')
 from ultralytics import YOLO
 
 
-from .reid import ReID
+from .reid import ReID, ReIDColorHistogram, ReIDViT, ReIDOSNet
 from ..settings import (
     USE_GPU,
     YOLO_MODEL_PATH,
@@ -19,10 +21,20 @@ from ..settings import (
     IOU_THRESHOLD,
     CONFIDENCE_THRESHOLD,
     BATCH_SIZE,
+    OSNET_REID_MODEL_PATH,
+    REID_MODEL_TYPE,
 )
 from ..util.cache import cache_to_file
 from ..util.video_io import get_video_properties
-from ..common_types import BoundingBox, Detection
+from ..common_types import BoundingBox, Detection, FrameIndex
+
+
+@dataclass
+class _RawDetection:
+    bbox: BoundingBox
+    confidence: float
+    frame_idx: FrameIndex
+    crop: np.ndarray
 
 
 class SurferDetector:
@@ -36,20 +48,20 @@ class SurferDetector:
             raise FileNotFoundError(f'YOLO model {yolo_model_path} not found')
 
         self.yolo_model = YOLO(model=yolo_model_path, verbose=False)
-        self.reid_model = ReID()
+        self.reid_model = _init_reid_model(REID_MODEL_TYPE)
+
+    def run_object_detection_on_video(self, video_path: str) -> list[Detection]:
+        """Two-pass pipeline: cached YOLO detection+crops, then cached ReID features."""
+        raw_detections = self.run_detection_pass(video_path)
+        return self.run_reid_pass(raw_detections)
 
     @cache_to_file(
-        'yolo_detections',
+        'yolo_detections_raw',
         ignore_args=[0],
-        additional_args=[YOLO_MODEL_PATH, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE],
+        additional_args=[YOLO_MODEL_PATH, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE, MIN_TRACKING_FPS],
     )
-    def run_object_detection_on_video(self, video_path: str) -> list[Detection]:
-        """Run batched inference on entire video and return all detections as a list.
-
-        This performs YOLO inference in a streamed fashion but accumulates lightweight
-        metadata (frame index, boxes and confidences) and then
-        runs ReID in larger batches across frames to improve GPU utilization.
-        """
+    def run_detection_pass(self, video_path: str) -> list[_RawDetection]:
+        """Run YOLO once and persist crops+metadata. Returns raw detections."""
 
         video_props = get_video_properties(video_path)
         skip_frames = max(1, video_props.fps // MIN_TRACKING_FPS)
@@ -66,10 +78,7 @@ class SurferDetector:
             verbose=False,
         )
 
-        # Accumulate per-detection info first (without ReID), then do ReID in batches
-        pending_crops: list[np.ndarray] = []
-        pending_meta: list[tuple[BoundingBox, float, int]] = []
-        all_detections: list[Detection] = []
+        raw_detections: list[_RawDetection] = []
 
         for frame_index, result in enumerate(results):
             frame_idx = frame_index * skip_frames
@@ -89,29 +98,59 @@ class SurferDetector:
                     y2=boxes[i][3],
                 )
 
-                # Crop for ReID (BGR)
-                x1, y1, x2, y2 = map(int, (bbox.x1, bbox.y1, bbox.x2, bbox.y2))
                 h, w = orig_img.shape[:2]
-                x1c, y1c, x2c, y2c = max(0, x1), max(0, y1), min(w, x2), min(h, y2)
-                crop = orig_img[y1c:y2c, x1c:x2c]
+                bbox = bbox.clamp(0, 0, w, h)
 
-                # Skip invalid crops
-                if crop.size == 0:
+                if bbox.area <= 0:  # Skip invalid crops
                     continue
 
-                bbox_clipped = BoundingBox(x1c, y1c, x2c, y2c)
-                pending_crops.append(crop)
-                pending_meta.append((bbox_clipped, float(confidences[i]), frame_idx))
+                raw_detections.append(
+                    _RawDetection(
+                        bbox=bbox,
+                        confidence=float(confidences[i]),
+                        crop=orig_img[bbox.y1 : bbox.y2, bbox.x1 : bbox.x2],
+                        frame_idx=frame_idx,
+                    )
+                )
 
-                # If we have enough crops, flush a ReID batch
-                if len(pending_crops) >= BATCH_SIZE:
-                    _flush_reid_batch(self.reid_model, pending_crops, pending_meta, all_detections)
+        return raw_detections
+
+    @cache_to_file('reid_features', ignore_args=[0], additional_args=[REID_MODEL_TYPE])
+    def run_reid_pass(self, raw_detections: list[_RawDetection]) -> list[Detection]:
+        """Compute embeddings for saved crops based on current ReID model.
+
+        Cached by (REID_MODEL_TYPE, det_key) so changing ReID invalidates only this pass.
+        """
+
+        # Batch crops for efficiency
+        all_detections: list[Detection] = []
+        pending_crops: list[np.ndarray] = []
+        pending_meta: list[tuple[BoundingBox, float, int]] = []
+
+        for rd in raw_detections:
+            crop = rd.crop
+            if crop is None or crop.size == 0:
+                continue
+            pending_crops.append(crop)
+            pending_meta.append((rd.bbox, rd.confidence, rd.frame_idx))
+            if len(pending_crops) >= BATCH_SIZE:
+                _flush_reid_batch(self.reid_model, pending_crops, pending_meta, all_detections)
 
         # Flush remaining crops
         if pending_crops:
             _flush_reid_batch(self.reid_model, pending_crops, pending_meta, all_detections)
 
         return all_detections
+
+
+def _init_reid_model(model_type: Literal['color_hist', 'osnet', 'vit']) -> ReID:
+    if model_type == 'color_hist':
+        return ReIDColorHistogram()
+    if model_type == 'osnet':
+        return ReIDOSNet(model_path=OSNET_REID_MODEL_PATH)
+    if model_type == 'vit':
+        return ReIDViT()
+    raise ValueError(f'Unknown REID_MODEL_TYPE: {model_type}')
 
 
 def _flush_reid_batch(

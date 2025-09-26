@@ -1,5 +1,6 @@
 import torch
 from pathlib import Path
+from typing import Literal
 
 USE_GPU = torch.cuda.is_available()
 
@@ -9,6 +10,11 @@ NUM_PARALLEL_VIDEO_WORKERS = 4
 # YOLO settings
 inference_root_folder = Path(__file__).parent.parent
 YOLO_MODEL_PATH = inference_root_folder / 'weights/yolo_models/windsurfing/best.pt'
+OSNET_REID_MODEL_PATH = inference_root_folder / 'weights/reid_models/common/osnet_ain_x1_0_msmt17.pth'
+OSNET_REID_MODEL_PATH = inference_root_folder / 'weights/reid_models/common/osnet_ain_x1_0_imagenet.pth'
+
+# ReID model selection
+REID_MODEL_TYPE: Literal['color_hist', 'osnet', 'vit'] = 'color_hist'
 
 IOU_THRESHOLD = 0.2
 CONFIDENCE_THRESHOLD = 0.6
