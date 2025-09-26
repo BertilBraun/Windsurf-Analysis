@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-from typing import List, Tuple
+from typing import Dict, Tuple
 
 import math
 import numpy as np
@@ -49,6 +49,7 @@ class IterativeILPTracker:
         gap_p_miss: float = 0.98,
         appearance_a: float = 7.427,
         appearance_b: float = 4.088,
+        max_consecutive_b_frames: int = 5,
     ) -> None:
         self.w_start = float(w_start)
         self.motion_weight = float(motion_weight)
@@ -58,6 +59,7 @@ class IterativeILPTracker:
         self.gap_p_miss = float(gap_p_miss)
         self.appearance_a = float(appearance_a)
         self.appearance_b = float(appearance_b)
+        self.max_consecutive_b_frames = int(max(0, max_consecutive_b_frames))
 
     # ───────────────────────────────── public API ───────────────────────────────── #
 
@@ -77,8 +79,13 @@ class IterativeILPTracker:
         graph = FragmentGraph(fragments)
         N = len(fragments)
 
-        # Pre-compute cumulative camera motion (translation only) for stabilised coordinates
-        cum_dx, cum_dy = self._compute_cumulative_camera_offsets(transforms)
+        # Build per-frame delta warp map consistent with BoTSORT (prev -> curr)
+        frame_warp: Dict[int, Tuple[float, float, float, float]] = {}
+        for t in transforms:
+            f = int(t.frame_idx)
+            c = math.cos(float(t.da))
+            s = math.sin(float(t.da))
+            frame_warp[f] = (c, s, float(t.dx), float(t.dy))
 
         for i, start_fragment in enumerate(fragments):
             for j in range(i, N):
@@ -86,11 +93,14 @@ class IterativeILPTracker:
 
                 # Skip if fragments have overlapping frames or are out of max gap
                 gap = end_fragment.start_frame - start_fragment.end_frame
-                if gap <= 0 or gap > video_fps * MAX_OVERLAP_LENGTH_SECONDS:
+                start_frames = set(start_fragment.detections_by_frame.keys())
+                end_frames = set(end_fragment.detections_by_frame.keys())
+                frames_overlap = start_frames & end_frames
+                if gap > video_fps * MAX_OVERLAP_LENGTH_SECONDS or len(frames_overlap) > 0:
                     continue
 
                 # Calculate connection cost
-                cost = self._calculate_link_cost(start_fragment, end_fragment, video_fps, cum_dx, cum_dy)
+                cost = self._calculate_link_cost(start_fragment, end_fragment, frame_warp)
                 if cost is not None:
                     graph.add_connection(i, j, cost)
 
@@ -102,20 +112,14 @@ class IterativeILPTracker:
         self,
         start: Track,
         end: Track,
-        video_fps: int,
-        cum_dx: List[float],
-        cum_dy: List[float],
+        frame_warp: Dict[int, Tuple[float, float, float, float]],
     ) -> float | None:
         """Calculate total NLL cost for linking two track fragments.
 
         Returns None if the pair should be disallowed (e.g., numerical issues).
         """
-        gap = end.start_frame - start.end_frame
-        if gap < 0 or gap > video_fps * MAX_OVERLAP_LENGTH_SECONDS:
-            return None
-
         # Motion model NLL using Kalman filter with stabilised coordinates
-        motion_nll = self._motion_nll(start, end, cum_dx, cum_dy)
+        motion_nll = self._motion_nll(start, end, frame_warp)
         if math.isnan(motion_nll) or math.isinf(motion_nll):
             return None
 
@@ -125,12 +129,15 @@ class IterativeILPTracker:
             return None
 
         # Gap penalty as NLL with per-frame miss probability
+        gap = (
+            max(start.end_frame, end.end_frame)
+            - start.start_frame
+            - len(start.sorted_detections)
+            - len(end.sorted_detections)
+        )
         gap_nll = self._gap_nll(gap)
 
-        total_cost = (
-            self.motion_weight * motion_nll + self.appearance_weight * appearance_nll + self.gap_weight * gap_nll
-        )
-        return float(total_cost)
+        return self.motion_weight * motion_nll + self.appearance_weight * appearance_nll + self.gap_weight * gap_nll
 
     # ───────────────────────────────── appearance ──────────────────────────────── #
 
@@ -142,44 +149,57 @@ class IterativeILPTracker:
     # ─────────────────────────────────── motion ────────────────────────────────── #
 
     def _motion_nll(
-        self, a: Track, b: Track, cum_dx: List[float], cum_dy: List[float]
-    ) -> float:  # average 0.5 * maha over B frames
+        self,
+        a: Track,
+        b: Track,
+        frame_warp: Dict[int, Tuple[float, float, float, float]],
+    ) -> float:
         if not b.sorted_detections:
             return 0.0
 
-        # Build per-frame measurements in stabilised coordinates
-        def to_xywh_stab(det: Detection) -> np.ndarray:
+        # Measurements in image coordinates
+        def to_xywh(det: Detection) -> np.ndarray:
             x, y, w, h = self._bbox_to_xywh(det.bbox)
-            fx = det.frame_idx
-            assert fx < len(cum_dx) and fx < len(cum_dy), f'Frame {fx} is out of bounds for cum_dx and cum_dy'
-            offx, offy = cum_dx[fx], cum_dy[fx]
-            return np.array([x - offx, y - offy, w, h], dtype=np.float64)
+            return np.array([x, y, w, h], dtype=np.float64)
 
         kf = KalmanFilter()
 
-        # Initialise with A.start in stabilised frame
-        mean, cov = kf.initiate(to_xywh_stab(a.start))
-
-        f = a.start_frame
-        f_end = max(a.end_frame, b.end_frame)
+        # Initialise with A.start in image coordinates
+        mean, cov = kf.initiate(to_xywh(a.start))
 
         total_maha = 0.0
         b_count = 0
 
-        while f <= f_end:
+        frame_indices = list(sorted(list(a.detections_by_frame.keys()) + list(b.detections_by_frame.keys())))
+        # remove elements K after A.end_frame
+        frame_indices = frame_indices[: frame_indices.index(a.end_frame) + 1 + self.max_consecutive_b_frames]
+
+        for i, f in enumerate(frame_indices):
             if f > a.start_frame:
                 mean, cov = kf.predict(mean, cov, missed_frames=1)
+                # Apply forward per-frame warp (prev -> curr), consistent with BoTSORT
+                assert f in frame_warp, f'Frame {f} not in frame_warp'
+                c, s, dx, dy = frame_warp[int(f)]
+                A = np.eye(8, dtype=np.float64)
+                A[0:2, 0:2] = np.array([[c, -s], [s, c]], dtype=np.float64)
+                A[4:6, 4:6] = np.array([[c, -s], [s, c]], dtype=np.float64)
+                mean = A @ mean
+                mean[0] += dx
+                mean[1] += dy
+                cov = A @ cov @ A.T
 
             # If A has a detection at this frame, incorporate it
             det_a = a.detections_by_frame.get(f)
             if det_a is not None:
-                meas_a = to_xywh_stab(det_a)
-                mean, cov = kf.update(mean, cov, meas_a)
+                mean, cov = kf.update(mean, cov, to_xywh(det_a))
 
             # If B has a detection at this frame, accumulate gating distance
             det_b = b.detections_by_frame.get(f)
             if det_b is not None:
-                meas_b = to_xywh_stab(det_b)
+                # if a has any detection in the past K frames, we can continue, else skip
+                if not any(a.detections_by_frame.get(f) for f in frame_indices[i - self.max_consecutive_b_frames : i]):
+                    continue
+                meas_b = to_xywh(det_b)
                 d = kf.gating_distance(
                     mean,
                     cov,
@@ -197,7 +217,7 @@ class IterativeILPTracker:
 
         avg_maha = total_maha / b_count
         # For Gaussian likelihood, NLL ≈ 0.5 * maha (+const). Drop constant.
-        return 0.5 * avg_maha
+        return 0.5 * avg_maha  # TODO to probability
 
     def _bbox_to_xywh(self, bbox: BoundingBox) -> Tuple[float, float, float, float]:
         x = (bbox.x1 + bbox.x2) / 2.0
@@ -214,41 +234,6 @@ class IterativeILPTracker:
         if gap_frames == 0:
             return 0.0
         return NLL(self.gap_p_miss**gap_frames)
-
-    # ───────────────────────────────── transforms ──────────────────────────────── #
-
-    def _compute_cumulative_camera_offsets(self, transforms: List[Transform]) -> Tuple[List[float], List[float]]:
-        if not transforms:
-            return [], []
-
-        transforms_sorted = sorted(transforms, key=lambda t: int(t.frame_idx))
-        max_frame = int(transforms_sorted[-1].frame_idx)
-        cum_dx = [0.0] * (max_frame + 1)
-        cum_dy = [0.0] * (max_frame + 1)
-
-        last_f = int(transforms_sorted[0].frame_idx)
-        # Ensure we propagate initial index correctly
-        for f in range(0, last_f + 1):
-            cum_dx[f] = float(transforms_sorted[0].dx)
-            cum_dy[f] = float(transforms_sorted[0].dy)
-
-        acc_x = 0.0
-        acc_y = 0.0
-        for t in transforms_sorted:
-            f = int(t.frame_idx)
-            acc_x += float(t.dx)
-            acc_y += float(t.dy)
-            if f < len(cum_dx):
-                cum_dx[f] = acc_x
-                cum_dy[f] = acc_y
-
-        # Fill gaps by carrying forward last known value
-        for f in range(1, len(cum_dx)):
-            if cum_dx[f] == 0.0 and cum_dy[f] == 0.0 and f not in {int(t.frame_idx) for t in transforms_sorted}:
-                cum_dx[f] = cum_dx[f - 1]
-                cum_dy[f] = cum_dy[f - 1]
-
-        return cum_dx, cum_dy
 
 
 def chi2_dist(p: np.ndarray, q: np.ndarray, eps: float = EPS) -> float:
