@@ -5,10 +5,13 @@
 
 from __future__ import annotations
 
+import math
 from typing import Dict, Literal, Tuple
 import numpy as np
 import numpy.typing as npt
 import scipy.linalg
+
+from server.inference.src.visualization.stabilize import Transform
 
 NDArrayF = npt.NDArray[np.float64]
 
@@ -21,7 +24,11 @@ CHI2_QUANTILES: Dict[float, Dict[int, float]] = {
 
 class KalmanFilter:
     """
-    State: [x, y, w, h, vx, vy, vw, vh]. Constant velocity. Measure [x, y, w, h].
+    State: [cx, cy, w, h, vx, vy, vw, vh]. Constant velocity. Measure [cx, cy, w, h].
+    cx, cy: center x, y of the bounding box
+    w, h: width, height of the bounding box
+    vx, vy: velocity x, y of the bounding box
+    vw, vh: velocity width, height of the bounding box
 
     Notes to avoid runaway growth:
       - Use small but >0 measurement noise. Default is conservative.
@@ -67,7 +74,7 @@ class KalmanFilter:
         return F
 
     def _meas_std(self, mean: NDArrayF) -> NDArrayF:
-        """Measurement stds for [x,y,w,h], proportional to w/h."""
+        """Measurement stds for [cx,cy,w,h], proportional to w/h."""
         return np.array(
             [
                 self._meas_std_weight_pos * max(mean[2], 1e-6),
@@ -160,7 +167,7 @@ class KalmanFilter:
 
     def update(self, mean: NDArrayF, covariance: NDArrayF, measurement: NDArrayF) -> Tuple[NDArrayF, NDArrayF]:
         """
-        Measurement update with z = [x, y, w, h].
+        Measurement update with z = [cx, cy, w, h].
 
         Returns:
             updated mean, covariance
@@ -192,8 +199,8 @@ class KalmanFilter:
         Args:
             mean: (8,)
             covariance: (8,8)
-            measurements: (N,4) with [x, y, w, h]
-            only_position: if True, use [x,y] only and 2x2 S
+            measurements: (N,4) with [cx, cy, w, h]
+            only_position: if True, use [cx,cy] only and 2x2 S
             metric: "maha" for Mahalanobis, "gaussian" for plain squared Euclidean
 
         Returns:
@@ -232,11 +239,11 @@ class KalmanFilter:
         """
         Inflate around the current box using projected covariance.
         If base_from_measurement=True, base w/h come from current mean (normal).
-        Returns [x, y, w_out, h_out].
+        Returns [cx, cy, w_out, h_out].
         """
         z_mean, S, _ = self.project(mean, covariance)
 
-        x, y, w, h = map(float, z_mean)
+        cx, cy, w, h = map(float, z_mean)
         k = np.sqrt(CHI2_QUANTILES[alpha][2])
 
         dx = k * np.sqrt(max(S[0, 0], 0.0))
@@ -250,4 +257,43 @@ class KalmanFilter:
             w_out += k_size * np.sqrt(max(S[2, 2], 0.0))
             h_out += k_size * np.sqrt(max(S[3, 3], 0.0))
 
-        return np.array([x, y, max(w_out, 1e-3), max(h_out, 1e-3)], dtype=np.float64)
+        return np.array([cx, cy, max(w_out, 1e-3), max(h_out, 1e-3)], dtype=np.float64)
+
+    def _build_A_T(self, transform: Transform) -> tuple[NDArrayF, NDArrayF]:
+        """Return (A, T) for forward GMC on KF state [cx,cy,w,h,vx,vy,vw,vh]."""
+        A = np.eye(8, dtype=np.float64)
+        R = np.array(
+            [[math.cos(transform.da), -math.sin(transform.da)], [math.sin(transform.da), math.cos(transform.da)]],
+            dtype=np.float64,
+        )
+        A[0:2, 0:2] = R  # positions
+        A[4:6, 4:6] = R  # velocities (cx,cy)
+        T = np.array([transform.dx, transform.dy], dtype=np.float64)
+        return A, T
+
+    def apply_forward_gmc_state(self, mean: NDArrayF, cov: NDArrayF, transform: Transform) -> tuple[NDArrayF, NDArrayF]:
+        """Apply one prev→curr delta to KF state and covariance."""
+        A, T = self._build_A_T(transform)
+        m = A @ mean
+        m[0:2] += T
+        P = A @ cov @ A.T
+        return m, P
+
+    def advance_state_to_frame(
+        self,
+        mean: NDArrayF,
+        cov: NDArrayF,
+        transforms: Dict[int, Transform],
+        from_frame: int,
+        to_frame: int,
+    ) -> tuple[NDArrayF, NDArrayF]:
+        """Step from `from_frame` to `to_frame` using per-frame forward deltas.
+        Assumes `frame_warp[f]` is the delta (f-1 -> f)."""
+        if to_frame <= from_frame:
+            return mean, cov
+        m, P = mean, cov
+        # hop f = from_frame+1 .. to_frame
+        for f in range(from_frame + 1, to_frame + 1):
+            m, P = self.predict(m, P, missed_frames=1)
+            m, P = self.apply_forward_gmc_state(m, P, transforms[f])
+        return m, P

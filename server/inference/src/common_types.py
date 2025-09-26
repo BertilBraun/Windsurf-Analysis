@@ -57,6 +57,10 @@ class BoundingBox:
     def area(self) -> int:
         return self.width * self.height
 
+    @property
+    def center_wh(self) -> np.ndarray:
+        return np.array([self.center.x, self.center.y, self.width, self.height], dtype=np.float64)
+
     def __iter__(self) -> Iterator[int]:
         return iter((self.x1, self.y1, self.x2, self.y2))
 
