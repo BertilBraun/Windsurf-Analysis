@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import cache
 import math
 import numpy as np
 
@@ -52,6 +53,10 @@ class BoundingBox:
     def diagonal_length(self) -> float:
         return math.sqrt(self.width**2 + self.height**2)
 
+    @property
+    def area(self) -> int:
+        return self.width * self.height
+
     def __iter__(self) -> Iterator[int]:
         return iter((self.x1, self.y1, self.x2, self.y2))
 
@@ -99,6 +104,17 @@ class BoundingBox:
             int(cy + self.height * scale_factor / 2),
         )
 
+    def clamp(self, min_x: int, min_y: int, max_x: int, max_y: int) -> BoundingBox:
+        return BoundingBox(
+            max(min_x, self.x1),
+            max(min_y, self.y1),
+            min(max_x, self.x2),
+            min(max_y, self.y2),
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.x1, self.y1, self.x2, self.y2))
+
 
 @dataclass
 class Detection:
@@ -106,6 +122,9 @@ class Detection:
     embedding: np.ndarray
     confidence: float
     frame_idx: FrameIndex
+
+    def __post_init__(self):
+        self.embedding /= np.maximum(1e-8, np.linalg.norm(self.embedding))
 
     def copy(self) -> Detection:
         return Detection(
@@ -126,6 +145,9 @@ class Detection:
             confidence=new_confidence,
             frame_idx=frame_idx,
         )
+
+    def __hash__(self) -> int:
+        return hash((self.bbox, self.confidence, self.frame_idx))
 
 
 FrameIndex = int
@@ -193,3 +215,13 @@ class Track:
             if i in self.detections_by_frame:
                 return self.detections_by_frame[i]
         assert False
+
+    @cache
+    def mean_embedding(self) -> np.ndarray:
+        assert self.sorted_detections, 'Track has no detections.'
+        from .util.similarity_helpers import l2_normalize
+
+        return l2_normalize(np.mean([l2_normalize(d.embedding) for d in self.sorted_detections], axis=0))
+
+    def __hash__(self) -> int:
+        return hash((self.track_id, tuple(self.sorted_detections)))
