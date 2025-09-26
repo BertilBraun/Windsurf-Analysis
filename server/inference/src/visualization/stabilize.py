@@ -10,7 +10,9 @@ from server.inference.bot_sort.gmc import GMC
 
 from ..util.video_io import get_video_properties
 
-Transform = NamedTuple('Transform', [('dx', float), ('dy', float), ('da', float), ('frame_idx', int)])
+Transform = NamedTuple(
+    'Transform', [('dx', float), ('dy', float), ('da', float), ('frame_idx', int)]
+)  # dx, dy, da for each frame relative to the previous frame
 
 
 @cache_to_file('vidstab_transforms')

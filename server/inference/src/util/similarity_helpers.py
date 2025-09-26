@@ -19,9 +19,13 @@ def _calc_pairwise(a: Track, b: Track, metric: Callable[[Detection, Detection], 
     return total / count if count > 0 else 0.0
 
 
+def l2_normalize(a: np.ndarray) -> np.ndarray:
+    return a / (np.maximum(1e-8, np.linalg.norm(a)))
+
+
 def mean_embedding(t: Track) -> np.ndarray:
     """Calculate the mean embedding of a track."""
-    return np.mean([d.embedding for d in t.sorted_detections], axis=0)
+    return l2_normalize(np.mean([l2_normalize(d.embedding) for d in t.sorted_detections], axis=0))
 
 
 def pairwise_cosine_similarity(a: Track, b: Track) -> float:
