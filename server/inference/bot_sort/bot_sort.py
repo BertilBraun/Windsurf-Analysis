@@ -29,9 +29,9 @@ class STrack(BaseTrack):
 
         self.smooth_feat = None
         self.curr_feat = None
+        self.features = deque([], maxlen=feat_history)
         if feat is not None:
             self.update_features(feat)
-        self.features = deque([], maxlen=feat_history)
         self.alpha = 0.9
 
     def update_features(self, feat):
@@ -61,15 +61,19 @@ class STrack(BaseTrack):
 
     @staticmethod
     def multi_gmc(stracks: list[STrack], H: np.ndarray = np.eye(2, 3)) -> None:
+        # rotates positions and velocities only; keep sizes as identity
         R = H[:2, :2]
-        R8x8 = np.kron(np.eye(4, dtype=float), R)
-        t = H[:2, 2]
+        T = H[:2, 2]
+        A = np.eye(8, dtype=float)
+        # blocks: [x,y] -> R ; [w,h] -> I ; [vx,vy] -> R ; [vw,vh] -> I
+        A[0:2, 0:2] = R
+        A[4:6, 4:6] = R
         for st in stracks:
             if st.mean is None or st.covariance is None:
                 continue
-            st.mean = R8x8.dot(st.mean)
-            st.mean[:2] += t
-            st.covariance = R8x8.dot(st.covariance).dot(R8x8.transpose())
+            st.mean = A @ st.mean
+            st.mean[0:2] += T
+            st.covariance = A @ st.covariance @ A.T
 
     def activate(self, kalman_filter, frame_id):
         """Start a new tracklet"""
@@ -143,10 +147,11 @@ class STrack(BaseTrack):
                 y2 = max(0.0, min(y2, float(fh)))
                 ret = np.array([x1, y1, max(x2 - x1, 1e-3), max(y2 - y1, 1e-3)], dtype=np.float32)
             return ret
-        # Number of consecutive frames since the last successful update of this track
-        missed_count = max(0, int(STrack.current_frame_id) - int(self.frame_id) - 1)
-
-        cx, cy, w, h = self.kalman_filter.display_bbox(self.mean, self.covariance, missed_count=missed_count)
+        cx, cy, w, h = self.kalman_filter.display_bbox(
+            self.mean,
+            self.covariance,
+            alpha=0.0 if self.state == TrackState.Tracked else 0.90,
+        )
 
         x1, y1, x2, y2 = cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2
         assert self.current_frame_width is not None and self.current_frame_height is not None
@@ -427,7 +432,15 @@ class BoTSORT(object):
                 )
 
             # Build distance heatmaps between tracks (rows) and detections (cols)
-            def build_heatmap(mat: np.ndarray, title: str, row_labels, col_labels) -> np.ndarray:
+            def build_heatmap(
+                mat: np.ndarray,
+                title: str,
+                row_labels,
+                col_labels,
+                vmin: float | None = None,
+                vmax: float | None = None,
+                label_high_values_as_text: bool = False,
+            ) -> np.ndarray:
                 if mat is None or mat.size == 0:
                     canvas = np.full((120, 240, 3), 30, dtype=np.uint8)
                     cv2.putText(
@@ -442,14 +455,19 @@ class BoTSORT(object):
                     )
                     return canvas
                 m = mat.astype(np.float32)
-                m_min, m_max = float(np.min(m)), float(np.max(m))
-                norm = (
-                    np.zeros_like(m, dtype=np.uint8)
-                    if (m_max - m_min) < 1e-6
-                    else ((m - m_min) / (m_max - m_min) * 255.0).astype(np.uint8)
-                )
+                # Determine display range
+                if vmin is None or vmax is None:
+                    m_min = float(np.nanmin(m))
+                    m_max = float(np.nanmax(m))
+                else:
+                    m_min = float(vmin)
+                    m_max = float(vmax)
+                # Normalize with optional clipping to [m_min, m_max]
+                m_clipped = np.clip(m, m_min, m_max)
+                denom = (m_max - m_min) if (m_max - m_min) >= 1e-6 else 1.0
+                norm = ((m_clipped - m_min) / denom * 255.0).astype(np.uint8)
                 heat = cv2.applyColorMap(norm, cv2.COLORMAP_AUTUMN)
-                cell_h, cell_w = 50, 50
+                cell_h, cell_w = 80, 80
                 hm = cv2.resize(heat, (heat.shape[1] * cell_w, heat.shape[0] * cell_h), interpolation=cv2.INTER_AREA)
                 top_margin, left_margin = 50, 36
                 colorbar_w, colorbar_gap = 16, 8
@@ -489,6 +507,7 @@ class BoTSORT(object):
                         1,
                         cv2.LINE_AA,
                     )
+                # Colorbar
                 bar_h = hm.shape[0]
                 grad = np.linspace(255, 0, bar_h, dtype=np.uint8).reshape(bar_h, 1)
                 grad_color = cv2.applyColorMap(grad, cv2.COLORMAP_AUTUMN)
@@ -536,28 +555,72 @@ class BoTSORT(object):
                     1,
                     cv2.LINE_AA,
                 )
+                # Annotate each cell with its value rounded to 2 decimals
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                for r in range(rows):
+                    for c in range(cols):
+                        val = float(m[r, c])
+                        label = f'{val:.2f}'
+                        (tw, th), _ = cv2.getTextSize(label, font, 0.35, 1)
+                        cx = left_margin + c * cell_w + cell_w // 2
+                        cy = top_margin + r * cell_h + cell_h // 2 + th // 2
+                        # Outline for readability
+                        cv2.putText(canvas, label, (cx - tw // 2, cy), font, 0.35, (0, 0, 0), 2, cv2.LINE_AA)
+                        cv2.putText(canvas, label, (cx - tw // 2, cy), font, 0.35, (255, 255, 255), 1, cv2.LINE_AA)
                 return canvas
 
             try:
-                ious_debug = matching.iou_distance(strack_pool, detections)
+                sorted_strack_pool = sorted(strack_pool, key=lambda x: x.track_id)
+
+                ious_debug = matching.iou_distance(sorted_strack_pool, detections)
                 ious_debug_fused = matching.fuse_score(ious_debug.copy(), detections)
-                emb_debug = matching.embedding_distance(strack_pool, detections) / 2.0
+                emb_debug = matching.embedding_distance(sorted_strack_pool, detections) / 2.0
                 ious_mask_debug = ious_debug > self.proximity_thresh
                 emb_debug_clipped = emb_debug.copy()
                 emb_debug_clipped[emb_debug_clipped > self.appearance_thresh] = 1.0
                 emb_debug_clipped[ious_mask_debug] = 1.0
                 final_debug = np.minimum(ious_debug_fused, emb_debug_clipped)
+                # KF gating distance (Mahalanobis g^2) per (track, detection)
+                if len(sorted_strack_pool) > 0 and len(detections) > 0:
+                    gate_debug = np.zeros((len(sorted_strack_pool), len(detections)), dtype=np.float32)
+                    for r, t in enumerate(sorted_strack_pool):
+                        for c, d in enumerate(detections):
+                            try:
+                                if t.mean is None or t.covariance is None:
+                                    gate_debug[r, c] = np.nan
+                                else:
+                                    z = STrack.tlwh_to_xywh(d.tlwh).astype(np.float64).reshape(1, 4)
+                                    g2 = float(
+                                        self.kalman_filter.gating_distance(
+                                            t.mean, t.covariance, z, only_position=True, metric='maha'
+                                        )[0]
+                                    )
+                                    gate_debug[r, c] = g2
+                            except Exception:
+                                gate_debug[r, c] = np.nan
+                else:
+                    gate_debug = None
 
-                row_labels = [t.track_id for t in strack_pool] if len(strack_pool) else []
+                row_labels = [t.track_id for t in sorted_strack_pool] if len(sorted_strack_pool) else []
                 col_labels = list(range(len(detections))) if len(detections) else []
 
                 hm_iou = build_heatmap(ious_debug, 'IoU distance', row_labels, col_labels)
                 hm_emb = build_heatmap(emb_debug, 'Embedding distance', row_labels, col_labels)
                 hm_final = build_heatmap(final_debug, 'Final distance', row_labels, col_labels)
+                # Gating heatmap with fixed 0-20 range; show 'high' for values > 20
+                hm_gate = build_heatmap(
+                    gate_debug if gate_debug is not None else np.zeros((0, 0), dtype=np.float32),
+                    'KF gating g^2 (0-20)',
+                    row_labels,
+                    col_labels,
+                    vmin=0.0,
+                    vmax=20.0,
+                    label_high_values_as_text=True,
+                )
 
-                heat_row = np.concatenate([hm_iou, hm_emb, hm_final], axis=1)
-                target_h = 140
-                heat_row = cv2.resize(heat_row, (img_w, target_h), interpolation=cv2.INTER_AREA)
+                heat_row = np.concatenate([hm_iou, hm_emb, hm_final, hm_gate], axis=1)
+                # target_h = 400
+                # heat_row = cv2.resize(heat_row, (img_w, target_h), interpolation=cv2.INTER_AREA)
                 cv2.imshow('dist_heatmaps (lower = better)', heat_row)
                 try:
                     x, y, w, h = cv2.getWindowImageRect('strack_pool')
@@ -567,10 +630,10 @@ class BoTSORT(object):
             except Exception:
                 pass
 
-            cv2.imshow('strack_pool', to_display)
-
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+            # Defer showing windows until after associations so we can overlay gating distances
+            debug_canvas = to_display
+        else:
+            debug_canvas = None
         # Associate with high score detection boxes
         ious_dists = matching.iou_distance(strack_pool, detections)
         ious_dists_mask = ious_dists > self.proximity_thresh
@@ -578,7 +641,6 @@ class BoTSORT(object):
         ious_dists = matching.fuse_score(ious_dists, detections)
 
         emb_dists = matching.embedding_distance(strack_pool, detections) / 2.0
-        raw_emb_dists = emb_dists.copy()
         emb_dists[emb_dists > self.appearance_thresh] = 1.0
         emb_dists[ious_dists_mask] = 1.0
         dists = np.minimum(ious_dists, emb_dists)
@@ -593,6 +655,53 @@ class BoTSORT(object):
         # dists[ious_dists_mask] = 1.0
 
         matches, u_track, u_detection = matching.linear_assignment(dists, thresh=self.args.match_thresh)
+
+        # If debugging, overlay gating distances between KF state and matched detections
+        try:
+            import cv2
+
+            if debug_canvas is not None and len(matches) > 0:
+                for itracked, idet in matches:
+                    track = strack_pool[itracked]
+                    det = detections[idet]
+                    # Compute Mahalanobis gating distance using current KF state (after GMC, before update)
+                    if track.mean is not None and track.covariance is not None:
+                        z = STrack.tlwh_to_xywh(det.tlwh).astype(np.float64)
+                        z = z.reshape(1, 4)
+                        g2 = float(
+                            self.kalman_filter.gating_distance(
+                                track.mean, track.covariance, z, only_position=False, metric='maha'
+                            )[0]
+                        )
+                    else:
+                        g2 = float('nan')
+
+                    # Draw a line between KF+GMC bbox center and detection center, label with gating distance
+                    tb = track.tlwh
+                    db = det.tlwh
+                    tcx = int(tb[0] + tb[2] / 2)
+                    tcy = int(tb[1] + tb[3] / 2)
+                    dcx = int(db[0] + db[2] / 2)
+                    dcy = int(db[1] + db[3] / 2)
+                    cv2.line(debug_canvas, (tcx, tcy), (dcx, dcy), (0, 200, 255), 1)
+                    mx = int((tcx + dcx) / 2)
+                    my = int((tcy + dcy) / 2)
+                    cv2.putText(
+                        debug_canvas,
+                        f'g^2={g2:.2f}',
+                        (mx + 4, my - 4),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.45,
+                        (0, 200, 255),
+                        1,
+                        cv2.LINE_AA,
+                    )
+            if debug_canvas is not None:
+                cv2.imshow('strack_pool', debug_canvas)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+        except Exception:
+            pass
 
         for itracked, idet in matches:
             track = strack_pool[itracked]
@@ -648,7 +757,6 @@ class BoTSORT(object):
         ious_dists = matching.fuse_score(ious_dists, detections)
 
         emb_dists = matching.embedding_distance(unconfirmed, detections) / 2.0
-        raw_emb_dists = emb_dists.copy()
         emb_dists[emb_dists > self.appearance_thresh] = 1.0
         emb_dists[ious_dists_mask] = 1.0
         dists = np.minimum(ious_dists, emb_dists)
@@ -736,6 +844,6 @@ def remove_duplicate_stracks(stracksa, stracksb):
             dupb.append(q)
         else:
             dupa.append(p)
-    resa = [t for i, t in enumerate(stracksa) if not i in dupa]
-    resb = [t for i, t in enumerate(stracksb) if not i in dupb]
+    resa = [t for i, t in enumerate(stracksa) if i not in dupa]
+    resb = [t for i, t in enumerate(stracksb) if i not in dupb]
     return resa, resb
