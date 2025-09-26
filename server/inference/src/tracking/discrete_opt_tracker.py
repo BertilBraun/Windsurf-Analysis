@@ -35,13 +35,13 @@ IMPORTANT ASSUMPTIONS
 from __future__ import annotations
 from dataclasses import dataclass
 
-import pulp
-import logging
-from typing import Dict, List, Tuple, Optional
+from typing import List, Optional
+
+from server.inference.src.visualization.stabilize import Transform
 
 from ..util.similarity_helpers import cosine_similarity, mean_embedding_cosine_similarity
 from ..util.video_io import VideoInfo
-from ..common_types import Detection, Track
+from ..common_types import Track
 
 from ..settings import (
     MAX_OVERLAP_LENGTH_SECONDS,
@@ -57,47 +57,12 @@ from ..settings import (
     OPTIMIZER_LONG_W_LINK_IOU,
     OPTIMIZER_LONG_W_LINK_APP,
     OPTIMIZER_LONG_W_LINK_GAP,
-    OPTIMIZER_TIMEOUT_SECONDS,
 )
 
-
-class TimeoutException(Exception):
-    """Raised when the ILP solver times out."""
+from .ILP_graph_solver import FragmentGraph, ILPGraphSolver
 
 
-class UnsatisfiableException(Exception):
-    """Raised when the ILP solver finds the problem unsatisfiable."""
-
-
-class FragmentGraph:
-    """Represents the graph structure of fragment connections and their costs."""
-
-    def __init__(self, fragments: List[Track]):
-        self.fragments = fragments
-        self.successors: List[List[int]] = [[] for _ in range(len(fragments))]
-        self.pair_costs: Dict[Tuple[int, int], float] = {}
-
-    def add_connection(self, from_idx: int, to_idx: int, cost: float) -> None:
-        """Add a connection between two fragments with the given cost."""
-        self.successors[from_idx].append(to_idx)
-        self.pair_costs[(from_idx, to_idx)] = cost
-
-    def get_outgoing_connections(self, fragment_idx: int) -> List[int]:
-        """Get all outgoing connections for a fragment."""
-        return self.successors[fragment_idx]
-
-    def get_connection_cost(self, from_idx: int, to_idx: int) -> float:
-        """Get the cost of a connection between two fragments."""
-        return self.pair_costs[(from_idx, to_idx)]
-
-    def get_all_connections(self) -> Dict[Tuple[int, int], float]:
-        """Get all connections and their costs."""
-        return self.pair_costs
-
-
-class DiscreteILPTracker:
-    """Track objects by solving an assignment problem with ILP."""
-
+class DiscreteOptTracker:
     def __init__(
         self,
         # Track length thresholds
@@ -120,8 +85,6 @@ class DiscreteILPTracker:
         # Shared parameters
         w_start: float = OPTIMIZER_W_START,
     ):
-        self.video_fps = -1  # set in track()
-
         # Short track parameters
         self.short_min_link_iou = short_min_link_iou
         self.short_min_link_cos = short_min_link_cos
@@ -145,34 +108,15 @@ class DiscreteILPTracker:
         self.short_track_threshold_seconds = short_track_threshold_seconds
         self.long_track_threshold_seconds = long_track_threshold_seconds
 
-    def track(self, tracks: List[Track], video_properties: VideoInfo) -> List[Track]:
-        """Main entry point for tracking detections."""
-        logging.info(f'{"=" * 30} Running ILP discrete optimization tracker with {len(tracks)} tracks {"=" * 30}')
+    def track(self, tracks: List[Track], video_properties: VideoInfo, transforms: List[Transform]) -> List[Track]:
+        """Track objects using discrete optimization."""
+        graph = self._build_fragment_graph(tracks, video_properties.fps)
+        return ILPGraphSolver(self.w_start).optimize_graph(graph)
 
-        if not tracks:
-            logging.warning('No tracks available for processing')
-            return []
-
-        self.video_fps = video_properties.fps
-
-        return self._optimize_fragments(tracks)
-
-    def _optimize_fragments(self, fragments: List[Track]) -> List[Track]:
-        """Optimize fragment connections using ILP solver."""
-        # Sort fragments by start frame
-        fragments = sorted(fragments, key=lambda t: t.start_frame)
-
-        # Build fragment connection graph
-        graph = self._build_fragment_graph(fragments)
-
-        # Solve optimization problem
-        solution = self._solve_optimization_problem(graph)
-
-        # Reconstruct tracks from solution
-        return self._reconstruct_tracks_from_solution(fragments, solution)
-
-    def _build_fragment_graph(self, fragments: List[Track]) -> FragmentGraph:
+    def _build_fragment_graph(self, fragments: List[Track], video_fps: int) -> FragmentGraph:
         """Build a graph of possible fragment connections with their costs."""
+        fragments.sort(key=lambda x: x.start_frame)
+
         graph = FragmentGraph(fragments)
         N = len(fragments)
 
@@ -182,11 +126,11 @@ class DiscreteILPTracker:
 
                 # Skip if fragments have overlapping frames
                 gap = end_fragment.start_frame - start_fragment.end_frame
-                if gap <= 0 or gap > self.video_fps * MAX_OVERLAP_LENGTH_SECONDS:
+                if gap <= 0 or gap > video_fps * MAX_OVERLAP_LENGTH_SECONDS:
                     continue
 
                 # Calculate connection cost
-                cost = self._calculate_link_cost(start_fragment, end_fragment)
+                cost = self._calculate_link_cost(start_fragment, end_fragment, video_fps)
                 if cost is not None:
                     graph.add_connection(i, j, cost)
 
@@ -201,10 +145,10 @@ class DiscreteILPTracker:
         w_link_gap: float
         window_radius: int
 
-    def _get_adaptive_parameters(self, track_length_frames: int) -> AdaptiveParameters:
+    def _get_adaptive_parameters(self, track_length_frames: int, video_fps: int) -> AdaptiveParameters:
         """Get adaptive parameters based on track length with linear interpolation."""
-        short_track_threshold_frames = self.short_track_threshold_seconds * self.video_fps
-        long_track_threshold_frames = self.long_track_threshold_seconds * self.video_fps
+        short_track_threshold_frames = self.short_track_threshold_seconds * video_fps
+        long_track_threshold_frames = self.long_track_threshold_seconds * video_fps
 
         # Determine interpolation factor
         if track_length_frames <= short_track_threshold_frames:
@@ -232,194 +176,14 @@ class DiscreteILPTracker:
         )
         window_radius = int(window_radius_float)
 
-        return DiscreteILPTracker.AdaptiveParameters(
-            min_link_iou, min_link_cos, w_link_iou, w_link_app, w_link_gap, window_radius
-        )
+        return self.AdaptiveParameters(min_link_iou, min_link_cos, w_link_iou, w_link_app, w_link_gap, window_radius)
 
-    def _solve_optimization_problem(self, graph: FragmentGraph) -> Dict[int, Optional[int]]:
-        """Solve the fragment linking optimization problem using ILP."""
-        # Create the ILP problem
-        prob = pulp.LpProblem('Fragment_Linking', pulp.LpMinimize)
-
-        # Create decision variables
-        link_vars = self._create_link_variables(graph)
-        start_vars = self._create_start_variables(len(graph.fragments))
-
-        # Add constraints
-        self._add_outgoing_constraints(prob, graph, link_vars)
-        self._add_incoming_constraints(prob, graph, link_vars)
-        self._add_start_constraints(prob, graph, link_vars, start_vars)
-
-        # Set objective function
-        self._set_objective_function(prob, graph, link_vars, start_vars)
-
-        # Solve and return solution
-        return self._solve_and_extract_solution(prob, graph, link_vars)
-
-    def _create_link_variables(self, graph: FragmentGraph) -> Dict[Tuple[int, int], pulp.LpVariable]:
-        """Create binary variables for fragment links."""
-        link_vars = {}
-        for i, j in graph.get_all_connections():
-            var_name = f'link_{i}_{j}'
-            link_vars[(i, j)] = pulp.LpVariable(var_name, cat='Binary')
-        return link_vars
-
-    def _create_start_variables(self, num_fragments: int) -> List[pulp.LpVariable]:
-        """Create binary variables for fragment starts."""
-        start_vars = []
-        for i in range(num_fragments):
-            var_name = f'start_{i}'
-            start_vars.append(pulp.LpVariable(var_name, cat='Binary'))
-        return start_vars
-
-    def _add_outgoing_constraints(
-        self, prob: pulp.LpProblem, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], pulp.LpVariable]
-    ) -> None:
-        """Add constraints ensuring each fragment has at most one outgoing link."""
-        for i in range(len(graph.fragments)):
-            outgoing_connections = graph.get_outgoing_connections(i)
-            if outgoing_connections:
-                # Sum of outgoing links <= 1
-                outgoing_vars = [link_vars[(i, j)] for j in outgoing_connections]
-                constraint_name = f'outgoing_{i}'
-                prob += pulp.lpSum(outgoing_vars) <= 1, constraint_name
-
-    def _add_incoming_constraints(
-        self, prob: pulp.LpProblem, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], pulp.LpVariable]
-    ) -> None:
-        """Add constraints ensuring each fragment has at most one incoming link."""
-        # Build incoming connections mapping
-        incoming: List[List[pulp.LpVariable]] = [[] for _ in range(len(graph.fragments))]
-        for (i, j), var in link_vars.items():
-            incoming[j].append(var)
-
-        # Add constraints
-        for j in range(len(graph.fragments)):
-            if incoming[j]:
-                constraint_name = f'incoming_{j}'
-                prob += pulp.lpSum(incoming[j]) <= 1, constraint_name
-
-    def _add_start_constraints(
-        self,
-        prob: pulp.LpProblem,
-        graph: FragmentGraph,
-        link_vars: Dict[Tuple[int, int], pulp.LpVariable],
-        start_vars: List[pulp.LpVariable],
-    ) -> None:
-        """Add constraints defining when a fragment is a start of a track."""
-        # Build incoming connections mapping
-        incoming: List[List[pulp.LpVariable]] = [[] for _ in range(len(graph.fragments))]
-        for (i, j), var in link_vars.items():
-            incoming[j].append(var)
-
-        # Add start constraints
-        for i in range(len(graph.fragments)):
-            if incoming[i]:
-                # start_i = 1 - sum(incoming_links_to_i)
-                # This means: start_i + sum(incoming_links_to_i) = 1
-                constraint_name = f'start_{i}'
-                prob += start_vars[i] + pulp.lpSum(incoming[i]) == 1, constraint_name
-            else:
-                # No incoming links, so must be a start
-                constraint_name = f'start_forced_{i}'
-                prob += start_vars[i] == 1, constraint_name
-
-    def _set_objective_function(
-        self,
-        prob: pulp.LpProblem,
-        graph: FragmentGraph,
-        link_vars: Dict[Tuple[int, int], pulp.LpVariable],
-        start_vars: List[pulp.LpVariable],
-    ) -> None:
-        """Set the objective function to minimize total cost."""
-        objective_terms = []
-
-        # Link costs
-        for (i, j), var in link_vars.items():
-            cost = graph.get_connection_cost(i, j)
-            objective_terms.append(cost * var)
-
-        # Start costs
-        for var in start_vars:
-            objective_terms.append(self.w_start * var)
-
-        # Set objective
-        if objective_terms:
-            prob += pulp.lpSum(objective_terms)
-        else:
-            # Empty objective if no terms
-            prob += 0
-
-    def _solve_and_extract_solution(
-        self, prob: pulp.LpProblem, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], pulp.LpVariable]
-    ) -> Dict[int, Optional[int]]:
-        """Solve the optimization problem and extract the solution."""
-        # Get solver
-        solver = pulp.PULP_CBC_CMD(timeLimit=OPTIMIZER_TIMEOUT_SECONDS, msg=False)  # don't print solver output
-
-        # Solve the problem
-        prob.solve(solver)
-
-        # Check solution status
-        status = pulp.LpStatus[prob.status]
-
-        if status == 'Optimal':
-            logging.info(f'ILP solver found optimal solution with cost: {pulp.value(prob.objective)}')
-        elif status == 'Feasible':
-            logging.warning(f'ILP solver found feasible solution with cost: {pulp.value(prob.objective)}')
-        elif status == 'Infeasible':
-            raise UnsatisfiableException('Fragment linking problem is infeasible')
-        elif status == 'Unbounded':
-            raise RuntimeError('Fragment linking problem is unbounded')
-        elif status == 'Undefined':
-            raise TimeoutException('Fragment linking solver timeout or undefined status')
-        else:
-            raise RuntimeError(f'Unexpected solver status: {status}')
-
-        # Extract solution
-        successor_of: Dict[int, Optional[int]] = {i: None for i in range(len(graph.fragments))}
-
-        for (i, j), var in link_vars.items():
-            if var.varValue is not None and var.varValue > 0.5:  # Binary variable is 1
-                successor_of[i] = j
-
-        return successor_of
-
-    def _reconstruct_tracks_from_solution(
-        self, fragments: List[Track], successor_of: Dict[int, Optional[int]]
-    ) -> List[Track]:
-        """Reconstruct final tracks from the optimization solution."""
-        # Find track starts (fragments with no predecessors)
-        has_predecessor = {i: False for i in range(len(fragments))}
-        for successor in successor_of.values():
-            if successor is not None:
-                has_predecessor[successor] = True
-
-        starts = [i for i in range(len(fragments)) if not has_predecessor[i]]
-
-        # Build final tracks
-        final_tracks: List[Track] = []
-        for track_id, start_idx in enumerate(starts, start=1):
-            detections: List[Detection] = []
-
-            # Follow the chain of fragments
-            current_idx = start_idx
-            while current_idx is not None:
-                detections.extend(fragments[current_idx].sorted_detections)
-                current_idx = successor_of[current_idx]
-
-            # Create final track
-            sorted_detections = sorted(detections, key=lambda d: d.frame_idx)
-            final_tracks.append(Track(track_id=track_id, sorted_detections=sorted_detections))
-
-        return final_tracks
-
-    def _calculate_link_cost(self, start: Track, end: Track) -> Optional[float]:
+    def _calculate_link_cost(self, start: Track, end: Track, video_fps: int) -> Optional[float]:
         """Calculate the cost of linking two tracks. Returns None if they can't be linked."""
         gap = end.start_frame - start.end_frame
 
         assert gap >= 0, 'Gap must be non-negative'
-        assert gap <= self.video_fps * MAX_OVERLAP_LENGTH_SECONDS, 'Gap must be less than max overlap length'
+        assert gap <= video_fps * MAX_OVERLAP_LENGTH_SECONDS, 'Gap must be less than max overlap length'
 
         # Get adaptive parameters based on both tracks
         # Use the shorter DURATION (in frames) of both tracks for parameter selection,
@@ -428,7 +192,7 @@ class DiscreteILPTracker:
         end_duration_frames = end.end_frame - end.start_frame + 1
         min_duration_frames = min(start_duration_frames, end_duration_frames)
 
-        adaptive_params = self._get_adaptive_parameters(min_duration_frames)
+        adaptive_params = self._get_adaptive_parameters(min_duration_frames, video_fps)
 
         # Geometric similarity (IoU)
         iou = end.start.bbox.iou(start.end.bbox)
@@ -445,7 +209,7 @@ class DiscreteILPTracker:
         if cos < adaptive_params.min_link_cos:
             return None
 
-        gap_percentage = gap / (self.video_fps * MAX_OVERLAP_LENGTH_SECONDS)
+        gap_percentage = gap / (video_fps * MAX_OVERLAP_LENGTH_SECONDS)
 
         # cost for similarity should be relative to the adaptive_params.min_link_cos i.e. if min_link_cos is 0.5, then cos_cost should be extremly high for cos close to 0.5 and only for cos close to 1.0 it should be 0
         cos_cost = 1.0 - (cos - adaptive_params.min_link_cos) / (1.0 - adaptive_params.min_link_cos)
