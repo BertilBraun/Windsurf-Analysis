@@ -40,6 +40,18 @@
             "problemMatcher": []
         },
         {
+            "label": "optimize_tracklet_matching",
+            "type": "shell",
+            "command": "python server/inference/optimization/evaluate_tracklet_matcher.py --golden-dir ${input:golden-dir}",
+            "problemMatcher": []
+        },
+        {
+            "label": "compare_trackers",
+            "type": "shell",
+            "command": "python server/inference/optimization/compare_trackers.py --golden-dir ${input:golden-dir}",
+            "problemMatcher": []
+        },
+        {
             "label": "run_local_inference",
             "type": "shell",
             "command": "python -m server.inference.src.local_inference_main ${input:video-dir}",
