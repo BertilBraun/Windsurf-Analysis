@@ -261,7 +261,7 @@ def main() -> None:
         tracker_by_name: Dict[str, Tracker] = {
             'botsort': BotSortTracker(vid_file_path=video_path.as_posix()),
             'discrete_opt': DiscreteOptTracker(),
-            'iter_ilp': IterativeILPTracker(),
+            'iter_ilp': IterativeILPTracker(video_path.as_posix()),
             'oc_sort': OCSortEmbedTracker(),
         }
 

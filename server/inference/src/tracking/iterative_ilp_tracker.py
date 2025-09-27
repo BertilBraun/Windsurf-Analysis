@@ -7,7 +7,7 @@ import math
 import numpy as np
 
 from server.inference.src.visualization.stabilize import Transform
-from ..util.video_io import VideoInfo
+from ..util.video_io import VideoInfo, VideoReader
 from ..common_types import Detection, Track
 from ..settings import MAX_OVERLAP_LENGTH_SECONDS, OPTIMIZER_W_START
 from .ILP_graph_solver import FragmentGraph, ILPGraphSolver
@@ -74,6 +74,7 @@ class IterativeILPTracker:
 
     def __init__(
         self,
+        video_path: str,
         w_start: float = OPTIMIZER_W_START,
         # costs
         p_miss: float = 0.98,  # for gap NLL
@@ -89,6 +90,7 @@ class IterativeILPTracker:
         internal_split_gap_frames: int = 5,  # 0 disables; >0 splits tracks on internal gaps > this
         enable_edge_logging: bool = True,
     ) -> None:
+        self.video_path = video_path
         self.w_start = float(w_start)
         self.p_miss = float(p_miss)
         self.appearance_a = float(appearance_a)
@@ -104,11 +106,29 @@ class IterativeILPTracker:
 
     def track(self, tracks: List[Track], video_properties: VideoInfo, transforms: List[Transform]) -> List[Track]:
         """Run iterative graph building and ILP solve. Stops when cost does not improve."""
+        # print tracks before tracking
+        print('Tracks before tracking:')
+        for track in tracks:
+            print(
+                f'Track {track.track_id}: {len(track.sorted_detections)} detections from {track.start_frame} to {track.end_frame}'
+            )
+
         tracks = self._maybe_split_on_internal_gaps(tracks)
         best_cost = float('inf')
 
+        print('Tracks after splitting on internal gaps:')
+        for track in tracks:
+            print(
+                f'Track {track.track_id}: {len(track.sorted_detections)} detections from {track.start_frame} to {track.end_frame}'
+            )
+
+        frame_dict = {}
+        with VideoReader(self.video_path) as reader:
+            for frame_idx, frame in reader.read_frames():
+                frame_dict[frame_idx] = frame
+
         for it in range(self.max_iters):
-            graph = self._build_fragment_graph(tracks, video_properties.fps, transforms)
+            graph = self._build_fragment_graph(tracks, video_properties.fps, transforms, frame_dict)
             # TODO increase start cost iteratively
             new_tracks, new_cost = ILPGraphSolver(self.w_start * (it + 1)).optimize_graph(graph)
             if new_cost >= best_cost:  # TODO smarter stopping condition (no assignment changes?)
@@ -124,9 +144,12 @@ class IterativeILPTracker:
     # ─────────────────────────────── graph building ────────────────────────────── #
 
     def _build_fragment_graph(
-        self, fragments: List[Track], video_fps: int, transforms: List[Transform]
+        self, fragments: List[Track], video_fps: int, transforms: List[Transform], frame_dict: Dict[int, np.ndarray]
     ) -> FragmentGraph:
-        """Build forward edges with costs. Logs one line per edge if enabled."""
+        """Build forward edges with costs. Logs one line per edge if enabled.
+        If `enable_edge_logging` is True, also displays a debug visualization for each edge candidate
+        right before adding the connection to the graph.
+        """
         fragments = sorted(fragments, key=lambda t: t.start_frame)
         graph = FragmentGraph(fragments)
 
@@ -166,6 +189,27 @@ class IterativeILPTracker:
                 gap_nll = self._gap_nll(gap_frames)
 
                 total = motion_nll + appearance_nll + gap_nll
+
+                # Debug visualization: show A.end frame and B.start frame with bboxes and cost terms
+                if self.enable_edge_logging:
+                    try:
+                        cache_A = kf_cache[i]
+                        self._show_edge_debug(
+                            A,
+                            B,
+                            motion_nll,
+                            appearance_nll,
+                            gap_nll,
+                            total,
+                            frame_dict,
+                            cache_A.mean_end,
+                            cache_A.cov_end,
+                            cache_A.end_frame,
+                            transforms_dict,
+                        )
+                    except Exception:
+                        pass
+
                 graph.add_connection(i, j, float(total))
 
                 if self.enable_edge_logging:
@@ -182,6 +226,167 @@ class IterativeILPTracker:
             print('\n'.join(logs))
 
         return graph
+
+    # ─────────────────────────────── debug visualization ─────────────────────────── #
+
+    def _show_edge_debug(
+        self,
+        A: Track,
+        B: Track,
+        motion_nll: float,
+        appearance_nll: float,
+        gap_nll: float,
+        total_cost: float,
+        frame_dict: Dict[int, np.ndarray],
+        kf_mean_end: np.ndarray,
+        kf_cov_end: np.ndarray,
+        kf_end_frame: int,
+        transforms: Dict[int, Transform],
+    ) -> None:
+        try:
+            import cv2  # type: ignore
+        except Exception:
+            return
+
+        try:
+            frame_a = frame_dict.get(A.end_frame)
+            frame_b = frame_dict.get(B.start_frame)
+            if frame_a is None or frame_b is None:
+                return
+
+            vis_a = frame_a.copy()
+            vis_b = frame_b.copy()
+
+            # Draw detection bounding boxes
+            bb_a = A.end.bbox
+            bb_b = B.start.bbox
+            cv2.rectangle(vis_a, (int(bb_a.x1), int(bb_a.y1)), (int(bb_a.x2), int(bb_a.y2)), (0, 255, 0), 2)
+            cv2.rectangle(vis_b, (int(bb_b.x1), int(bb_b.y1)), (int(bb_b.x2), int(bb_b.y2)), (0, 255, 255), 2)
+
+            # Labels near boxes
+            cv2.putText(
+                vis_a,
+                f'A id={A.track_id} end f={A.end_frame}',
+                (max(0, int(bb_a.x1)), max(0, int(bb_a.y1) - 4)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 255, 0),
+                1,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                vis_b,
+                f'B id={B.track_id} start f={B.start_frame}',
+                (max(0, int(bb_b.x1)), max(0, int(bb_b.y1) - 4)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
+
+            # Prepare KF instance once for overlays
+            kf = KalmanFilter()
+
+            # Overlay KF current on A.end frame (mean_end, cov_end)
+            try:
+                cx_a, cy_a, w_a, h_a = kf.display_bbox(kf_mean_end, kf_cov_end, alpha=0.0)
+                x1a = int(cx_a - w_a / 2.0)
+                y1a = int(cy_a - h_a / 2.0)
+                x2a = int(cx_a + w_a / 2.0)
+                y2a = int(cy_a + h_a / 2.0)
+                cv2.rectangle(vis_a, (x1a, y1a), (x2a, y2a), (255, 0, 0), 2)
+                # Draw velocity arrow from KF state if available
+                if kf_mean_end.shape[0] >= 6:
+                    vx = float(kf_mean_end[4])
+                    vy = float(kf_mean_end[5])
+                    start_pt = (int(cx_a), int(cy_a))
+                    end_pt = (int(round(cx_a + vx)), int(round(cy_a + vy)))
+                    cv2.arrowedLine(vis_a, start_pt, end_pt, (255, 0, 0), 2, tipLength=0.3)
+                cv2.putText(
+                    vis_a,
+                    'KF A end',
+                    (x1a, max(0, y1a - 6)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (255, 0, 0),
+                    1,
+                    cv2.LINE_AA,
+                )
+            except Exception:
+                pass
+
+            # Predict KF state from A.end to B.start and overlay on B.start frame
+            try:
+                m_b, P_b = kf.advance_state_to_frame(kf_mean_end, kf_cov_end, transforms, kf_end_frame, B.start_frame)
+                cx_b, cy_b, w_b, h_b = kf.display_bbox(m_b, P_b, alpha=0.9)
+                x1b = int(cx_b - w_b / 2.0)
+                y1b = int(cy_b - h_b / 2.0)
+                x2b = int(cx_b + w_b / 2.0)
+                y2b = int(cy_b + h_b / 2.0)
+                cv2.rectangle(vis_b, (x1b, y1b), (x2b, y2b), (255, 0, 255), 2)
+                # Gating distance between predicted KF and B.start detection
+                z = B.start.bbox.center_wh.reshape(1, 4).astype(np.float64)
+                g2 = float(kf.gating_distance(m_b, P_b, z, only_position=self.use_position_only, metric='maha')[0])
+                # Draw connection and label
+                cv2.putText(
+                    vis_b,
+                    f'KF→B pred g^2={g2:.2f}',
+                    (x1b, max(0, y1b - 6)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (255, 0, 255),
+                    1,
+                    cv2.LINE_AA,
+                )
+                # Line between predicted KF center and detection center on B frame
+                dcx = int((bb_b.x1 + bb_b.x2) / 2)
+                dcy = int((bb_b.y1 + bb_b.y2) / 2)
+                cv2.line(vis_b, (int(cx_b), int(cy_b)), (dcx, dcy), (0, 200, 255), 1)
+                midx = int((cx_b + dcx) / 2)
+                midy = int((cy_b + dcy) / 2)
+                cv2.putText(
+                    vis_b,
+                    f'g^2={g2:.2f}',
+                    (midx + 4, midy - 4),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.45,
+                    (0, 200, 255),
+                    1,
+                    cv2.LINE_AA,
+                )
+            except Exception:
+                pass
+
+            # Normalize heights for side-by-side display
+            ha, wa = vis_a.shape[:2]
+            hb, wb = vis_b.shape[:2]
+            target_h = max(ha, hb)
+            scale_a = target_h / float(ha) if ha > 0 else 1.0
+            scale_b = target_h / float(hb) if hb > 0 else 1.0
+            vis_a_resized = cv2.resize(vis_a, (int(round(wa * scale_a)), target_h), interpolation=cv2.INTER_AREA)
+            vis_b_resized = cv2.resize(vis_b, (int(round(wb * scale_b)), target_h), interpolation=cv2.INTER_AREA)
+            combined = np.concatenate([vis_a_resized, vis_b_resized], axis=1)
+
+            # Add a top banner with cost terms and gap frames
+            banner_h = 36
+            banner = np.full((banner_h, combined.shape[1], 3), 15, dtype=np.uint8)
+            gap_frames = max(0, int(B.start_frame - A.end_frame - 1))
+            text = (
+                f'Δf={gap_frames}  '
+                f'C_mot={motion_nll:.4f}  C_app={appearance_nll:.4f}  C_gap={gap_nll:.4f}  C_tot={total_cost:.4f}'
+            )
+            cv2.putText(banner, text, (8, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (230, 230, 230), 1, cv2.LINE_AA)
+            canvas = np.concatenate([banner, combined], axis=0)
+            canvas = cv2.resize(canvas, (canvas.shape[1] // 2, canvas.shape[0] // 2))
+
+            window_name = 'ILP edge debug (A end | B start)'
+            cv2.imshow(window_name, canvas)
+            # Short wait to refresh window without blocking the entire optimization
+            cv2.waitKey(0)
+        except Exception:
+            # Fail silently in debug drawing
+            return
 
     # ──────────────────────────────── cost helpers ─────────────────────────────── #
 
