@@ -4,6 +4,8 @@ from typing import Literal
 
 USE_GPU = torch.cuda.is_available()
 
+EPS = 1e-9
+
 STANDARD_OUTPUT_DIR = 'tmp/standard'
 NUM_PARALLEL_VIDEO_WORKERS = 4
 

@@ -8,43 +8,10 @@ import numpy as np
 
 from server.inference.src.visualization.stabilize import Transform
 from ..util.video_io import VideoInfo, VideoReader
-from ..common_types import Detection, Track
-from ..settings import MAX_OVERLAP_LENGTH_SECONDS, OPTIMIZER_W_START
+from ..common_types import Detection, FrameIndex, Track, TrackId
+from ..settings import MAX_OVERLAP_LENGTH_SECONDS, OPTIMIZER_W_START, EPS
 from .ILP_graph_solver import FragmentGraph, ILPGraphSolver
 from server.inference.bot_sort.kalman_filter import KalmanFilter
-
-EPS = 1e-9
-
-
-# ───────────────────────── helpers: probabilities/metrics ───────────────────────── #
-
-
-def chi2_dist(p: np.ndarray, q: np.ndarray, eps: float = EPS) -> float:
-    num = (p - q) ** 2
-    den = p + q + eps
-    return 0.5 * float((num / den).sum())
-
-
-def sigmoid(z: float) -> float:
-    return 1.0 / (1.0 + np.exp(-z))
-
-
-def platt_prob_from_dist(d: float, a: float, b: float) -> float:
-    # smaller distance → larger probability
-    return sigmoid(a * (-d) + b)
-
-
-def clamp_prob(p: float) -> float:
-    return max(EPS, min(1.0 - EPS, float(p)))
-
-
-def NLL_from_prob(p: float) -> float:
-    """Negative log-likelihood ratio cost: -logit(p)."""
-    p = clamp_prob(p)
-    return float(-math.log(p / (1.0 - p)))
-
-
-# ───────────────────────────── tracker implementation ───────────────────────────── #
 
 
 class IterativeILPTracker:
@@ -162,7 +129,7 @@ class IterativeILPTracker:
             # optional: after each solve, split again on internal gaps if enabled
             tracks = _maybe_split_on_internal_gaps(tracks, self.internal_split_gap_frames)
 
-        # Remerge tracks with same track id
+        # Remerge tracks with same track id in case of internal splits
         return _remerge_tracks(tracks)
 
     # ─────────────────────────────── graph building ────────────────────────────── #
@@ -172,7 +139,7 @@ class IterativeILPTracker:
         fragments: List[Track],
         max_frame_gap: int,
         transforms: List[Transform],
-        frame_dict: Dict[int, np.ndarray],
+        frame_dict: Dict[FrameIndex, np.ndarray],  # TODO remove
     ) -> FragmentGraph:
         """Build forward edges with costs. Logs one line per edge if enabled.
         If `enable_edge_logging` is True, also displays a debug visualization for each edge candidate
@@ -182,10 +149,12 @@ class IterativeILPTracker:
         graph = FragmentGraph(fragments)
 
         # per-frame GMC mapping f → f+1: Transform
-        transforms_dict: Dict[int, Transform] = {t.frame_idx: t for t in transforms}
+        transforms_dict: Dict[FrameIndex, Transform] = {t.frame_idx: t for t in transforms}
 
         # KF cache: fit once per fragment (end state after all its detections)
-        kf_cache = {i: _fit_kf_end_state(frag, transforms_dict) for i, frag in enumerate(fragments)}
+        kf_cache: Dict[TrackId, _KFCacheEntry] = {
+            i: _fit_kf_end_state(frag, transforms_dict) for i, frag in enumerate(fragments)
+        }
 
         logs: List[str] = []
 
@@ -193,7 +162,7 @@ class IterativeILPTracker:
             A = fragments[i]
             B = fragments[j]
             # compute costs
-            motion_nll, avg_d2, used_k = _motion_nll_cached(
+            motion_nll, avg_d2, used_k = _motion_nll(
                 i, j, fragments, kf_cache, transforms_dict, self.motion_k_eval, self.use_position_only
             )
             if math.isinf(motion_nll) or math.isnan(motion_nll):
@@ -409,7 +378,33 @@ class IterativeILPTracker:
             # Fail silently in debug drawing
             return
 
-    # ──────────────────────────────── cost helpers ─────────────────────────────── #
+
+# ──────────────────────────────── cost helpers ─────────────────────────────── #
+
+
+def chi2_dist(p: np.ndarray, q: np.ndarray, eps: float = EPS) -> float:
+    num = (p - q) ** 2
+    den = p + q + eps
+    return 0.5 * float((num / den).sum())
+
+
+def sigmoid(z: float) -> float:
+    return 1.0 / (1.0 + np.exp(-z))
+
+
+def platt_prob_from_dist(d: float, a: float, b: float) -> float:
+    # smaller distance → larger probability
+    return sigmoid(a * (-d) + b)
+
+
+def clamp_prob(p: float) -> float:
+    return max(EPS, min(1.0 - EPS, float(p)))
+
+
+def NLL_from_prob(p: float) -> float:
+    """Negative log-likelihood ratio cost: -logit(p)."""
+    p = clamp_prob(p)
+    return float(-math.log(p / (1.0 - p)))
 
 
 def _appearance_nll(a: Track, b: Track, appearance_a: float, appearance_b: float) -> float:
@@ -419,12 +414,12 @@ def _appearance_nll(a: Track, b: Track, appearance_a: float, appearance_b: float
     return NLL_from_prob(p)
 
 
-def _motion_nll_cached(
-    idx_a: int,
-    idx_b: int,
+def _motion_nll(
+    idx_a: TrackId,
+    idx_b: TrackId,
     frags: List[Track],
-    kf_cache: Dict[int, _KFCacheEntry],
-    transforms: Dict[int, Transform],
+    kf_cache: Dict[TrackId, _KFCacheEntry],
+    transforms: Dict[FrameIndex, Transform],
     motion_k_eval: int,
     use_position_only: bool,
 ) -> Tuple[float, Optional[float], int]:
@@ -526,9 +521,9 @@ def _maybe_split_on_internal_gaps(tracks: List[Track], internal_split_gap_frames
     return out
 
 
-def _possible_mergeable_candidates(fragments: List[Track], max_frame_gap: int) -> List[Tuple[int, int]]:
+def _possible_mergeable_candidates(fragments: List[Track], max_frame_gap: int) -> List[Tuple[TrackId, TrackId]]:
     """Return possible mergeable candidates for a list of fragments."""
-    candidates: List[Tuple[int, int]] = []
+    candidates: List[Tuple[TrackId, TrackId]] = []
     for i in range(len(fragments)):
         for j in range(i + 1, len(fragments)):
             gap = fragments[j].start_frame - fragments[i].end_frame - 1
@@ -541,10 +536,10 @@ def _possible_mergeable_candidates(fragments: List[Track], max_frame_gap: int) -
 class _KFCacheEntry:
     mean_end: np.ndarray  # (8,)
     cov_end: np.ndarray  # (8,8)
-    end_frame: int
+    end_frame: FrameIndex
 
 
-def _fit_kf_end_state(track: Track, transforms: Dict[int, Transform]) -> _KFCacheEntry:
+def _fit_kf_end_state(track: Track, transforms: Dict[FrameIndex, Transform]) -> _KFCacheEntry:
     """Fit KF across all detections of a fragment and return its end state."""
     kf = KalmanFilter()
 
@@ -564,7 +559,7 @@ def _fit_kf_end_state(track: Track, transforms: Dict[int, Transform]) -> _KFCach
 
 def _remerge_tracks(tracks: List[Track]) -> List[Track]:
     """Re-merge tracks with the same track id."""
-    merged_tracks: dict[int, list[Detection]] = {}
+    merged_tracks: dict[TrackId, list[Detection]] = {}
     for track in tracks:
         merged_tracks[track.track_id].extend(track.sorted_detections)
     return [
