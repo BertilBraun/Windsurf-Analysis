@@ -47,13 +47,6 @@ def NLL_from_prob(p: float) -> float:
 # ───────────────────────────── tracker implementation ───────────────────────────── #
 
 
-@dataclass
-class _KFCacheEntry:
-    mean_end: np.ndarray  # (8,)
-    cov_end: np.ndarray  # (8,8)
-    end_frame: int
-
-
 class IterativeILPTracker:
     """Iterative ILP tracker.
 
@@ -106,16 +99,19 @@ class IterativeILPTracker:
 
     def track(self, tracks: List[Track], video_properties: VideoInfo, transforms: List[Transform]) -> List[Track]:
         """Run iterative graph building and ILP solve. Stops when cost does not improve."""
-        # print tracks before tracking
+        # TODO remove
         print('Tracks before tracking:')
         for track in tracks:
             print(
                 f'Track {track.track_id}: {len(track.sorted_detections)} detections from {track.start_frame} to {track.end_frame}'
             )
 
-        tracks = self._maybe_split_on_internal_gaps(tracks)
+        MAX_FRAME_GAP = int(round(MAX_OVERLAP_LENGTH_SECONDS * video_properties.fps))
+
+        tracks = _maybe_split_on_internal_gaps(tracks, self.internal_split_gap_frames)
         best_cost = float('inf')
 
+        # TODO remove
         print('Tracks after splitting on internal gaps:')
         for track in tracks:
             print(
@@ -128,23 +124,55 @@ class IterativeILPTracker:
                 frame_dict[frame_idx] = frame
 
         for it in range(self.max_iters):
-            graph = self._build_fragment_graph(tracks, video_properties.fps, transforms, frame_dict)
+            # Iteration-level debug: list fragments/ids before building the graph
+            if self.enable_edge_logging:
+                try:
+                    print(f'Iteration {it}: fragments before graph build:')
+                    for idx, tr in enumerate(sorted(tracks, key=lambda t: t.start_frame)):
+                        print(
+                            f'  it={it} frag[{idx}] id={tr.track_id} start={tr.start_frame} end={tr.end_frame} len={len(tr.sorted_detections)}'
+                        )
+                except Exception:
+                    pass
+
+            graph = self._build_fragment_graph(tracks, MAX_FRAME_GAP, transforms, frame_dict)
             # TODO increase start cost iteratively
             new_tracks, new_cost = ILPGraphSolver(self.w_start * (it + 1)).optimize_graph(graph)
-            if new_cost >= best_cost:  # TODO smarter stopping condition (no assignment changes?)
-                # no improvement → stop
+
+            if self.enable_edge_logging:
+                print(f'Iteration {it}: new tracks after ILP solve:')
+                for track in new_tracks:
+                    print(
+                        f'  it={it} track[{track.track_id}] start={track.start_frame} end={track.end_frame} len={len(track.sorted_detections)}'
+                    )
+
+            are_all_tracks_merged = all(
+                new_tracks[i].track_id == new_tracks[j].track_id
+                # Only tracks which were split on internal gaps remain, no other candidates
+                for i, j in _possible_mergeable_candidates(new_tracks, MAX_FRAME_GAP)
+            )
+            # TODO smarter stopping condition (no assignment changes?)
+            if are_all_tracks_merged:
+                print(f'All tracks merged, stopping. {new_cost}')
+                break
+            if new_cost >= best_cost:  # no improvement → stop
                 print(f'No improvement in iteration {it}, stopping. {new_cost} >= {best_cost}')
                 break
             tracks, best_cost = new_tracks, new_cost
             # optional: after each solve, split again on internal gaps if enabled
-            tracks = self._maybe_split_on_internal_gaps(tracks)
+            tracks = _maybe_split_on_internal_gaps(tracks, self.internal_split_gap_frames)
 
-        return tracks
+        # Remerge tracks with same track id
+        return _remerge_tracks(tracks)
 
     # ─────────────────────────────── graph building ────────────────────────────── #
 
     def _build_fragment_graph(
-        self, fragments: List[Track], video_fps: int, transforms: List[Transform], frame_dict: Dict[int, np.ndarray]
+        self,
+        fragments: List[Track],
+        max_frame_gap: int,
+        transforms: List[Transform],
+        frame_dict: Dict[int, np.ndarray],
     ) -> FragmentGraph:
         """Build forward edges with costs. Logs one line per edge if enabled.
         If `enable_edge_logging` is True, also displays a debug visualization for each edge candidate
@@ -157,70 +185,63 @@ class IterativeILPTracker:
         transforms_dict: Dict[int, Transform] = {t.frame_idx: t for t in transforms}
 
         # KF cache: fit once per fragment (end state after all its detections)
-        kf_cache = {i: self._fit_kf_end_state(frag, transforms_dict) for i, frag in enumerate(fragments)}
-
-        max_gap_frames = int(round(video_fps * float(MAX_OVERLAP_LENGTH_SECONDS)))
+        kf_cache = {i: _fit_kf_end_state(frag, transforms_dict) for i, frag in enumerate(fragments)}
 
         logs: List[str] = []
 
-        N = len(fragments)
-        for i in range(N):
+        for i, j in _possible_mergeable_candidates(fragments, max_frame_gap):
             A = fragments[i]
-            for j in range(i + 1, N):
-                B = fragments[j]
+            B = fragments[j]
+            # compute costs
+            motion_nll, avg_d2, used_k = _motion_nll_cached(
+                i, j, fragments, kf_cache, transforms_dict, self.motion_k_eval, self.use_position_only
+            )
+            if math.isinf(motion_nll) or math.isnan(motion_nll):
+                continue
+            # hard-drop by average d^2 if requested
+            if avg_d2 is not None and avg_d2 > self.d2_drop_threshold:
+                continue
 
-                # forward-only, no same-frame overlap
-                gap_frames = B.start_frame - A.end_frame - 1
-                if gap_frames < 0 or gap_frames > max_gap_frames:
-                    continue
+            appearance_nll = _appearance_nll(A, B, self.appearance_a, self.appearance_b)
+            if math.isinf(appearance_nll) or math.isnan(appearance_nll):
+                continue
 
-                # compute costs
-                motion_nll, avg_d2, used_k = self._motion_nll_cached(i, j, fragments, kf_cache, transforms_dict)
-                if math.isinf(motion_nll) or math.isnan(motion_nll):
-                    continue
-                # hard-drop by average d^2 if requested
-                if avg_d2 is not None and avg_d2 > self.d2_drop_threshold:
-                    continue
+            gap_frames = B.start_frame - A.end_frame - 1
+            gap_nll = _gap_nll(gap_frames, self.p_miss)
 
-                appearance_nll = self._appearance_nll(A, B)
-                if math.isinf(appearance_nll) or math.isnan(appearance_nll):
-                    continue
+            total = motion_nll + appearance_nll + gap_nll
 
-                gap_nll = self._gap_nll(gap_frames)
-
-                total = motion_nll + appearance_nll + gap_nll
-
-                # Debug visualization: show A.end frame and B.start frame with bboxes and cost terms
-                if self.enable_edge_logging:
-                    try:
-                        cache_A = kf_cache[i]
-                        self._show_edge_debug(
-                            A,
-                            B,
-                            motion_nll,
-                            appearance_nll,
-                            gap_nll,
-                            total,
-                            frame_dict,
-                            cache_A.mean_end,
-                            cache_A.cov_end,
-                            cache_A.end_frame,
-                            transforms_dict,
-                        )
-                    except Exception:
-                        pass
-
-                graph.add_connection(i, j, float(total))
-
-                if self.enable_edge_logging:
-                    logs.append(
-                        f'edge A[{i} id={A.track_id} end={A.end_frame}] -> '
-                        f'B[{j} id={B.track_id} start={B.start_frame}] | '
-                        f'Δ={gap_frames} | '
-                        f'avg_d2={avg_d2:.3f} K={used_k} | '
-                        f'C_mot={motion_nll:.4f} C_app={appearance_nll:.4f} C_gap={gap_nll:.4f} | '
-                        f'C_tot={total:.4f}'
+            # Debug visualization: show A.end frame and B.start frame with bboxes and cost terms
+            if self.enable_edge_logging:
+                try:
+                    cache_A = kf_cache[i]
+                    self._show_edge_debug(
+                        A,
+                        B,
+                        motion_nll,
+                        appearance_nll,
+                        gap_nll,
+                        total,
+                        frame_dict,
+                        cache_A.mean_end,
+                        cache_A.cov_end,
+                        cache_A.end_frame,
+                        transforms_dict,
                     )
+                except Exception:
+                    pass
+
+            graph.add_connection(i, j, float(total))
+
+            if self.enable_edge_logging:
+                logs.append(
+                    f'edge A[{i} id={A.track_id} end={A.end_frame} obj={hex(id(A))}] -> '
+                    f'B[{j} id={B.track_id} start={B.start_frame} obj={hex(id(B))}] | '
+                    f'Δ={gap_frames} | '
+                    f'avg_d2={avg_d2:.3f} K={used_k} | '
+                    f'C_mot={motion_nll:.4f} C_app={appearance_nll:.4f} C_gap={gap_nll:.4f} | '
+                    f'C_tot={total:.4f}'
+                )
 
         if self.enable_edge_logging and logs:
             print('\n'.join(logs))
@@ -390,128 +411,163 @@ class IterativeILPTracker:
 
     # ──────────────────────────────── cost helpers ─────────────────────────────── #
 
-    def _appearance_nll(self, a: Track, b: Track) -> float:
-        """Lab χ² distance between fragment prototypes → Platt → NLLR."""
-        chi2 = chi2_dist(a.mean_embedding(), b.mean_embedding())
-        p = platt_prob_from_dist(chi2, self.appearance_a, self.appearance_b)
-        return NLL_from_prob(p)
 
-    def _motion_nll_cached(
-        self,
-        idx_a: int,
-        idx_b: int,
-        frags: List[Track],
-        kf_cache: Dict[int, _KFCacheEntry],
-        transforms: Dict[int, Transform],
-    ) -> Tuple[float, Optional[float], int]:
-        """
-        Motion NLL between frags[idx_a] → frags[idx_b]:
-          - use cached KF end state for A
-          - predict by Δ to each of first K detections of B
-          - inverse-GMC the observation into A.end frame
-          - 0.5*d2 + 0.5*log|S_pos|, averaged across used dets
-        Returns: (motion_nll, avg_d2, used_K)
-        """
-        B = frags[idx_b]
-        kf = KalmanFilter()
+def _appearance_nll(a: Track, b: Track, appearance_a: float, appearance_b: float) -> float:
+    """Lab χ² distance between fragment prototypes → Platt → NLLR."""
+    chi2 = chi2_dist(a.mean_embedding(), b.mean_embedding())
+    p = platt_prob_from_dist(chi2, appearance_a, appearance_b)
+    return NLL_from_prob(p)
 
-        cache = kf_cache[idx_a]
-        m_end = cache.mean_end
-        P_end = cache.cov_end
-        t_end = cache.end_frame
 
-        if not B.sorted_detections:
-            return 0.0, 0.0, 0
+def _motion_nll_cached(
+    idx_a: int,
+    idx_b: int,
+    frags: List[Track],
+    kf_cache: Dict[int, _KFCacheEntry],
+    transforms: Dict[int, Transform],
+    motion_k_eval: int,
+    use_position_only: bool,
+) -> Tuple[float, Optional[float], int]:
+    """
+    Motion NLL between frags[idx_a] → frags[idx_b]:
+      - use cached KF end state for A
+      - predict by Δ to each of first K detections of B
+      - inverse-GMC the observation into A.end frame
+      - 0.5*d2 + 0.5*log|S_pos|, averaged across used dets
+    Returns: (motion_nll, avg_d2, used_K)
+    """
+    B = frags[idx_b]
+    kf = KalmanFilter()
 
-        # evaluate up to K detections at B's start
-        K = min(self.motion_k_eval, len(B.sorted_detections))
-        total = 0.0
-        d2_vals: List[float] = []
-        used = 0
+    cache = kf_cache[idx_a]
+    m_end = cache.mean_end
+    P_end = cache.cov_end
+    t_end = cache.end_frame
 
-        m_pred, P_pred = m_end, P_end
-        last_frame = t_end
+    if not B.sorted_detections:
+        return 0.0, 0.0, 0
 
-        for k in range(K):
-            db = B.sorted_detections[k]
+    # evaluate up to K detections at B's start
+    K = min(motion_k_eval, len(B.sorted_detections))
+    total = 0.0
+    d2_vals: List[float] = []
+    used = 0
 
-            # predict from A.end by Δ
-            m_pred, P_pred = kf.advance_state_to_frame(m_pred, P_pred, transforms, last_frame, db.frame_idx)
-            last_frame = db.frame_idx
+    m_pred, P_pred = m_end, P_end
+    last_frame = t_end
 
-            z_obs_back = db.bbox.center_wh
+    for k in range(K):
+        db = B.sorted_detections[k]
 
-            # position-only mahalanobis
-            d2 = float(
-                kf.gating_distance(
-                    m_pred, P_pred, z_obs_back[None, :], only_position=self.use_position_only, metric='maha'
-                )[0]
-            )
-            # add 0.5 * log|S_pos|
-            _, S_full, _ = kf.project(m_pred, P_pred)
-            S_pos = S_full[:2, :2] if self.use_position_only else S_full
-            logdet = 0.5 * math.log(max(np.linalg.det(S_pos), EPS))
+        # predict from A.end by Δ
+        m_pred, P_pred = kf.advance_state_to_frame(m_pred, P_pred, transforms, last_frame, db.frame_idx)
+        last_frame = db.frame_idx
 
-            total += 0.5 * d2 + logdet
-            d2_vals.append(d2)
-            used += 1
+        z_obs_back = db.bbox.center_wh
 
-        if used == 0:
-            return 1e6, None, 0
+        # position-only mahalanobis
+        d2 = float(
+            kf.gating_distance(m_pred, P_pred, z_obs_back[None, :], only_position=use_position_only, metric='maha')[0]
+        )
+        # add 0.5 * log|S_pos|
+        _, S_full, _ = kf.project(m_pred, P_pred)
+        S_pos = S_full[:2, :2] if use_position_only else S_full
+        logdet = 0.5 * math.log(max(np.linalg.det(S_pos), EPS))
 
-        avg_d2 = float(np.mean(d2_vals))
-        motion_nll = total / used
-        return motion_nll, avg_d2, used
+        total += 0.5 * d2 + logdet
+        d2_vals.append(d2)
+        used += 1
 
-    def _fit_kf_end_state(self, track: Track, transforms: Dict[int, Transform]) -> _KFCacheEntry:
-        """Fit KF across all detections of a fragment and return its end state."""
-        kf = KalmanFilter()
+    if used == 0:
+        return 1e6, None, 0
 
-        first = track.start
-        m, P = kf.initiate(first.bbox.center_wh)
-        prev_f = track.start_frame
+    avg_d2 = float(np.mean(d2_vals))
+    motion_nll = total / used
+    return motion_nll, avg_d2, used
 
-        for det in track.sorted_detections[1:]:
-            gap = det.frame_idx - prev_f
-            m, P = kf.predict(m, P, missed_frames=gap)
-            m, P = kf.apply_forward_gmc_state(m, P, transforms[det.frame_idx])
-            m, P = kf.update(m, P, det.bbox.center_wh)
-            prev_f = det.frame_idx
 
-        return _KFCacheEntry(mean_end=m, cov_end=P, end_frame=track.end_frame)
+# ───────────────────────────────────── gap ─────────────────────────────────── #
 
-    # ───────────────────────────────────── gap ─────────────────────────────────── #
 
-    def _gap_nll(self, gap_frames: int) -> float:
-        return float(gap_frames) * (-math.log(self.p_miss))
+def _gap_nll(gap_frames: int, p_miss: float) -> float:
+    return float(gap_frames) * (-math.log(p_miss))
 
-    # ────────────────────────────── simple track splitter ───────────────────────── #
 
-    def _maybe_split_on_internal_gaps(self, tracks: List[Track]) -> List[Track]:
-        """
-        Optional conservative splitter: if enabled, breaks tracks at internal gaps
-        > `internal_split_gap_frames`. Keeps the same track_id for resulting fragments.
-        If disabled, returns input unchanged.
-        """
-        G = self.internal_split_gap_frames
-        if G <= 0:  # Skip splitting - disabled # TODO what about other parameters for KF or Appearance uncertainty?
-            return tracks
+# ────────────────────────────── simple track splitter ───────────────────────── #
 
-        out: List[Track] = []
-        for tr in tracks:
-            if len(tr.sorted_detections) <= 1:
-                out.append(tr)
-                continue
-            run: List[Detection] = []
-            last_f = None
-            for d in tr.sorted_detections:
-                if last_f is None or (d.frame_idx - last_f) <= G:  # TODO also split on KF or Appearance uncertainty
-                    run.append(d)
-                else:
-                    # TODO does that work with multiple tracks with the same track_id?
-                    out.append(Track(track_id=tr.track_id, sorted_detections=run))
-                    run = [d]
-                last_f = d.frame_idx
-            if run:
+
+def _maybe_split_on_internal_gaps(tracks: List[Track], internal_split_gap_frames: int) -> List[Track]:
+    """
+    Optional conservative splitter: if enabled, breaks tracks at internal gaps
+    > `internal_split_gap_frames`. Keeps the same track_id for resulting fragments.
+    If disabled, returns input unchanged.
+    """
+    G = internal_split_gap_frames
+    if G <= 0:  # Skip splitting - disabled # TODO what about other parameters for KF or Appearance uncertainty?
+        return tracks
+
+    out: List[Track] = []
+    for tr in tracks:
+        if len(tr.sorted_detections) <= 1:
+            out.append(tr)
+            continue
+        run: List[Detection] = []
+        last_f = None
+        for d in tr.sorted_detections:
+            if last_f is None or (d.frame_idx - last_f) <= G:  # TODO also split on KF or Appearance uncertainty
+                run.append(d)
+            else:
+                # TODO does that work with multiple tracks with the same track_id?
                 out.append(Track(track_id=tr.track_id, sorted_detections=run))
-        return out
+                run = [d]
+            last_f = d.frame_idx
+        if run:
+            out.append(Track(track_id=tr.track_id, sorted_detections=run))
+    return out
+
+
+def _possible_mergeable_candidates(fragments: List[Track], max_frame_gap: int) -> List[Tuple[int, int]]:
+    """Return possible mergeable candidates for a list of fragments."""
+    candidates: List[Tuple[int, int]] = []
+    for i in range(len(fragments)):
+        for j in range(i + 1, len(fragments)):
+            gap = fragments[j].start_frame - fragments[i].end_frame - 1
+            if gap >= 0 and gap <= max_frame_gap:
+                candidates.append((i, j))
+    return candidates
+
+
+@dataclass
+class _KFCacheEntry:
+    mean_end: np.ndarray  # (8,)
+    cov_end: np.ndarray  # (8,8)
+    end_frame: int
+
+
+def _fit_kf_end_state(track: Track, transforms: Dict[int, Transform]) -> _KFCacheEntry:
+    """Fit KF across all detections of a fragment and return its end state."""
+    kf = KalmanFilter()
+
+    first = track.start
+    m, P = kf.initiate(first.bbox.center_wh)
+    prev_f = track.start_frame
+
+    for det in track.sorted_detections[1:]:
+        gap = det.frame_idx - prev_f
+        m, P = kf.predict(m, P, missed_frames=gap)
+        m, P = kf.apply_forward_gmc_state(m, P, transforms[det.frame_idx])
+        m, P = kf.update(m, P, det.bbox.center_wh)
+        prev_f = det.frame_idx
+
+    return _KFCacheEntry(mean_end=m, cov_end=P, end_frame=track.end_frame)
+
+
+def _remerge_tracks(tracks: List[Track]) -> List[Track]:
+    """Re-merge tracks with the same track id."""
+    merged_tracks: dict[int, list[Detection]] = {}
+    for track in tracks:
+        merged_tracks[track.track_id].extend(track.sorted_detections)
+    return [
+        Track(track_id=track_id, sorted_detections=sorted(detections, key=lambda d: d.frame_idx))
+        for track_id, detections in merged_tracks.items()
+    ]
