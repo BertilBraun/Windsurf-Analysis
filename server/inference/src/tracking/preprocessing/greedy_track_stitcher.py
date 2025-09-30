@@ -2,23 +2,14 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import DefaultDict, Dict, Iterable, List, NamedTuple, Tuple, Optional
 from collections import defaultdict
+from typing import Dict, List
 
-import numpy as np
-
-from server.inference.src.settings import EPS
+from server.inference.src.util.similarity_helpers import Embedding, HistogramEmbedding
 from server.inference.src.visualization.stabilize import Transform
-from ...util.video_io import VideoInfo, VideoReader
-from ...common_types import BoundingBox, Detection, FrameIndex, Track, TrackId
-from server.inference.bot_sort.kalman_filter import KFState, KalmanFilter
-
-
-def chi2_dist(p: np.ndarray, q: np.ndarray, eps: float = EPS) -> float:
-    """Symmetric χ² distance for L*a*b* histogram embeddings (assumed L1-normalized)."""
-    num = (p - q) ** 2
-    den = p + q + eps
-    return 0.5 * float((num / den).sum())
+from ...util.video_io import VideoInfo
+from ...common_types import Detection, FrameIndex, Track, TrackId
+from server.inference.bot_sort.kalman_filter import KFState
 
 
 class _ComparisonResult(Enum):
@@ -27,563 +18,204 @@ class _ComparisonResult(Enum):
     NO_MATCH = 'no_match'
 
 
-# ────────────────────────────── main class ────────────────────────────── #
-
-Candidate = NamedTuple('Candidate', [('clean', list[Track]), ('maybe', list[Track])])
-DetectionCandidate = NamedTuple('DetectionCandidate', [('detection', Detection), ('candidate', Candidate)])
+# ───────────────────────────── main class ───────────────────────────── #
 
 
 class GreedyTrackStitcher:
     """
-    Greedy pre-stitcher using:
+    Greedy pre-stitcher with original matching orchestration, but using:
       • Motion: KF + forward GMC deltas (prev→curr) → position-only Mahalanobis d²
-      • Appearance: χ² distance on L*a*b* hist embeddings (L1-normalized)
+      • Appearance: χ² distance on L1-normalized L*a*b* histograms (with EMA)
 
     Decision:
       MATCH      if (d² ≤ gate_strict) and (χ² ≤ chi2_strict)
-      MAY_MATCH  if (d² ≤ gate_loose)  and (χ² ≤ chi2_loose) and detection is isolated
+      MAY_MATCH  if (d² ≤ gate_loose)  and (χ² ≤ chi2_loose)
       NO_MATCH   otherwise
+
+    Notes:
+      - Isolation heuristic intentionally disabled (can be re-added if needed).
+      - KF predictions are cached per track via KFState to avoid recomputation.
     """
 
     def __init__(
         self,
-        gate_strict_d2: float,
-        gate_loose_d2: float,  # χ²(2, 0.95)
-        chi2_strict: float,  # tune on data
-        chi2_loose: float,  # tune on data
-        iso_center_mul: float,  # isolation: center dist > iso_center_mul * det.width
-        iso_iou_max: float,  # and IoU to others <= iso_iou_max
-        max_frame_distance: int = 5,  # stale cutoff (frames)
+        *,
+        gate_strict_d2: float = 5.9915,  # χ²(2, 0.95)
+        gate_loose_d2: float = 9.2103,  # χ²(2, 0.99)
+        chi2_strict: float = 0.20,  # tune on your data
+        chi2_loose: float = 0.35,  # tune on your data
         ema_alpha: float = 0.9,  # appearance EMA smoothing
-        # TODO: Debug options
-        debug_video_path: Optional[str] = None,
+        max_frame_distance: int = 5,  # stale cutoff (frames)
     ):
         self.gate_strict_d2 = float(gate_strict_d2)
         self.gate_loose_d2 = float(gate_loose_d2)
         self.chi2_strict = float(chi2_strict)
         self.chi2_loose = float(chi2_loose)
-        self.iso_center_mul = float(iso_center_mul)
-        self.iso_iou_max = float(iso_iou_max)
-        self.max_frame_distance = int(max_frame_distance)
         self.ema_alpha = float(ema_alpha)
+        self.max_frame_distance = int(max_frame_distance)
 
-        # Debug config/state
-        self.debug_vis = False  # True
-        self.debug_wait_ms = 0  # TODO remove
-        self.debug_video_path = debug_video_path
-        self._debug_frames: Optional[Dict[int, np.ndarray]] = None
+        # Per-track state
+        self._kf: Dict[TrackId, KFState] = {}
+        self._ema: Dict[TrackId, Embedding] = {}
 
     # ─────────────────────────── public API ─────────────────────────── #
 
     def track(self, tracks: List[Track], video_properties: VideoInfo, transforms: List[Transform]) -> List[Track]:
-        """Greedily stitches single-detection tracks into longer tracks."""
-        logging.info(f'{"=" * 28} Greedy preprocessor: {len(tracks)} inputs {"=" * 28}')
-        detections_by_frame = self._group_single_detections_by_frame(tracks)
-        frames = sorted(detections_by_frame.keys())
-        gmc = {int(t.frame_idx): t for t in transforms}  # per-frame forward delta (f-1 → f)
+        """Greedily stitches single-detection tracks into longer tracks (old orchestration, new compare)."""
+        logging.info(f'{"=" * 30} Running greedy preprocessor with {len(tracks)} tracks {"=" * 30}')
 
-        # Lazy-load frames for debug if requested
-        if self.debug_vis and self._debug_frames is None and self.debug_video_path is not None:
-            try:
-                import cv2  # type: ignore
+        # Build per-frame detections from single-detection inputs
+        detections_by_frame: Dict[FrameIndex, List[Detection]] = defaultdict(list)
+        for track in tracks:
+            assert len(track.sorted_detections) == 1, 'Greedy preprocessor only supports single-detection tracks'
+            for det in track.sorted_detections:
+                detections_by_frame[det.frame_idx].append(det)
 
-                _ = cv2  # silence linter unused
-                self._debug_frames = {}
-                with VideoReader(self.debug_video_path) as reader:
-                    for f_idx, frame in reader.read_frames():
-                        self._debug_frames[int(f_idx)] = frame
-            except Exception:
-                # If OpenCV is not available or video cannot be read, disable debug
-                self._debug_frames = None
-                self.debug_vis = False
+        frames: List[int] = sorted(int(f) for f in detections_by_frame.keys())
 
-        active: List[Track] = []
-        stale: List[Track] = []
-        stale_ids: set[TrackId] = set()
-        kf_state: Dict[TrackId, KFState] = {}
-        next_tid = 1
+        # Forward camera-motion deltas: map destination frame f to transform (f-1 → f)
+        gmc: Dict[int, Transform] = {int(t.frame_idx): t for t in transforms}
 
-        for f in frames:
-            candidates = self._collect_candidate_matches_for_frame(detections_by_frame[f], active, kf_state, gmc)
+        next_track_id: int = 1
 
-            # Optional debug visualization for this frame
-            if self.debug_vis:
-                try:
-                    self._debug_show_frame_and_heatmaps(
-                        frame=f,
-                        detections=detections_by_frame[f],
-                        active_tracks=active,
-                        kf_state=kf_state,
+        # Active = can be extended; Stale = finalized and kept for output
+        active_tracks: List[Track] = []
+        stale_tracks: List[Track] = []
+        stale_track_ids: set[TrackId] = set()
+
+        for frame_idx in frames:
+            matches_this_frame: List[tuple[Track, Detection]] = []
+
+            # ── propose matches greedily per detection ──
+            for detection in detections_by_frame[frame_idx]:
+                clean_matches: List[Track] = []
+                mby_matches: List[Track] = []
+
+                for track in active_tracks:
+                    result = self._compare_detection_to_track(
+                        track,
+                        detection,
+                        frame_idx=frame_idx,
                         gmc=gmc,
                     )
-                except Exception:
-                    pass
+                    if result == _ComparisonResult.MATCH:
+                        clean_matches.append(track)
+                    elif result == _ComparisonResult.MAY_MATCH:
+                        mby_matches.append(track)
 
-            # resolve per-track conflicts & update states
-            new_tracks, newly_staled, next_tid = self._apply_matches(candidates, active, kf_state, next_tid, gmc)
-            stale.extend(newly_staled)
-            stale_ids.update(t.track_id for t in newly_staled)
-            active = new_tracks
+                if len(clean_matches) == 1:
+                    matches_this_frame.append((clean_matches[0], detection))
+                elif len(clean_matches) == 0 and len(mby_matches) == 1:
+                    matches_this_frame.append((mby_matches[0], detection))
+                else:
+                    # No clear match → new track candidate for this detection
+                    new_track = Track(track_id=next_track_id, sorted_detections=[])
+                    matches_this_frame.append((new_track, detection))
+                    next_track_id += 1
 
-            # age out
-            aged_out = [t for t in active if (t.end.frame_idx + self.max_frame_distance) < f]
-            for t in aged_out:
-                if t.track_id not in stale_ids:
-                    stale_ids.add(t.track_id)
-                    stale.append(t)
-            active = [t for t in active if t.track_id not in stale_ids]
+                    # All tracks that "almost matched" become stale
+                    for track in clean_matches + mby_matches:
+                        if track.track_id not in stale_track_ids:
+                            stale_track_ids.add(track.track_id)
+                            stale_tracks.append(track)
+                            # cleanup state
+                            self._kf.pop(track.track_id, None)
+                            self._ema.pop(track.track_id, None)
 
-        return stale + active
+            # ── resolve conflicts per track id ──
+            detections_per_track: Dict[int, List[Detection]] = defaultdict(list)
+            tracks_per_track_id: Dict[int, Track] = {}
+            for track, detection in matches_this_frame:
+                detections_per_track[track.track_id].append(detection)
+                tracks_per_track_id[track.track_id] = track
 
-    # ─────────────────────── per-frame orchestration ─────────────────────── #
+            for track_id, detections in detections_per_track.items():
+                track = tracks_per_track_id[track_id]
+                if len(detections) > 1:
+                    # conflicting attachments → stale original, spawn new tracks
+                    if track.track_id not in stale_track_ids:
+                        stale_track_ids.add(track.track_id)
+                        stale_tracks.append(track)
+                        self._kf.pop(track.track_id, None)
+                        self._ema.pop(track.track_id, None)
+                    for det in detections:
+                        new_track = Track(track_id=next_track_id, sorted_detections=[det])
+                        next_track_id += 1
+                        active_tracks.append(new_track)
+                        # init per-track state
+                        self._kf[new_track.track_id] = KFState.init(new_track)
+                        self._ema[new_track.track_id] = det.embedding
+                else:
+                    # single extension
+                    det = detections[0]
+                    track.sorted_detections.append(det)
+                    if track not in active_tracks:
+                        active_tracks.append(track)
+                    # init if needed, then update KF + EMA
+                    if track.track_id not in self._kf:
+                        self._kf[track.track_id] = KFState.init(track)
+                        self._ema[track.track_id] = track.start.embedding
+                    self._kf[track.track_id] = self._kf[track.track_id].update_to_det(det, gmc)
+                    old_ema = self._ema.get(track.track_id, track.start.embedding)
+                    self._ema[track.track_id] = old_ema.interpolate(det.embedding, self.ema_alpha)
 
-    def _collect_candidate_matches_for_frame(
-        self,
-        detections: List[Detection],
-        active_tracks: List[Track],
-        kf_state: Dict[TrackId, KFState],
-        gmc: Dict[int, Transform],
-    ) -> List[DetectionCandidate]:
-        """Build (track, det) proposals for this frame. Returns matches and debug data."""
+            # ── age out stale tracks (too far behind current frame) ──
+            for track in list(active_tracks):
+                if track.end.frame_idx + self.max_frame_distance < frame_idx:
+                    if track.track_id not in stale_track_ids:
+                        stale_track_ids.add(track.track_id)
+                        stale_tracks.append(track)
+                        self._kf.pop(track.track_id, None)
+                        self._ema.pop(track.track_id, None)
 
-        candidates: List[DetectionCandidate] = []
-        other_boxes = self._end_boxes(active_tracks)
+            # keep only non-stale active tracks
+            active_tracks = [track for track in active_tracks if track.track_id not in stale_track_ids]
 
-        for det in detections:
-            clean: List[Track] = []
-            maybe: List[Track] = []
-
-            for tr in active_tracks:
-                decision = self._classify_pair(tr, det, other_boxes, kf_state, gmc)
-                if decision == _ComparisonResult.MATCH:
-                    clean.append(tr)
-                elif decision == _ComparisonResult.MAY_MATCH:
-                    maybe.append(tr)
-
-            candidates.append(DetectionCandidate(detection=det, candidate=Candidate(clean=clean, maybe=maybe)))
-
-        return candidates
-
-    def _apply_matches(
-        self,
-        candidates: List[DetectionCandidate],
-        active_tracks: List[Track],
-        kf_state: Dict[TrackId, KFState],
-        next_tid: int,
-        gmc: Dict[int, Transform],
-    ) -> Tuple[List[Track], List[Track], int]:
-        """
-        Resolve multiple detections per track, update KF+EMA, spawn new tracks.
-        Returns: (new_active_tracks, newly_staled_tracks, next_tid)
-        """
-        newly_staled: List[Track] = []
-        newly_staled_ids: set[TrackId] = set()
-
-        new_active: List[Track] = [t for t in active_tracks]  # will edit in place
-
-        matches: List[Tuple[Track, Detection]] = []
-
-        def new_track(detections: List[Detection]) -> Track:
-            nonlocal next_tid
-            new_track = Track(track_id=next_tid, sorted_detections=detections)
-            kf_state[new_track.track_id] = KFState.init(new_track)
-            next_tid += 1
-            return new_track
-
-        for detection, candidate in candidates:
-            if len(candidate.clean) == 1:
-                matches.append((candidate.clean[0], detection))
-            elif len(candidate.clean) == 0 and len(candidate.maybe) == 1:
-                matches.append((candidate.maybe[0], detection))
-            else:
-                # ambiguous → stale current and split into new tracks
-                newly_staled.extend(candidate.clean + candidate.maybe)
-                newly_staled_ids.update(t.track_id for t in candidate.clean + candidate.maybe)
-                new_active = [t for t in new_active if t.track_id not in newly_staled_ids]
-                new_active.append(new_track([detection]))
-
-        per_tid: DefaultDict[int, List[Detection]] = defaultdict(list)
-        tid_to_track: Dict[int, Track] = {}
-        for track, detection in matches:
-            per_tid[track.track_id].append(detection)
-            tid_to_track[track.track_id] = track
-
-        for tid, detections in per_tid.items():
-            active_track_for_me = [t for t in new_active if t.track_id == tid]
-            if len(active_track_for_me) == 0:
-                # The active track for this tid has been made stale - simply instantiate a new track
-                for detection in detections:
-                    new_active.append(new_track([detection]))
-                continue
-            assert len(active_track_for_me) == 1
-            track = active_track_for_me[0]
-
-            if len(detections) > 1:
-                # ambiguous → stale current and split into new tracks
-                newly_staled.append(track)
-                new_active = [t for t in new_active if t.track_id != tid]
-                for detection in detections:
-                    new_active.append(new_track([detection]))
-            else:
-                # single extension
-                detection = detections[0]
-                assert detection.frame_idx not in (track.detections_by_frame.keys()), (
-                    f'Detection {detection.frame_idx} already in track {track.track_id}'
-                )
-                track.sorted_detections.append(detection)
-                kf_state[track.track_id] = kf_state[track.track_id].update_to_det(detection, gmc)
-                self._update_track_ema(track)
-
-        return new_active, newly_staled, next_tid
+        return stale_tracks + active_tracks
 
     # ───────────────────────────── scoring ───────────────────────────── #
 
-    def _classify_pair(
+    def _compare_detection_to_track(
         self,
         track: Track,
-        det: Detection,
-        other_boxes: Dict[TrackId, BoundingBox],
-        kf_state: Dict[TrackId, KFState],
+        detection: Detection,
+        *,
+        frame_idx: int,
         gmc: Dict[int, Transform],
     ) -> _ComparisonResult:
-        """Score motion (Mahalanobis d²) and appearance (χ²); apply gates + isolation."""
-        # motion
-        st = kf_state.get(track.track_id)
+        """
+        Score motion (Mahalanobis d² on [cx,cy]) + appearance (χ² on L1-hist EMA).
+        """
+        # Early guard on excessive frame gap (keeps candidate set small)
+        gap = detection.frame_idx - track.end.frame_idx
+        if gap <= 0 or gap > self.max_frame_distance:
+            return _ComparisonResult.NO_MATCH
+
+        tid = track.track_id
+
+        # Ensure KF state
+        st = self._kf.get(tid)
         if st is None:
-            return _ComparisonResult.MAY_MATCH  # brand-new active track, be lenient
+            st = self._kf[tid] = KFState.init(track)
 
-        predicted_state = st.predict_to(det.frame_idx, gmc)
-        d2 = float(predicted_state.gating_distance(det.bbox.center_wh[None, :], only_position=True, metric='maha')[0])
+        # Predict to current frame (cached inside KFState)
+        pred = st.predict_to(frame_idx, gmc)
 
-        # appearance (EMA is stored in track.sorted_detections[0].embedding)
-        ema = track.sorted_detections[0].embedding
-        chi2 = chi2_dist(ema, det.embedding)
+        # Motion gating: squared Mahalanobis distance (df=2)
+        d2 = pred.gating_distance(detection.bbox.center_wh)
 
-        if self.debug_vis:
-            last_bbox = track.sorted_detections[-1].bbox
-            print(
-                f'Track {track.track_id} d2 motion: {d2}, chi2 embedding: {chi2}, track bbox: [{last_bbox.x1}, {last_bbox.y1}, {last_bbox.x2}, {last_bbox.y2}] detection bbox: [{det.bbox.x1}, {det.bbox.y1}, {det.bbox.x2}, {det.bbox.y2}]'
-            )
+        # Appearance: χ² on L1-normalized histograms with EMA
+        ema = self._ema.get(tid, track.start.embedding)
+        assert isinstance(ema, HistogramEmbedding)
+        chi2 = ema.similarity(detection.embedding)
 
+        # Decision
         if d2 <= self.gate_strict_d2 and chi2 <= self.chi2_strict:
             return _ComparisonResult.MATCH
 
         if d2 <= self.gate_loose_d2 and chi2 <= self.chi2_loose:
+            # Isolation logic intentionally disabled for now.
+            # If needed later, reintroduce a tie-break under the loose gate.
             return _ComparisonResult.MAY_MATCH
 
-        # if self._is_isolated(det, track.track_id, other_boxes):
-        #     return _ComparisonResult.MAY_MATCH
-
         return _ComparisonResult.NO_MATCH
-
-    # ───────────────────────────── primitives ───────────────────────────── #
-
-    @staticmethod
-    def _group_single_detections_by_frame(tracks: Iterable[Track]) -> Dict[FrameIndex, List[Detection]]:
-        out: DefaultDict[FrameIndex, List[Detection]] = defaultdict(list)
-        for t in tracks:
-            assert len(t.sorted_detections) == 1, 'Greedy preprocessor expects single-detection tracks.'
-            out[t.sorted_detections[0].frame_idx].append(t.sorted_detections[0])
-        return out
-
-    @staticmethod
-    def _end_boxes(active: Iterable[Track]) -> Dict[TrackId, BoundingBox]:
-        """
-        Map tid -> bbox of the last detection's bbox.
-        Used by the isolation heuristic.
-        """
-        return {tr.track_id: tr.end.bbox for tr in active}
-
-    def _pick_track_for_detection(self, clean: List[Track], maybe: List[Track]) -> Track | None:
-        """Tie-breaker for multiple candidates: prefer single clean, else single maybe, else None."""
-        if len(clean) == 1:
-            if self.debug_vis:
-                print(f'Picked clean track {clean[0].track_id}')
-            return clean[0]
-        if len(clean) == 0 and len(maybe) == 1:
-            if self.debug_vis:
-                print(f'Picked maybe track {maybe[0].track_id}')
-            return maybe[0]
-        if self.debug_vis:
-            print(f'Picked no track: {len(clean)} clean, {len(maybe)} maybe')
-        return None
-
-    def _update_track_ema(self, tr: Track) -> None:
-        """Recompute EMA (stored in the first detection) after appending a single new detection."""
-        assert tr.sorted_detections, 'Track has no detections.'
-        tr.sorted_detections[0].embedding = (
-            self.ema_alpha * tr.sorted_detections[0].embedding
-            + (1.0 - self.ema_alpha) * tr.sorted_detections[-1].embedding
-        )
-
-    def _is_isolated(
-        self,
-        det: Detection,
-        this_tid: TrackId,
-        other_boxes: Dict[TrackId, BoundingBox],
-    ) -> bool:
-        """True if detection is far from and non-overlapping with other tracks."""
-        for tid, b in other_boxes.items():
-            if tid == this_tid:
-                continue
-            if det.bbox.iou(b) > self.iso_iou_max:
-                return False
-            if det.bbox.center.distance_to(b.center) <= self.iso_center_mul * det.bbox.width:
-                return False
-        return True
-
-    # ───────────────────────────── debug helpers ───────────────────────────── #
-
-    def _debug_show_frame_and_heatmaps(
-        self,
-        *,
-        frame: int,
-        detections: List[Detection],
-        active_tracks: List[Track],
-        kf_state: Dict[TrackId, KFState],
-        gmc: Dict[int, Transform],
-    ) -> None:
-        if not self.debug_vis:
-            return
-        try:
-            import cv2  # type: ignore
-        except Exception:
-            return
-
-        # Draw current frame with detections and KF predictions
-        frame_img = None
-        if self._debug_frames is not None:
-            frame_img = self._debug_frames.get(int(frame))
-        if frame_img is None:
-            return
-
-        to_display = frame_img.copy()
-
-        # Prepare matrices for debug heatmaps (rows: tracks, cols: detections)
-        sorted_tracks = sorted(active_tracks, key=lambda t: t.track_id)
-        d2_mat = np.full((len(sorted_tracks), len(detections)), np.nan, dtype=np.float32) if detections else None
-        chi2_mat = np.full((len(sorted_tracks), len(detections)), np.nan, dtype=np.float32) if detections else None
-
-        # Compute pairwise distances for debug
-        if d2_mat is not None and chi2_mat is not None:
-            for r, tr in enumerate(sorted_tracks):
-                st = kf_state.get(tr.track_id)
-                for c, det in enumerate(detections):
-                    try:
-                        if st is not None:
-                            predicted_state = st.predict_to(det.frame_idx, gmc)
-                            d2 = float(
-                                predicted_state.gating_distance(
-                                    det.bbox.center_wh[None, :],
-                                    only_position=True,
-                                    metric='maha',
-                                )[0]
-                            )
-                            d2_mat[r, c] = d2
-                        ema = tr.sorted_detections[0].embedding
-                        chi2_mat[r, c] = chi2_dist(ema, det.embedding)
-                    except Exception:
-                        pass
-
-        # Draw detections (white)
-        for idx, d in enumerate(detections):
-            bb = d.bbox
-            cv2.rectangle(to_display, (int(bb.x1), int(bb.y1)), (int(bb.x2), int(bb.y2)), (255, 255, 255), 2)
-            cv2.putText(
-                to_display,
-                f'Det {idx}',
-                (int(bb.x2), max(0, int(bb.y2) - 4)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.45,
-                (255, 255, 255),
-                1,
-                cv2.LINE_AA,
-            )
-
-        # Draw KF predictions for active tracks (green)
-        for tr in active_tracks:
-            st = kf_state.get(tr.track_id)
-            if st is None:
-                continue
-            try:
-                predicted_state = st.predict_to(frame, gmc)
-                cx, cy, w, h = predicted_state.display_bbox(alpha=0.0)
-                x1 = int(cx - w / 2.0)
-                y1 = int(cy - h / 2.0)
-                x2 = int(cx + w / 2.0)
-                y2 = int(cy + h / 2.0)
-                cv2.rectangle(to_display, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(
-                    to_display,
-                    f'KF id={tr.track_id}',
-                    (x1, max(0, y1 - 6)),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.45,
-                    (0, 255, 0),
-                    1,
-                    cv2.LINE_AA,
-                )
-            except Exception:
-                pass
-
-        # Draw association lines for picked pairs with g^2
-        # Build lookup of detection indices for stable labeling
-        for d in detections:
-            continue  # TODO fix?
-            try:
-                m_pred, P_pred, _ = kf_state[tr.track_id].predict_to(d.frame_idx, gmc)
-                z = d.bbox.center_wh.astype(np.float64).reshape(1, 4)
-                g2 = float(self._kf.gating_distance(m_pred, P_pred, z, only_position=True, metric='maha')[0])
-
-                # Centers
-                cx, cy, w, h = self._kf.display_bbox(m_pred, P_pred, alpha=0.0)
-                tcx, tcy = int(round(cx)), int(round(cy))
-                dcx = int(round((d.bbox.x1 + d.bbox.x2) / 2.0))
-                dcy = int(round((d.bbox.y1 + d.bbox.y2) / 2.0))
-                cv2.line(to_display, (tcx, tcy), (dcx, dcy), (0, 200, 255), 1)
-                mx = int((tcx + dcx) / 2)
-                my = int((tcy + dcy) / 2)
-                cv2.putText(
-                    to_display,
-                    f'g^2={g2:.2f}',
-                    (mx + 4, my - 4),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.45,
-                    (0, 200, 255),
-                    1,
-                    cv2.LINE_AA,
-                )
-            except Exception:
-                pass
-
-        # Heatmaps for chi2 and gating distances
-        def build_heatmap(
-            mat: Optional[np.ndarray], title: str, row_labels, col_labels, vmin=None, vmax=None
-        ) -> np.ndarray:
-            h = 120
-            w = 240
-            if mat is None or mat.size == 0:
-                canvas = np.full((h, w, 3), 30, dtype=np.uint8)
-                cv2.putText(
-                    canvas,
-                    f'{title}: no data',
-                    (8, h // 2),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.45,
-                    (200, 200, 200),
-                    1,
-                    cv2.LINE_AA,
-                )
-                return canvas
-            m = mat.astype(np.float32)
-            # handle NaNs
-            m = np.where(np.isnan(m), 0.0, m)
-            m_min = float(np.min(m)) if vmin is None else float(vmin)
-            m_max = float(np.max(m)) if vmax is None else float(vmax)
-            m_clipped = np.clip(m, m_min, m_max)
-            denom = (m_max - m_min) if (m_max - m_min) >= 1e-6 else 1.0
-            norm = ((m_clipped - m_min) / denom * 255.0).astype(np.uint8)
-            heat = cv2.applyColorMap(norm, cv2.COLORMAP_AUTUMN)
-            cell_h, cell_w = 80, 80
-            hm = cv2.resize(heat, (heat.shape[1] * cell_w, heat.shape[0] * cell_h), interpolation=cv2.INTER_AREA)
-            top_margin, left_margin = 50, 36
-            colorbar_w, colorbar_gap = 16, 8
-            canvas_h = hm.shape[0] + top_margin
-            canvas_w = hm.shape[1] + left_margin + colorbar_gap + colorbar_w
-            canvas = np.full((canvas_h, canvas_w, 3), 15, dtype=np.uint8)
-            canvas[top_margin:, left_margin : left_margin + hm.shape[1]] = hm
-            rows, cols = m.shape
-            for r in range(rows + 1):
-                y = top_margin + r * cell_h
-                cv2.line(canvas, (left_margin, y), (left_margin + cols * cell_w, y), (60, 60, 60), 1)
-            for c in range(cols + 1):
-                x = left_margin + c * cell_w
-                cv2.line(canvas, (x, top_margin), (x, top_margin + rows * cell_h), (60, 60, 60), 1)
-            cv2.putText(canvas, title, (6, 16), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (230, 230, 230), 1, cv2.LINE_AA)
-            for r, lbl in enumerate(row_labels):
-                y = top_margin + r * cell_h + int(cell_h * 0.7)
-                cv2.putText(
-                    canvas, f'Track {str(lbl)}', (4, y), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (200, 200, 200), 1, cv2.LINE_AA
-                )
-            for c, lbl in enumerate(col_labels):
-                x = left_margin + c * cell_w + 2
-                cv2.putText(
-                    canvas,
-                    f'Det {str(lbl)}',
-                    (x, top_margin - 6),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.35,
-                    (200, 200, 200),
-                    1,
-                    cv2.LINE_AA,
-                )
-            # Colorbar
-            bar_h = hm.shape[0]
-            grad = np.linspace(255, 0, bar_h, dtype=np.uint8).reshape(bar_h, 1)
-            grad_color = cv2.applyColorMap(grad, cv2.COLORMAP_AUTUMN)
-            x0 = left_margin + hm.shape[1] + colorbar_gap
-            canvas[top_margin:, x0 : x0 + colorbar_w] = cv2.resize(
-                grad_color, (colorbar_w, bar_h), interpolation=cv2.INTER_AREA
-            )
-            cv2.putText(
-                canvas,
-                'high',
-                (x0 - 2, top_margin + 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.35,
-                (220, 220, 220),
-                1,
-                cv2.LINE_AA,
-            )
-            cv2.putText(
-                canvas,
-                'low',
-                (x0 + 2, top_margin + bar_h - 2),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.35,
-                (220, 220, 220),
-                1,
-                cv2.LINE_AA,
-            )
-            cv2.putText(
-                canvas,
-                f'{m_max:.2f}',
-                (x0 + colorbar_w + 4, top_margin + 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.35,
-                (180, 180, 180),
-                1,
-                cv2.LINE_AA,
-            )
-            cv2.putText(
-                canvas,
-                f'{m_min:.2f}',
-                (x0 + colorbar_w + 4, top_margin + bar_h - 2),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.35,
-                (180, 180, 180),
-                1,
-                cv2.LINE_AA,
-            )
-            # Annotate cells with values
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            for r in range(rows):
-                for c in range(cols):
-                    val = float(m[r, c])
-                    label = f'{val:.2f}'
-                    (tw, th), _ = cv2.getTextSize(label, font, 0.35, 1)
-                    cx = left_margin + c * cell_w + cell_w // 2
-                    cy = top_margin + r * cell_h + cell_h // 2 + th // 2
-                    cv2.putText(canvas, label, (cx - tw // 2, cy), font, 0.35, (0, 0, 0), 2, cv2.LINE_AA)
-                    cv2.putText(canvas, label, (cx - tw // 2, cy), font, 0.35, (255, 255, 255), 1, cv2.LINE_AA)
-            return canvas
-
-        row_labels = [t.track_id for t in sorted(active_tracks, key=lambda t: t.track_id)]
-        col_labels = list(range(len(detections)))
-        hm_chi2 = build_heatmap(chi2_mat, 'Chi2 distance', row_labels, col_labels)
-        hm_d2 = build_heatmap(d2_mat, 'KF gating g^2 (0-20)', row_labels, col_labels, vmin=0.0, vmax=20.0)
-        heat_row = np.concatenate([hm_chi2, hm_d2], axis=1)
-
-        cv2.imshow('greedy_stitcher', to_display)
-        cv2.imshow('greedy_heatmaps', heat_row)
-        cv2.waitKey(self.debug_wait_ms)
