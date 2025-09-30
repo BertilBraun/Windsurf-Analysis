@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    
+        <script>
+            L_NO_TOUCH = false;
+            L_DISABLE_3D = false;
+        </script>
+    
+    <style>html, body {width: 100%;height: 100%;margin: 0;padding: 0;}</style>
+    <style>#map {position:absolute;top:0;bottom:0;right:0;left:0;}</style>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.6.0/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.6.0/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap-theme.min.css"/>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_80a7d0176995ba550ae13a0b2482e2da {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+            </style>
+        
+</head>
+<body>
+    
+    
+            <div class="folium-map" id="map_80a7d0176995ba550ae13a0b2482e2da" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_80a7d0176995ba550ae13a0b2482e2da = L.map(
+                "map_80a7d0176995ba550ae13a0b2482e2da",
+                {
+                    center: [28.25, -15.6],
+                    crs: L.CRS.EPSG3857,
+                    zoom: 7,
+                    zoomControl: true,
+                    preferCanvas: false,
+                }
+            );
+            L.control.scale().addTo(map_80a7d0176995ba550ae13a0b2482e2da);
+
+            
+
+        
+    
+            var tile_layer_3cbc8593c8aaebe015becc6427c73b99 = L.tileLayer(
+                "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {"attribution": "Data by \u0026copy; \u003ca href=\"http://openstreetmap.org\"\u003eOpenStreetMap\u003c/a\u003e, under \u003ca href=\"http://www.openstreetmap.org/copyright\"\u003eODbL\u003c/a\u003e.", "detectRetina": false, "maxNativeZoom": 18, "maxZoom": 18, "minZoom": 0, "noWrap": false, "opacity": 1, "subdomains": "abc", "tms": false}
+            ).addTo(map_80a7d0176995ba550ae13a0b2482e2da);
+        
+    
+            var tile_layer_888f0ce79a4b0571fea101762da35a6c = L.tileLayer(
+                "https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg",
+                {"attribution": "Map tiles by \u003ca href=\"http://stamen.com\"\u003eStamen Design\u003c/a\u003e, under \u003ca href=\"http://creativecommons.org/licenses/by/3.0\"\u003eCC BY 3.0\u003c/a\u003e. Data by \u0026copy; \u003ca href=\"http://openstreetmap.org\"\u003eOpenStreetMap\u003c/a\u003e, under \u003ca href=\"http://creativecommons.org/licenses/by-sa/3.0\"\u003eCC BY SA\u003c/a\u003e.", "detectRetina": false, "maxNativeZoom": 18, "maxZoom": 18, "minZoom": 0, "noWrap": false, "opacity": 1, "subdomains": "abc", "tms": false}
+            ).addTo(map_80a7d0176995ba550ae13a0b2482e2da);
+        
+    
+            var tile_layer_1b010248dd329ce2de202cbe12a48df4 = L.tileLayer(
+                "https://stamen-tiles-{s}.a.ssl.fastly.net/toner/{z}/{x}/{y}.png",
+                {"attribution": "Map tiles by \u003ca href=\"http://stamen.com\"\u003eStamen Design\u003c/a\u003e, under \u003ca href=\"http://creativecommons.org/licenses/by/3.0\"\u003eCC BY 3.0\u003c/a\u003e. Data by \u0026copy; \u003ca href=\"http://openstreetmap.org\"\u003eOpenStreetMap\u003c/a\u003e, under \u003ca href=\"http://www.openstreetmap.org/copyright\"\u003eODbL\u003c/a\u003e.", "detectRetina": false, "maxNativeZoom": 18, "maxZoom": 18, "minZoom": 0, "noWrap": false, "opacity": 1, "subdomains": "abc", "tms": false}
+            ).addTo(map_80a7d0176995ba550ae13a0b2482e2da);
+        
+    
+            var feature_group_9c6ecc43263870cb65bab41d744ed75b = L.featureGroup(
+                {}
+            ).addTo(map_80a7d0176995ba550ae13a0b2482e2da);
+        
+    
+            var circle_marker_9dc8ff3e122afd9b8607277169bbbce0 = L.circleMarker(
+                [27.8305, -15.4224],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 14, "stroke": true, "weight": 3}
+            ).addTo(feature_group_9c6ecc43263870cb65bab41d744ed75b);
+        
+    
+        var popup_b4c2b20910bc6d24dfe16257fcfdc3ed = L.popup({"maxWidth": 380});
+
+        
+            var html_df68a39db86dcc090bf2812933ccaf89 = $(`<div id="html_df68a39db86dcc090bf2812933ccaf89" style="width: 100.0%; height: 100.0%;"><b>Pozo Izquierdo (PWA Pozo)</b> — Gran Canaria<br/>Wave · popularity: high<br/>World‑class wave spot; strongest NE trades in summer.<br/><i>27.830500, -15.422400</i></div>`)[0];
+            popup_b4c2b20910bc6d24dfe16257fcfdc3ed.setContent(html_df68a39db86dcc090bf2812933ccaf89);
+        
+
+        circle_marker_9dc8ff3e122afd9b8607277169bbbce0.bindPopup(popup_b4c2b20910bc6d24dfe16257fcfdc3ed)
+        ;
+
+        
+    
+    
+            circle_marker_9dc8ff3e122afd9b8607277169bbbce0.bindTooltip(
+                `<div>
+                     Pozo Izquierdo (PWA Pozo) (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_89b0230562f328cbb5349ee20d780008 = L.circleMarker(
+                [27.89019, -15.39406],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 14, "stroke": true, "weight": 3}
+            ).addTo(feature_group_9c6ecc43263870cb65bab41d744ed75b);
+        
+    
+        var popup_ba34cbed4248089c6533591f22070ca1 = L.popup({"maxWidth": 380});
+
+        
+            var html_6c22d905e4177bdbee4c33437368c387 = $(`<div id="html_6c22d905e4177bdbee4c33437368c387" style="width: 100.0%; height: 100.0%;"><b>Playa de Vargas</b> — Gran Canaria<br/>Wave · popularity: high<br/>Open beach; bump & jump / wave depending on swell.<br/><i>27.890190, -15.394060</i></div>`)[0];
+            popup_ba34cbed4248089c6533591f22070ca1.setContent(html_6c22d905e4177bdbee4c33437368c387);
+        
+
+        circle_marker_89b0230562f328cbb5349ee20d780008.bindPopup(popup_ba34cbed4248089c6533591f22070ca1)
+        ;
+
+        
+    
+    
+            circle_marker_89b0230562f328cbb5349ee20d780008.bindTooltip(
+                `<div>
+                     Playa de Vargas (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_782e2bebe6c2822bfab8f5e5eb896d7f = L.circleMarker(
+                [27.950965, -15.380903],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_9c6ecc43263870cb65bab41d744ed75b);
+        
+    
+        var popup_c482fa3fa87a7667ff98ac6b0e30bd9a = L.popup({"maxWidth": 380});
+
+        
+            var html_5e8b1fbb9fe15fe1ce42a9c3e69d46cc = $(`<div id="html_5e8b1fbb9fe15fe1ce42a9c3e69d46cc" style="width: 100.0%; height: 100.0%;"><b>Ojos de Garza</b> — Gran Canaria<br/>Wave · popularity: low<br/>More exposed; usually for experienced locals.<br/><i>27.950965, -15.380903</i></div>`)[0];
+            popup_c482fa3fa87a7667ff98ac6b0e30bd9a.setContent(html_5e8b1fbb9fe15fe1ce42a9c3e69d46cc);
+        
+
+        circle_marker_782e2bebe6c2822bfab8f5e5eb896d7f.bindPopup(popup_c482fa3fa87a7667ff98ac6b0e30bd9a)
+        ;
+
+        
+    
+    
+            circle_marker_782e2bebe6c2822bfab8f5e5eb896d7f.bindTooltip(
+                `<div>
+                     Ojos de Garza (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_a500c7189aaaf92d75d4f847b757d762 = L.circleMarker(
+                [28.045708, -16.533286],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 14, "stroke": true, "weight": 3}
+            ).addTo(feature_group_9c6ecc43263870cb65bab41d744ed75b);
+        
+    
+        var popup_2a946f0ff6f2af8282a6c94de1f4ce3c = L.popup({"maxWidth": 380});
+
+        
+            var html_689c36f7c3b3d5ea978cc0bd14dd19c6 = $(`<div id="html_689c36f7c3b3d5ea978cc0bd14dd19c6" style="width: 100.0%; height: 100.0%;"><b>El Médano – Cabezo</b> — Tenerife<br/>Wave · popularity: high<br/>PWA wavespot (El Cabezo).<br/><i>28.045708, -16.533286</i></div>`)[0];
+            popup_2a946f0ff6f2af8282a6c94de1f4ce3c.setContent(html_689c36f7c3b3d5ea978cc0bd14dd19c6);
+        
+
+        circle_marker_a500c7189aaaf92d75d4f847b757d762.bindPopup(popup_2a946f0ff6f2af8282a6c94de1f4ce3c)
+        ;
+
+        
+    
+    
+            circle_marker_a500c7189aaaf92d75d4f847b757d762.bindTooltip(
+                `<div>
+                     El Médano – Cabezo (Tenerife)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_46666e002f4be1d780ddc288d14948e5 = L.circleMarker(
+                [28.5707, -16.317],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_9c6ecc43263870cb65bab41d744ed75b);
+        
+    
+        var popup_9eee4ee6ef7fa69686e3b948d97c9345 = L.popup({"maxWidth": 380});
+
+        
+            var html_2c79d6c68ea275da94c72bd5e9dc02ef = $(`<div id="html_2c79d6c68ea275da94c72bd5e9dc02ef" style="width: 100.0%; height: 100.0%;"><b>Punta del Hidalgo</b> — Tenerife<br/>Wave · popularity: low<br/>Surf-influenced; requires specific wind/swell.<br/><i>28.570700, -16.317000</i></div>`)[0];
+            popup_9eee4ee6ef7fa69686e3b948d97c9345.setContent(html_2c79d6c68ea275da94c72bd5e9dc02ef);
+        
+
+        circle_marker_46666e002f4be1d780ddc288d14948e5.bindPopup(popup_9eee4ee6ef7fa69686e3b948d97c9345)
+        ;
+
+        
+    
+    
+            circle_marker_46666e002f4be1d780ddc288d14948e5.bindTooltip(
+                `<div>
+                     Punta del Hidalgo (Tenerife)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_b16435bf210915cb10812bd2a4dc1e64 = L.circleMarker(
+                [28.393944, -16.603722],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_9c6ecc43263870cb65bab41d744ed75b);
+        
+    
+        var popup_2cb0de88badc73d64fbc5c253cd33b4f = L.popup({"maxWidth": 380});
+
+        
+            var html_dcde00392724b50c3f2d757a9bbf4f15 = $(`<div id="html_dcde00392724b50c3f2d757a9bbf4f15" style="width: 100.0%; height: 100.0%;"><b>El Socorro (Los Realejos)</b> — Tenerife<br/>Wave · popularity: low<br/>North-coast surf beach; advanced only.<br/><i>28.393944, -16.603722</i></div>`)[0];
+            popup_2cb0de88badc73d64fbc5c253cd33b4f.setContent(html_dcde00392724b50c3f2d757a9bbf4f15);
+        
+
+        circle_marker_b16435bf210915cb10812bd2a4dc1e64.bindPopup(popup_2cb0de88badc73d64fbc5c253cd33b4f)
+        ;
+
+        
+    
+    
+            circle_marker_b16435bf210915cb10812bd2a4dc1e64.bindTooltip(
+                `<div>
+                     El Socorro (Los Realejos) (Tenerife)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_17afa17de0851eb2ada80be8d3a21f3f = L.circleMarker(
+                [28.7215, -13.8315],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_9c6ecc43263870cb65bab41d744ed75b);
+        
+    
+        var popup_5794a514e3041b6daf0c05bdc3b26624 = L.popup({"maxWidth": 380});
+
+        
+            var html_974441fa673548a7460e7e3ff7f27e98 = $(`<div id="html_974441fa673548a7460e7e3ff7f27e98" style="width: 100.0%; height: 100.0%;"><b>Glass Beach (Playa del Burro)</b> — Fuerteventura<br/>Wave · popularity: medium<br/>Reef waves; advanced only; near dunes park.<br/><i>28.721500, -13.831500</i></div>`)[0];
+            popup_5794a514e3041b6daf0c05bdc3b26624.setContent(html_974441fa673548a7460e7e3ff7f27e98);
+        
+
+        circle_marker_17afa17de0851eb2ada80be8d3a21f3f.bindPopup(popup_5794a514e3041b6daf0c05bdc3b26624)
+        ;
+
+        
+    
+    
+            circle_marker_17afa17de0851eb2ada80be8d3a21f3f.bindTooltip(
+                `<div>
+                     Glass Beach (Playa del Burro) (Fuerteventura)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_ccae574842b2109a872355477e1f8ac2 = L.circleMarker(
+                [28.7356, -13.9984],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_9c6ecc43263870cb65bab41d744ed75b);
+        
+    
+        var popup_9d5e173f8f1e278613449f98978efb4b = L.popup({"maxWidth": 380});
+
+        
+            var html_b3a99027f27213e8217eff93300b578a = $(`<div id="html_b3a99027f27213e8217eff93300b578a" style="width: 100.0%; height: 100.0%;"><b>Majanicho (North shore reefs)</b> — Fuerteventura<br/>Wave · popularity: low<br/>Hardcore reef; needs swell + correct wind; expert only.<br/><i>28.735600, -13.998400</i></div>`)[0];
+            popup_9d5e173f8f1e278613449f98978efb4b.setContent(html_b3a99027f27213e8217eff93300b578a);
+        
+
+        circle_marker_ccae574842b2109a872355477e1f8ac2.bindPopup(popup_9d5e173f8f1e278613449f98978efb4b)
+        ;
+
+        
+    
+    
+            circle_marker_ccae574842b2109a872355477e1f8ac2.bindTooltip(
+                `<div>
+                     Majanicho (North shore reefs) (Fuerteventura)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_734d640cea28c20c900c9452646cb553 = L.circleMarker(
+                [28.2225, -14.2285],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "red", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_9c6ecc43263870cb65bab41d744ed75b);
+        
+    
+        var popup_c07aea110de62fdd634529d73b3276fc = L.popup({"maxWidth": 380});
+
+        
+            var html_957932b69941fdb91f2ef281e079b3be = $(`<div id="html_957932b69941fdb91f2ef281e079b3be" style="width: 100.0%; height: 100.0%;"><b>La Pared (West coast)</b> — Fuerteventura<br/>Wave · popularity: low<br/>Main beach access; heavy shorebreak; advanced only.<br/><i>28.222500, -14.228500</i></div>`)[0];
+            popup_c07aea110de62fdd634529d73b3276fc.setContent(html_957932b69941fdb91f2ef281e079b3be);
+        
+
+        circle_marker_734d640cea28c20c900c9452646cb553.bindPopup(popup_c07aea110de62fdd634529d73b3276fc)
+        ;
+
+        
+    
+    
+            circle_marker_734d640cea28c20c900c9452646cb553.bindTooltip(
+                `<div>
+                     La Pared (West coast) (Fuerteventura)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var feature_group_be0eda84d8fda69a0be78a82317af3fa = L.featureGroup(
+                {}
+            ).addTo(map_80a7d0176995ba550ae13a0b2482e2da);
+        
+    
+            var circle_marker_7deb766befcba7ff4c7eecc6a85d3a5e = L.circleMarker(
+                [27.9101721, -15.3872109],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_05f1dcf0c7a71725f2f55bb0ee9849a3 = L.popup({"maxWidth": 380});
+
+        
+            var html_0a80764d89ea96b79e61a7b3c3f4fb8f = $(`<div id="html_0a80764d89ea96b79e61a7b3c3f4fb8f" style="width: 100.0%; height: 100.0%;"><b>El Burrero</b> — Gran Canaria<br/>Freeride/mixed · popularity: medium<br/>Some protection but can have shorebreak on swell.<br/><i>27.910172, -15.387211</i></div>`)[0];
+            popup_05f1dcf0c7a71725f2f55bb0ee9849a3.setContent(html_0a80764d89ea96b79e61a7b3c3f4fb8f);
+        
+
+        circle_marker_7deb766befcba7ff4c7eecc6a85d3a5e.bindPopup(popup_05f1dcf0c7a71725f2f55bb0ee9849a3)
+        ;
+
+        
+    
+    
+            circle_marker_7deb766befcba7ff4c7eecc6a85d3a5e.bindTooltip(
+                `<div>
+                     El Burrero (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_3e55d92c93a47bce98eb165855a35a80 = L.circleMarker(
+                [27.7995446, -15.460263],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_be7237747e0c57501e2a019dd9e7db7e = L.popup({"maxWidth": 380});
+
+        
+            var html_7694dc14a7f3519e346957cc9b5c796e = $(`<div id="html_7694dc14a7f3519e346957cc9b5c796e" style="width: 100.0%; height: 100.0%;"><b>Castillo del Romeral</b> — Gran Canaria<br/>Freeride/mixed · popularity: medium<br/>Windy stretch; conditions vary with swell/tide.<br/><i>27.799545, -15.460263</i></div>`)[0];
+            popup_be7237747e0c57501e2a019dd9e7db7e.setContent(html_7694dc14a7f3519e346957cc9b5c796e);
+        
+
+        circle_marker_3e55d92c93a47bce98eb165855a35a80.bindPopup(popup_be7237747e0c57501e2a019dd9e7db7e)
+        ;
+
+        
+    
+    
+            circle_marker_3e55d92c93a47bce98eb165855a35a80.bindTooltip(
+                `<div>
+                     Castillo del Romeral (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_1dd6a222116cc62461ae8c1a754d53a8 = L.circleMarker(
+                [27.7808504, -15.5206944],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_01f3ef5ef551d73a4c2f7de709d13b43 = L.popup({"maxWidth": 380});
+
+        
+            var html_eb6cf532c174a443192d764fc4b76900 = $(`<div id="html_eb6cf532c174a443192d764fc4b76900" style="width: 100.0%; height: 100.0%;"><b>Bahía Feliz (Tarajalillo)</b> — Gran Canaria<br/>Freeride/mixed · popularity: medium<br/>Beginner‑friendly on calmer days; can get choppy.<br/><i>27.780850, -15.520694</i></div>`)[0];
+            popup_01f3ef5ef551d73a4c2f7de709d13b43.setContent(html_eb6cf532c174a443192d764fc4b76900);
+        
+
+        circle_marker_1dd6a222116cc62461ae8c1a754d53a8.bindPopup(popup_01f3ef5ef551d73a4c2f7de709d13b43)
+        ;
+
+        
+    
+    
+            circle_marker_1dd6a222116cc62461ae8c1a754d53a8.bindTooltip(
+                `<div>
+                     Bahía Feliz (Tarajalillo) (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_0f7c76555d93cf30c022a60d43944317 = L.circleMarker(
+                [27.7749497, -15.5304863],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_b80889a86a3acf6fa59f79e635d6f3cf = L.popup({"maxWidth": 380});
+
+        
+            var html_16ce4baa8a384af6a2311d5bbbcc1569 = $(`<div id="html_16ce4baa8a384af6a2311d5bbbcc1569" style="width: 100.0%; height: 100.0%;"><b>Playa del Águila</b> — Gran Canaria<br/>Freeride/mixed · popularity: medium<br/>Works best with low swell.<br/><i>27.774950, -15.530486</i></div>`)[0];
+            popup_b80889a86a3acf6fa59f79e635d6f3cf.setContent(html_16ce4baa8a384af6a2311d5bbbcc1569);
+        
+
+        circle_marker_0f7c76555d93cf30c022a60d43944317.bindPopup(popup_b80889a86a3acf6fa59f79e635d6f3cf)
+        ;
+
+        
+    
+    
+            circle_marker_0f7c76555d93cf30c022a60d43944317.bindTooltip(
+                `<div>
+                     Playa del Águila (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_6b87cdc2a353e5f604029e868f6dbcca = L.circleMarker(
+                [27.9965, -15.3775],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_87cd3e19a2cd1af460d9d6a7b9e24afd = L.popup({"maxWidth": 380});
+
+        
+            var html_32fb556bdb3b946a81f9411385a7cf2b = $(`<div id="html_32fb556bdb3b946a81f9411385a7cf2b" style="width: 100.0%; height: 100.0%;"><b>Melenara</b> — Gran Canaria<br/>Freeride/mixed · popularity: low<br/>Sideshore NE; gusty; watch shorebreak.<br/><i>27.996500, -15.377500</i></div>`)[0];
+            popup_87cd3e19a2cd1af460d9d6a7b9e24afd.setContent(html_32fb556bdb3b946a81f9411385a7cf2b);
+        
+
+        circle_marker_6b87cdc2a353e5f604029e868f6dbcca.bindPopup(popup_87cd3e19a2cd1af460d9d6a7b9e24afd)
+        ;
+
+        
+    
+    
+            circle_marker_6b87cdc2a353e5f604029e868f6dbcca.bindTooltip(
+                `<div>
+                     Melenara (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_3115c368c12c6179c1eddae866c3a754 = L.circleMarker(
+                [27.9908, -15.376],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_8d612e1842f64e9af3bd913640fb7c22 = L.popup({"maxWidth": 380});
+
+        
+            var html_1b2cafac323d1768c01074b1adec3560 = $(`<div id="html_1b2cafac323d1768c01074b1adec3560" style="width: 100.0%; height: 100.0%;"><b>Salinetas</b> — Gran Canaria<br/>Freeride/mixed · popularity: low<br/>Small bay next to Melenara; punchy shorebreak on swell.<br/><i>27.990800, -15.376000</i></div>`)[0];
+            popup_8d612e1842f64e9af3bd913640fb7c22.setContent(html_1b2cafac323d1768c01074b1adec3560);
+        
+
+        circle_marker_3115c368c12c6179c1eddae866c3a754.bindPopup(popup_8d612e1842f64e9af3bd913640fb7c22)
+        ;
+
+        
+    
+    
+            circle_marker_3115c368c12c6179c1eddae866c3a754.bindTooltip(
+                `<div>
+                     Salinetas (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_cad75dcd1791d34301ecb5b85660ceb9 = L.circleMarker(
+                [28.077, -15.411],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_cb6f7e50095e2982835cdaf107d47c59 = L.popup({"maxWidth": 380});
+
+        
+            var html_07b509252d49cea32a128c2416ef1892 = $(`<div id="html_07b509252d49cea32a128c2416ef1892" style="width: 100.0%; height: 100.0%;"><b>La Laja</b> — Gran Canaria<br/>Freeride/mixed · popularity: low<br/>Exposed beach south of Las Palmas; check flags/zones.<br/><i>28.077000, -15.411000</i></div>`)[0];
+            popup_cb6f7e50095e2982835cdaf107d47c59.setContent(html_07b509252d49cea32a128c2416ef1892);
+        
+
+        circle_marker_cad75dcd1791d34301ecb5b85660ceb9.bindPopup(popup_cb6f7e50095e2982835cdaf107d47c59)
+        ;
+
+        
+    
+    
+            circle_marker_cad75dcd1791d34301ecb5b85660ceb9.bindTooltip(
+                `<div>
+                     La Laja (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_4780f82789e44b0f8fe79233f2602865 = L.circleMarker(
+                [28.039, -15.402],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_7f24b3c62872098cec7455e785ff20a9 = L.popup({"maxWidth": 380});
+
+        
+            var html_6b4311151111178504dc8a464053115f = $(`<div id="html_6b4311151111178504dc8a464053115f" style="width: 100.0%; height: 100.0%;"><b>Jinámar</b> — Gran Canaria<br/>Freeride/mixed · popularity: low<br/>Gusty local spot; only for experienced sailors.<br/><i>28.039000, -15.402000</i></div>`)[0];
+            popup_7f24b3c62872098cec7455e785ff20a9.setContent(html_6b4311151111178504dc8a464053115f);
+        
+
+        circle_marker_4780f82789e44b0f8fe79233f2602865.bindPopup(popup_7f24b3c62872098cec7455e785ff20a9)
+        ;
+
+        
+    
+    
+            circle_marker_4780f82789e44b0f8fe79233f2602865.bindTooltip(
+                `<div>
+                     Jinámar (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_7754ee92417c5c1635da966339623d06 = L.circleMarker(
+                [27.7629, -15.5465],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_77ddc72fc0e08715e2bfac6e5fc6e43a = L.popup({"maxWidth": 380});
+
+        
+            var html_a5b172c1f782ca8a3e69c182729da8f4 = $(`<div id="html_a5b172c1f782ca8a3e69c182729da8f4" style="width: 100.0%; height: 100.0%;"><b>San Agustín</b> — Gran Canaria<br/>Freeride/mixed · popularity: low<br/>Downwind of Águila; sometimes used in lighter swell.<br/><i>27.762900, -15.546500</i></div>`)[0];
+            popup_77ddc72fc0e08715e2bfac6e5fc6e43a.setContent(html_a5b172c1f782ca8a3e69c182729da8f4);
+        
+
+        circle_marker_7754ee92417c5c1635da966339623d06.bindPopup(popup_77ddc72fc0e08715e2bfac6e5fc6e43a)
+        ;
+
+        
+    
+    
+            circle_marker_7754ee92417c5c1635da966339623d06.bindTooltip(
+                `<div>
+                     San Agustín (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_a944bf0240a871069bc56c048b2e4e5f = L.circleMarker(
+                [27.8556, -15.3929],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_cb94be14269857fa77f416331a04bece = L.popup({"maxWidth": 380});
+
+        
+            var html_704da7cfbd9c0aa296a7fb68f0b607b9 = $(`<div id="html_704da7cfbd9c0aa296a7fb68f0b607b9" style="width: 100.0%; height: 100.0%;"><b>Arinaga (Risco Verde)</b> — Gran Canaria<br/>Freeride/mixed · popularity: low<br/>Rocky entry; local bump/chop sessions.<br/><i>27.855600, -15.392900</i></div>`)[0];
+            popup_cb94be14269857fa77f416331a04bece.setContent(html_704da7cfbd9c0aa296a7fb68f0b607b9);
+        
+
+        circle_marker_a944bf0240a871069bc56c048b2e4e5f.bindPopup(popup_cb94be14269857fa77f416331a04bece)
+        ;
+
+        
+    
+    
+            circle_marker_a944bf0240a871069bc56c048b2e4e5f.bindTooltip(
+                `<div>
+                     Arinaga (Risco Verde) (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_9a8d69ecd51c80219e8be8d879215fb5 = L.circleMarker(
+                [28.044167, -16.538858],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 14, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_b4471a209d3fa3fb5b043d2b732fa4a6 = L.popup({"maxWidth": 380});
+
+        
+            var html_dbc9ca5c63fc3cc639ea192958847337 = $(`<div id="html_dbc9ca5c63fc3cc639ea192958847337" style="width: 100.0%; height: 100.0%;"><b>El Médano – Playa Sur (Bay)</b> — Tenerife<br/>Freeride/mixed · popularity: high<br/>Main bay (Leocadio Machado).<br/><i>28.044167, -16.538858</i></div>`)[0];
+            popup_b4471a209d3fa3fb5b043d2b732fa4a6.setContent(html_dbc9ca5c63fc3cc639ea192958847337);
+        
+
+        circle_marker_9a8d69ecd51c80219e8be8d879215fb5.bindPopup(popup_b4471a209d3fa3fb5b043d2b732fa4a6)
+        ;
+
+        
+    
+    
+            circle_marker_9a8d69ecd51c80219e8be8d879215fb5.bindTooltip(
+                `<div>
+                     El Médano – Playa Sur (Bay) (Tenerife)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_0e3779b2c320c35bacb86daefa65c087 = L.circleMarker(
+                [28.0379, -16.5386],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 14, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_b4aa2242c62b66007ffc95b7ee28b702 = L.popup({"maxWidth": 380});
+
+        
+            var html_d1ed8a6fcde531ba010986432a20fc91 = $(`<div id="html_d1ed8a6fcde531ba010986432a20fc91" style="width: 100.0%; height: 100.0%;"><b>La Tejita</b> — Tenerife<br/>Freeride/mixed · popularity: high<br/>Adjusted near SW corner by Montaña Roja; NE with low swell.<br/><i>28.037900, -16.538600</i></div>`)[0];
+            popup_b4aa2242c62b66007ffc95b7ee28b702.setContent(html_d1ed8a6fcde531ba010986432a20fc91);
+        
+
+        circle_marker_0e3779b2c320c35bacb86daefa65c087.bindPopup(popup_b4aa2242c62b66007ffc95b7ee28b702)
+        ;
+
+        
+    
+    
+            circle_marker_0e3779b2c320c35bacb86daefa65c087.bindTooltip(
+                `<div>
+                     La Tejita (Tenerife)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_04da56508c7cd5b0fe80d79cf0b3329a = L.circleMarker(
+                [28.142693, -16.440213],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_cae75f4c4ff5c4fcf67046095b9dd18b = L.popup({"maxWidth": 380});
+
+        
+            var html_c268f45f979363f0eed924b1e4ef956b = $(`<div id="html_c268f45f979363f0eed924b1e4ef956b" style="width: 100.0%; height: 100.0%;"><b>Abades (Los Abriguitos)</b> — Tenerife<br/>Freeride/mixed · popularity: medium<br/>Semi-sheltered bay; flatter inside.<br/><i>28.142693, -16.440213</i></div>`)[0];
+            popup_cae75f4c4ff5c4fcf67046095b9dd18b.setContent(html_c268f45f979363f0eed924b1e4ef956b);
+        
+
+        circle_marker_04da56508c7cd5b0fe80d79cf0b3329a.bindPopup(popup_cae75f4c4ff5c4fcf67046095b9dd18b)
+        ;
+
+        
+    
+    
+            circle_marker_04da56508c7cd5b0fe80d79cf0b3329a.bindTooltip(
+                `<div>
+                     Abades (Los Abriguitos) (Tenerife)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_58750adbf9347377301f344b3a874716 = L.circleMarker(
+                [28.16433, -16.432121],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_57d5f679fc8b3037d46ec815806069e6 = L.popup({"maxWidth": 380});
+
+        
+            var html_180b52e48c9b6c5b23d314093b73bd2f = $(`<div id="html_180b52e48c9b6c5b23d314093b73bd2f" style="width: 100.0%; height: 100.0%;"><b>El Porís de Abona</b> — Tenerife<br/>Freeride/mixed · popularity: medium<br/>Open sea; bump & jump.<br/><i>28.164330, -16.432121</i></div>`)[0];
+            popup_57d5f679fc8b3037d46ec815806069e6.setContent(html_180b52e48c9b6c5b23d314093b73bd2f);
+        
+
+        circle_marker_58750adbf9347377301f344b3a874716.bindPopup(popup_57d5f679fc8b3037d46ec815806069e6)
+        ;
+
+        
+    
+    
+            circle_marker_58750adbf9347377301f344b3a874716.bindTooltip(
+                `<div>
+                     El Porís de Abona (Tenerife)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_645b1db0ff2fdafedc222c79db71d320 = L.circleMarker(
+                [28.008765, -16.660122],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_ddc90019f5b40ea7155c7ebc7c3b5b4f = L.popup({"maxWidth": 380});
+
+        
+            var html_96ad6886201b2483d941658f06af6491 = $(`<div id="html_96ad6886201b2483d941658f06af6491" style="width: 100.0%; height: 100.0%;"><b>Las Galletas</b> — Tenerife<br/>Freeride/mixed · popularity: low<br/>By Marina del Sur; winter S/SW can work.<br/><i>28.008765, -16.660122</i></div>`)[0];
+            popup_ddc90019f5b40ea7155c7ebc7c3b5b4f.setContent(html_96ad6886201b2483d941658f06af6491);
+        
+
+        circle_marker_645b1db0ff2fdafedc222c79db71d320.bindPopup(popup_ddc90019f5b40ea7155c7ebc7c3b5b4f)
+        ;
+
+        
+    
+    
+            circle_marker_645b1db0ff2fdafedc222c79db71d320.bindTooltip(
+                `<div>
+                     Las Galletas (Tenerife)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_ea6d18e4acbfb5a5cdb2bbff1e44b49b = L.circleMarker(
+                [28.098213, -16.752021],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_2acc114e26c3fbf316741f714aee5a60 = L.popup({"maxWidth": 380});
+
+        
+            var html_47b9c9b9f6400b1e1230d72fa0233763 = $(`<div id="html_47b9c9b9f6400b1e1230d72fa0233763" style="width: 100.0%; height: 100.0%;"><b>La Caleta (Adeje)</b> — Tenerife<br/>Freeride/mixed · popularity: low<br/>Playa La Enramada area; opportunistic S/SW.<br/><i>28.098213, -16.752021</i></div>`)[0];
+            popup_2acc114e26c3fbf316741f714aee5a60.setContent(html_47b9c9b9f6400b1e1230d72fa0233763);
+        
+
+        circle_marker_ea6d18e4acbfb5a5cdb2bbff1e44b49b.bindPopup(popup_2acc114e26c3fbf316741f714aee5a60)
+        ;
+
+        
+    
+    
+            circle_marker_ea6d18e4acbfb5a5cdb2bbff1e44b49b.bindTooltip(
+                `<div>
+                     La Caleta (Adeje) (Tenerife)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_31e4a14f64e182aff643fbeb1729c9e8 = L.circleMarker(
+                [28.7207, -13.8366],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 14, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_2d80ef55e11577b78a12ac47bbf6289b = L.popup({"maxWidth": 380});
+
+        
+            var html_641c7fb8023ab922c957ace47c3aec40 = $(`<div id="html_641c7fb8023ab922c957ace47c3aec40" style="width: 100.0%; height: 100.0%;"><b>Flag Beach (Corralejo dunes)</b> — Fuerteventura<br/>Freeride/mixed · popularity: high<br/>Long sandy beach; chop/bump; lessons operate here.<br/><i>28.720700, -13.836600</i></div>`)[0];
+            popup_2d80ef55e11577b78a12ac47bbf6289b.setContent(html_641c7fb8023ab922c957ace47c3aec40);
+        
+
+        circle_marker_31e4a14f64e182aff643fbeb1729c9e8.bindPopup(popup_2d80ef55e11577b78a12ac47bbf6289b)
+        ;
+
+        
+    
+    
+            circle_marker_31e4a14f64e182aff643fbeb1729c9e8.bindTooltip(
+                `<div>
+                     Flag Beach (Corralejo dunes) (Fuerteventura)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_de4c7d0506bbd4229c7225cd479d77f7 = L.circleMarker(
+                [28.533, -13.8566],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_14c5383c79a78497cc693ff8257a5a68 = L.popup({"maxWidth": 380});
+
+        
+            var html_b2fcf4e77a572257591ba4076c17cf17 = $(`<div id="html_b2fcf4e77a572257591ba4076c17cf17" style="width: 100.0%; height: 100.0%;"><b>Puerto Lajas</b> — Fuerteventura<br/>Freeride/mixed · popularity: medium<br/>Local spot north of Puerto del Rosario; gusty; foil/freeride.<br/><i>28.533000, -13.856600</i></div>`)[0];
+            popup_14c5383c79a78497cc693ff8257a5a68.setContent(html_b2fcf4e77a572257591ba4076c17cf17);
+        
+
+        circle_marker_de4c7d0506bbd4229c7225cd479d77f7.bindPopup(popup_14c5383c79a78497cc693ff8257a5a68)
+        ;
+
+        
+    
+    
+            circle_marker_de4c7d0506bbd4229c7225cd479d77f7.bindTooltip(
+                `<div>
+                     Puerto Lajas (Fuerteventura)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_baf8c6a007dedd109ae691bf82e1cd40 = L.circleMarker(
+                [28.4856, -13.8592],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_b4d14467dd22d38db16cc78546f34571 = L.popup({"maxWidth": 380});
+
+        
+            var html_dbeecf23fc08d6a7db72e34a03c71cdb = $(`<div id="html_dbeecf23fc08d6a7db72e34a03c71cdb" style="width: 100.0%; height: 100.0%;"><b>Playa Blanca (Puerto del Rosario)</b> — Fuerteventura<br/>Freeride/mixed · popularity: medium<br/>Chop/flat sections; gusty with NE trades.<br/><i>28.485600, -13.859200</i></div>`)[0];
+            popup_b4d14467dd22d38db16cc78546f34571.setContent(html_dbeecf23fc08d6a7db72e34a03c71cdb);
+        
+
+        circle_marker_baf8c6a007dedd109ae691bf82e1cd40.bindPopup(popup_b4d14467dd22d38db16cc78546f34571)
+        ;
+
+        
+    
+    
+            circle_marker_baf8c6a007dedd109ae691bf82e1cd40.bindTooltip(
+                `<div>
+                     Playa Blanca (Puerto del Rosario) (Fuerteventura)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_ebfdf7ab273c2663db83e3934306b25c = L.circleMarker(
+                [28.164, -14.2195],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 14, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_39612aff384d1b13db3a9bb0476a88e3 = L.popup({"maxWidth": 380});
+
+        
+            var html_2b4e0f198a6dc892251fae4103867ce6 = $(`<div id="html_2b4e0f198a6dc892251fae4103867ce6" style="width: 100.0%; height: 100.0%;"><b>Sotavento – René Egli / Event Site</b> — Fuerteventura<br/>Freeride/mixed · popularity: high<br/>Outside beach; PWA slalom/freestyle site; strong NE trades.<br/><i>28.164000, -14.219500</i></div>`)[0];
+            popup_39612aff384d1b13db3a9bb0476a88e3.setContent(html_2b4e0f198a6dc892251fae4103867ce6);
+        
+
+        circle_marker_ebfdf7ab273c2663db83e3934306b25c.bindPopup(popup_39612aff384d1b13db3a9bb0476a88e3)
+        ;
+
+        
+    
+    
+            circle_marker_ebfdf7ab273c2663db83e3934306b25c.bindTooltip(
+                `<div>
+                     Sotavento – René Egli / Event Site (Fuerteventura)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_4c2af837e6fc5c6ebe21802b46dd922f = L.circleMarker(
+                [28.1214, -14.2702],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 14, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_e472e1d32d9cf8df4dcb5b7219d42407 = L.popup({"maxWidth": 380});
+
+        
+            var html_e562c01f3579ddf025fbe406ae10326b = $(`<div id="html_e562c01f3579ddf025fbe406ae10326b" style="width: 100.0%; height: 100.0%;"><b>Risco del Paso</b> — Fuerteventura<br/>Freeride/mixed · popularity: high<br/>Launch/rigging area near dune spit; flatter inside.<br/><i>28.121400, -14.270200</i></div>`)[0];
+            popup_e472e1d32d9cf8df4dcb5b7219d42407.setContent(html_e562c01f3579ddf025fbe406ae10326b);
+        
+
+        circle_marker_4c2af837e6fc5c6ebe21802b46dd922f.bindPopup(popup_e472e1d32d9cf8df4dcb5b7219d42407)
+        ;
+
+        
+    
+    
+            circle_marker_4c2af837e6fc5c6ebe21802b46dd922f.bindTooltip(
+                `<div>
+                     Risco del Paso (Fuerteventura)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_87d3d2979ad400a4e490b90c6d65175d = L.circleMarker(
+                [28.1682, -14.2263],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_f496a3d60fe00479f8b1b3fa0a34328b = L.popup({"maxWidth": 380});
+
+        
+            var html_f3534406e75174293e7a758991448144 = $(`<div id="html_f3534406e75174293e7a758991448144" style="width: 100.0%; height: 100.0%;"><b>Costa Calma</b> — Fuerteventura<br/>Freeride/mixed · popularity: medium<br/>Chop/freeride area north of Sotavento; centers nearby.<br/><i>28.168200, -14.226300</i></div>`)[0];
+            popup_f496a3d60fe00479f8b1b3fa0a34328b.setContent(html_f3534406e75174293e7a758991448144);
+        
+
+        circle_marker_87d3d2979ad400a4e490b90c6d65175d.bindPopup(popup_f496a3d60fe00479f8b1b3fa0a34328b)
+        ;
+
+        
+    
+    
+            circle_marker_87d3d2979ad400a4e490b90c6d65175d.bindTooltip(
+                `<div>
+                     Costa Calma (Fuerteventura)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_ec10d459719a15ed539da349aa54e30b = L.circleMarker(
+                [28.2065, -14.216],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_1da3ee6d956872889c6744a0bcd4b8a8 = L.popup({"maxWidth": 380});
+
+        
+            var html_fdeb7f0d3f5e17cd082a8b79bc986a3b = $(`<div id="html_fdeb7f0d3f5e17cd082a8b79bc986a3b" style="width: 100.0%; height: 100.0%;"><b>Matas Blancas</b> — Fuerteventura<br/>Freeride/mixed · popularity: medium<br/>Speed-strip stretch north of Costa Calma; slalom/foil.<br/><i>28.206500, -14.216000</i></div>`)[0];
+            popup_1da3ee6d956872889c6744a0bcd4b8a8.setContent(html_fdeb7f0d3f5e17cd082a8b79bc986a3b);
+        
+
+        circle_marker_ec10d459719a15ed539da349aa54e30b.bindPopup(popup_1da3ee6d956872889c6744a0bcd4b8a8)
+        ;
+
+        
+    
+    
+            circle_marker_ec10d459719a15ed539da349aa54e30b.bindTooltip(
+                `<div>
+                     Matas Blancas (Fuerteventura)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_53b1d49109a3c6fd49202691537c6b79 = L.circleMarker(
+                [28.0513, -14.3503],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "blue", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_be0eda84d8fda69a0be78a82317af3fa);
+        
+    
+        var popup_5ecb2526313c2cf03aedef29bb24b430 = L.popup({"maxWidth": 380});
+
+        
+            var html_4cd5a4ba94a3469837ba39da269ff425 = $(`<div id="html_4cd5a4ba94a3469837ba39da269ff425" style="width: 100.0%; height: 100.0%;"><b>Morro Jable (Jandía)</b> — Fuerteventura<br/>Freeride/mixed · popularity: low<br/>Occasional sessions; more touristic; variable winds.<br/><i>28.051300, -14.350300</i></div>`)[0];
+            popup_5ecb2526313c2cf03aedef29bb24b430.setContent(html_4cd5a4ba94a3469837ba39da269ff425);
+        
+
+        circle_marker_53b1d49109a3c6fd49202691537c6b79.bindPopup(popup_5ecb2526313c2cf03aedef29bb24b430)
+        ;
+
+        
+    
+    
+            circle_marker_53b1d49109a3c6fd49202691537c6b79.bindTooltip(
+                `<div>
+                     Morro Jable (Jandía) (Fuerteventura)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var feature_group_0c8ed09cf4e37c5edd5e0d15a930e2a8 = L.featureGroup(
+                {}
+            ).addTo(map_80a7d0176995ba550ae13a0b2482e2da);
+        
+    
+            var circle_marker_167e78cab8b110fd0dde59371810aace = L.circleMarker(
+                [27.84257, -15.41056],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "green", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 14, "stroke": true, "weight": 3}
+            ).addTo(feature_group_0c8ed09cf4e37c5edd5e0d15a930e2a8);
+        
+    
+        var popup_ed849e2da15d715507c54025b2b57206 = L.popup({"maxWidth": 380});
+
+        
+            var html_266ea6848f459f1a969cb472817b7fc1 = $(`<div id="html_266ea6848f459f1a969cb472817b7fc1" style="width: 100.0%; height: 100.0%;"><b>Bahía de Formas (Arinaga bay)</b> — Gran Canaria<br/>Sheltered/flat/harbour · popularity: high<br/>Flatter water inside the bay; outside gets chop.<br/><i>27.842570, -15.410560</i></div>`)[0];
+            popup_ed849e2da15d715507c54025b2b57206.setContent(html_266ea6848f459f1a969cb472817b7fc1);
+        
+
+        circle_marker_167e78cab8b110fd0dde59371810aace.bindPopup(popup_ed849e2da15d715507c54025b2b57206)
+        ;
+
+        
+    
+    
+            circle_marker_167e78cab8b110fd0dde59371810aace.bindTooltip(
+                `<div>
+                     Bahía de Formas (Arinaga bay) (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_cac43cb32846689f92e66b275d36a9e0 = L.circleMarker(
+                [28.1325, -15.4314],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "green", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_0c8ed09cf4e37c5edd5e0d15a930e2a8);
+        
+    
+        var popup_c0f82354bd0c8c3049b9e3940c85c088 = L.popup({"maxWidth": 380});
+
+        
+            var html_0e8f7c14735b89721a2024274fa32092 = $(`<div id="html_0e8f7c14735b89721a2024274fa32092" style="width: 100.0%; height: 100.0%;"><b>Alcaravaneras (Las Palmas inner bay)</b> — Gran Canaria<br/>Sheltered/flat/harbour · popularity: low<br/>Flattest water; gusty/dirty wind; respect swim/boat zones.<br/><i>28.132500, -15.431400</i></div>`)[0];
+            popup_c0f82354bd0c8c3049b9e3940c85c088.setContent(html_0e8f7c14735b89721a2024274fa32092);
+        
+
+        circle_marker_cac43cb32846689f92e66b275d36a9e0.bindPopup(popup_c0f82354bd0c8c3049b9e3940c85c088)
+        ;
+
+        
+    
+    
+            circle_marker_cac43cb32846689f92e66b275d36a9e0.bindTooltip(
+                `<div>
+                     Alcaravaneras (Las Palmas inner bay) (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_fd239c4a49db85daa935602d0f265d27 = L.circleMarker(
+                [27.9996, -15.3765],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "green", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 7, "stroke": true, "weight": 3}
+            ).addTo(feature_group_0c8ed09cf4e37c5edd5e0d15a930e2a8);
+        
+    
+        var popup_06564e6357bf110b9effcc076debd003 = L.popup({"maxWidth": 380});
+
+        
+            var html_9defe387fc1b3999771ff9b63f269a6d = $(`<div id="html_9defe387fc1b3999771ff9b63f269a6d" style="width: 100.0%; height: 100.0%;"><b>Taliarte (harbour)</b> — Gran Canaria<br/>Sheltered/flat/harbour · popularity: low<br/>Small harbour; occasional foil/freestyle. Mind traffic.<br/><i>27.999600, -15.376500</i></div>`)[0];
+            popup_06564e6357bf110b9effcc076debd003.setContent(html_9defe387fc1b3999771ff9b63f269a6d);
+        
+
+        circle_marker_fd239c4a49db85daa935602d0f265d27.bindPopup(popup_06564e6357bf110b9effcc076debd003)
+        ;
+
+        
+    
+    
+            circle_marker_fd239c4a49db85daa935602d0f265d27.bindTooltip(
+                `<div>
+                     Taliarte (harbour) (Gran Canaria)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_29e2e32f06b8124b27b73909d1f7933e = L.circleMarker(
+                [28.0693, -16.4978],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "green", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_0c8ed09cf4e37c5edd5e0d15a930e2a8);
+        
+    
+        var popup_f6ba64d847b62541f0385ba3a8655272 = L.popup({"maxWidth": 380});
+
+        
+            var html_8dc49ea5ae5348714c0232b43e39e453 = $(`<div id="html_8dc49ea5ae5348714c0232b43e39e453" style="width: 100.0%; height: 100.0%;"><b>Granadilla Harbour (Puerto industrial)</b> — Tenerife<br/>Sheltered/flat/harbour · popularity: medium<br/>Industrial port; access restrictions may apply.<br/><i>28.069300, -16.497800</i></div>`)[0];
+            popup_f6ba64d847b62541f0385ba3a8655272.setContent(html_8dc49ea5ae5348714c0232b43e39e453);
+        
+
+        circle_marker_29e2e32f06b8124b27b73909d1f7933e.bindPopup(popup_f6ba64d847b62541f0385ba3a8655272)
+        ;
+
+        
+    
+    
+            circle_marker_29e2e32f06b8124b27b73909d1f7933e.bindTooltip(
+                `<div>
+                     Granadilla Harbour (Puerto industrial) (Tenerife)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_982132ba47e526774795d01f3add51f7 = L.circleMarker(
+                [28.290823, -16.379755],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "green", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_0c8ed09cf4e37c5edd5e0d15a930e2a8);
+        
+    
+        var popup_cb41d559d58299e8bea255e55f2a7524 = L.popup({"maxWidth": 380});
+
+        
+            var html_550a0afb518e45cde16e57d510d83b09 = $(`<div id="html_550a0afb518e45cde16e57d510d83b09" style="width: 100.0%; height: 100.0%;"><b>Puertito de Güímar</b> — Tenerife<br/>Sheltered/flat/harbour · popularity: medium<br/>Harbour; flat/gusty. Respect zones.<br/><i>28.290823, -16.379755</i></div>`)[0];
+            popup_cb41d559d58299e8bea255e55f2a7524.setContent(html_550a0afb518e45cde16e57d510d83b09);
+        
+
+        circle_marker_982132ba47e526774795d01f3add51f7.bindPopup(popup_cb41d559d58299e8bea255e55f2a7524)
+        ;
+
+        
+    
+    
+            circle_marker_982132ba47e526774795d01f3add51f7.bindTooltip(
+                `<div>
+                     Puertito de Güímar (Tenerife)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_8ec2f64da9c560ac8faf49b497e7bdb6 = L.circleMarker(
+                [28.40352, -16.322474],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "green", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(feature_group_0c8ed09cf4e37c5edd5e0d15a930e2a8);
+        
+    
+        var popup_c4959d510676ce64283d6e6577270908 = L.popup({"maxWidth": 380});
+
+        
+            var html_979748d30ba5e1b58f766929cd47d769 = $(`<div id="html_979748d30ba5e1b58f766929cd47d769" style="width: 100.0%; height: 100.0%;"><b>Radazul</b> — Tenerife<br/>Sheltered/flat/harbour · popularity: medium<br/>Flat water inside; gusty wind.<br/><i>28.403520, -16.322474</i></div>`)[0];
+            popup_c4959d510676ce64283d6e6577270908.setContent(html_979748d30ba5e1b58f766929cd47d769);
+        
+
+        circle_marker_8ec2f64da9c560ac8faf49b497e7bdb6.bindPopup(popup_c4959d510676ce64283d6e6577270908)
+        ;
+
+        
+    
+    
+            circle_marker_8ec2f64da9c560ac8faf49b497e7bdb6.bindTooltip(
+                `<div>
+                     Radazul (Tenerife)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var circle_marker_ec8c35cfc09e98967ecf45f08bca9680 = L.circleMarker(
+                [28.1598, -14.222],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "green", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 14, "stroke": true, "weight": 3}
+            ).addTo(feature_group_0c8ed09cf4e37c5edd5e0d15a930e2a8);
+        
+    
+        var popup_863fcc93977efcb9a0eeca6e75ba8329 = L.popup({"maxWidth": 380});
+
+        
+            var html_e566f2c904819993b97c92cbe261dce8 = $(`<div id="html_e566f2c904819993b97c92cbe261dce8" style="width: 100.0%; height: 100.0%;"><b>Sotavento Lagoon (tide/berm dependent)</b> — Fuerteventura<br/>Sheltered/flat/harbour · popularity: high<br/>Lagoon center behind sandbar; tide/berm dependent.<br/><i>28.159800, -14.222000</i></div>`)[0];
+            popup_863fcc93977efcb9a0eeca6e75ba8329.setContent(html_e566f2c904819993b97c92cbe261dce8);
+        
+
+        circle_marker_ec8c35cfc09e98967ecf45f08bca9680.bindPopup(popup_863fcc93977efcb9a0eeca6e75ba8329)
+        ;
+
+        
+    
+    
+            circle_marker_ec8c35cfc09e98967ecf45f08bca9680.bindTooltip(
+                `<div>
+                     Sotavento Lagoon (tide/berm dependent) (Fuerteventura)
+                 </div>`,
+                {"sticky": true}
+            );
+        
+    
+            var layer_control_8eb933092fbb9bb72a2ca7777b82cd83 = {
+                base_layers : {
+                    "openstreetmap" : tile_layer_3cbc8593c8aaebe015becc6427c73b99,
+                    "Terrain" : tile_layer_888f0ce79a4b0571fea101762da35a6c,
+                    "Toner (hi-contrast)" : tile_layer_1b010248dd329ce2de202cbe12a48df4,
+                },
+                overlays :  {
+                    "Wave" : feature_group_9c6ecc43263870cb65bab41d744ed75b,
+                    "Freeride/mixed" : feature_group_be0eda84d8fda69a0be78a82317af3fa,
+                    "Sheltered/flat/harbour" : feature_group_0c8ed09cf4e37c5edd5e0d15a930e2a8,
+                },
+            };
+            L.control.layers(
+                layer_control_8eb933092fbb9bb72a2ca7777b82cd83.base_layers,
+                layer_control_8eb933092fbb9bb72a2ca7777b82cd83.overlays,
+                {"autoZIndex": true, "collapsed": false, "position": "topright"}
+            ).addTo(map_80a7d0176995ba550ae13a0b2482e2da);
+            tile_layer_888f0ce79a4b0571fea101762da35a6c.remove();
+            tile_layer_1b010248dd329ce2de202cbe12a48df4.remove();
+        
+</script>
+</html>
