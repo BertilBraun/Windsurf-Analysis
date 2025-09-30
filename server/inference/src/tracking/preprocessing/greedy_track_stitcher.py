@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from bisect import bisect_right
 import logging
-from dataclasses import dataclass, field
 from enum import Enum
-from typing import DefaultDict, Dict, Iterable, List, Tuple, Optional
+from typing import DefaultDict, Dict, Iterable, List, NamedTuple, Tuple, Optional
 from collections import defaultdict
 
 import numpy as np
@@ -13,7 +11,7 @@ from server.inference.src.settings import EPS
 from server.inference.src.visualization.stabilize import Transform
 from ...util.video_io import VideoInfo, VideoReader
 from ...common_types import BoundingBox, Detection, FrameIndex, Track, TrackId
-from server.inference.bot_sort.kalman_filter import KalmanFilter
+from server.inference.bot_sort.kalman_filter import KFState, KalmanFilter
 
 
 def chi2_dist(p: np.ndarray, q: np.ndarray, eps: float = EPS) -> float:
@@ -29,46 +27,10 @@ class _ComparisonResult(Enum):
     NO_MATCH = 'no_match'
 
 
-KF = KalmanFilter()
-
-
-@dataclass(frozen=True)
-class _KFState:
-    mean: np.ndarray  # (8,)
-    cov: np.ndarray  # (8,8)
-    last_frame: int
-
-    _cached_predictions: Dict[int, Tuple[np.ndarray, np.ndarray, int]] = field(default_factory=dict)
-
-    def predict_to(self, to_frame: int, gmc: Dict[int, Transform]) -> Tuple[np.ndarray, np.ndarray, int]:
-        if to_frame <= self.last_frame:
-            return self.mean, self.cov, self.last_frame
-        if to_frame in self._cached_predictions:
-            return self._cached_predictions[to_frame]
-
-        start_m, start_P, start_frame = self.mean, self.cov, self.last_frame
-
-        frames = sorted(self._cached_predictions.keys())
-        idx = bisect_right(frames, to_frame - 1) - 1
-        if idx >= 0 and frames[idx] <= to_frame and frames[idx] > start_frame:
-            start_m, start_P, start_frame = self._cached_predictions[frames[idx]]
-
-        m, P = KF.advance_state_to_frame(start_m, start_P, gmc, start_frame, int(to_frame))
-        self._cached_predictions[to_frame] = (m, P, int(to_frame))
-        return m, P, int(to_frame)
-
-    def update_to_det(self, det: Detection, gmc: Dict[int, Transform]) -> _KFState:
-        m, P, _ = self.predict_to(det.frame_idx, gmc)
-        m2, P2 = KF.update(m, P, det.bbox.center_wh)
-        return _KFState(mean=m2, cov=P2, last_frame=det.frame_idx)
-
-    @staticmethod
-    def init_kf(tr: Track) -> _KFState:
-        m, P = KF.initiate(tr.sorted_detections[0].bbox.center_wh)
-        return _KFState(mean=m, cov=P, last_frame=tr.start_frame)
-
-
 # ────────────────────────────── main class ────────────────────────────── #
+
+Candidate = NamedTuple('Candidate', [('clean', list[Track]), ('maybe', list[Track])])
+DetectionCandidate = NamedTuple('DetectionCandidate', [('detection', Detection), ('candidate', Candidate)])
 
 
 class GreedyTrackStitcher:
@@ -105,8 +67,6 @@ class GreedyTrackStitcher:
         self.max_frame_distance = int(max_frame_distance)
         self.ema_alpha = float(ema_alpha)
 
-        self._kf = KalmanFilter()
-
         # Debug config/state
         self.debug_vis = False  # True
         self.debug_wait_ms = 0  # TODO remove
@@ -118,8 +78,8 @@ class GreedyTrackStitcher:
     def track(self, tracks: List[Track], video_properties: VideoInfo, transforms: List[Transform]) -> List[Track]:
         """Greedily stitches single-detection tracks into longer tracks."""
         logging.info(f'{"=" * 28} Greedy preprocessor: {len(tracks)} inputs {"=" * 28}')
-        dets_by_frame = self._group_single_detections_by_frame(tracks)
-        frames = sorted(dets_by_frame.keys())
+        detections_by_frame = self._group_single_detections_by_frame(tracks)
+        frames = sorted(detections_by_frame.keys())
         gmc = {int(t.frame_idx): t for t in transforms}  # per-frame forward delta (f-1 → f)
 
         # Lazy-load frames for debug if requested
@@ -140,33 +100,27 @@ class GreedyTrackStitcher:
         active: List[Track] = []
         stale: List[Track] = []
         stale_ids: set[TrackId] = set()
-        kf_state: Dict[TrackId, _KFState] = {}
+        kf_state: Dict[TrackId, KFState] = {}
         next_tid = 1
 
         for f in frames:
-            candidates = dets_by_frame[f]
-            matches, picked_by_det, d2_mat, chi2_mat = self._collect_matches_for_frame(
-                f, candidates, active, kf_state, gmc
-            )
+            candidates = self._collect_candidate_matches_for_frame(detections_by_frame[f], active, kf_state, gmc)
 
             # Optional debug visualization for this frame
             if self.debug_vis:
                 try:
                     self._debug_show_frame_and_heatmaps(
                         frame=f,
-                        detections=candidates,
+                        detections=detections_by_frame[f],
                         active_tracks=active,
                         kf_state=kf_state,
                         gmc=gmc,
-                        picked_by_det=picked_by_det,
-                        d2_mat=d2_mat,
-                        chi2_mat=chi2_mat,
                     )
                 except Exception:
                     pass
 
             # resolve per-track conflicts & update states
-            new_tracks, newly_staled, next_tid = self._apply_matches(matches, active, kf_state, next_tid, gmc)
+            new_tracks, newly_staled, next_tid = self._apply_matches(candidates, active, kf_state, next_tid, gmc)
             stale.extend(newly_staled)
             stale_ids.update(t.track_id for t in newly_staled)
             active = new_tracks
@@ -183,48 +137,18 @@ class GreedyTrackStitcher:
 
     # ─────────────────────── per-frame orchestration ─────────────────────── #
 
-    def _collect_matches_for_frame(
+    def _collect_candidate_matches_for_frame(
         self,
-        frame: int,
         detections: List[Detection],
         active_tracks: List[Track],
-        kf_state: Dict[TrackId, _KFState],
+        kf_state: Dict[TrackId, KFState],
         gmc: Dict[int, Transform],
-    ) -> Tuple[
-        List[Tuple[Track, Detection]],
-        Dict[int, Optional[Track]],
-        Optional[np.ndarray],
-        Optional[np.ndarray],
-    ]:
+    ) -> List[DetectionCandidate]:
         """Build (track, det) proposals for this frame. Returns matches and debug data."""
-        results: List[Tuple[Track, Detection]] = []
+
+        candidates: List[DetectionCandidate] = []
         other_boxes = self._end_boxes(active_tracks)
 
-        # Prepare matrices for debug heatmaps (rows: tracks, cols: detections)
-        sorted_tracks = sorted(active_tracks, key=lambda t: t.track_id)
-        d2_mat = np.full((len(sorted_tracks), len(detections)), np.nan, dtype=np.float32) if detections else None
-        chi2_mat = np.full((len(sorted_tracks), len(detections)), np.nan, dtype=np.float32) if detections else None
-
-        # Compute pairwise distances for debug
-        if d2_mat is not None and chi2_mat is not None:
-            for r, tr in enumerate(sorted_tracks):
-                st = kf_state.get(tr.track_id)
-                for c, det in enumerate(detections):
-                    try:
-                        if st is not None:
-                            m_pred, P_pred, _ = st.predict_to(det.frame_idx, gmc)
-                            d2 = float(
-                                self._kf.gating_distance(
-                                    m_pred, P_pred, det.bbox.center_wh[None, :], only_position=True, metric='maha'
-                                )[0]
-                            )
-                            d2_mat[r, c] = d2
-                        ema = tr.sorted_detections[0].embedding
-                        chi2_mat[r, c] = chi2_dist(ema, det.embedding)
-                    except Exception:
-                        pass
-
-        picked_by_det: Dict[int, Optional[Track]] = {}
         for det in detections:
             clean: List[Track] = []
             maybe: List[Track] = []
@@ -236,22 +160,15 @@ class GreedyTrackStitcher:
                 elif decision == _ComparisonResult.MAY_MATCH:
                     maybe.append(tr)
 
-            picked = self._pick_track_for_detection(clean, maybe)
-            picked_by_det[det.frame_idx * 1000000 + id(det)] = picked  # unique key per det instance
-            if picked is None:
-                # will be turned into a brand-new track later
-                tmp = Track(track_id=-1, sorted_detections=[det])  # temporary id
-                results.append((tmp, det))  # TODO clean and maybe are now stale, right?
-            else:
-                results.append((picked, det))
+            candidates.append(DetectionCandidate(detection=det, candidate=Candidate(clean=clean, maybe=maybe)))
 
-        return results, picked_by_det, d2_mat, chi2_mat
+        return candidates
 
     def _apply_matches(
         self,
-        matches: List[Tuple[Track, Detection]],
+        candidates: List[DetectionCandidate],
         active_tracks: List[Track],
-        kf_state: Dict[TrackId, _KFState],
+        kf_state: Dict[TrackId, KFState],
         next_tid: int,
         gmc: Dict[int, Transform],
     ) -> Tuple[List[Track], List[Track], int]:
@@ -259,45 +176,63 @@ class GreedyTrackStitcher:
         Resolve multiple detections per track, update KF+EMA, spawn new tracks.
         Returns: (new_active_tracks, newly_staled_tracks, next_tid)
         """
-        per_tid: DefaultDict[int, List[Detection]] = defaultdict(list)
-        tid_to_track: Dict[int, Track] = {}
-        for tr, d in matches:
-            per_tid[tr.track_id].append(d)
-            tid_to_track[tr.track_id] = tr
+        newly_staled: List[Track] = []
+        newly_staled_ids: set[TrackId] = set()
 
         new_active: List[Track] = [t for t in active_tracks]  # will edit in place
-        newly_staled: List[Track] = []
 
-        for tid, dets in per_tid.items():
-            if tid == -1:
-                # spawn one new track per such detection
-                for d in dets:
-                    new_track = Track(track_id=next_tid, sorted_detections=[d])
-                    new_active.append(new_track)
-                    kf_state[new_track.track_id] = _KFState.init_kf(new_track)
-                    next_tid += 1
-                continue
+        matches: List[Tuple[Track, Detection]] = []
 
-            tr = next(t for t in new_active if t.track_id == tid)
+        def new_track(detections: List[Detection]) -> Track:
+            nonlocal next_tid
+            new_track = Track(track_id=next_tid, sorted_detections=detections)
+            kf_state[new_track.track_id] = KFState.init(new_track)
+            next_tid += 1
+            return new_track
 
-            if len(dets) > 1:
+        for detection, candidate in candidates:
+            if len(candidate.clean) == 1:
+                matches.append((candidate.clean[0], detection))
+            elif len(candidate.clean) == 0 and len(candidate.maybe) == 1:
+                matches.append((candidate.maybe[0], detection))
+            else:
                 # ambiguous → stale current and split into new tracks
-                newly_staled.append(tr)
+                newly_staled.extend(candidate.clean + candidate.maybe)
+                newly_staled_ids.update(t.track_id for t in candidate.clean + candidate.maybe)
+                new_active = [t for t in new_active if t.track_id not in newly_staled_ids]
+                new_active.append(new_track([detection]))
+
+        per_tid: DefaultDict[int, List[Detection]] = defaultdict(list)
+        tid_to_track: Dict[int, Track] = {}
+        for track, detection in matches:
+            per_tid[track.track_id].append(detection)
+            tid_to_track[track.track_id] = track
+
+        for tid, detections in per_tid.items():
+            active_track_for_me = [t for t in new_active if t.track_id == tid]
+            if len(active_track_for_me) == 0:
+                # The active track for this tid has been made stale - simply instantiate a new track
+                for detection in detections:
+                    new_active.append(new_track([detection]))
+                continue
+            assert len(active_track_for_me) == 1
+            track = active_track_for_me[0]
+
+            if len(detections) > 1:
+                # ambiguous → stale current and split into new tracks
+                newly_staled.append(track)
                 new_active = [t for t in new_active if t.track_id != tid]
-                for d in dets:
-                    new_track = Track(track_id=next_tid, sorted_detections=[d])
-                    new_active.append(new_track)
-                    kf_state[new_track.track_id] = _KFState.init_kf(new_track)
-                    next_tid += 1
+                for detection in detections:
+                    new_active.append(new_track([detection]))
             else:
                 # single extension
-                d = dets[0]
-                assert d.frame_idx not in (tr.detections_by_frame.keys()), (
-                    f'Detection {d.frame_idx} already in track {tr.track_id}'
+                detection = detections[0]
+                assert detection.frame_idx not in (track.detections_by_frame.keys()), (
+                    f'Detection {detection.frame_idx} already in track {track.track_id}'
                 )
-                tr.sorted_detections.append(d)
-                kf_state[tr.track_id] = kf_state[tr.track_id].update_to_det(d, gmc)
-                self._update_track_ema(tr)
+                track.sorted_detections.append(detection)
+                kf_state[track.track_id] = kf_state[track.track_id].update_to_det(detection, gmc)
+                self._update_track_ema(track)
 
         return new_active, newly_staled, next_tid
 
@@ -308,7 +243,7 @@ class GreedyTrackStitcher:
         track: Track,
         det: Detection,
         other_boxes: Dict[TrackId, BoundingBox],
-        kf_state: Dict[TrackId, _KFState],
+        kf_state: Dict[TrackId, KFState],
         gmc: Dict[int, Transform],
     ) -> _ComparisonResult:
         """Score motion (Mahalanobis d²) and appearance (χ²); apply gates + isolation."""
@@ -317,10 +252,8 @@ class GreedyTrackStitcher:
         if st is None:
             return _ComparisonResult.MAY_MATCH  # brand-new active track, be lenient
 
-        m_pred, P_pred, _ = st.predict_to(det.frame_idx, gmc)
-        d2 = float(
-            self._kf.gating_distance(m_pred, P_pred, det.bbox.center_wh[None, :], only_position=True, metric='maha')[0]
-        )
+        predicted_state = st.predict_to(det.frame_idx, gmc)
+        d2 = float(predicted_state.gating_distance(det.bbox.center_wh[None, :], only_position=True, metric='maha')[0])
 
         # appearance (EMA is stored in track.sorted_detections[0].embedding)
         ema = track.sorted_detections[0].embedding
@@ -338,8 +271,8 @@ class GreedyTrackStitcher:
         if d2 <= self.gate_loose_d2 and chi2 <= self.chi2_loose:
             return _ComparisonResult.MAY_MATCH
 
-        if self._is_isolated(det, track.track_id, other_boxes):
-            return _ComparisonResult.MAY_MATCH
+        # if self._is_isolated(det, track.track_id, other_boxes):
+        #     return _ComparisonResult.MAY_MATCH
 
         return _ComparisonResult.NO_MATCH
 
@@ -407,11 +340,8 @@ class GreedyTrackStitcher:
         frame: int,
         detections: List[Detection],
         active_tracks: List[Track],
-        kf_state: Dict[TrackId, _KFState],
+        kf_state: Dict[TrackId, KFState],
         gmc: Dict[int, Transform],
-        picked_by_det: Dict[int, Optional[Track]],
-        d2_mat: Optional[np.ndarray],
-        chi2_mat: Optional[np.ndarray],
     ) -> None:
         if not self.debug_vis:
             return
@@ -428,6 +358,32 @@ class GreedyTrackStitcher:
             return
 
         to_display = frame_img.copy()
+
+        # Prepare matrices for debug heatmaps (rows: tracks, cols: detections)
+        sorted_tracks = sorted(active_tracks, key=lambda t: t.track_id)
+        d2_mat = np.full((len(sorted_tracks), len(detections)), np.nan, dtype=np.float32) if detections else None
+        chi2_mat = np.full((len(sorted_tracks), len(detections)), np.nan, dtype=np.float32) if detections else None
+
+        # Compute pairwise distances for debug
+        if d2_mat is not None and chi2_mat is not None:
+            for r, tr in enumerate(sorted_tracks):
+                st = kf_state.get(tr.track_id)
+                for c, det in enumerate(detections):
+                    try:
+                        if st is not None:
+                            predicted_state = st.predict_to(det.frame_idx, gmc)
+                            d2 = float(
+                                predicted_state.gating_distance(
+                                    det.bbox.center_wh[None, :],
+                                    only_position=True,
+                                    metric='maha',
+                                )[0]
+                            )
+                            d2_mat[r, c] = d2
+                        ema = tr.sorted_detections[0].embedding
+                        chi2_mat[r, c] = chi2_dist(ema, det.embedding)
+                    except Exception:
+                        pass
 
         # Draw detections (white)
         for idx, d in enumerate(detections):
@@ -450,8 +406,8 @@ class GreedyTrackStitcher:
             if st is None:
                 continue
             try:
-                m_pred, P_pred, _ = st.predict_to(frame, gmc)
-                cx, cy, w, h = self._kf.display_bbox(m_pred, P_pred, alpha=0.0)
+                predicted_state = st.predict_to(frame, gmc)
+                cx, cy, w, h = predicted_state.display_bbox(alpha=0.0)
                 x1 = int(cx - w / 2.0)
                 y1 = int(cy - h / 2.0)
                 x2 = int(cx + w / 2.0)
@@ -473,14 +429,9 @@ class GreedyTrackStitcher:
         # Draw association lines for picked pairs with g^2
         # Build lookup of detection indices for stable labeling
         for d in detections:
-            picked = picked_by_det.get(d.frame_idx * 1000000 + id(d))
-            if picked is None or picked.track_id == -1:
-                continue
+            continue  # TODO fix?
             try:
-                st = kf_state.get(picked.track_id)
-                if st is None:
-                    continue
-                m_pred, P_pred, _ = st.predict_to(d.frame_idx, gmc)
+                m_pred, P_pred, _ = kf_state[tr.track_id].predict_to(d.frame_idx, gmc)
                 z = d.bbox.center_wh.astype(np.float64).reshape(1, 4)
                 g2 = float(self._kf.gating_distance(m_pred, P_pred, z, only_position=True, metric='maha')[0])
 
