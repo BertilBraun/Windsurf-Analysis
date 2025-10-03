@@ -2,22 +2,21 @@
 
 import math
 import numpy as np
-from typing import TYPE_CHECKING
 
-
-if TYPE_CHECKING:
-    NDArrayF = np.ndarray
+NDArrayF = np.ndarray
 
 from server.inference.src.common_types import FrameIndex
 from server.inference.src.visualization.stabilize import Transform
 
 
 class CMC:
+    """Camera motion compensation. Functionality to apply camera motion compensation Transforms to a KF state."""
+
     def __init__(self, transforms: list[Transform]):
-        self._transforms_dict: dict[FrameIndex, Transform] = {t.frame_idx: t for t in transforms}
+        self._transforms_dict: dict[FrameIndex, Transform] = {t.frame_idx - 1: t for t in transforms}
 
     def apply_forward(self, mean: NDArrayF, cov: NDArrayF, frame_idx: FrameIndex) -> tuple[NDArrayF, NDArrayF]:
-        """Apply one prev→curr delta to KF state and covariance."""
+        """Apply one prev→curr delta to KF state and covariance. Advances from frame_idx to frame_idx+1."""
         transform = self._transforms_dict[frame_idx]
         A, T = self._build_A_T(transform)
         m = A @ mean

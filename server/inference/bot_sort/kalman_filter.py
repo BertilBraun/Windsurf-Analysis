@@ -279,7 +279,8 @@ class KalmanFilter:
         to_frame: FrameIndex,
     ) -> tuple[NDArrayF, NDArrayF]:
         """Step from `from_frame` to `to_frame` using per-frame forward deltas.
-        Assumes `cmc` encodes the forward delta f -> f+1.
+        Assumes that `from_frame` was not predicted, nor camera motion compensated.
+        `to_frame` is the frame after the last prediction.
         Advances for f = from_frame .. to_frame-1 (no overstep)."""
         if to_frame <= from_frame:
             return mean, cov
