@@ -22,8 +22,8 @@ import numpy as np
 from typing import List
 
 from ...common_types import Track, TrackId
-from ...util.similarity_helpers import cosine_similarity, mean_embedding
 from ...util.video_io import VideoInfo
+from ...util.similarity_helpers import Embedding
 
 
 class FilterNonSurfers:
@@ -52,23 +52,20 @@ class FilterNonSurfers:
 
         kept: List[Track] = []
 
-        track_id_to_average_embedding: dict[TrackId, np.ndarray] = {}
+        track_id_to_average_embedding: dict[TrackId, Embedding] = {}
         for track in tracks:
             if len(track.sorted_detections) >= self.min_frames:
-                track_id_to_average_embedding[track.track_id] = mean_embedding(track)
+                track_id_to_average_embedding[track.track_id] = track.mean_embedding()
 
         for track in tracks:
             if len(track.sorted_detections) >= self.min_frames:
                 kept.append(track)  # always keep long tracks
                 continue
 
-            short_track_average_embedding = mean_embedding(track)
+            short_track_average_embedding = track.mean_embedding()
 
             for long_track_average_embedding in track_id_to_average_embedding.values():
-                if (
-                    cosine_similarity(short_track_average_embedding, long_track_average_embedding)
-                    > self.similarity_thresh
-                ):
+                if short_track_average_embedding.distance(long_track_average_embedding) > self.similarity_thresh:
                     kept.append(track)
                     break
 

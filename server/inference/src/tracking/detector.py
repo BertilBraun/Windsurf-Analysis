@@ -168,19 +168,13 @@ def _flush_reid_batch(
         return
 
     features = reid_model.get_features_for_crops(pending_crops)
-    assert features.shape[0] == len(pending_meta)
+    assert len(features) == len(pending_meta)
 
     for i, (bbox, confidence, frame_idx) in enumerate(pending_meta):
-        embedding = features[i]
-        # Ensure numerical safety: normalize if slightly off
-        norm = np.linalg.norm(embedding)
-        if norm > 0 and abs(norm - 1.0) > 1e-3:
-            embedding = embedding / norm
-
         output_detections.append(
             Detection(
                 bbox=bbox,
-                embedding=embedding,
+                embedding=features[i],
                 confidence=confidence,
                 frame_idx=frame_idx,
             )

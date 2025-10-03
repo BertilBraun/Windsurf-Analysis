@@ -20,9 +20,7 @@ from ..settings import (
     MAX_OVERLAP_LENGTH_SECONDS,
 )
 from ..common_types import Track
-from ..util.similarity_helpers import mean_embedding
 from ..util.video_io import VideoInfo
-from ..util.similarity_helpers import cosine_similarity
 
 
 class GreedyTracker:
@@ -48,7 +46,7 @@ class GreedyTracker:
                 break
 
             # Pre‑compute average embeddings
-            avg_emb = [mean_embedding(t) for t in working]
+            avg_emb = [t.mean_embedding() for t in working]
 
             best_i, best_j, best_sim = None, None, -1.0
             # Evaluate all unordered pairs
@@ -56,7 +54,7 @@ class GreedyTracker:
                 for j in range(i + 1, n):
                     if not _can_merge(working[i], working[j], max_gap=max_gap):
                         continue
-                    sim = cosine_similarity(avg_emb[i], avg_emb[j])
+                    sim = avg_emb[i].distance(avg_emb[j])
                     # TODO prefer to merge longer tracks?
                     # longest_track_length = max(len(t.sorted_detections) for t in working)
                     # (len(working[i].sorted_detections) + len(working[j].sorted_detections)) / (2 * longest_track_length)

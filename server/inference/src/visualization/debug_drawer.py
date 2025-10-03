@@ -58,13 +58,6 @@ from ..util.video_io import VideoInfo
 
 
 from ..common_types import BoundingBox, Detection, FrameIndex, Point, TrackId, Track
-from ..util.similarity_helpers import (
-    cosine_similarity,
-    mean_embedding_cosine_similarity,
-    pairwise_cosine_similarity,
-    pairwise_squared_cosine_similarity,
-    prop_embeddings_sim,
-)
 
 
 BOX_COLOR_CUR = (255, 255, 255)  # white
@@ -388,7 +381,7 @@ def generate_debug_video_worker_function(
                     for _t_id, det_p in prev_dets:
                         prev_c_global = prev_view._feed_to_global(*det_p.bbox.center)
                         cos = (
-                            cosine_similarity(det_c.embedding, det_p.embedding)
+                            det_c.embedding.similarity(det_p.embedding)
                             if det_c.embedding is not None and det_p.embedding is not None
                             else float('nan')
                         )
@@ -541,22 +534,10 @@ def debug_track_similarities(
                             color = canvas.palette[cnt % len(canvas.palette)]
                             cnt += 1
 
-                            cos_end_start = cosine_similarity(active_track.start.embedding, t.end.embedding)
+                            cos_end_start = active_track.start.embedding.distance(t.end.embedding)
                             iou = bbox.iou(bbox_active)
-                            pw_cos = pairwise_cosine_similarity(active_track, t)
-                            mean_emb_cos = mean_embedding_cosine_similarity(active_track, t)
-                            pw_cos2 = pairwise_squared_cosine_similarity(active_track, t)
-                            min_sim = 0.5
-                            prop_gt_min_sim = prop_embeddings_sim(active_track, t, min_sim=min_sim)
 
-                            txt = (
-                                f'c_se={cos_end_start:.2f}\n'
-                                f'iou={iou:.2f}\n'
-                                f'pw_cos={pw_cos:.2f}\n'
-                                f'mean_emb_cos={mean_emb_cos:.2f}\n'
-                                f'pw_cos2={pw_cos2:.2f}\n'
-                                f'prop>{min_sim}={prop_gt_min_sim:.2f}'
-                            )
+                            txt = f'c_se={cos_end_start:.2f}\niou={iou:.2f}\n'
                             canvas.draw_line_with_label(
                                 bbox_center_global,
                                 bbox_active_global,

@@ -39,7 +39,6 @@ from typing import List, Optional
 
 from server.inference.src.visualization.stabilize import Transform
 
-from ..util.similarity_helpers import cosine_similarity, mean_embedding_cosine_similarity
 from ..util.video_io import VideoInfo
 from ..common_types import Track
 
@@ -202,7 +201,7 @@ class DiscreteOptTracker:
 
         # Appearance similarity
         if adaptive_params.window_radius >= min_duration_frames:  # Use mean appearance for long tracks
-            cos = mean_embedding_cosine_similarity(start, end)
+            cos = start.mean_embedding().distance(end.mean_embedding())
         else:
             cos = self._calculate_windowed_cosine_similarity(start, end, adaptive_params.window_radius)
 
@@ -239,7 +238,7 @@ class DiscreteOptTracker:
                 if d2 is None:
                     continue
 
-                cos = cosine_similarity(d1.embedding, d2.embedding)
+                cos = d1.embedding.distance(d2.embedding)
                 cos_sum += cos
                 n_pairs += 1
 

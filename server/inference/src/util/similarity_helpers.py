@@ -1,128 +1,93 @@
+from __future__ import annotations
+from typing import Protocol
+
 import numpy as np
-from typing import Callable
 
-from ..common_types import Detection, Track
-
-
-def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+from .algebra import l2_normalize, l1_normalize
 
 
-def _calc_pairwise(a: Track, b: Track, metric: Callable[[Detection, Detection], float]) -> float:
-    """Calculate pairwise metric between all detections in two tracks."""
-    total = 0
-    count = 0
-    for da in a.sorted_detections:
-        for db in b.sorted_detections:
-            total += metric(da, db)
-            count += 1
-    return total / count if count > 0 else 0.0
+class Embedding(Protocol):
+    def distance(self, other: Embedding) -> float: ...
+    def interpolate(self, other: Embedding, alpha: float) -> Embedding: ...
+    @staticmethod
+    def mean(embeddings: list[Embedding]) -> Embedding: ...
 
 
-def l2_normalize(a: np.ndarray) -> np.ndarray:
-    return a / (np.maximum(1e-8, np.linalg.norm(a)))
+class VectorEmbedding:
+    def __init__(self, embedding: np.ndarray):
+        self.__embedding = l2_normalize(embedding)
 
+    @property
+    def embedding(self) -> np.ndarray:
+        return self.__embedding
 
-def mean_embedding(t: Track) -> np.ndarray:
-    """Calculate the mean embedding of a track."""
-    return l2_normalize(np.mean([l2_normalize(d.embedding) for d in t.sorted_detections], axis=0))
-
-
-def pairwise_cosine_similarity(a: Track, b: Track) -> float:
-    """Calculate pairwise cosine similarity between all detections in two tracks."""
-    return _calc_pairwise(a, b, lambda a, b: cosine_similarity(a.embedding, b.embedding))
-
-
-def mean_embedding_cosine_similarity(a: Track, b: Track) -> float:
-    """Calculate cosine similarity between mean embeddings of two tracks."""
-    return cosine_similarity(
-        mean_embedding(a),
-        mean_embedding(b),
-    )
-
-
-def pairwise_squared_cosine_similarity(a: Track, b: Track) -> float:
-    """Calculate pairwise squared cosine similarity between all detections in two tracks."""
-    return _calc_pairwise(a, b, lambda a, b: cosine_similarity(a.embedding, b.embedding) ** 2)
-
-
-def prop_embeddings_sim(a: Track, b: Track, min_sim: float = 0.5) -> float:
-    """Count how many embeddings in two tracks have cosine similarity above a threshold."""
-    count = 0
-    cnt = 0
-    for da in a.sorted_detections:
-        for db in b.sorted_detections:
-            cnt += 1
-            if cosine_similarity(da.embedding, db.embedding) >= min_sim:
-                count += 1
-    return count / cnt if cnt > 0 else 0.0
-
-
-def print_track_similarity_statistics(tracks: list[Track], greedy_min_cosine_similarity: float):
-    # for the tracks, I want to experiment:
-    # I want to compute the average embedding vector of each track
-    # I want to compute the average cosine similarity between the embedding vectors of each detection of a track with the average embedding vector of the track
-    # I want to compute the average cosine similarity between the embedding vectors of each detection of other tracks with the average embedding vector of the track
-    # I want to compute the pairwise cosine similarity between the average embedding vectors of each of the tracks
-
-    average_embeddings = {}
-    for track in tracks:
-        average_embedding = np.mean([d.embedding for d in track.sorted_detections], axis=0)
-        average_embeddings[track.track_id] = average_embedding
-
-        average_cosine_similarity = 0
-        for detection in track.sorted_detections:
-            average_cosine_similarity += cosine_similarity(detection.embedding, average_embedding)
-        average_cosine_similarity /= len(track.sorted_detections)
-        print(
-            f'Track {track.track_id} average cosine similarity with its own detections: {average_cosine_similarity} ({len(track.sorted_detections)} detections)'
+    def distance(self, other: Embedding) -> float:
+        if not isinstance(other, VectorEmbedding):
+            raise ValueError(f'Expected VectorEmbedding, got {type(other)}')
+        similarity = np.dot(self.embedding, other.embedding) / (
+            np.linalg.norm(self.embedding) * np.linalg.norm(other.embedding)
         )
+        return 1 - similarity
 
-        for other_track in tracks:
-            if other_track.track_id == track.track_id:
-                continue
-            if (
-                other_track.start_frame < track.end_frame  # It does not start after the track
-                or other_track.start_frame > track.end_frame + 30  # It starts too far in the future
-            ):
-                continue
-            average_cosine_similarity = 0
-            for detection in other_track.sorted_detections:
-                average_cosine_similarity += cosine_similarity(detection.embedding, average_embedding)
-            average_cosine_similarity /= len(other_track.sorted_detections)
-            print(
-                f'Track {track.track_id} average cosine similarity with track {other_track.track_id}: {average_cosine_similarity} ({len(other_track.sorted_detections)} detections)'
-            )
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, VectorEmbedding):
+            return False
+        return np.allclose(self.embedding, other.embedding)
 
-    for i in range(len(tracks)):
-        for j in range(len(tracks)):
-            track_i = tracks[i]
-            track_j = tracks[j]
-            if (
-                track_i.start_frame < track_j.end_frame  # It does not start after the track
-                or track_i.start_frame > track_j.end_frame + 30  # It starts too far in the future
-                or i == j
-            ):
-                continue
-            average_cosine_similarity = cosine_similarity(
-                average_embeddings[track_i.track_id], average_embeddings[track_j.track_id]
-            )
-            print(
-                f'Pairwise cosine similarity between track {track_j.track_id} and track {track_i.track_id}: {average_cosine_similarity} ({len(track_i.sorted_detections)} vs {len(track_j.sorted_detections)} detections)'
-            )
+    def __hash__(self) -> int:
+        return hash(tuple(self.embedding))
 
-            average_pairwise_cosine_similarity = 0
-            number_of_detections_with_good_similarity = 0
-            for detection_i in track_i.sorted_detections:
-                for detection_j in track_j.sorted_detections:
-                    sim = cosine_similarity(detection_i.embedding, detection_j.embedding)
-                    if sim >= greedy_min_cosine_similarity:
-                        number_of_detections_with_good_similarity += 1
-                    average_pairwise_cosine_similarity += sim
-            average_pairwise_cosine_similarity /= len(track_i.sorted_detections) * len(track_j.sorted_detections)
-            print(
-                f'Average pairwise cosine similarity between track {track_j.track_id} and track {track_i.track_id}: {average_pairwise_cosine_similarity}'
-            )
-            print(
-                f'Number of detections with good similarity: {number_of_detections_with_good_similarity}/{len(track_i.sorted_detections) * len(track_j.sorted_detections)} ({number_of_detections_with_good_similarity / (len(track_i.sorted_detections) * len(track_j.sorted_detections)) * 100:.2f}%)'
-            )
+    def interpolate(self, other: Embedding, alpha: float) -> VectorEmbedding:
+        if not isinstance(other, VectorEmbedding):
+            raise ValueError(f'Expected VectorEmbedding, got {type(other)}')
+        return VectorEmbedding(self.embedding * (1 - alpha) + other.embedding * alpha)
+
+    @staticmethod
+    def mean(embeddings: list[Embedding]) -> VectorEmbedding:
+        if not all(isinstance(e, VectorEmbedding) for e in embeddings):
+            raise ValueError(f'Expected list of VectorEmbedding, got {type(embeddings)}')
+        return VectorEmbedding(np.mean([e.embedding for e in embeddings], axis=0))  # type: ignore
+
+
+class HistogramEmbedding:
+    def __init__(self, histogram: np.ndarray):
+        self.__histogram = l1_normalize(histogram)
+
+    @property
+    def histogram(self) -> np.ndarray:
+        return self.__histogram
+
+    def distance(self, other: Embedding, eps: float = 1e-8) -> float:
+        if not isinstance(other, HistogramEmbedding):
+            raise ValueError(f'Expected HistogramEmbedding, got {type(other)}')
+        """Calculate the chi2 distance between two embeddings."""
+        num = (self.histogram - other.histogram) ** 2
+        den = self.histogram + other.histogram + eps
+        return 0.5 * float((num / den).sum())
+
+    def probability(
+        self, other: HistogramEmbedding, a: float = 7.427828328625088, b: float = 4.088360175681194
+    ) -> float:
+        """Calculate the probability for a distance to say, that the two tracks are the same. `a` and `b` are parameters of the platt scaling. The returned probability is in the range [0, 1] (sigmoid(a * -d + b))"""
+        z = a * (-self.distance(other)) + b
+        p = 1.0 / (1.0 + np.exp(-z))
+        return float(np.clip(p, 1e-6, 1 - 1e-6))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, HistogramEmbedding):
+            return False
+        return np.allclose(self.histogram, other.histogram)
+
+    def __hash__(self) -> int:
+        return hash(tuple(self.histogram))
+
+    def interpolate(self, other: Embedding, alpha: float) -> HistogramEmbedding:
+        if not isinstance(other, HistogramEmbedding):
+            raise ValueError(f'Expected HistogramEmbedding, got {type(other)}')
+        return HistogramEmbedding(self.histogram * (1 - alpha) + other.histogram * alpha)
+
+    @staticmethod
+    def mean(embeddings: list[Embedding]) -> HistogramEmbedding:
+        if not all(isinstance(e, HistogramEmbedding) for e in embeddings):
+            raise ValueError(f'Expected list of HistogramEmbedding, got {type(embeddings)}')
+        return HistogramEmbedding(np.mean([e.histogram for e in embeddings], axis=0))  # type: ignore

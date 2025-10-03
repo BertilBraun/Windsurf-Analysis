@@ -7,6 +7,8 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Iterator
 
+from server.inference.src.util.similarity_helpers import Embedding
+
 
 @dataclass
 class Point:
@@ -123,24 +125,21 @@ class BoundingBox:
 @dataclass
 class Detection:
     bbox: BoundingBox
-    embedding: np.ndarray
+    embedding: Embedding
     confidence: float
     frame_idx: FrameIndex
-
-    def __post_init__(self):
-        self.embedding /= np.maximum(1e-8, np.linalg.norm(self.embedding))
 
     def copy(self) -> Detection:
         return Detection(
             bbox=self.bbox.copy(),
-            embedding=self.embedding.copy(),
+            embedding=self.embedding,
             confidence=self.confidence,
             frame_idx=self.frame_idx,
         )
 
     def interpolate(self, other: Detection, alpha: float, frame_idx: FrameIndex) -> Detection:
         new_bbox = self.bbox.interpolate(other.bbox, alpha)
-        new_embedding = (1 - alpha) * self.embedding + alpha * other.embedding
+        new_embedding = self.embedding.interpolate(other.embedding, alpha)
         new_confidence = (1 - alpha) * self.confidence + alpha * other.confidence
 
         return Detection(
@@ -221,11 +220,14 @@ class Track:
         assert False
 
     @cache
-    def mean_embedding(self) -> np.ndarray:
+    def mean_embedding(self, ema: float = 0.9) -> Embedding:
         assert self.sorted_detections, 'Track has no detections.'
-        from .util.similarity_helpers import l2_normalize
+        embedding: Embedding = self.sorted_detections[0].embedding
+        for detection in self.sorted_detections[1:]:
+            embedding = embedding.interpolate(detection.embedding, ema)  # type: ignore
+        return embedding
 
-        return l2_normalize(np.mean([l2_normalize(d.embedding) for d in self.sorted_detections], axis=0))
+        return Embedding.mean([d.embedding for d in self.sorted_detections])
 
     def __hash__(self) -> int:
         return hash((self.track_id, tuple(self.sorted_detections)))
