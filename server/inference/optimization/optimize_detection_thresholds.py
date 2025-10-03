@@ -25,7 +25,7 @@ os.environ.setdefault('YOLO_CONFIG_DIR', str(server_root / 'ultralytics'))
 
 from ultralytics import YOLO  # type: ignore
 
-from server.inference.src.settings import YOLO_MODEL_PATH, BATCH_SIZE
+from server.inference.src.settings import YOLO_MODEL_PATH, DETECTOR_BATCH_SIZE
 
 
 IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp'}
@@ -146,7 +146,7 @@ def _evaluate_combo(
     # Run model inference on all images
     paths = [str(p) for p in image_paths]
     results = model.predict(
-        paths, conf=float(conf), iou=float(iou), batch=int(BATCH_SIZE), stream=True, save=False, verbose=False
+        paths, conf=float(conf), iou=float(iou), batch=int(DETECTOR_BATCH_SIZE), stream=True, save=False, verbose=False
     )
 
     total_tp = total_fp = total_fn = 0
