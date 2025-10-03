@@ -34,6 +34,12 @@
             "problemMatcher": []
         },
         {
+            "label": "optimize_iter_ilp",
+            "type": "shell",
+            "command": "python server/inference/optimization/optimize_tracker.py --golden-dir ${input:golden-dir} --mode iter_ilp",
+            "problemMatcher": []
+        },
+        {
             "label": "optimize_detection_thresholds",
             "type": "shell",
             "command": "python server/inference/optimization/optimize_detection_thresholds.py --golden-dir ${input:golden-dir}",
@@ -48,7 +54,13 @@
         {
             "label": "compare_trackers",
             "type": "shell",
-            "command": "python server/inference/optimization/compare_trackers.py --golden-dir ${input:golden-dir}",
+            "command": "python server/inference/optimization/compare_trackers.py --golden-dir ${input:golden-dir} --tracker iter_ilp",
+            "problemMatcher": []
+        },
+        {
+            "label": "compare_preprocessor",
+            "type": "shell",
+            "command": "python server/inference/optimization/compare_trackers.py --golden-dir ${input:golden-dir} --tracker preprocessor",
             "problemMatcher": []
         },
         {
