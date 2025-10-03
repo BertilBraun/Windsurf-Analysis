@@ -18,9 +18,9 @@ from ..settings import (
     USE_GPU,
     YOLO_MODEL_PATH,
     MIN_TRACKING_FPS,
-    IOU_THRESHOLD,
-    CONFIDENCE_THRESHOLD,
-    BATCH_SIZE,
+    DETECTOR_IOU_THRESHOLD,
+    DETECTOR_CONFIDENCE_THRESHOLD,
+    DETECTOR_BATCH_SIZE,
     OSNET_REID_MODEL_PATH,
     REID_MODEL_TYPE,
 )
@@ -58,7 +58,13 @@ class SurferDetector:
     @cache_to_file(
         'yolo_detections_raw',
         ignore_args=[0],
-        additional_args=[YOLO_MODEL_PATH, IOU_THRESHOLD, CONFIDENCE_THRESHOLD, BATCH_SIZE, MIN_TRACKING_FPS],
+        additional_args=[
+            YOLO_MODEL_PATH,
+            DETECTOR_IOU_THRESHOLD,
+            DETECTOR_CONFIDENCE_THRESHOLD,
+            DETECTOR_BATCH_SIZE,
+            MIN_TRACKING_FPS,
+        ],
     )
     def run_detection_pass(self, video_path: str) -> list[_RawDetection]:
         """Run YOLO once and persist crops+metadata. Returns raw detections."""
@@ -68,9 +74,9 @@ class SurferDetector:
 
         results = self.yolo_model.predict(
             str(video_path),
-            iou=IOU_THRESHOLD,
-            conf=CONFIDENCE_THRESHOLD,
-            batch=BATCH_SIZE,
+            iou=DETECTOR_IOU_THRESHOLD,
+            conf=DETECTOR_CONFIDENCE_THRESHOLD,
+            batch=DETECTOR_BATCH_SIZE,
             vid_stride=skip_frames,
             stream=True,
             save=False,
@@ -133,7 +139,7 @@ class SurferDetector:
                 continue
             pending_crops.append(crop)
             pending_meta.append((rd.bbox, rd.confidence, rd.frame_idx))
-            if len(pending_crops) >= BATCH_SIZE:
+            if len(pending_crops) >= DETECTOR_BATCH_SIZE:
                 _flush_reid_batch(self.reid_model, pending_crops, pending_meta, all_detections)
 
         # Flush remaining crops

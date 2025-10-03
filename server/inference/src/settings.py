@@ -18,13 +18,13 @@ OSNET_REID_MODEL_PATH = inference_root_folder / 'weights/reid_models/common/osne
 # ReID model selection
 REID_MODEL_TYPE: Literal['color_hist', 'osnet', 'vit'] = 'color_hist'
 
-IOU_THRESHOLD = 0.2
-CONFIDENCE_THRESHOLD = 0.6
-BATCH_SIZE = 32
+DETECTOR_IOU_THRESHOLD = 0.2
+DETECTOR_CONFIDENCE_THRESHOLD = 0.6
+DETECTOR_BATCH_SIZE = 32
 
 # Tracking preprocessing settings
 MIN_TRACKING_FPS = 300  # Disabled for now
-MAX_OVERLAP_LENGTH_SECONDS = 10
+MAX_OVERLAP_LENGTH_SECONDS = 5
 
 # Track postprocessing settings
 # Minimum percentage of total frames a track must appear in (default 5%)

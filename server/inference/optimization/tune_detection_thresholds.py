@@ -30,7 +30,7 @@ from PySide6.QtGui import QAction
 from server.inference.src.player.core.player_state import PlayerState, VideoProperties, TrackLite, DetectionLite
 from server.inference.src.player.core.video_manager import VideoManager
 from server.inference.src.player.ui.video_widget import VideoWidget
-from server.inference.src.settings import YOLO_MODEL_PATH, IOU_THRESHOLD, CONFIDENCE_THRESHOLD
+from server.inference.src.settings import YOLO_MODEL_PATH, DETECTOR_IOU_THRESHOLD, DETECTOR_CONFIDENCE_THRESHOLD
 
 
 @dataclass
@@ -571,8 +571,8 @@ def _discover_models(models_dir: Path) -> list[Path]:
 def main() -> None:
     parser = argparse.ArgumentParser(description='Tune detection thresholds on a chosen frame.')
     parser.add_argument('video', type=str, help='Path to input video')
-    parser.add_argument('--conf', type=float, default=float(CONFIDENCE_THRESHOLD), help='Initial confidence')
-    parser.add_argument('--iou', type=float, default=float(IOU_THRESHOLD), help='Initial IoU')
+    parser.add_argument('--conf', type=float, default=float(DETECTOR_CONFIDENCE_THRESHOLD), help='Initial confidence')
+    parser.add_argument('--iou', type=float, default=float(DETECTOR_IOU_THRESHOLD), help='Initial IoU')
     parser.add_argument('--step', type=float, default=0.02, help='Adjustment step for conf/iou')
     parser.add_argument('--agnostic', action='store_true', help='Use class-agnostic NMS')
     parser.add_argument('--classes', type=str, default='', help='Optional comma-separated class ids to keep')
