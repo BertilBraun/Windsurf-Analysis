@@ -37,9 +37,7 @@ class IterativeILPTracker:
         video_path: str,
         w_start: float = OPTIMIZER_W_START,
         # costs
-        p_miss: float = 0.98,  # for gap NLL
-        appearance_a: float = 7.427,  # Platt A
-        appearance_b: float = 4.088,  # Platt B
+        p_miss: float = 0.97,  # for gap NLL
         # motion eval
         motion_k_eval: int = 3,  # eval first K detections of B (1..3 recommended)
         d2_drop_threshold: float = 200.0,  # hard-drop average d^2 above this
@@ -53,8 +51,6 @@ class IterativeILPTracker:
         self.video_path = video_path
         self.w_start = float(w_start)
         self.p_miss = float(p_miss)
-        self.appearance_a = float(appearance_a)
-        self.appearance_b = float(appearance_b)
         self.motion_k_eval = int(max(1, motion_k_eval))
         self.d2_drop_threshold = float(d2_drop_threshold)
         self.use_position_only = bool(use_position_only)
@@ -74,6 +70,8 @@ class IterativeILPTracker:
             )
 
         MAX_FRAME_GAP = int(round(MAX_OVERLAP_LENGTH_SECONDS * video_properties.fps))
+
+        cmc = CMC(transforms)
 
         tracks = _maybe_split_on_internal_gaps(tracks, self.internal_split_gap_frames)
         best_cost = float('inf')
@@ -102,7 +100,7 @@ class IterativeILPTracker:
                 except Exception:
                     pass
 
-            graph = self._build_fragment_graph(tracks, MAX_FRAME_GAP, transforms, frame_dict)
+            graph = self._build_fragment_graph(tracks, MAX_FRAME_GAP, cmc, frame_dict)
             # TODO increase start cost iteratively
             new_tracks, new_cost = ILPGraphSolver(self.w_start * (it + 1)).optimize_graph(graph)
 
@@ -138,7 +136,7 @@ class IterativeILPTracker:
         self,
         fragments: List[Track],
         max_frame_gap: int,
-        transforms: List[Transform],
+        cmc: CMC,
         frame_dict: Dict[FrameIndex, np.ndarray],  # TODO remove
     ) -> FragmentGraph:
         """Build forward edges with costs. Logs one line per edge if enabled.
@@ -148,12 +146,9 @@ class IterativeILPTracker:
         fragments = sorted(fragments, key=lambda t: t.start_frame)
         graph = FragmentGraph(fragments)
 
-        # per-frame GMC mapping f → f+1: Transform
-        transforms_dict: Dict[FrameIndex, Transform] = {t.frame_idx: t for t in transforms}
-
         # KF cache: fit once per fragment (end state after all its detections)
-        kf_cache: Dict[TrackId, _KFCacheEntry] = {
-            i: _fit_kf_end_state(frag, transforms_dict) for i, frag in enumerate(fragments)
+        kf_cache: Dict[TrackId, KFState] = {
+            i: KFState.fit_kf_end_state(frag.sorted_detections, cmc) for i, frag in enumerate(fragments)
         }
 
         logs: List[str] = []
@@ -162,8 +157,14 @@ class IterativeILPTracker:
             A = fragments[i]
             B = fragments[j]
             # compute costs
-            motion_nll, avg_d2, used_k = _motion_nll(
-                i, j, fragments, kf_cache, transforms_dict, self.motion_k_eval, self.use_position_only
+            motion_nll, avg_d2, avg_logdet, used_k = _motion_nll(
+                i,
+                j,
+                fragments,
+                kf_cache,
+                cmc,
+                self.motion_k_eval,
+                self.use_position_only,
             )
             if math.isinf(motion_nll) or math.isnan(motion_nll):
                 continue
@@ -171,7 +172,7 @@ class IterativeILPTracker:
             if avg_d2 is not None and avg_d2 > self.d2_drop_threshold:
                 continue
 
-            appearance_nll = _appearance_nll(A, B, self.appearance_a, self.appearance_b)
+            appearance_nll = _appearance_nll(A, B)
             if math.isinf(appearance_nll) or math.isnan(appearance_nll):
                 continue
 
@@ -231,7 +232,7 @@ class IterativeILPTracker:
         kf_mean_end: np.ndarray,
         kf_cov_end: np.ndarray,
         kf_end_frame: int,
-        transforms: Dict[int, Transform],
+        cmc: CMC,
     ) -> None:
         try:
             import cv2  # type: ignore
@@ -308,8 +309,8 @@ class IterativeILPTracker:
 
             # Predict KF state from A.end to B.start and overlay on B.start frame
             try:
-                m_b, P_b = kf.advance_state_to_frame(kf_mean_end, kf_cov_end, transforms, kf_end_frame, B.start_frame)
-                cx_b, cy_b, w_b, h_b = kf.display_bbox(m_b, P_b, alpha=0.9)
+                m_b, P_b = kf.advance_state_to_frame(kf_mean_end, kf_cov_end, cmc, kf_end_frame, B.start_frame)
+                cx_b, cy_b, w_b, h_b = kf.display_bbox(m_b, P_b, alpha=0.0)
                 x1b = int(cx_b - w_b / 2.0)
                 y1b = int(cy_b - h_b / 2.0)
                 x2b = int(cx_b + w_b / 2.0)
@@ -407,19 +408,22 @@ def NLL_from_prob(p: float) -> float:
     return float(-math.log(p / (1.0 - p)))
 
 
-def _appearance_nll(a: Track, b: Track, appearance_a: float, appearance_b: float) -> float:
+def _appearance_nll(a: Track, b: Track) -> float:
     """Lab χ² distance between fragment prototypes → Platt → NLLR."""
-    chi2 = chi2_dist(a.mean_embedding(), b.mean_embedding())
-    p = platt_prob_from_dist(chi2, appearance_a, appearance_b)
-    return NLL_from_prob(p)
+    a_mean = a.mean_embedding()
+    b_mean = b.mean_embedding()
+    assert isinstance(a_mean, HistogramEmbedding), f'assuming histogram embedding but got {type(a_mean)}'
+    assert isinstance(b_mean, HistogramEmbedding), f'assuming histogram embedding but got {type(b_mean)}'
+    probability = a_mean.probability(b_mean)
+    return NLL_from_prob(probability)
 
 
 def _motion_nll(
     idx_a: TrackId,
     idx_b: TrackId,
     frags: List[Track],
-    kf_cache: Dict[TrackId, _KFCacheEntry],
-    transforms: Dict[FrameIndex, Transform],
+    kf_cache: Dict[TrackId, KFState],
+    cmc: CMC,
     motion_k_eval: int,
     use_position_only: bool,
 ) -> Tuple[float, Optional[float], int]:
@@ -434,10 +438,7 @@ def _motion_nll(
     B = frags[idx_b]
     kf = KalmanFilter()
 
-    cache = kf_cache[idx_a]
-    m_end = cache.mean_end
-    P_end = cache.cov_end
-    t_end = cache.end_frame
+    kf_state = kf_cache[idx_a]
 
     if not B.sorted_detections:
         return 0.0, 0.0, 0
@@ -448,25 +449,24 @@ def _motion_nll(
     d2_vals: List[float] = []
     used = 0
 
-    m_pred, P_pred = m_end, P_end
-    last_frame = t_end
+    cost_vals: List[float] = []
+
+    pred = kf_state
 
     for k in range(K):
         db = B.sorted_detections[k]
 
         # predict from A.end by Δ
-        m_pred, P_pred = kf.advance_state_to_frame(m_pred, P_pred, transforms, last_frame, db.frame_idx)
-        last_frame = db.frame_idx
+        pred = pred.predict_to(db.frame_idx, cmc)
 
         z_obs_back = db.bbox.center_wh
 
         # position-only mahalanobis
-        d2 = float(
-            kf.gating_distance(m_pred, P_pred, z_obs_back[None, :], only_position=use_position_only, metric='maha')[0]
-        )
+        d2 = pred.gating_distance(z_obs_back, only_position=use_position_only)
         # add 0.5 * log|S_pos|
-        _, S_full, _ = kf.project(m_pred, P_pred)
+        _, S_full, _ = kf.project(pred.mean, pred.cov)
         S_pos = S_full[:2, :2] if use_position_only else S_full
+        S_pos = np.clip(S_pos, 1.0, 1e4)
         logdet = 0.5 * math.log(max(np.linalg.det(S_pos), EPS))
 
         total += 0.5 * d2 + logdet
@@ -532,36 +532,11 @@ def _possible_mergeable_candidates(fragments: List[Track], max_frame_gap: int) -
     return candidates
 
 
-@dataclass
-class _KFCacheEntry:
-    mean_end: np.ndarray  # (8,)
-    cov_end: np.ndarray  # (8,8)
-    end_frame: FrameIndex
-
-
-def _fit_kf_end_state(track: Track, transforms: Dict[FrameIndex, Transform]) -> _KFCacheEntry:
-    """Fit KF across all detections of a fragment and return its end state."""
-    kf = KalmanFilter()
-
-    first = track.start
-    m, P = kf.initiate(first.bbox.center_wh)
-    prev_f = track.start_frame
-
-    for det in track.sorted_detections[1:]:
-        gap = det.frame_idx - prev_f
-        m, P = kf.predict(m, P, missed_frames=gap)
-        m, P = kf.apply_forward_gmc_state(m, P, transforms[det.frame_idx])
-        m, P = kf.update(m, P, det.bbox.center_wh)
-        prev_f = det.frame_idx
-
-    return _KFCacheEntry(mean_end=m, cov_end=P, end_frame=track.end_frame)
-
-
 def _remerge_tracks(tracks: List[Track]) -> List[Track]:
     """Re-merge tracks with the same track id."""
     merged_tracks: dict[TrackId, list[Detection]] = {}
     for track in tracks:
-        merged_tracks[track.track_id].extend(track.sorted_detections)
+        merged_tracks.setdefault(track.track_id, []).extend(track.sorted_detections)
     return [
         Track(track_id=track_id, sorted_detections=sorted(detections, key=lambda d: d.frame_idx))
         for track_id, detections in merged_tracks.items()

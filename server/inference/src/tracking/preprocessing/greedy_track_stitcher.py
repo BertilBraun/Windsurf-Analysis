@@ -73,8 +73,7 @@ class GreedyTrackStitcher:
 
         frames: List[int] = sorted(int(f) for f in detections_by_frame.keys())
 
-        # Forward camera-motion deltas: map destination frame f to transform (f-1 → f)
-        gmc: Dict[int, Transform] = {int(t.frame_idx): t for t in transforms}
+        cmc = CMC(transforms)
 
         next_track_id: int = 1
 
@@ -92,12 +91,7 @@ class GreedyTrackStitcher:
                 mby_matches: List[Track] = []
 
                 for track in active_tracks:
-                    result = self._compare_detection_to_track(
-                        track,
-                        detection,
-                        frame_idx=frame_idx,
-                        gmc=gmc,
-                    )
+                    result = self._compare_detection_to_track(track, detection, cmc=cmc)
                     if result == _ComparisonResult.MATCH:
                         clean_matches.append(track)
                     elif result == _ComparisonResult.MAY_MATCH:
@@ -155,7 +149,7 @@ class GreedyTrackStitcher:
                     if track.track_id not in self._kf:
                         self._kf[track.track_id] = KFState.init(track)
                         self._ema[track.track_id] = track.start.embedding
-                    self._kf[track.track_id] = self._kf[track.track_id].update_to_det(det, gmc)
+                    self._kf[track.track_id] = self._kf[track.track_id].update_to_det(det, cmc)
                     old_ema = self._ema.get(track.track_id, track.start.embedding)
                     self._ema[track.track_id] = old_ema.interpolate(det.embedding, self.ema_alpha)
 
@@ -175,14 +169,7 @@ class GreedyTrackStitcher:
 
     # ───────────────────────────── scoring ───────────────────────────── #
 
-    def _compare_detection_to_track(
-        self,
-        track: Track,
-        detection: Detection,
-        *,
-        frame_idx: int,
-        gmc: Dict[int, Transform],
-    ) -> _ComparisonResult:
+    def _compare_detection_to_track(self, track: Track, detection: Detection, cmc: CMC) -> _ComparisonResult:
         """
         Score motion (Mahalanobis d² on [cx,cy]) + appearance (χ² on L1-hist EMA).
         """
@@ -199,7 +186,7 @@ class GreedyTrackStitcher:
             st = self._kf[tid] = KFState.init(track)
 
         # Predict to current frame (cached inside KFState)
-        pred = st.predict_to(frame_idx, gmc)
+        pred = st.predict_to(detection.frame_idx, cmc)
 
         # Motion gating: squared Mahalanobis distance (df=2)
         d2 = pred.gating_distance(detection.bbox.center_wh)
@@ -207,7 +194,7 @@ class GreedyTrackStitcher:
         # Appearance: χ² on L1-normalized histograms with EMA
         ema = self._ema.get(tid, track.start.embedding)
         assert isinstance(ema, HistogramEmbedding)
-        chi2 = ema.similarity(detection.embedding)
+        chi2 = ema.distance(detection.embedding)
 
         # Decision
         if d2 <= self.gate_strict_d2 and chi2 <= self.chi2_strict:

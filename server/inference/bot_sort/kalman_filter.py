@@ -8,8 +8,9 @@ import numpy as np
 import numpy.typing as npt
 import scipy.linalg
 
+from server.inference.bot_sort.cmc import CMC
+from server.inference.src.common_types import FrameIndex
 from server.inference.src.settings import EPS
-from server.inference.src.visualization.stabilize import Transform
 
 
 NDArrayF = npt.NDArray[np.float64]
@@ -269,45 +270,25 @@ class KalmanFilter:
             dtype=np.float64,
         )
 
-    def _build_A_T(self, transform: Transform) -> tuple[NDArrayF, NDArrayF]:
-        """Return (A, T) for forward GMC on KF state [cx,cy,w,h,vx,vy,vw,vh]."""
-        A = np.eye(8, dtype=np.float64)
-        R = np.array(
-            [[math.cos(transform.da), -math.sin(transform.da)], [math.sin(transform.da), math.cos(transform.da)]],
-            dtype=np.float64,
-        )
-        A[0:2, 0:2] = R  # positions
-        A[4:6, 4:6] = R  # velocities (cx,cy)
-        T = np.array([transform.dx, transform.dy], dtype=np.float64)
-        return A, T
-
-    def apply_forward_gmc_state(self, mean: NDArrayF, cov: NDArrayF, transform: Transform) -> tuple[NDArrayF, NDArrayF]:
-        """Apply one prev→curr delta to KF state and covariance."""
-        A, T = self._build_A_T(transform)
-        m = A @ mean
-        m[0:2] += T
-        P = A @ cov @ A.T
-        P = 0.5 * (P + P.T)  # symmetrize to avoid numerical drift
-        return m, P
-
     def advance_state_to_frame(
         self,
         mean: NDArrayF,
         cov: NDArrayF,
-        transforms: Dict[int, Transform],
-        from_frame: int,
-        to_frame: int,
+        cmc: CMC,
+        from_frame: FrameIndex,
+        to_frame: FrameIndex,
     ) -> tuple[NDArrayF, NDArrayF]:
         """Step from `from_frame` to `to_frame` using per-frame forward deltas.
-        Assumes `transforms[f]` encodes the forward delta f -> f+1.
+        Assumes `cmc` encodes the forward delta f -> f+1.
         Advances for f = from_frame .. to_frame-1 (no overstep)."""
         if to_frame <= from_frame:
             return mean, cov
+
         m, P = mean, cov
-        # hop f = from_frame .. to_frame-1
-        for f in range(from_frame, to_frame):
+        for f in range(from_frame, to_frame):  # hop f = from_frame .. to_frame-1
             m, P = self.predict(m, P, missed_frames=1)
-            m, P = self.apply_forward_gmc_state(m, P, transforms[f])
+            m, P = cmc.apply_forward(m, P, f)
+
         return m, P
 
 
@@ -326,7 +307,7 @@ class KFState:
 
     _cached_predictions: Dict[int, KFState] = field(default_factory=dict)
 
-    def predict_to(self, to_frame: int, gmc: Dict[int, Transform]) -> KFState:
+    def predict_to(self, to_frame: int, cmc: CMC) -> KFState:
         if to_frame <= self.last_frame:
             return KFState(mean=self.mean, cov=self.cov, last_frame=self.last_frame)
         if to_frame in self._cached_predictions:
@@ -340,12 +321,12 @@ class KFState:
             prediction = self._cached_predictions[frames[idx]]
             start_m, start_P, start_frame = prediction.mean, prediction.cov, prediction.last_frame
 
-        m, P = KF.advance_state_to_frame(start_m, start_P, gmc, start_frame, int(to_frame))
+        m, P = KF.advance_state_to_frame(start_m, start_P, cmc, start_frame, int(to_frame))
         self._cached_predictions[to_frame] = KFState(mean=m, cov=P, last_frame=int(to_frame))
         return KFState(mean=m, cov=P, last_frame=int(to_frame))
 
-    def update_to_det(self, det: Detection, gmc: Dict[int, Transform]) -> KFState:
-        prediction = self.predict_to(det.frame_idx, gmc)
+    def update_to_det(self, det: Detection, cmc: CMC) -> KFState:
+        prediction = self.predict_to(det.frame_idx, cmc)
         m2, P2 = KF.update(prediction.mean, prediction.cov, det.bbox.center_wh)
         return KFState(mean=m2, cov=P2, last_frame=det.frame_idx)
 
@@ -363,14 +344,14 @@ class KFState:
         return KFState(mean=m, cov=P, last_frame=track.start_frame)
 
     @staticmethod
-    def fit_kf_end_state(detections: list[Detection], transforms: Dict[int, Transform]) -> KFState:
+    def fit_kf_end_state(detections: list[Detection], cmc: CMC) -> KFState:
         assert len(detections) > 0, 'No detections to fit KF end state'
         m, P = KF.initiate(detections[0].bbox.center_wh)
+
         prev_f = detections[0].frame_idx
         for det in detections[1:]:
-            for frame_idx in range(prev_f, det.frame_idx):
-                m, P = KF.predict(m, P, missed_frames=1)
-                m, P = KF.apply_forward_gmc_state(m, P, transforms[frame_idx])
-            prev_f = det.frame_idx
+            m, P = KF.advance_state_to_frame(m, P, cmc, prev_f, det.frame_idx)
             m, P = KF.update(m, P, det.bbox.center_wh)
-        return KFState(mean=m, cov=P, last_frame=detections[-1].frame_idx)
+            prev_f = det.frame_idx
+
+        return KFState(mean=m, cov=P, last_frame=prev_f)
