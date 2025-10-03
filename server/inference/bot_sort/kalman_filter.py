@@ -1,17 +1,16 @@
-# kalman_tracking.py
-# Typed, minimal Kalman filter for bbox tracking.
-# Fixes: stable covariance (Joseph form), controlled Q growth, shrink after update,
-# inflation only on misses, optional inflation caps, vectorized multi_predict.
-
 from __future__ import annotations
 
+from bisect import bisect_right
+from dataclasses import dataclass, field
 import math
-from typing import Dict, Literal, Tuple
+from typing import TYPE_CHECKING, Dict, Literal, Tuple
 import numpy as np
 import numpy.typing as npt
 import scipy.linalg
 
+from server.inference.src.settings import EPS
 from server.inference.src.visualization.stabilize import Transform
+
 
 NDArrayF = npt.NDArray[np.float64]
 
@@ -44,9 +43,11 @@ class KalmanFilter:
         dt: float = 1.0,
         proc_std_weight_pos: float = 1.0 / 20.0,
         proc_std_weight_vel: float = 1.0 / 80.0,
-        meas_std_weight_pos: float = 1.0 / 50.0,
-        meas_std_weight_size: float = 1.0 / 20.0,
-        q_growth: float = 1.05,
+        meas_std_weight_pos: float = 1.0 / 30.0,
+        meas_std_weight_size: float = 1.0 / 40.0,
+        q_growth: float = 1.01,
+        x_scale: float = 1.5,  # scale for width, larger than 1 means more uncertainty in width
+        y_scale: float = 0.5,  # scale for height, larger than 1 means more uncertainty in height
     ) -> None:
         self.ndim = 4
         self.dt = float(dt)
@@ -62,28 +63,8 @@ class KalmanFilter:
         self._meas_std_weight_pos = float(meas_std_weight_pos)
         self._meas_std_weight_size = float(meas_std_weight_size)
         self._q_growth = float(q_growth)
-
-    # ---------------------------- Utilities ---------------------------- #
-
-    def _F_gap(self, gap: int) -> NDArrayF:
-        """State transition for an integer gap of frames."""
-        F = self._F_base.copy()
-        if gap != 1:
-            for i in range(self.ndim):
-                F[i, self.ndim + i] = self.dt * gap
-        return F
-
-    def _meas_std(self, mean: NDArrayF) -> NDArrayF:
-        """Measurement stds for [cx,cy,w,h], proportional to w/h."""
-        return np.array(
-            [
-                self._meas_std_weight_pos * max(mean[2], 1e-6),
-                self._meas_std_weight_pos * max(mean[3], 1e-6),
-                self._meas_std_weight_size * max(mean[2], 1e-6),
-                self._meas_std_weight_size * max(mean[3], 1e-6),
-            ],
-            dtype=np.float64,
-        )
+        self._x_scale = float(x_scale)
+        self._y_scale = float(y_scale)
 
     # ---------------------------- Single-track ---------------------------- #
 
@@ -128,21 +109,24 @@ class KalmanFilter:
         gap = int(max(missed_frames, 0)) if missed_frames else 1
         F = self._F_gap(gap)
 
+        size_scale = math.sqrt(max(mean[2], EPS) * max(mean[3], EPS))
+        size_scale_x = size_scale * self._x_scale
+        size_scale_y = size_scale * self._y_scale
         std_pos = np.array(
             [
-                self._proc_std_weight_pos * max(mean[2], 1e-6),
-                self._proc_std_weight_pos * max(mean[3], 1e-6),
-                self._proc_std_weight_pos * max(mean[2], 1e-6),
-                self._proc_std_weight_pos * max(mean[3], 1e-6),
+                self._proc_std_weight_pos * size_scale_x,
+                self._proc_std_weight_pos * size_scale_y,
+                self._proc_std_weight_pos * size_scale_x,
+                self._proc_std_weight_pos * size_scale_y,
             ],
             dtype=np.float64,
         )
         std_vel = np.array(
             [
-                self._proc_std_weight_vel * max(mean[2], 1e-6),
-                self._proc_std_weight_vel * max(mean[3], 1e-6),
-                self._proc_std_weight_vel * max(mean[2], 1e-6),
-                self._proc_std_weight_vel * max(mean[3], 1e-6),
+                self._proc_std_weight_vel * size_scale_x,
+                self._proc_std_weight_vel * size_scale_y,
+                self._proc_std_weight_vel * size_scale_x,
+                self._proc_std_weight_vel * size_scale_y,
             ],
             dtype=np.float64,
         )
@@ -260,6 +244,31 @@ class KalmanFilter:
 
         return np.array([cx, cy, max(w_out, 1e-3), max(h_out, 1e-3)], dtype=np.float64)
 
+    # ---------------------------- Utilities ---------------------------- #
+
+    def _F_gap(self, gap: int) -> NDArrayF:
+        """State transition for an integer gap of frames."""
+        F = self._F_base.copy()
+        if gap != 1:
+            for i in range(self.ndim):
+                F[i, self.ndim + i] = self.dt * gap
+        return F
+
+    def _meas_std(self, mean: NDArrayF) -> NDArrayF:
+        """Measurement stds for [cx,cy,w,h], proportional to w/h."""
+        size_scale = math.sqrt(max(mean[2], EPS) * max(mean[3], EPS))
+        size_scale_x = size_scale * self._x_scale
+        size_scale_y = size_scale * self._y_scale
+        return np.array(
+            [
+                self._meas_std_weight_pos * size_scale_x,
+                self._meas_std_weight_pos * size_scale_y,
+                self._meas_std_weight_size * size_scale_x,
+                self._meas_std_weight_size * size_scale_y,
+            ],
+            dtype=np.float64,
+        )
+
     def _build_A_T(self, transform: Transform) -> tuple[NDArrayF, NDArrayF]:
         """Return (A, T) for forward GMC on KF state [cx,cy,w,h,vx,vy,vw,vh]."""
         A = np.eye(8, dtype=np.float64)
@@ -278,6 +287,7 @@ class KalmanFilter:
         m = A @ mean
         m[0:2] += T
         P = A @ cov @ A.T
+        P = 0.5 * (P + P.T)  # symmetrize to avoid numerical drift
         return m, P
 
     def advance_state_to_frame(
@@ -289,12 +299,78 @@ class KalmanFilter:
         to_frame: int,
     ) -> tuple[NDArrayF, NDArrayF]:
         """Step from `from_frame` to `to_frame` using per-frame forward deltas.
-        Assumes `frame_warp[f]` is the delta (f-1 -> f)."""
+        Assumes `transforms[f]` encodes the forward delta f -> f+1.
+        Advances for f = from_frame .. to_frame-1 (no overstep)."""
         if to_frame <= from_frame:
             return mean, cov
         m, P = mean, cov
-        # hop f = from_frame+1 .. to_frame
-        for f in range(from_frame + 1, to_frame + 1):
+        # hop f = from_frame .. to_frame-1
+        for f in range(from_frame, to_frame):
             m, P = self.predict(m, P, missed_frames=1)
             m, P = self.apply_forward_gmc_state(m, P, transforms[f])
         return m, P
+
+
+if TYPE_CHECKING:
+    from server.inference.src.common_types import Detection, Track
+
+
+KF = KalmanFilter()
+
+
+@dataclass(frozen=True)
+class KFState:
+    mean: NDArrayF  # (8,)
+    cov: NDArrayF  # (8,8)
+    last_frame: int
+
+    _cached_predictions: Dict[int, KFState] = field(default_factory=dict)
+
+    def predict_to(self, to_frame: int, gmc: Dict[int, Transform]) -> KFState:
+        if to_frame <= self.last_frame:
+            return KFState(mean=self.mean, cov=self.cov, last_frame=self.last_frame)
+        if to_frame in self._cached_predictions:
+            return self._cached_predictions[to_frame]
+
+        start_m, start_P, start_frame = self.mean, self.cov, self.last_frame
+
+        frames = sorted(self._cached_predictions.keys())
+        idx = bisect_right(frames, to_frame - 1) - 1
+        if idx >= 0 and frames[idx] <= to_frame and frames[idx] > start_frame:
+            prediction = self._cached_predictions[frames[idx]]
+            start_m, start_P, start_frame = prediction.mean, prediction.cov, prediction.last_frame
+
+        m, P = KF.advance_state_to_frame(start_m, start_P, gmc, start_frame, int(to_frame))
+        self._cached_predictions[to_frame] = KFState(mean=m, cov=P, last_frame=int(to_frame))
+        return KFState(mean=m, cov=P, last_frame=int(to_frame))
+
+    def update_to_det(self, det: Detection, gmc: Dict[int, Transform]) -> KFState:
+        prediction = self.predict_to(det.frame_idx, gmc)
+        m2, P2 = KF.update(prediction.mean, prediction.cov, det.bbox.center_wh)
+        return KFState(mean=m2, cov=P2, last_frame=det.frame_idx)
+
+    def gating_distance(
+        self, measurement: NDArrayF, only_position: bool = True, metric: Literal['maha', 'gaussian'] = 'maha'
+    ) -> float:
+        return float(KF.gating_distance(self.mean, self.cov, measurement[None, :], only_position, metric)[0])
+
+    def display_bbox(self, alpha: float = 0.90, include_size_unc: bool = False) -> NDArrayF:
+        return KF.display_bbox(self.mean, self.cov, alpha, include_size_unc)
+
+    @staticmethod
+    def init(track: Track) -> KFState:
+        m, P = KF.initiate(track.sorted_detections[0].bbox.center_wh)
+        return KFState(mean=m, cov=P, last_frame=track.start_frame)
+
+    @staticmethod
+    def fit_kf_end_state(detections: list[Detection], transforms: Dict[int, Transform]) -> KFState:
+        assert len(detections) > 0, 'No detections to fit KF end state'
+        m, P = KF.initiate(detections[0].bbox.center_wh)
+        prev_f = detections[0].frame_idx
+        for det in detections[1:]:
+            for frame_idx in range(prev_f, det.frame_idx):
+                m, P = KF.predict(m, P, missed_frames=1)
+                m, P = KF.apply_forward_gmc_state(m, P, transforms[frame_idx])
+            prev_f = det.frame_idx
+            m, P = KF.update(m, P, det.bbox.center_wh)
+        return KFState(mean=m, cov=P, last_frame=detections[-1].frame_idx)
