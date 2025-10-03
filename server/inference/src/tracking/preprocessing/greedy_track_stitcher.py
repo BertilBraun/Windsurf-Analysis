@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from collections import defaultdict
-from typing import Dict, List
+from collections import defaultdict, deque
+from typing import Dict, List, Optional
 
+import numpy as np
+
+from server.inference.bot_sort.cmc import CMC
 from server.inference.src.util.similarity_helpers import Embedding, HistogramEmbedding
 from server.inference.src.visualization.stabilize import Transform
 from ...util.video_io import VideoInfo

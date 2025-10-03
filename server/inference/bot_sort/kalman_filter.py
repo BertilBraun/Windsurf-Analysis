@@ -22,7 +22,7 @@ CHI2_QUANTILES: Dict[float, Dict[int, float]] = {
 }
 
 
-class KalmanFilter:
+class _KalmanFilter:
     """
     State: [cx, cy, w, h, vx, vy, vw, vh]. Constant velocity. Measure [cx, cy, w, h].
     cx, cy: center x, y of the bounding box
@@ -297,7 +297,7 @@ if TYPE_CHECKING:
     from server.inference.src.common_types import Detection, Track
 
 
-KF = KalmanFilter()
+KF = _KalmanFilter()
 
 
 @dataclass(frozen=True)
@@ -338,6 +338,13 @@ class KFState:
 
     def display_bbox(self, alpha: float = 0.90, include_size_unc: bool = False) -> NDArrayF:
         return KF.display_bbox(self.mean, self.cov, alpha, include_size_unc)
+
+    def logdet(self, use_position_only: bool = True) -> float:
+        _, S_full, _ = KF.project(self.mean, self.cov)
+        S_pos = S_full[:2, :2] if use_position_only else S_full
+        S_pos = np.clip(S_pos, 1.0, 1e4)
+        logdet = math.log(max(np.linalg.det(S_pos), EPS))
+        return logdet
 
     @staticmethod
     def init(track: Track) -> KFState:

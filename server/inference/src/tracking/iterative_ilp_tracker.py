@@ -1,17 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Dict, Tuple, List, Optional
 
 import math
 import numpy as np
+from scipy.stats import chi2
 
-from server.inference.src.visualization.stabilize import Transform
+from server.inference.bot_sort.cmc import CMC
+
+
 from ..util.video_io import VideoInfo, VideoReader
 from ..common_types import Detection, FrameIndex, Track, TrackId
 from ..settings import MAX_OVERLAP_LENGTH_SECONDS, OPTIMIZER_W_START, EPS
 from .ILP_graph_solver import FragmentGraph, ILPGraphSolver
-from server.inference.bot_sort.kalman_filter import KalmanFilter
+from server.inference.bot_sort.kalman_filter import KFState, _KalmanFilter
+from server.inference.src.visualization.stabilize import Transform
+from server.inference.src.tracking.reid import HistogramEmbedding
 
 
 class IterativeILPTracker:
@@ -277,7 +281,7 @@ class IterativeILPTracker:
             )
 
             # Prepare KF instance once for overlays
-            kf = KalmanFilter()
+            kf = _KalmanFilter()
 
             # Overlay KF current on A.end frame (mean_end, cov_end)
             try:
@@ -436,7 +440,6 @@ def _motion_nll(
     Returns: (motion_nll, avg_d2, used_K)
     """
     B = frags[idx_b]
-    kf = KalmanFilter()
 
     kf_state = kf_cache[idx_a]
 
@@ -461,13 +464,9 @@ def _motion_nll(
 
         z_obs_back = db.bbox.center_wh
 
-        # position-only mahalanobis
+        # position-only mahalanobis + log|S_pos|
         d2 = pred.gating_distance(z_obs_back, only_position=use_position_only)
-        # add 0.5 * log|S_pos|
-        _, S_full, _ = kf.project(pred.mean, pred.cov)
-        S_pos = S_full[:2, :2] if use_position_only else S_full
-        S_pos = np.clip(S_pos, 1.0, 1e4)
-        logdet = 0.5 * math.log(max(np.linalg.det(S_pos), EPS))
+        logdet = pred.logdet(use_position_only)
 
         total += 0.5 * d2 + logdet
         d2_vals.append(d2)

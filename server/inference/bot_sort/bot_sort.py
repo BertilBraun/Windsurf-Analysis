@@ -5,12 +5,12 @@ from collections import deque
 
 from . import matching
 from .basetrack import BaseTrack, TrackState
-from .kalman_filter import KalmanFilter
+from .kalman_filter import _KalmanFilter
 from server.inference.src.common_types import Detection
 
 
 class STrack(BaseTrack):
-    shared_kalman = KalmanFilter()
+    shared_kalman = _KalmanFilter()
     # Updated each BoTSORT.update call so tracks can compute missed_count locally
     current_frame_id: int = 0
 
@@ -20,7 +20,7 @@ class STrack(BaseTrack):
     def __init__(self, tlwh, score, feat=None, feat_history=50):
         # wait activate
         self._tlwh = np.asarray(tlwh, dtype=np.float32)
-        self.kalman_filter: KalmanFilter = None  # type: ignore
+        self.kalman_filter: _KalmanFilter = None  # type: ignore
         self.mean, self.covariance = None, None
         self.is_activated = False
 
@@ -235,7 +235,7 @@ class BoTSORT(object):
 
         self.buffer_size = int(frame_rate / 30.0 * args.track_buffer)
         self.max_time_lost = self.buffer_size
-        self.kalman_filter = KalmanFilter()
+        self.kalman_filter = _KalmanFilter()
 
         # ReID module
         self.proximity_thresh = args.proximity_thresh
