@@ -27,45 +27,47 @@ class _ComparisonResult(Enum):
 class GreedyTrackStitcher:
     """
     Greedy pre-stitcher with original matching orchestration, but using:
+
       • Motion: KF + forward GMC deltas (prev→curr) → position-only Mahalanobis d²
+        - Values 0-0.2 are very good matches
+        - Values 0.2-5.0 are still good matches
+        - Values >5.0 (up to tens of thousands) are bad matches
+
       • Appearance: χ² distance on L1-normalized L*a*b* histograms (with EMA)
+        - Values 0-0.05 are very good matches
+        - Values 0.05-0.15 are still good matches
+        - Values >0.15 (up to ~0.9 for the worst matching pairs in the sample dataset) are bad matches
 
     Decision:
-      MATCH      if (d² ≤ gate_strict) and (χ² ≤ chi2_strict)
-      MAY_MATCH  if (d² ≤ gate_loose)  and (χ² ≤ chi2_loose)
+      MATCH      if (d² ≤ motion_strict) and (χ² ≤ appearance_strict)
+      MAY_MATCH  if (d² ≤ motion_loose)  and (χ² ≤ appearance_loose)
       NO_MATCH   otherwise
-
-    Notes:
-      - Isolation heuristic intentionally disabled (can be re-added if needed).
-      - KF predictions are cached per track via KFState to avoid recomputation.
     """
 
     def __init__(
         self,
         *,
-        gate_strict_d2: float = 5.9915,  # χ²(2, 0.95)
-        gate_loose_d2: float = 9.2103,  # χ²(2, 0.99)
-        chi2_strict: float = 0.20,  # tune on your data
-        chi2_loose: float = 0.35,  # tune on your data
-        ema_alpha: float = 0.9,  # appearance EMA smoothing
-        max_frame_distance: int = 5,  # stale cutoff (frames)
+        motion_strict: float,
+        motion_loose: float,
+        appearance_strict: float,
+        appearance_loose: float,
+        ema_alpha: float,
+        max_frame_distance: int,
         # Debugging/visualization
         debug_video_path: Optional[str] = None,
     ):
-        self.gate_strict_d2 = float(gate_strict_d2)
-        self.gate_loose_d2 = float(gate_loose_d2)
-        self.chi2_strict = float(chi2_strict)
-        self.chi2_loose = float(chi2_loose)
+        self.motion_strict = float(motion_strict)
+        self.motion_loose = float(motion_loose)
+        self.appearance_strict = float(appearance_strict)
+        self.appearance_loose = float(appearance_loose)
         self.ema_alpha = float(ema_alpha)
         self.max_frame_distance = int(max_frame_distance)
+
+        # TODO remove
         self.debug_vis = debug_video_path is not None
         self.debug_video_path = debug_video_path
         # Debug trail history of camera translations (dx,dy) similar to BoT-SORT
         self._camera_translation_history = deque([], maxlen=30)
-
-        # Per-track state
-        self._kf: Dict[TrackId, KFState] = {}
-        self._ema: Dict[TrackId, Embedding] = {}
 
     # ─────────────────────────── public API ─────────────────────────── #
 
@@ -85,6 +87,9 @@ class GreedyTrackStitcher:
         cmc = CMC(transforms)
 
         next_track_id: int = 1
+        # Per-track state
+        kf: Dict[TrackId, KFState] = {}
+        ema: Dict[TrackId, Embedding] = {}
 
         # Active = can be extended; Stale = finalized and kept for output
         active_tracks: List[Track] = []
@@ -105,8 +110,8 @@ class GreedyTrackStitcher:
             nonlocal next_track_id
             new_track = Track(track_id=next_track_id, sorted_detections=[detection])
             next_track_id += 1
-            self._kf[new_track.track_id] = KFState.init(new_track)
-            self._ema[new_track.track_id] = detection.embedding
+            kf[new_track.track_id] = KFState.init(new_track)
+            ema[new_track.track_id] = detection.embedding
             return new_track
 
         def stale_track(track: Track) -> None:
@@ -114,11 +119,15 @@ class GreedyTrackStitcher:
             if track.track_id not in stale_track_ids:
                 stale_track_ids.add(track.track_id)
                 stale_tracks.append(track)
-                self._kf.pop(track.track_id, None)
-                self._ema.pop(track.track_id, None)
+                kf.pop(track.track_id, None)
+                ema.pop(track.track_id, None)
+
+        def update_track(track: Track, detection: Detection, cmc: CMC) -> None:
+            track.sorted_detections.append(detection)
+            kf[track.track_id] = kf[track.track_id].update_to_det(detection, cmc)
+            ema[track.track_id] = ema[track.track_id].interpolate(detection.embedding, self.ema_alpha)
 
         for frame_idx in frames:
-            # ── Phase A: proposal using immutable snapshot ──
             frame_detections: List[Detection] = detections_by_frame[frame_idx]
             track_by_id: Dict[int, Track] = {t.track_id: t for t in active_tracks}
 
@@ -132,7 +141,13 @@ class GreedyTrackStitcher:
                 maybe_candidates: List[Track] = []
 
                 for candidate_track in active_tracks:
-                    result = self._compare_detection_to_track(candidate_track, detection, cmc=cmc)
+                    result = self._compare_detection_to_track(
+                        candidate_track,
+                        detection,
+                        cmc=cmc,
+                        kf=kf[candidate_track.track_id],
+                        ema=ema[candidate_track.track_id],
+                    )
                     if result == _ComparisonResult.MATCH:
                         clean_candidates.append(candidate_track)
                     elif result == _ComparisonResult.MAY_MATCH:
@@ -141,6 +156,8 @@ class GreedyTrackStitcher:
                 # Clean-first rule with uniqueness
                 if len(clean_candidates) == 1:
                     tentative_proposals.append((clean_candidates[0].track_id, detection))
+                    for track in maybe_candidates:  # All maybe candidates are faded - remove them
+                        fade_track_ids.add(track.track_id)
                 elif len(clean_candidates) == 0 and len(maybe_candidates) == 1:
                     tentative_proposals.append((maybe_candidates[0].track_id, detection))
                 else:
@@ -153,7 +170,6 @@ class GreedyTrackStitcher:
             for track_id in fade_track_ids:
                 stale_track(track_by_id[track_id])
 
-            # ── Phase B: resolve using fade set, then commit ──
             # Drop proposals that touch faded tracks
             valid_proposals = self._get_non_stale_proposals(tentative_proposals, stale_track_ids)
 
@@ -175,7 +191,7 @@ class GreedyTrackStitcher:
                     # Track no longer active (e.g., faded); convert to new track
                     detections_to_create_new_tracks.append(detection)
                 else:
-                    self._update_track(track, detection, cmc)
+                    update_track(track, detection, cmc)
 
             # ── age out stale tracks (too far behind current frame) ──
             for track in active_tracks:
@@ -204,11 +220,11 @@ class GreedyTrackStitcher:
                         chi2_matrix = np.full((num_rows, num_cols), np.nan, dtype=np.float32)
                         for row_index, track in enumerate(sorted_active_tracks):
                             # Ensure KF/EMA state exists
-                            kf_state = self._kf.get(track.track_id)
+                            kf_state = kf.get(track.track_id)
                             if kf_state is None:
-                                kf_state = self._kf[track.track_id] = KFState.init(track)
+                                kf_state = kf[track.track_id] = KFState.init(track)
                             pred = kf_state.predict_to(frame_idx, cmc)
-                            ema = self._ema.get(track.track_id, track.start.embedding)
+                            track_ema = ema.get(track.track_id, track.start.embedding)
                             for col_index, detection in enumerate(frame_detections_dbg):
                                 try:
                                     d2_matrix[row_index, col_index] = float(
@@ -217,8 +233,8 @@ class GreedyTrackStitcher:
                                 except Exception:
                                     d2_matrix[row_index, col_index] = np.nan
                                 try:
-                                    assert isinstance(ema, HistogramEmbedding)
-                                    chi2_matrix[row_index, col_index] = float(ema.distance(detection.embedding))
+                                    assert isinstance(track_ema, HistogramEmbedding)
+                                    chi2_matrix[row_index, col_index] = float(track_ema.distance(detection.embedding))
                                 except Exception:
                                     chi2_matrix[row_index, col_index] = np.nan
 
@@ -296,9 +312,9 @@ class GreedyTrackStitcher:
                         # Draw KF predictions for active tracks at this frame
                         for track in sorted_active_tracks:
                             try:
-                                kf_state = self._kf.get(track.track_id)
+                                kf_state = kf.get(track.track_id)
                                 if kf_state is None:
-                                    kf_state = self._kf[track.track_id] = KFState.init(track)
+                                    kf_state = kf[track.track_id] = KFState.init(track)
                                 pred = kf_state.predict_to(frame_idx, cmc)
                                 cx, cy, w, h = pred.display_bbox(alpha=0.0)
                                 x1 = int(cx - w / 2.0)
@@ -445,7 +461,14 @@ class GreedyTrackStitcher:
 
     # ───────────────────────────── scoring ───────────────────────────── #
 
-    def _compare_detection_to_track(self, track: Track, detection: Detection, cmc: CMC) -> _ComparisonResult:
+    def _compare_detection_to_track(
+        self,
+        track: Track,
+        detection: Detection,
+        cmc: CMC,
+        kf: KFState,
+        ema: Embedding,
+    ) -> _ComparisonResult:
         """
         Score motion (Mahalanobis d² on [cx,cy]) + appearance (χ² on L1-hist EMA).
         """
@@ -454,36 +477,27 @@ class GreedyTrackStitcher:
         if gap <= 0 or gap > self.max_frame_distance:
             return _ComparisonResult.NO_MATCH
 
-        track_id = track.track_id
-
         # Predict to current frame (cached inside KFState)
-        pred = self._kf[track_id].predict_to(detection.frame_idx, cmc)
+        pred = kf.predict_to(detection.frame_idx, cmc)
 
         # Motion gating: squared Mahalanobis distance (df=2)
         d2 = pred.gating_distance(detection.bbox.center_wh)
 
         # Appearance: χ² on L1-normalized histograms with EMA
-        ema = self._ema[track_id]
         assert isinstance(ema, HistogramEmbedding)
         chi2 = ema.distance(detection.embedding)
 
-        print(f'd2: {d2} chi2: {chi2} for track {track_id} and detection {detection.frame_idx} bbox: {detection.bbox}')
-
         # Decision
-        if d2 <= self.gate_strict_d2 and chi2 <= self.chi2_strict and gap <= 3:
+        if d2 <= self.motion_strict and chi2 <= self.appearance_strict and gap <= 3:
+            # Strong matches are only allowed on frame gaps of 3 or less
             return _ComparisonResult.MATCH
 
-        if d2 <= self.gate_loose_d2 and chi2 <= self.chi2_loose:
+        if d2 <= self.motion_loose and chi2 <= self.appearance_loose:
             # Isolation logic intentionally disabled for now.
             # If needed later, reintroduce a tie-break under the loose gate.
             return _ComparisonResult.MAY_MATCH
 
         return _ComparisonResult.NO_MATCH
-
-    def _update_track(self, track: Track, detection: Detection, cmc: CMC) -> None:
-        track.sorted_detections.append(detection)
-        self._kf[track.track_id] = self._kf[track.track_id].update_to_det(detection, cmc)
-        self._ema[track.track_id] = self._ema[track.track_id].interpolate(detection.embedding, self.ema_alpha)
 
     @staticmethod
     def _get_non_stale_proposals(

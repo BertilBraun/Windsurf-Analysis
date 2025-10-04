@@ -13,10 +13,12 @@ from .greedy_track_stitcher import GreedyTrackStitcher
 class Preprocessor:
     def __init__(
         self,
-        greedy_min_iou: float = GREEDY_PREPROCESSOR_MIN_IOU,
-        greedy_min_cosine_similarity: float = GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY,
-        greedy_max_frame_distance: int = GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE,
-        greedy_ema_alpha: float = GREEDY_PREPROCESSOR_EMA_ALPHA,
+        appearance_strict: float = 0.05,
+        appearance_loose: float = 0.15,
+        motion_strict: float = 0.2,
+        motion_loose: float = 5.0,
+        max_frame_distance: int = 6,  # stale cutoff (frames)
+        ema_alpha: float = 0.6,  # appearance EMA smoothing
         # non_surfer_min_frames: int = 5,
         # non_surfer_similarity_thresh: float = 0.8,
     ):
@@ -31,7 +33,8 @@ class Preprocessor:
         #     similarity_thresh=non_surfer_similarity_thresh,
         # )
 
-    def track(self, tracks: list[Track], video_properties: VideoInfo) -> list[Track]:
-        tracks = self.greedy_track_stitcher.track(tracks, video_properties)
+    def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
+        tracks = self.greedy_track_stitcher.track(tracks, video_properties, transforms)
+        # TODO tracks = OldGreedyTrackStitcher().track(tracks, video_properties)
         # tracks = self.filter_non_surfers.track(tracks, video_properties)
         return tracks
