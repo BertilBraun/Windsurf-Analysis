@@ -77,8 +77,8 @@ class GreedyTrackStitcher:
         detections_by_frame: Dict[FrameIndex, List[Detection]] = defaultdict(list)
         for track in tracks:
             assert len(track.sorted_detections) == 1, 'Greedy preprocessor only supports single-detection tracks'
-            for det in track.sorted_detections:
-                detections_by_frame[det.frame_idx].append(det)
+            for detection in track.sorted_detections:
+                detections_by_frame[detection.frame_idx].append(detection)
 
         frames: List[int] = sorted(int(f) for f in detections_by_frame.keys())
 
@@ -118,71 +118,79 @@ class GreedyTrackStitcher:
                 self._ema.pop(track.track_id, None)
 
         for frame_idx in frames:
-            matches_this_frame: List[tuple[Track, Detection]] = []
+            # ── Phase A: proposal using immutable snapshot ──
+            frame_detections: List[Detection] = detections_by_frame[frame_idx]
+            active_snapshot: List[Track] = list(active_tracks)
+            track_by_id: Dict[int, Track] = {t.track_id: t for t in active_snapshot}
 
-            # ── propose matches greedily per detection ──
-            for detection in detections_by_frame[frame_idx]:
-                clean_matches: List[Track] = []
-                mby_matches: List[Track] = []
+            # Tentative proposals and fade/new collections
+            tentative_proposals: List[tuple[int, Detection]] = []
+            detections_to_create_new_tracks: List[Detection] = []
+            fade_track_ids: set[int] = set()
 
-                for track in active_tracks:
-                    result = self._compare_detection_to_track(track, detection, cmc=cmc)
+            for detection in frame_detections:
+                clean_candidates: List[Track] = []
+                maybe_candidates: List[Track] = []
+
+                for candidate_track in active_snapshot:
+                    result = self._compare_detection_to_track(candidate_track, detection, cmc=cmc)
                     if result == _ComparisonResult.MATCH:
-                        clean_matches.append(track)
+                        clean_candidates.append(candidate_track)
                     elif result == _ComparisonResult.MAY_MATCH:
-                        mby_matches.append(track)
+                        maybe_candidates.append(candidate_track)
 
-                if len(clean_matches) == 1:
-                    matches_this_frame.append((clean_matches[0], detection))
-                elif len(clean_matches) == 0 and len(mby_matches) == 1:
-                    matches_this_frame.append((mby_matches[0], detection))
+                # Clean-first rule with uniqueness
+                if len(clean_candidates) == 1:
+                    tentative_proposals.append((clean_candidates[0].track_id, detection))
+                elif len(clean_candidates) == 0 and len(maybe_candidates) == 1:
+                    tentative_proposals.append((maybe_candidates[0].track_id, detection))
                 else:
-                    # No clear match → new track candidate for this detection
-                    new_track = create_new_track(detection)
-                    matches_this_frame.append((new_track, detection))
-                    print(
-                        f'New track candidate: {new_track.track_id} on frame {frame_idx} len(clean_matches): {len(clean_matches)} len(mby_matches): {len(mby_matches)}'
-                    )
-                    print(detection)
-                    print(
-                        f'Index of detection in detections_by_frame: {detections_by_frame[frame_idx].index(detection)}'
-                    )
-                    for track in active_tracks:
-                        print(
-                            f'Track: {track.track_id} result: {self._compare_detection_to_track(track, detection, cmc=cmc)}'
-                        )
-                    print('-' * 100)
+                    # Ambiguous or no candidates → new track; fade all candidates for this detection
+                    detections_to_create_new_tracks.append(detection)
+                    for track in clean_candidates + maybe_candidates:
+                        fade_track_ids.add(track.track_id)
 
-                    # All tracks that "almost matched" become stale
-                    for track in clean_matches + mby_matches:
-                        # TODO this breaks because the active tracks are not updated and previous matches might continue to match...
+            # ── Phase B: resolve using fade set, then commit ──
+            # Drop proposals that touch faded tracks
+            valid_proposals: List[tuple[int, Detection]] = [
+                (track_id, detection) for (track_id, detection) in tentative_proposals if track_id not in fade_track_ids
+            ]
+
+            # Cancel conflicts: tracks proposed to more than one detection
+            proposals_by_track: Dict[int, List[Detection]] = defaultdict(list)
+            for track_id, detection in valid_proposals:
+                proposals_by_track[track_id].append(detection)
+
+            conflicted_track_ids: List[int] = [
+                track_id for track_id, detection_list in proposals_by_track.items() if len(detection_list) > 1
+            ]
+            if conflicted_track_ids:
+                for track_id in conflicted_track_ids:
+                    fade_track_ids.add(track_id)
+                    for detection in proposals_by_track[track_id]:
+                        detections_to_create_new_tracks.append(detection)
+                # Remove all proposals that reference newly faded tracks
+                valid_proposals = [
+                    (track_id, detection) for (track_id, detection) in valid_proposals if track_id not in fade_track_ids
+                ]
+
+            # Stale faded tracks now (single commit point)
+            if fade_track_ids:
+                for track in list(active_tracks):
+                    if track.track_id in fade_track_ids:
                         stale_track(track)
 
-            # ── resolve conflicts per track id ──
-            detections_per_track: Dict[int, List[Detection]] = defaultdict(list)
-            tracks_per_track_id: Dict[int, Track] = {}
-            for track, detection in matches_this_frame:
-                detections_per_track[track.track_id].append(detection)
-                tracks_per_track_id[track.track_id] = track
-
-            for track_id, detections in detections_per_track.items():
-                track = tracks_per_track_id[track_id]
-                if len(detections) > 1:
-                    # conflicting attachments → stale original, spawn new tracks
-                    stale_track(track)
-                    for det in detections:
-                        new_track = create_new_track(det)
-                        print(f'Conflicting attachments → stale original, spawn new tracks: {new_track.track_id}')
-                        active_tracks.append(new_track)
-                else:
-                    # single extension
-                    det = detections[0]
-                    track.sorted_detections.append(det)
-                    if track not in active_tracks:  # NOTE: dirty hack to activate new tracks
-                        active_tracks.append(track)
-                    # update KF + EMA
-                    self._kf[track.track_id] = self._kf[track.track_id].update_to_det(det, cmc)
-                    self._ema[track.track_id] = self._ema[track.track_id].interpolate(det.embedding, self.ema_alpha)
+            # Apply surviving 1:1 proposals
+            for track_id, detection in valid_proposals:
+                track = track_by_id.get(track_id)
+                if track is None or track.track_id in stale_track_ids:
+                    # Track no longer active (e.g., faded); convert to new track
+                    detections_to_create_new_tracks.append(detection)
+                    continue
+                track.sorted_detections.append(detection)
+                # update KF + EMA
+                self._kf[track.track_id] = self._kf[track.track_id].update_to_det(detection, cmc)
+                self._ema[track.track_id] = self._ema[track.track_id].interpolate(detection.embedding, self.ema_alpha)
 
             # ── age out stale tracks (too far behind current frame) ──
             for track in list(active_tracks):
@@ -192,36 +200,42 @@ class GreedyTrackStitcher:
             # keep only non-stale active tracks
             active_tracks = [track for track in active_tracks if track.track_id not in stale_track_ids]
 
+            # Create new tracks for remaining detections
+            for detection in detections_to_create_new_tracks:
+                active_tracks.append(create_new_track(detection))
+
             # ── optional debug: visualize current frame before resolving conflicts ──
             if self.debug_vis:
                 try:
                     import cv2  # type: ignore
 
                     # Build matrices for distances between active tracks and current detections
-                    frame_dets: List[Detection] = detections_by_frame[frame_idx]
-                    sorted_active = sorted(active_tracks, key=lambda t: t.track_id)
-                    R = len(sorted_active)
-                    C = len(frame_dets)
-                    if R > 0 and C > 0:
-                        d2_mat = np.full((R, C), np.nan, dtype=np.float32)
-                        chi2_mat = np.full((R, C), np.nan, dtype=np.float32)
-                        for r, tr in enumerate(sorted_active):
+                    frame_detections_dbg: List[Detection] = detections_by_frame[frame_idx]
+                    sorted_active_tracks = sorted(active_tracks, key=lambda t: t.track_id)
+                    num_rows = len(sorted_active_tracks)
+                    num_cols = len(frame_detections_dbg)
+                    if num_rows > 0 and num_cols > 0:
+                        d2_matrix = np.full((num_rows, num_cols), np.nan, dtype=np.float32)
+                        chi2_matrix = np.full((num_rows, num_cols), np.nan, dtype=np.float32)
+                        for row_index, track in enumerate(sorted_active_tracks):
                             # Ensure KF/EMA state exists
-                            st = self._kf.get(tr.track_id)
-                            if st is None:
-                                st = self._kf[tr.track_id] = KFState.init(tr)
-                            pred = st.predict_to(frame_idx, cmc)
-                            ema = self._ema.get(tr.track_id, tr.start.embedding)
-                            for c, det in enumerate(frame_dets):
+                            kf_state = self._kf.get(track.track_id)
+                            if kf_state is None:
+                                kf_state = self._kf[track.track_id] = KFState.init(track)
+                            pred = kf_state.predict_to(frame_idx, cmc)
+                            ema = self._ema.get(track.track_id, track.start.embedding)
+                            for col_index, detection in enumerate(frame_detections_dbg):
                                 try:
-                                    d2_mat[r, c] = float(pred.gating_distance(det.bbox.center_wh, only_position=True))
+                                    d2_matrix[row_index, col_index] = float(
+                                        pred.gating_distance(detection.bbox.center_wh, only_position=True)
+                                    )
                                 except Exception:
-                                    d2_mat[r, c] = np.nan
+                                    d2_matrix[row_index, col_index] = np.nan
                                 try:
                                     assert isinstance(ema, HistogramEmbedding)
-                                    chi2_mat[r, c] = float(ema.distance(det.embedding))
+                                    chi2_matrix[row_index, col_index] = float(ema.distance(detection.embedding))
                                 except Exception:
-                                    chi2_mat[r, c] = np.nan
+                                    chi2_matrix[row_index, col_index] = np.nan
 
                         # Draw overlays on the current frame if available, else on a blank canvas
                         if frame_dict:
@@ -274,15 +288,19 @@ class GreedyTrackStitcher:
                             pass
 
                         # Draw detections
-                        for i, det in enumerate(frame_dets):
-                            bb = det.bbox
+                        for i, detection in enumerate(frame_detections_dbg):
+                            bbox = detection.bbox
                             cv2.rectangle(
-                                to_display, (int(bb.x1), int(bb.y1)), (int(bb.x2), int(bb.y2)), (255, 255, 255), 2
+                                to_display,
+                                (int(bbox.x1), int(bbox.y1)),
+                                (int(bbox.x2), int(bbox.y2)),
+                                (255, 255, 255),
+                                2,
                             )
                             cv2.putText(
                                 to_display,
                                 f'Det {i}',
-                                (int(bb.x2), max(0, int(bb.y2) - 4)),
+                                (int(bbox.x2), max(0, int(bbox.y2) - 4)),
                                 cv2.FONT_HERSHEY_SIMPLEX,
                                 0.45,
                                 (255, 255, 255),
@@ -291,12 +309,12 @@ class GreedyTrackStitcher:
                             )
 
                         # Draw KF predictions for active tracks at this frame
-                        for tr in sorted_active:
+                        for track in sorted_active_tracks:
                             try:
-                                st = self._kf.get(tr.track_id)
-                                if st is None:
-                                    st = self._kf[tr.track_id] = KFState.init(tr)
-                                pred = st.predict_to(frame_idx, cmc)
+                                kf_state = self._kf.get(track.track_id)
+                                if kf_state is None:
+                                    kf_state = self._kf[track.track_id] = KFState.init(track)
+                                pred = kf_state.predict_to(frame_idx, cmc)
                                 cx, cy, w, h = pred.display_bbox(alpha=0.0)
                                 x1 = int(cx - w / 2.0)
                                 y1 = int(cy - h / 2.0)
@@ -305,7 +323,7 @@ class GreedyTrackStitcher:
                                 cv2.rectangle(to_display, (x1, y1), (x2, y2), (0, 255, 0), 2)
                                 cv2.putText(
                                     to_display,
-                                    f'KF id={tr.track_id}',
+                                    f'KF id={track.track_id}',
                                     (x1, max(0, y1 - 6)),
                                     cv2.FONT_HERSHEY_SIMPLEX,
                                     0.45,
@@ -424,11 +442,11 @@ class GreedyTrackStitcher:
                                 pass
                             return canvas
 
-                        row_labels = [t.track_id for t in sorted_active]
-                        col_labels = list(range(C))
-                        hm_chi2 = build_heatmap(chi2_mat, 'chi2 embedding (low=better)', row_labels, col_labels)
+                        row_labels = [t.track_id for t in sorted_active_tracks]
+                        col_labels = list(range(num_cols))
+                        hm_chi2 = build_heatmap(chi2_matrix, 'chi2 embedding (low=better)', row_labels, col_labels)
                         hm_d2 = build_heatmap(
-                            d2_mat, 'KF gating g2 (pos-only)', row_labels, col_labels, vmin=0.0, vmax=20.0
+                            d2_matrix, 'KF gating g2 (pos-only)', row_labels, col_labels, vmin=0.0, vmax=20.0
                         )
                         heat_row = np.concatenate([hm_chi2, hm_d2], axis=1)
 
@@ -451,23 +469,23 @@ class GreedyTrackStitcher:
         if gap <= 0 or gap > self.max_frame_distance:
             return _ComparisonResult.NO_MATCH
 
-        tid = track.track_id
+        track_id = track.track_id
 
         # Predict to current frame (cached inside KFState)
-        pred = self._kf[tid].predict_to(detection.frame_idx, cmc)
+        pred = self._kf[track_id].predict_to(detection.frame_idx, cmc)
 
         # Motion gating: squared Mahalanobis distance (df=2)
         d2 = pred.gating_distance(detection.bbox.center_wh)
 
         # Appearance: χ² on L1-normalized histograms with EMA
-        ema = self._ema[tid]
+        ema = self._ema[track_id]
         assert isinstance(ema, HistogramEmbedding)
         chi2 = ema.distance(detection.embedding)
 
-        print(f'd2: {d2} chi2: {chi2} for track {tid} and detection {detection.frame_idx} bbox: {detection.bbox}')
+        print(f'd2: {d2} chi2: {chi2} for track {track_id} and detection {detection.frame_idx} bbox: {detection.bbox}')
 
         # Decision
-        if d2 <= self.gate_strict_d2 and chi2 <= self.chi2_strict:
+        if d2 <= self.gate_strict_d2 and chi2 <= self.chi2_strict and gap <= 3:
             return _ComparisonResult.MATCH
 
         if d2 <= self.gate_loose_d2 and chi2 <= self.chi2_loose:
