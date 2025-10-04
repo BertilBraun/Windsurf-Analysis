@@ -1,3 +1,5 @@
+from server.inference.src.tracking.preprocessing.old_greedy_track_stitcher import OldGreedyTrackStitcher
+from server.inference.src.visualization.stabilize import Transform
 from ...util.video_io import VideoInfo
 from ...common_types import Track
 from ...settings import (
@@ -21,12 +23,16 @@ class Preprocessor:
         ema_alpha: float = 0.6,  # appearance EMA smoothing
         # non_surfer_min_frames: int = 5,
         # non_surfer_similarity_thresh: float = 0.8,
+        debug_video_path: str | None = None,
     ):
         self.greedy_track_stitcher = GreedyTrackStitcher(
-            greedy_min_iou=greedy_min_iou,
-            greedy_min_cosine_similarity=greedy_min_cosine_similarity,
-            greedy_max_frame_distance=greedy_max_frame_distance,
-            greedy_ema_alpha=greedy_ema_alpha,
+            appearance_strict=appearance_strict,
+            appearance_loose=appearance_loose,
+            motion_strict=motion_strict,
+            motion_loose=motion_loose,
+            max_frame_distance=max_frame_distance,
+            ema_alpha=ema_alpha,
+            debug_video_path=debug_video_path,
         )
         # self.filter_non_surfers = FilterNonSurfers(
         #     min_frames=non_surfer_min_frames,
