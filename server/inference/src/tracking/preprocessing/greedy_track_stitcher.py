@@ -131,40 +131,9 @@ class GreedyTrackStitcher:
             frame_detections: List[Detection] = detections_by_frame[frame_idx]
             track_by_id: Dict[int, Track] = {t.track_id: t for t in active_tracks}
 
-            # Tentative proposals and fade/new collections
-            tentative_proposals: List[tuple[int, Detection]] = []
-            detections_to_create_new_tracks: List[Detection] = []
-            fade_track_ids: set[int] = set()
-
-            for detection in frame_detections:
-                clean_candidates: List[Track] = []
-                maybe_candidates: List[Track] = []
-
-                for candidate_track in active_tracks:
-                    result = self._compare_detection_to_track(
-                        candidate_track,
-                        detection,
-                        cmc=cmc,
-                        kf=kf[candidate_track.track_id],
-                        ema=ema[candidate_track.track_id],
-                    )
-                    if result == _ComparisonResult.MATCH:
-                        clean_candidates.append(candidate_track)
-                    elif result == _ComparisonResult.MAY_MATCH:
-                        maybe_candidates.append(candidate_track)
-
-                # Clean-first rule with uniqueness
-                if len(clean_candidates) == 1:
-                    tentative_proposals.append((clean_candidates[0].track_id, detection))
-                    for track in maybe_candidates:  # All maybe candidates are faded - remove them
-                        fade_track_ids.add(track.track_id)
-                elif len(clean_candidates) == 0 and len(maybe_candidates) == 1:
-                    tentative_proposals.append((maybe_candidates[0].track_id, detection))
-                else:
-                    # Ambiguous or no candidates → new track; fade all candidates for this detection
-                    detections_to_create_new_tracks.append(detection)
-                    for track in clean_candidates + maybe_candidates:
-                        fade_track_ids.add(track.track_id)
+            tentative_proposals, detections_to_create_new_tracks, fade_track_ids = self._generate_tentative_proposals(
+                frame_detections, active_tracks, cmc, kf, ema
+            )
 
             # Stale faded tracks now (single commit point)
             for track_id in fade_track_ids:
@@ -460,6 +429,51 @@ class GreedyTrackStitcher:
         return stale_tracks + active_tracks
 
     # ───────────────────────────── scoring ───────────────────────────── #
+
+    def _generate_tentative_proposals(
+        self,
+        frame_detections: List[Detection],
+        active_tracks: List[Track],
+        cmc: CMC,
+        kf: Dict[TrackId, KFState],
+        ema: Dict[TrackId, Embedding],
+    ) -> tuple[List[tuple[int, Detection]], List[Detection], set[int]]:
+        # Tentative proposals and fade/new collections
+        tentative_proposals: List[tuple[int, Detection]] = []
+        detections_to_create_new_tracks: List[Detection] = []
+        fade_track_ids: set[int] = set()
+
+        for detection in frame_detections:
+            clean_candidates: List[Track] = []
+            maybe_candidates: List[Track] = []
+
+            for candidate_track in active_tracks:
+                result = self._compare_detection_to_track(
+                    candidate_track,
+                    detection,
+                    cmc=cmc,
+                    kf=kf[candidate_track.track_id],
+                    ema=ema[candidate_track.track_id],
+                )
+                if result == _ComparisonResult.MATCH:
+                    clean_candidates.append(candidate_track)
+                elif result == _ComparisonResult.MAY_MATCH:
+                    maybe_candidates.append(candidate_track)
+
+            # Clean-first rule with uniqueness
+            if len(clean_candidates) == 1:
+                tentative_proposals.append((clean_candidates[0].track_id, detection))
+                for track in maybe_candidates:  # All maybe candidates are faded - remove them
+                    fade_track_ids.add(track.track_id)
+            elif len(clean_candidates) == 0 and len(maybe_candidates) == 1:
+                tentative_proposals.append((maybe_candidates[0].track_id, detection))
+            else:
+                # Ambiguous or no candidates → new track; fade all candidates for this detection
+                detections_to_create_new_tracks.append(detection)
+                for track in clean_candidates + maybe_candidates:
+                    fade_track_ids.add(track.track_id)
+
+        return tentative_proposals, detections_to_create_new_tracks, fade_track_ids
 
     def _compare_detection_to_track(
         self,
