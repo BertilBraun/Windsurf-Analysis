@@ -120,8 +120,7 @@ class GreedyTrackStitcher:
         for frame_idx in frames:
             # ── Phase A: proposal using immutable snapshot ──
             frame_detections: List[Detection] = detections_by_frame[frame_idx]
-            active_snapshot: List[Track] = list(active_tracks)
-            track_by_id: Dict[int, Track] = {t.track_id: t for t in active_snapshot}
+            track_by_id: Dict[int, Track] = {t.track_id: t for t in active_tracks}
 
             # Tentative proposals and fade/new collections
             tentative_proposals: List[tuple[int, Detection]] = []
@@ -132,7 +131,7 @@ class GreedyTrackStitcher:
                 clean_candidates: List[Track] = []
                 maybe_candidates: List[Track] = []
 
-                for candidate_track in active_snapshot:
+                for candidate_track in active_tracks:
                     result = self._compare_detection_to_track(candidate_track, detection, cmc=cmc)
                     if result == _ComparisonResult.MATCH:
                         clean_candidates.append(candidate_track)
@@ -150,50 +149,36 @@ class GreedyTrackStitcher:
                     for track in clean_candidates + maybe_candidates:
                         fade_track_ids.add(track.track_id)
 
+            # Stale faded tracks now (single commit point)
+            for track_id in fade_track_ids:
+                stale_track(track_by_id[track_id])
+
             # ── Phase B: resolve using fade set, then commit ──
             # Drop proposals that touch faded tracks
-            valid_proposals: List[tuple[int, Detection]] = [
-                (track_id, detection) for (track_id, detection) in tentative_proposals if track_id not in fade_track_ids
-            ]
+            valid_proposals = self._get_non_stale_proposals(tentative_proposals, stale_track_ids)
 
             # Cancel conflicts: tracks proposed to more than one detection
-            proposals_by_track: Dict[int, List[Detection]] = defaultdict(list)
-            for track_id, detection in valid_proposals:
-                proposals_by_track[track_id].append(detection)
+            duplicated_assignment_proposals = self._get_duplicated_assignment_proposals(valid_proposals)
+            for track_id, detection_list in duplicated_assignment_proposals:
+                stale_track(track_by_id[track_id])
+                for detection in detection_list:
+                    detections_to_create_new_tracks.append(detection)
 
-            conflicted_track_ids: List[int] = [
-                track_id for track_id, detection_list in proposals_by_track.items() if len(detection_list) > 1
-            ]
-            if conflicted_track_ids:
-                for track_id in conflicted_track_ids:
-                    fade_track_ids.add(track_id)
-                    for detection in proposals_by_track[track_id]:
-                        detections_to_create_new_tracks.append(detection)
-                # Remove all proposals that reference newly faded tracks
-                valid_proposals = [
-                    (track_id, detection) for (track_id, detection) in valid_proposals if track_id not in fade_track_ids
-                ]
-
-            # Stale faded tracks now (single commit point)
-            if fade_track_ids:
-                for track in list(active_tracks):
-                    if track.track_id in fade_track_ids:
-                        stale_track(track)
+            # Remove all proposals that reference newly stale tracks
+            valid_proposals = self._get_non_stale_proposals(valid_proposals, stale_track_ids)
 
             # Apply surviving 1:1 proposals
             for track_id, detection in valid_proposals:
-                track = track_by_id.get(track_id)
-                if track is None or track.track_id in stale_track_ids:
+                assert track_id in track_by_id, f'Track {track_id} not found in track_by_id but must be present'
+                track = track_by_id[track_id]
+                if track.track_id in stale_track_ids:
                     # Track no longer active (e.g., faded); convert to new track
                     detections_to_create_new_tracks.append(detection)
-                    continue
-                track.sorted_detections.append(detection)
-                # update KF + EMA
-                self._kf[track.track_id] = self._kf[track.track_id].update_to_det(detection, cmc)
-                self._ema[track.track_id] = self._ema[track.track_id].interpolate(detection.embedding, self.ema_alpha)
+                else:
+                    self._update_track(track, detection, cmc)
 
             # ── age out stale tracks (too far behind current frame) ──
-            for track in list(active_tracks):
+            for track in active_tracks:
                 if track.end.frame_idx + self.max_frame_distance < frame_idx:
                     stale_track(track)
 
@@ -494,3 +479,28 @@ class GreedyTrackStitcher:
             return _ComparisonResult.MAY_MATCH
 
         return _ComparisonResult.NO_MATCH
+
+    def _update_track(self, track: Track, detection: Detection, cmc: CMC) -> None:
+        track.sorted_detections.append(detection)
+        self._kf[track.track_id] = self._kf[track.track_id].update_to_det(detection, cmc)
+        self._ema[track.track_id] = self._ema[track.track_id].interpolate(detection.embedding, self.ema_alpha)
+
+    @staticmethod
+    def _get_non_stale_proposals(
+        proposals: List[tuple[int, Detection]], fade_track_ids: set[int]
+    ) -> List[tuple[int, Detection]]:
+        return [(track_id, detection) for (track_id, detection) in proposals if track_id not in fade_track_ids]
+
+    @staticmethod
+    def _get_duplicated_assignment_proposals(
+        proposals: List[tuple[int, Detection]],
+    ) -> List[tuple[int, List[Detection]]]:
+        proposals_by_track: Dict[int, List[Detection]] = defaultdict(list)
+        for track_id, detection in proposals:
+            proposals_by_track[track_id].append(detection)
+
+        return [
+            (track_id, detection_list)
+            for (track_id, detection_list) in proposals_by_track.items()
+            if len(detection_list) > 1
+        ]
