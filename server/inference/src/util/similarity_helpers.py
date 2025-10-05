@@ -66,7 +66,10 @@ class HistogramEmbedding:
         return 0.5 * float((num / den).sum())
 
     def probability(
-        self, other: HistogramEmbedding, a: float = 7.427828328625088, b: float = 4.088360175681194
+        self,
+        other: HistogramEmbedding,
+        a: float = 7.427828328625088,  # TODO tune again from data using evaluate_tracklet_matcher.py
+        b: float = 4.088360175681194,  # TODO tune again from data using evaluate_tracklet_matcher.py
     ) -> float:
         """Calculate the probability for a distance to say, that the two tracks are the same. `a` and `b` are parameters of the platt scaling. The returned probability is in the range [0, 1] (sigmoid(a * -d + b))"""
         z = a * (-self.distance(other)) + b

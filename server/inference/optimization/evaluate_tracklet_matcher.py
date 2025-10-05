@@ -5,7 +5,6 @@ import random
 import argparse
 import optuna
 
-import numpy as np
 
 from pathlib import Path
 from typing import List, Tuple
@@ -124,12 +123,6 @@ def _sample_negative_pairs(
 
 
 def _builtin_cost(track_a: Track, track_b: Track, params: dict) -> float:
-    def platt_prob_from_dist(d: float, a: float, b: float) -> float:
-        """Calculate the probability for a distance to say, that the two tracks are the same. `a` and `b` are parameters of the platt scaling. The returned probability is in the range [0, 1] (sigmoid(a * -d + b))"""
-        z = a * (-d) + b
-        p = 1.0 / (1.0 + np.exp(-z))
-        return float(np.clip(p, 1e-6, 1 - 1e-6))
-
     a = float(params.get('a', 1.0))
     b = float(params.get('b', 0.0))
 
@@ -157,22 +150,12 @@ b: -0.21355869883517353
 """
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description='Optimize built-in tracklet matching scorer on golden tracklets.')
-    parser.add_argument('--golden-dir', type=str, required=True, help='Directory with *.golden.tracks.pkl files')
-    # no external config; everything driven by constants above
-
-    args = parser.parse_args()
-
-    def score_with_params(a: Track, b: Track, video_path: str, params: dict) -> float:
-        return _builtin_cost(a, b, params)
-
+def build_dataset(golden_dir: str) -> Tuple[List[Track], List[Tuple[int, int, int, str]]]:
     # Build reusable dataset of (tracks, labeled pairs)
     dataset_tracks: List[Track] = []
     dataset_pairs: List[Tuple[int, int, int, str]] = []  # (i,j,label,video_path) with label 0=pos, 1=neg
-    per_video_stats = []
 
-    for tracks, meta in each_golden(args.golden_dir):
+    for tracks, meta in each_golden(golden_dir):
         video_path = meta.input_video_path
 
         pos_pairs: List[Tuple[Track, Track]] = []
@@ -191,17 +174,13 @@ def main() -> None:
             tracks, samples_per_video=neg_target, require_min_len=max(1, int(MIN_SUB_LEN))
         )
         # Collect unique tracklets to embed for this video
-        unique_tracklets: List[Track] = []
         key_to_index: dict[int, int] = {}
 
         def _get_index(t: Track) -> int:
             k = id(t)
-            idx = key_to_index.get(k)
-            if idx is None:
-                idx = len(unique_tracklets)
-                unique_tracklets.append(t)
-                key_to_index[k] = idx
-            return idx
+            if k not in key_to_index:
+                key_to_index[k] = len(key_to_index)
+            return key_to_index[k]
 
         pos_indices = [(_get_index(a), _get_index(b)) for (a, b) in pos_pairs]
         neg_indices = [(_get_index(a), _get_index(b)) for (a, b) in neg_pairs]
@@ -213,14 +192,20 @@ def main() -> None:
         for i, j in neg_indices:
             dataset_pairs.append((base + i, base + j, 1, video_path))
 
-        per_video_stats.append(
-            {
-                'video': Path(video_path).name,
-                'num_tracks': len(tracks),
-                'pos_pairs': len(pos_pairs),
-                'neg_pairs': len(neg_pairs),
-            }
-        )
+    return dataset_tracks, dataset_pairs
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description='Optimize built-in tracklet matching scorer on golden tracklets.')
+    parser.add_argument('--golden-dir', type=str, required=True, help='Directory with *.golden.tracks.pkl files')
+    # no external config; everything driven by constants above
+
+    args = parser.parse_args()
+
+    dataset_tracks, dataset_pairs = build_dataset(args.golden_dir)
+
+    def score_with_params(a: Track, b: Track, video_path: str, params: dict) -> float:
+        return _builtin_cost(a, b, params)
 
     def objective(trial: optuna.trial.Trial) -> float:
         params = {
@@ -230,8 +215,8 @@ def main() -> None:
 
         pos_costs: List[float] = []
         neg_costs: List[float] = []
-        for i, j, label, vp in dataset_pairs:
-            c = score_with_params(dataset_tracks[i], dataset_tracks[j], vp, params)
+        for i, j, label, video_path in dataset_pairs:
+            c = score_with_params(dataset_tracks[i], dataset_tracks[j], video_path, params)
             if label == 0:
                 pos_costs.append(c)
             else:
