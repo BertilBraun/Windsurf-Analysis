@@ -39,12 +39,12 @@ class IterativeILPTracker:
     def __init__(
         self,
         video_path: str,
-        w_start: float = OPTIMIZER_W_START,
+        w_start: float = OPTIMIZER_W_START * 50,
         # costs
         p_miss: float = 0.97,  # for gap NLL
         # motion eval
-        motion_k_eval: int = 3,  # eval first K detections of B (1..3 recommended)
-        d2_drop_threshold: float = 200.0,  # hard-drop average d^2 above this
+        motion_k_eval: int = 2,  # eval first K detections of B (1..3 recommended)
+        d2_drop_threshold: float = 50.0,  # hard-drop average d^2 above this
         use_position_only: bool = True,  # gating_distance on (cx,cy) or (cx,cy,w,h)
         # iteration
         max_iters: int = 4,
@@ -73,9 +73,8 @@ class IterativeILPTracker:
                 f'Track {track.track_id}: {len(track.sorted_detections)} detections from {track.start_frame} to {track.end_frame}'
             )
 
-        MAX_FRAME_GAP = int(round(MAX_OVERLAP_LENGTH_SECONDS * video_properties.fps))
-
         cmc = CMC(transforms)
+        max_frame_gap = int(round(MAX_OVERLAP_LENGTH_SECONDS * video_properties.fps))
 
         tracks = _maybe_split_on_internal_gaps(tracks, self.internal_split_gap_frames)
         best_cost = float('inf')
@@ -104,7 +103,7 @@ class IterativeILPTracker:
                 except Exception:
                     pass
 
-            graph = self._build_fragment_graph(tracks, MAX_FRAME_GAP, cmc, frame_dict)
+            graph = self._build_fragment_graph(tracks, max_frame_gap, cmc, frame_dict)
             # TODO increase start cost iteratively
             new_tracks, new_cost = ILPGraphSolver(self.w_start * (it + 1)).optimize_graph(graph)
 
@@ -118,7 +117,7 @@ class IterativeILPTracker:
             are_all_tracks_merged = all(
                 new_tracks[i].track_id == new_tracks[j].track_id
                 # Only tracks which were split on internal gaps remain, no other candidates
-                for i, j in _possible_mergeable_candidates(new_tracks, MAX_FRAME_GAP)
+                for i, j in _possible_mergeable_candidates(new_tracks, max_frame_gap)
             )
             # TODO smarter stopping condition (no assignment changes?)
             if are_all_tracks_merged:
@@ -193,14 +192,16 @@ class IterativeILPTracker:
                         A,
                         B,
                         motion_nll,
+                        avg_d2 if avg_d2 is not None else 0.0,
+                        avg_logdet,
                         appearance_nll,
                         gap_nll,
                         total,
                         frame_dict,
-                        cache_A.mean_end,
-                        cache_A.cov_end,
-                        cache_A.end_frame,
-                        transforms_dict,
+                        cache_A.mean,
+                        cache_A.cov,
+                        cache_A.last_frame,
+                        cmc,
                     )
                 except Exception:
                     pass
@@ -212,7 +213,7 @@ class IterativeILPTracker:
                     f'edge A[{i} id={A.track_id} end={A.end_frame} obj={hex(id(A))}] -> '
                     f'B[{j} id={B.track_id} start={B.start_frame} obj={hex(id(B))}] | '
                     f'Δ={gap_frames} | '
-                    f'avg_d2={avg_d2:.3f} K={used_k} | '
+                    f'avg_d2={avg_d2:.3f} avg_logdet={avg_logdet:.3f} K={used_k} | '
                     f'C_mot={motion_nll:.4f} C_app={appearance_nll:.4f} C_gap={gap_nll:.4f} | '
                     f'C_tot={total:.4f}'
                 )
@@ -229,6 +230,8 @@ class IterativeILPTracker:
         A: Track,
         B: Track,
         motion_nll: float,
+        avg_d2: float,
+        avg_logdet: float,
         appearance_nll: float,
         gap_nll: float,
         total_cost: float,
@@ -368,7 +371,7 @@ class IterativeILPTracker:
             banner = np.full((banner_h, combined.shape[1], 3), 15, dtype=np.uint8)
             gap_frames = max(0, int(B.start_frame - A.end_frame - 1))
             text = (
-                f'Δf={gap_frames}  '
+                f'Δf={gap_frames} avg_d2={avg_d2:.3f} avg_logdet={avg_logdet:.3f} '
                 f'C_mot={motion_nll:.4f}  C_app={appearance_nll:.4f}  C_gap={gap_nll:.4f}  C_tot={total_cost:.4f}'
             )
             cv2.putText(banner, text, (8, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (230, 230, 230), 1, cv2.LINE_AA)
@@ -430,26 +433,27 @@ def _motion_nll(
     cmc: CMC,
     motion_k_eval: int,
     use_position_only: bool,
-) -> Tuple[float, Optional[float], int]:
+) -> Tuple[float, Optional[float], float, int]:
     """
     Motion NLL between frags[idx_a] → frags[idx_b]:
       - use cached KF end state for A
       - predict by Δ to each of first K detections of B
       - inverse-GMC the observation into A.end frame
       - 0.5*d2 + 0.5*log|S_pos|, averaged across used dets
-    Returns: (motion_nll, avg_d2, used_K)
+    Returns: (motion_nll, avg_d2, logdet, used_K)
     """
     B = frags[idx_b]
 
     kf_state = kf_cache[idx_a]
 
     if not B.sorted_detections:
-        return 0.0, 0.0, 0
+        return 0.0, 0.0, 0.0, 0
 
     # evaluate up to K detections at B's start
     K = min(motion_k_eval, len(B.sorted_detections))
     total = 0.0
     d2_vals: List[float] = []
+    logdet_vals: List[float] = []
     used = 0
 
     cost_vals: List[float] = []
@@ -468,16 +472,22 @@ def _motion_nll(
         d2 = pred.gating_distance(z_obs_back, only_position=use_position_only)
         logdet = pred.logdet(use_position_only)
 
-        total += 0.5 * d2 + logdet
+        total += 0.5 * d2 + 0.5 * logdet
         d2_vals.append(d2)
+        logdet_vals.append(logdet)
         used += 1
 
+        p_tail = 1.0 - float(chi2.cdf(d2, df=2 if use_position_only else 4))
+        cost_vals.append(NLL_from_prob(p_tail))
+
     if used == 0:
-        return 1e6, None, 0
+        return 1e6, None, 0.0, 0
 
     avg_d2 = float(np.mean(d2_vals))
+    avg_logdet = float(np.mean(logdet_vals))
     motion_nll = total / used
-    return motion_nll, avg_d2, used
+    motion_nll = float(np.mean(cost_vals))
+    return motion_nll, avg_d2, avg_logdet, used
 
 
 # ───────────────────────────────────── gap ─────────────────────────────────── #
