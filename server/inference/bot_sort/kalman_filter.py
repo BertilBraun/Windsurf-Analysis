@@ -44,7 +44,7 @@ class _KalmanFilter:
         dt: float = 1.0,
         proc_std_weight_pos: float = 1.0 / 20.0,
         proc_std_weight_vel: float = 1.0 / 80.0,
-        meas_std_weight_pos: float = 1.0 / 30.0,
+        meas_std_weight_pos: float = 1.0 / 10.0,
         meas_std_weight_size: float = 1.0 / 40.0,
         q_growth: float = 1.01,
         x_scale: float = 1.5,  # scale for width, larger than 1 means more uncertainty in width
@@ -115,19 +115,19 @@ class _KalmanFilter:
         size_scale_y = size_scale * self._y_scale
         std_pos = np.array(
             [
-                self._proc_std_weight_pos * size_scale_x,
-                self._proc_std_weight_pos * size_scale_y,
-                self._proc_std_weight_pos * size_scale_x,
-                self._proc_std_weight_pos * size_scale_y,
+                self._proc_std_weight_pos * size_scale_x,  # x
+                self._proc_std_weight_pos * size_scale_y,  # y
+                self._proc_std_weight_pos * max(1.0, size_scale_x),  # w - don't shrink width
+                self._proc_std_weight_pos * max(1.0, size_scale_y),  # h - don't shrink height
             ],
             dtype=np.float64,
         )
         std_vel = np.array(
             [
-                self._proc_std_weight_vel * size_scale_x,
-                self._proc_std_weight_vel * size_scale_y,
-                self._proc_std_weight_vel * size_scale_x,
-                self._proc_std_weight_vel * size_scale_y,
+                self._proc_std_weight_vel * size_scale_x,  # vx
+                self._proc_std_weight_vel * size_scale_y,  # vy
+                self._proc_std_weight_vel * max(1.0, size_scale_x),  # vw - don't shrink width velocity
+                self._proc_std_weight_vel * max(1.0, size_scale_y),  # vh - don't shrink height velocity
             ],
             dtype=np.float64,
         )
@@ -264,8 +264,8 @@ class _KalmanFilter:
             [
                 self._meas_std_weight_pos * size_scale_x,
                 self._meas_std_weight_pos * size_scale_y,
-                self._meas_std_weight_size * size_scale_x,
-                self._meas_std_weight_size * size_scale_y,
+                self._meas_std_weight_size * max(1.0, size_scale_x),
+                self._meas_std_weight_size * max(1.0, size_scale_y),
             ],
             dtype=np.float64,
         )
