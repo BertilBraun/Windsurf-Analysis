@@ -46,9 +46,9 @@
             "problemMatcher": []
         },
         {
-            "label": "optimize_tracklet_matching",
+            "label": "optimize_pairwise_association",
             "type": "shell",
-            "command": "python server/inference/optimization/evaluate_tracklet_matcher.py --golden-dir ${input:golden-dir}",
+            "command": "python server/inference/optimization/optimize_pairwise_association.py --golden-dir ${input:golden-dir}",
             "problemMatcher": []
         },
         {

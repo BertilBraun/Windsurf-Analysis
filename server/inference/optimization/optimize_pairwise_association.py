@@ -9,8 +9,6 @@ import optuna
 from pathlib import Path
 from typing import List, Tuple
 
-from server.inference.src.util.similarity_helpers import HistogramEmbedding
-
 
 # Ensure project imports work when executed as a script
 this_file = Path(__file__).resolve()
@@ -18,6 +16,7 @@ project_root = this_file.parents[3]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
+from server.inference.src.util.similarity_helpers import HistogramEmbedding
 from server.inference.optimization.optimization_util import each_golden, optimize
 from server.inference.src.common_types import Track
 
@@ -122,34 +121,6 @@ def _sample_negative_pairs(
     return pairs
 
 
-def _builtin_cost(track_a: Track, track_b: Track, params: dict) -> float:
-    a = float(params.get('a', 1.0))
-    b = float(params.get('b', 0.0))
-
-    mean_embedding_a = track_a.mean_embedding()
-    mean_embedding_b = track_b.mean_embedding()
-
-    # d = mean_embedding_a.similarity(mean_embedding_b)
-    # d = chi2_dist(mean_embedding_a, mean_embedding_b)
-    # d = _calc_pairwise(track_a, track_b, lambda a, b: chi2_dist(a.embedding, b.embedding))  # too slow
-    assert isinstance(mean_embedding_a, HistogramEmbedding)
-    assert isinstance(mean_embedding_b, HistogramEmbedding)
-    p_same = mean_embedding_a.probability(mean_embedding_b, a, b)
-    return float(1.0 - p_same)  # 0 for positive, 1 for negative ideally
-
-
-"""  
-For mean embedding chi2 distance (objective = 0.099057)
-a: 7.427828328625088
-b: 4.088360175681194
-
-For mean embedding cosine similarity (objective = 0.253774):
-a: 0.0191976149872535
-b: -0.21355869883517353
-
-"""
-
-
 def build_dataset(golden_dir: str) -> Tuple[List[Track], List[Tuple[int, int, int, str]]]:
     # Build reusable dataset of (tracks, labeled pairs)
     dataset_tracks: List[Track] = []
@@ -174,19 +145,23 @@ def build_dataset(golden_dir: str) -> Tuple[List[Track], List[Tuple[int, int, in
             tracks, samples_per_video=neg_target, require_min_len=max(1, int(MIN_SUB_LEN))
         )
         # Collect unique tracklets to embed for this video
+        unique_tracklets: List[Track] = []
         key_to_index: dict[int, int] = {}
 
         def _get_index(t: Track) -> int:
             k = id(t)
-            if k not in key_to_index:
-                key_to_index[k] = len(key_to_index)
-            return key_to_index[k]
+            idx = key_to_index.get(k)
+            if idx is None:
+                idx = len(unique_tracklets)
+                unique_tracklets.append(t)
+                key_to_index[k] = idx
+            return idx
 
         pos_indices = [(_get_index(a), _get_index(b)) for (a, b) in pos_pairs]
         neg_indices = [(_get_index(a), _get_index(b)) for (a, b) in neg_pairs]
 
         base = len(dataset_tracks)
-        dataset_tracks.extend(tracks)
+        dataset_tracks.extend(unique_tracklets)
         for i, j in pos_indices:
             dataset_pairs.append((base + i, base + j, 0, video_path))
         for i, j in neg_indices:
@@ -196,16 +171,43 @@ def build_dataset(golden_dir: str) -> Tuple[List[Track], List[Tuple[int, int, in
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description='Optimize built-in tracklet matching scorer on golden tracklets.')
+    """This file exists to optimize the hyperparameters for the pairwise association cost function.
+    It generates a dataset of Tracks which should match (Positives), and Tracks which should not match (Negatives).
+    It then optimizes the hyperparameters for the pairwise association cost function which should return values close to 0 for Positives and close to 1 for Negatives.
+    """
+
+    parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument('--golden-dir', type=str, required=True, help='Directory with *.golden.tracks.pkl files')
-    # no external config; everything driven by constants above
 
     args = parser.parse_args()
 
     dataset_tracks, dataset_pairs = build_dataset(args.golden_dir)
 
-    def score_with_params(a: Track, b: Track, video_path: str, params: dict) -> float:
-        return _builtin_cost(a, b, params)
+    def score_with_params(track_a: Track, track_b: Track, video_path: str, params: dict) -> float:
+        a = float(params['a'])
+        b = float(params['b'])
+
+        mean_embedding_a = track_a.mean_embedding()
+        mean_embedding_b = track_b.mean_embedding()
+
+        # d = mean_embedding_a.similarity(mean_embedding_b)
+        # d = chi2_dist(mean_embedding_a, mean_embedding_b)
+        # d = _calc_pairwise(track_a, track_b, lambda a, b: chi2_dist(a.embedding, b.embedding))  # too slow
+        assert isinstance(mean_embedding_a, HistogramEmbedding)
+        assert isinstance(mean_embedding_b, HistogramEmbedding)
+        p_same = mean_embedding_a.probability(mean_embedding_b, a, b)
+        return float(1.0 - p_same)  # 0 for positive, 1 for negative ideally
+
+    """  
+    For mean embedding chi2 distance (objective = 0.099057)
+    a: 7.427828328625088
+    b: 4.088360175681194
+
+    For mean embedding cosine similarity (objective = 0.253774):
+    a: 0.0191976149872535
+    b: -0.21355869883517353
+
+    """
 
     def objective(trial: optuna.trial.Trial) -> float:
         params = {
