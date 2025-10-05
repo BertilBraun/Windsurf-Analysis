@@ -53,10 +53,12 @@ def _evaluate_preprocessor(params: Dict[str, Any], golden_dir: Path) -> float:
         transforms = compute_stabilization_transforms_gmc(video_path.as_posix())
 
         pre = Preprocessor(
-            chi2_strict=float(params['chi2_strict']),
-            chi2_loose=float(params['chi2_loose']),
-            gate_strict_d2=float(params['gate_strict_d2']),
-            gate_loose_d2=float(params['gate_loose_d2']),
+            appearance_strict=float(params['appearance_strict']),
+            appearance_loose=float(params['appearance_loose']),
+            motion_strict=float(params['motion_strict']),
+            motion_loose=float(params['motion_loose']),
+            max_frame_distance=int(params['max_frame_distance']),
+            ema_alpha=float(params['ema_alpha']),
             debug_video_path=video_path.as_posix(),
         )
         initial_tracks = _flatten_tracks(tracks)
@@ -95,14 +97,16 @@ def _evaluate_preprocessor(params: Dict[str, Any], golden_dir: Path) -> float:
 def _run_opt_preprocessor(args) -> Tuple[float, Dict[str, Any]]:
     def objective(trial: optuna.trial.Trial) -> float:
         params = {
-            'chi2_strict': trial.suggest_float('chi2_strict', 0.05, 0.5),
-            'chi2_loose': trial.suggest_float('chi2_loose', 0.1, 0.8),
-            'gate_strict_d2': trial.suggest_float('gate_strict_d2', 0.1, 0.5),
-            'gate_loose_d2': trial.suggest_float('gate_loose_d2', 0.8, 5.0),
+            'appearance_strict': trial.suggest_float('appearance_strict', 0.00, 0.2),
+            'appearance_loose': trial.suggest_float('appearance_loose', 0.05, 0.4),
+            'motion_strict': trial.suggest_float('motion_strict', 0.05, 0.4),
+            'motion_loose': trial.suggest_float('motion_loose', 0.1, 10.0),
+            'max_frame_distance': trial.suggest_int('max_frame_distance', 0, 10),
+            'ema_alpha': trial.suggest_float('ema_alpha', 0.0, 1.0),
         }
-        if params['chi2_strict'] >= params['chi2_loose']:
+        if params['appearance_strict'] >= params['appearance_loose']:
             return -math.inf
-        if params['gate_strict_d2'] >= params['gate_loose_d2']:
+        if params['motion_strict'] >= params['motion_loose']:
             return -math.inf
         score = _evaluate_preprocessor(params, args.golden_dir)
         return float(score)
