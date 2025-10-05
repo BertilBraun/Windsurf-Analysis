@@ -3,7 +3,7 @@ from typing import Protocol
 
 import numpy as np
 
-from .algebra import l2_normalize, l1_normalize
+from .algebra import chi2_dist, clip_probability, cosine_similarity, l2_normalize, l1_normalize
 
 
 class Embedding(Protocol):
@@ -24,10 +24,7 @@ class VectorEmbedding:
     def distance(self, other: Embedding) -> float:
         if not isinstance(other, VectorEmbedding):
             raise ValueError(f'Expected VectorEmbedding, got {type(other)}')
-        similarity = np.dot(self.embedding, other.embedding) / (
-            np.linalg.norm(self.embedding) * np.linalg.norm(other.embedding)
-        )
-        return 1 - similarity
+        return 1 - cosine_similarity(self.embedding, other.embedding)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, VectorEmbedding):
@@ -57,24 +54,19 @@ class HistogramEmbedding:
     def histogram(self) -> np.ndarray:
         return self.__histogram
 
-    def distance(self, other: Embedding, eps: float = 1e-8) -> float:
+    def distance(self, other: Embedding) -> float:
         if not isinstance(other, HistogramEmbedding):
             raise ValueError(f'Expected HistogramEmbedding, got {type(other)}')
         """Calculate the chi2 distance between two embeddings."""
-        num = (self.histogram - other.histogram) ** 2
-        den = self.histogram + other.histogram + eps
-        return 0.5 * float((num / den).sum())
+        return chi2_dist(self.histogram, other.histogram)
 
-    def probability(
-        self,
-        other: HistogramEmbedding,
-        a: float = 7.427828328625088,  # TODO tune again from data using optimize_pairwise_association.py
-        b: float = 4.088360175681194,  # TODO tune again from data using optimize_pairwise_association.py
-    ) -> float:
-        """Calculate the probability for a distance to say, that the two tracks are the same. `a` and `b` are parameters of the platt scaling. The returned probability is in the range [0, 1] (sigmoid(a * -d + b))"""
-        z = a * (-self.distance(other)) + b
-        p = 1.0 / (1.0 + np.exp(-z))
-        return float(np.clip(p, 1e-6, 1 - 1e-6))
+    def probability(self, other: HistogramEmbedding) -> float:
+        """Calculate the probability, that the two tracks are the same based on the appearance similarity."""
+        distance = self.distance(other)
+        # Distance values 0-0.05 are very good matches
+        # Distance values 0.05-0.15 are still good matches
+        # Distance values >0.15 (up to ~0.9 for the worst matching pairs in the sample dataset) are bad matches
+        return clip_probability(1 - distance * 4)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, HistogramEmbedding):

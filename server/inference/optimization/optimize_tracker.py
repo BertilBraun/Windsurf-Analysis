@@ -154,7 +154,7 @@ def _evaluate_discrete(params: Dict[str, Any], golden_dir: Path) -> Tuple[float,
     if not metrics_list:
         return float('nan'), []
 
-    avg_f1 = sum(s.pairwise_f1 for _, s in metrics_list) / len(metrics_list)
+    avg_f1 = sum(s.f1 for _, s in metrics_list) / len(metrics_list)
     return float(avg_f1), metrics_list
 
 
@@ -226,7 +226,7 @@ def _evaluate_botsort(params: Dict[str, Any], golden_dir: Path) -> Tuple[float, 
     if not metrics_list:
         return float('nan'), []
 
-    avg_f1 = sum(s.pairwise_f1 for _, s in metrics_list) / len(metrics_list)
+    avg_f1 = sum(s.f1 for _, s in metrics_list) / len(metrics_list)
     return float(avg_f1), metrics_list
 
 
@@ -278,14 +278,14 @@ def _evaluate_iter_ilp(params: Dict[str, Any], golden_dir: Path) -> Tuple[float,
     if not metrics_list:
         return float('nan'), []
 
-    avg_f1 = sum(s.pairwise_f1 for _, s in metrics_list) / len(metrics_list)
+    avg_f1 = sum(s.f1 for _, s in metrics_list) / len(metrics_list)
     return float(avg_f1), metrics_list
 
 
 def _run_iter_ilp(args) -> Tuple[float, Dict[str, Any]]:
     def objective(trial: optuna.trial.Trial) -> float:
         params: Dict[str, Any] = {
-            'w_start': trial.suggest_float('w_start', 0.5, 10.0),
+            'w_start': trial.suggest_float('w_start', 0.5, 1000.0),
         }
         score, _ = _evaluate_iter_ilp(params, args.golden_dir)
         return -1.0 if math.isnan(score) else float(score)

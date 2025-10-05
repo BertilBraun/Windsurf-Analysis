@@ -100,11 +100,9 @@ def main() -> None:
                         pred_assign[k] = next_tid
                         next_tid += 1
 
-            if set(gold_assign.keys()) != set(pred_assign.keys()):
-                print(
-                    f'[warn] Key mismatch for {video_path.name} with tracker {name}; skipping F1 computation for this video.'
-                )
-                continue
+            assert set(gold_assign.keys()) == set(pred_assign.keys()), (
+                f'Key mismatch for {video_path.name} with tracker {name}'
+            )
 
             s = pairwise_scores(gold_assign, pred_assign)
             per_tracker_scores[name].append((video_path.name, s))
@@ -116,7 +114,7 @@ def main() -> None:
         if not items:
             print(f'  {name}: n/a')
             continue
-        avg_f1 = sum(s.pairwise_f1 for _, s in items) / len(items)
+        avg_f1 = sum(s.f1 for _, s in items) / len(items)
         avg_time = sum(t for _, t in per_tracker_times[name]) / len(per_tracker_times[name])
         print(f'  {name}: {avg_f1:.4f}  (n={len(items)}) {avg_time:.2f}s')
 

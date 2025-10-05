@@ -203,9 +203,9 @@ def build_assignment_from_metadata(meta: Metadata) -> Dict[AssignmentKey, int]:
 class PairwiseScores:
     num_detections: float
     pairs: float
-    pairwise_precision: float
-    pairwise_recall: float
-    pairwise_f1: float
+    precision: float
+    recall: float
+    f1: float
     rand_index: float
     jaccard_same: float
 
@@ -218,9 +218,9 @@ def pairwise_scores(gold: Dict[AssignmentKey, int], pred: Dict[AssignmentKey, in
         return PairwiseScores(
             num_detections=float(n),
             pairs=0.0,
-            pairwise_precision=1.0,
-            pairwise_recall=1.0,
-            pairwise_f1=1.0,
+            precision=1.0,
+            recall=1.0,
+            f1=1.0,
             rand_index=1.0,
             jaccard_same=1.0,
         )
@@ -252,9 +252,9 @@ def pairwise_scores(gold: Dict[AssignmentKey, int], pred: Dict[AssignmentKey, in
     return PairwiseScores(
         num_detections=float(n),
         pairs=float(pairs),
-        pairwise_precision=float(prec),
-        pairwise_recall=float(rec),
-        pairwise_f1=float(f1),
+        precision=float(prec),
+        recall=float(rec),
+        f1=float(f1),
         rand_index=float(rand),
         jaccard_same=float(jaccard_same),
     )
