@@ -21,9 +21,14 @@ class FragmentGraph:
     """Represents the graph structure of fragment connections and their costs."""
 
     def __init__(self, fragments: List[Track]):
-        self.fragments = fragments
+        self.fragments = fragments  # required for reconstructing tracks from solution
         self.successors: List[List[int]] = [[] for _ in range(len(fragments))]
         self.pair_costs: Dict[Tuple[int, int], float] = {}
+
+    @property
+    def N(self) -> int:
+        """Get the number of fragments."""
+        return len(self.fragments)
 
     def add_connection(self, from_idx: int, to_idx: int, cost: float) -> None:
         """Add a connection between two fragments with the given cost."""
@@ -76,7 +81,7 @@ class ILPGraphSolver:
 
         # Create decision variables
         link_vars = self._create_link_variables(simplified_graph)
-        start_vars = self._create_start_variables(len(simplified_graph.fragments))
+        start_vars = self._create_start_variables(simplified_graph.N)
 
         # Add constraints
         self._add_outgoing_constraints(problem, simplified_graph, link_vars)
@@ -113,7 +118,7 @@ class ILPGraphSolver:
         self, problem: pulp.LpProblem, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], pulp.LpVariable]
     ) -> None:
         """Add constraints ensuring each fragment has at most one outgoing link."""
-        for i in range(len(graph.fragments)):
+        for i in range(graph.N):
             outgoing_connections = graph.get_outgoing_connections(i)
             if outgoing_connections:
                 # Sum of outgoing links <= 1
@@ -126,12 +131,12 @@ class ILPGraphSolver:
     ) -> None:
         """Add constraints ensuring each fragment has at most one incoming link."""
         # Build incoming connections mapping
-        incoming: List[List[pulp.LpVariable]] = [[] for _ in range(len(graph.fragments))]
+        incoming: List[List[pulp.LpVariable]] = [[] for _ in range(graph.N)]
         for (i, j), var in link_vars.items():
             incoming[j].append(var)
 
         # Add constraints
-        for j in range(len(graph.fragments)):
+        for j in range(graph.N):
             if incoming[j]:
                 constraint_name = f'incoming_{j}'
                 problem += pulp.lpSum(incoming[j]) <= 1, constraint_name
@@ -145,12 +150,12 @@ class ILPGraphSolver:
     ) -> None:
         """Add constraints defining when a fragment is a start of a track."""
         # Build incoming connections mapping
-        incoming: List[List[pulp.LpVariable]] = [[] for _ in range(len(graph.fragments))]
+        incoming: List[List[pulp.LpVariable]] = [[] for _ in range(graph.N)]
         for (i, j), var in link_vars.items():
             incoming[j].append(var)
 
         # Add start constraints
-        for i in range(len(graph.fragments)):
+        for i in range(graph.N):
             if incoming[i]:
                 # start_i = 1 - sum(incoming_links_to_i)
                 # This means: start_i + sum(incoming_links_to_i) = 1
@@ -211,7 +216,7 @@ class ILPGraphSolver:
             raise RuntimeError(f'Unexpected solver status: {status}')
 
         # Extract solution
-        successor_of: Dict[int, int | None] = {i: None for i in range(len(graph.fragments))}
+        successor_of: Dict[int, int | None] = {i: None for i in range(graph.N)}
 
         for (i, j), var in link_vars.items():
             if var.varValue is not None and var.varValue > 0.5:  # Binary variable is 1

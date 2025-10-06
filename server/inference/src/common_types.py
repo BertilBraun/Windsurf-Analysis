@@ -10,7 +10,7 @@ from typing import Iterator
 from server.inference.src.util.similarity_helpers import Embedding
 
 
-@dataclass
+@dataclass(frozen=True)
 class Point:
     x: int
     y: int
@@ -25,19 +25,23 @@ class Point:
         return Point(int((1 - alpha) * self.x + alpha * other.x), int((1 - alpha) * self.y + alpha * other.y))
 
 
-@dataclass
+@dataclass(frozen=True)
 class BoundingBox:
     x1: int
     y1: int
     x2: int
     y2: int
 
-    def __init__(self, x1: int, y1: int, x2: int, y2: int):
-        assert int(x1) <= int(x2) and int(y1) <= int(y2), f'Bounding boxes must be valid ({x1}<={x2}, {y1}<={y2})'
-        self.x1 = int(x1)
-        self.y1 = int(y1)
-        self.x2 = int(x2)
-        self.y2 = int(y2)
+    def __post_init__(self):
+        assert int(self.x1) <= int(self.x2) and int(self.y1) <= int(self.y2), (
+            f'Bounding boxes must be valid ({self.x1}<={self.x2}, {self.y1}<={self.y2})'
+        )
+        assert (
+            isinstance(self.x1, int)
+            and isinstance(self.y1, int)
+            and isinstance(self.x2, int)
+            and isinstance(self.y2, int)
+        ), 'Bounding boxes must be integers'
 
     @property
     def width(self) -> int:
@@ -121,6 +125,11 @@ class BoundingBox:
     def __hash__(self) -> int:
         return hash((self.x1, self.y1, self.x2, self.y2))
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, BoundingBox):
+            return False
+        return self.x1 == other.x1 and self.y1 == other.y1 and self.x2 == other.x2 and self.y2 == other.y2
+
 
 @dataclass
 class Detection:
@@ -151,6 +160,11 @@ class Detection:
 
     def __hash__(self) -> int:
         return hash((self.bbox, self.confidence, self.frame_idx))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Detection):
+            return False
+        return self.bbox == other.bbox and self.confidence == other.confidence and self.frame_idx == other.frame_idx
 
 
 FrameIndex = int
