@@ -10,7 +10,7 @@ from server.inference.src.util.algebra import probability_from_dist
 
 
 from ..util.video_io import VideoInfo, VideoReader
-from ..common_types import Detection, FrameIndex, Track, TrackId
+from ..common_types import Detection, Track, TrackId
 from ..settings import MAX_OVERLAP_LENGTH_SECONDS, OPTIMIZER_W_START, EPS
 from .ILP_graph_solver import FragmentGraph, ILPGraphSolver
 from server.inference.bot_sort.kalman_filter import KFState, _KalmanFilter
@@ -633,8 +633,6 @@ def _appearance_nll(a: Track, b: Track) -> float:
     b_mean = b.mean_embedding()
     assert isinstance(a_mean, HistogramEmbedding), f'assuming histogram embedding but got {type(a_mean)}'
     assert isinstance(b_mean, HistogramEmbedding), f'assuming histogram embedding but got {type(b_mean)}'
-    distance = a_mean.distance(b_mean)
-    probability = probability_from_dist(distance, df=1)  # TODO remove
     probability = a_mean.probability(b_mean)
     return NLL_from_prob(probability)
 
