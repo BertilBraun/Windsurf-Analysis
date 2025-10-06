@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Tuple, List, Optional
+from typing import Dict, Literal, Tuple, List, Optional
 
 import math
 import numpy as np
@@ -39,24 +39,56 @@ class IterativeILPTracker:
     def __init__(
         self,
         video_path: str,
-        w_start: float = OPTIMIZER_W_START * 50,
-        # costs
+        # Start-cost schedule (controls edge cap and start penalty in ILP)
+        w_start: float = OPTIMIZER_W_START * 50,  # initial start cost (backward-compatible)
+        start_cost_mode: Literal['linear', 'geo'] = 'linear',  # 'linear' or 'geo'
+        start_cost_growth: float = 1.0,  # linear: additive step; geo: multiplicative factor
+        start_cost_max: Optional[float] = None,  # optional cap
+        # Per-term cost weights
+        w_motion: float = 1.0,
+        w_appearance: float = 1.0,
+        w_gap: float = 1.0,
+        # Gap model
         p_miss: float = 0.97,  # for gap NLL
-        # motion eval
+        # Motion evaluation
         max_detections_to_compare: int = 2,  # eval first K detections of B (1..3 recommended)
         use_position_only: bool = True,  # gating_distance on (cx,cy) or (cx,cy,w,h)
-        # iteration
+        # Iteration & stopping
         max_optimization_iterations: int = 4,
-        # optional internal long-gap split during iteration (simple rule)
+        # optional splitting rules
+        enable_splitting: bool = True,
         internal_split_gap_frames: int = 3,  # 0 disables; >0 splits tracks on internal gaps > this
+        motion_split_nll_min: float = 0.15,  # split if P_same(motion) < this
+        appearance_split_nll_min: float = 0.20,  # split if P_same(app) < this
+        appearance_split_window: int = 3,  # mean of last W embeddings vs current
+        max_splits_per_track: Optional[int] = None,
     ) -> None:
         self.video_path = video_path
-        self.w_start = float(w_start)
+        # Start-cost scheduling
+        assert start_cost_mode in ['linear', 'geo']
+        assert start_cost_growth > 0.0
+        self.w_start_initial = w_start
+        self.start_cost_mode = start_cost_mode
+        self.start_cost_growth = start_cost_growth
+        self.start_cost_max = start_cost_max
+        # Term weights
+        self.w_motion = float(w_motion)
+        self.w_appearance = float(w_appearance)
+        self.w_gap = float(w_gap)
+        # Gap model
         self.p_miss = float(p_miss)
+        # Motion evaluation
         self.max_detections_to_compare = int(max(1, max_detections_to_compare))
         self.use_position_only = bool(use_position_only)
+        # Iteration & stopping
         self.max_optimization_iterations = int(max(1, max_optimization_iterations))
+        # Splitting
+        self.enable_splitting = bool(enable_splitting)
         self.internal_split_gap_frames = int(max(0, internal_split_gap_frames))
+        self.motion_split_nll_min = motion_split_nll_min
+        self.appearance_split_nll_min = appearance_split_nll_min
+        self.appearance_split_window = int(max(1, appearance_split_window))
+        self.max_splits_per_track = None if max_splits_per_track is None else int(max(0, max_splits_per_track))
 
         # TODO remove
         # Debugging/visualization
@@ -70,13 +102,25 @@ class IterativeILPTracker:
 
     # ───────────────────────────────── public API ───────────────────────────────── #
 
-    def track(self, tracks: List[Track], video_properties: VideoInfo, transforms: List[Transform]) -> List[Track]:
+    def track(
+        self, tracks: List[Track], video_properties: VideoInfo, transforms: List[Transform]
+    ) -> tuple[List[Track], float]:
         """Run iterative graph building and ILP solve. Stops when cost does not improve."""
 
         cmc = CMC(transforms)
         max_frame_gap = int(round(MAX_OVERLAP_LENGTH_SECONDS * video_properties.fps))
 
-        tracks = _maybe_split_on_internal_gaps(tracks, self.internal_split_gap_frames)
+        if self.enable_splitting:
+            tracks = _split_tracks(
+                tracks,
+                cmc,
+                max_detections_to_compare=self.max_detections_to_compare,
+                use_position_only=self.use_position_only,
+                motion_split_nll_min=self.motion_split_nll_min,
+                appearance_split_nll_min=self.appearance_split_nll_min,
+                internal_split_gap_frames=self.internal_split_gap_frames,
+                max_splits_per_track=self.max_splits_per_track,
+            )
         best_cost = float('inf')
 
         frame_dict = {}
@@ -84,6 +128,7 @@ class IterativeILPTracker:
             for frame_idx, frame in reader.read_frames():
                 frame_dict[frame_idx] = frame
 
+        iteration = 0  # TODO remove iteration
         for iteration in range(self.max_optimization_iterations):
             # Iteration-level debug: list fragments/ids before building the graph
             if self.enable_edge_logging:
@@ -99,9 +144,10 @@ class IterativeILPTracker:
             graph = self._build_fragment_graph(tracks, max_frame_gap, cmc)
 
             if self.enable_edge_logging:
-                # debug graph - print:count of edges, min/median/max of costs, and how many edges have cost < current w_start*(it+1)
+                # debug graph - print: count of edges, min/median/max of costs, and how many edges pass the scheduled cap
+                _dbg_w = self._scheduled_start_cost(iteration)
                 print(
-                    f'Iteration {iteration}: graph has {len(graph.pair_costs)} edges, min/median/max of costs: {min(graph.pair_costs.values())}/{np.median(list(graph.pair_costs.values()))}/{max(graph.pair_costs.values())}, {sum(1 for cost in graph.pair_costs.values() if cost < self.w_start * (iteration + 1))} edges have cost < {self.w_start * (iteration + 1)}'
+                    f'Iteration {iteration}: graph has {len(graph.pair_costs)} edges, min/median/max of costs: {min(graph.pair_costs.values())}/{np.median(list(graph.pair_costs.values()))}/{max(graph.pair_costs.values())}, {sum(1 for cost in graph.pair_costs.values() if cost < _dbg_w)} edges have cost < {_dbg_w}'
                 )
 
             # Optional interactive graph visualization (source/sink + edges with costs)
@@ -111,8 +157,9 @@ class IterativeILPTracker:
                 except Exception:
                     # Non-fatal if viz fails (e.g., headless or missing deps)
                     pass
-            # TODO increase start cost iteratively
-            new_tracks, new_cost = ILPGraphSolver(self.w_start * (iteration + 1)).optimize_graph(graph)
+            # Solve with scheduled start cost
+            scheduled_w_start = self._scheduled_start_cost(iteration)
+            new_tracks, new_cost = ILPGraphSolver(scheduled_w_start).optimize_graph(graph)
 
             if self.enable_edge_logging:
                 print(f'Iteration {iteration}: new tracks after ILP solve:')
@@ -125,24 +172,33 @@ class IterativeILPTracker:
                 if self.enable_edge_logging:
                     print(f'No improvement in iteration {iteration}, stopping. {new_cost} >= {best_cost}')
                 break
-            tracks, best_cost = new_tracks, new_cost
 
-            are_all_tracks_merged = all(
-                new_tracks[i].track_id == new_tracks[j].track_id
-                # Only tracks which were split on internal gaps remain, no other candidates
-                for i, j in _possible_mergeable_candidates(new_tracks, max_frame_gap)
-            )
-            # TODO smarter stopping condition (no assignment changes?)
-            if are_all_tracks_merged:
+            last_tracks, tracks, best_cost = tracks, new_tracks, new_cost
+
+            are_all_tracks_merged = _are_all_tracks_merged(new_tracks, max_frame_gap)
+            no_assignment_changes = _are_assignments_the_same(last_tracks, new_tracks)
+            if are_all_tracks_merged or no_assignment_changes:
                 if self.enable_edge_logging:
-                    print(f'All tracks merged, stopping. {new_cost}')
+                    print(
+                        f'All tracks merged or no assignment changes, stopping. Cost: {new_cost} Are all tracks merged: {are_all_tracks_merged} No assignment changes: {no_assignment_changes}'
+                    )
                 break
 
-            # optional: after each solve, split again on internal gaps if enabled
-            tracks = _maybe_split_on_internal_gaps(tracks, self.internal_split_gap_frames)
+            # optional: after each solve, split again if enabled
+            if self.enable_splitting:
+                tracks = _split_tracks(
+                    tracks,
+                    cmc,
+                    max_detections_to_compare=self.max_detections_to_compare,
+                    use_position_only=self.use_position_only,
+                    motion_split_nll_min=self.motion_split_nll_min,
+                    appearance_split_nll_min=self.appearance_split_nll_min,
+                    internal_split_gap_frames=self.internal_split_gap_frames,
+                    max_splits_per_track=self.max_splits_per_track,
+                )
 
         # Remerge tracks with same track id in case of internal splits
-        return _remerge_tracks(tracks)
+        return _remerge_tracks(tracks), iteration  # TODO remove iteration
 
     # ─────────────────────────────── graph building ────────────────────────────── #
 
@@ -166,13 +222,7 @@ class IterativeILPTracker:
             A = fragments[i]
             B = fragments[j]
             # compute costs
-            motion_nll, avg_d2, avg_logdet, used_k = _motion_nll(
-                kf_cache[i],
-                B,
-                cmc,
-                self.max_detections_to_compare,
-                self.use_position_only,
-            )
+            motion_nll = _motion_nll(kf_cache[i], B, cmc, self.max_detections_to_compare, self.use_position_only)
             if math.isinf(motion_nll) or math.isnan(motion_nll):
                 continue
 
@@ -183,7 +233,8 @@ class IterativeILPTracker:
             gap_frames = B.start_frame - A.end_frame - 1
             gap_nll = _gap_nll(gap_frames, self.p_miss)
 
-            total = motion_nll + appearance_nll + gap_nll
+            # Weighted sum of costs
+            total = self.w_motion * motion_nll + self.w_appearance * appearance_nll + self.w_gap * gap_nll
 
             # Collect per-edge debug data for interactive visualization
             if self.enable_edge_logging:
@@ -203,9 +254,6 @@ class IterativeILPTracker:
                             'appearance_nll': float(appearance_nll),
                             'gap_nll': float(gap_nll),
                             'total': float(total),
-                            'avg_d2': float(avg_d2 if avg_d2 is not None else 0.0),
-                            'avg_logdet': float(avg_logdet),
-                            'used_k': int(used_k),
                             'gap_frames': int(gap_frames),
                             # KF end state for A to drive visualization later
                             'kf_mean_end': cache_A.mean,
@@ -219,7 +267,7 @@ class IterativeILPTracker:
                 except Exception:
                     pass
 
-            graph.add_connection(i, j, float(total))
+            graph.add_connection(i, j, total)
 
         # Store fragments and per-edge records for later interactive visualization
         if self.enable_edge_logging:
@@ -605,6 +653,20 @@ class IterativeILPTracker:
         except Exception:
             return
 
+    # ──────────────────────────────── scheduling/splitting ─────────────────────────── #
+
+    def _scheduled_start_cost(self, iteration: int) -> float:
+        """Compute the start-cost for a given iteration based on configured schedule."""
+        w = self.w_start_initial
+        if self.start_cost_mode == 'geo':
+            w = w * (self.start_cost_growth**iteration)
+        else:
+            # linear by default
+            w = w + iteration * self.start_cost_growth
+        if self.start_cost_max is not None:
+            w = min(w, self.start_cost_max)
+        return w
+
 
 # ──────────────────────────────── cost helpers ─────────────────────────────── #
 
@@ -629,30 +691,16 @@ def _appearance_nll(a: Track, b: Track) -> float:
     return NLL_from_prob(probability)
 
 
-def _motion_nll(
-    A: KFState,
-    B: Track,
-    cmc: CMC,
-    max_detections_to_compare: int,
-    use_position_only: bool,
-) -> Tuple[float, Optional[float], float, int]:
+def _motion_nll(A: KFState, B: Track, cmc: CMC, max_detections_to_compare: int, use_position_only: bool) -> float:
     """
     Motion NLL between frags[idx_a] → frags[idx_b]:
       - use cached KF end state for A
       - predict by Δ to each of first K detections of B
       - inverse-GMC the observation into A.end frame
       - 0.5*d2 + 0.5*log|S_pos|, averaged across used dets
-    Returns: (motion_nll, avg_d2, logdet, used_K)
+    Returns: (motion_nll)
     """
-    if not B.sorted_detections:
-        return 0.0, 0.0, 0.0, 0
-
-    total = 0.0
-    d2_vals: List[float] = []
-    logdet_vals: List[float] = []
-    used = 0
-
-    cost_vals: List[float] = []
+    nll_values: List[float] = []
 
     pred: KFState = A
 
@@ -661,29 +709,13 @@ def _motion_nll(
         # predict from A.end by Δ
         pred = pred.predict_to(db.frame_idx, cmc)
 
-        z_obs_back = db.bbox.center_wh
-
         # position-only mahalanobis + log|S_pos|
-        d2 = pred.gating_distance(z_obs_back, only_position=use_position_only)
-        logdet = pred.logdet(use_position_only)
-
-        total += 0.5 * d2 + 0.5 * logdet
-        # d2_vals.append(d2)
-        logdet_vals.append(logdet)
-        used += 1
+        d2 = pred.gating_distance(db.bbox.center_wh, only_position=use_position_only)
 
         p_same = probability_from_dist(d2, df=2 if use_position_only else 4)
-        d2_vals.append(p_same)
-        cost_vals.append(NLL_from_prob(p_same))
+        nll_values.append(NLL_from_prob(p_same))
 
-    if used == 0:
-        return 1e6, None, 0.0, 0
-
-    avg_d2 = float(np.mean(d2_vals))
-    avg_logdet = float(np.mean(logdet_vals))
-    motion_nll = total / used
-    motion_nll = float(np.mean(cost_vals))
-    return motion_nll, avg_d2, avg_logdet, used
+    return float(np.mean(nll_values + [0.0]))
 
 
 # ───────────────────────────────────── gap ─────────────────────────────────── #
@@ -696,34 +728,90 @@ def _gap_nll(gap_frames: int, p_miss: float) -> float:
 # ────────────────────────────── simple track splitter ───────────────────────── #
 
 
-def _maybe_split_on_internal_gaps(tracks: List[Track], internal_split_gap_frames: int) -> List[Track]:
-    """
-    Optional conservative splitter: if enabled, breaks tracks at internal gaps
-    > `internal_split_gap_frames`. Keeps the same track_id for resulting fragments.
-    If disabled, returns input unchanged.
-    """
-    G = internal_split_gap_frames
-    if G <= 0:  # Skip splitting - disabled # TODO what about other parameters for KF or Appearance uncertainty?
-        return tracks
-
+def _split_tracks(
+    tracks: List[Track],
+    cmc: CMC,
+    *,
+    max_detections_to_compare: int,
+    use_position_only: bool,
+    motion_split_nll_min: float,
+    appearance_split_nll_min: float,
+    internal_split_gap_frames: int,
+    max_splits_per_track: Optional[int],
+) -> List[Track]:
     out: List[Track] = []
-    for tr in tracks:
-        if len(tr.sorted_detections) <= 1:
-            out.append(tr)
-            continue
-        run: List[Detection] = []
-        last_f = None
-        for d in tr.sorted_detections:
-            if last_f is None or (d.frame_idx - last_f) <= G:  # TODO also split on KF or Appearance uncertainty
-                run.append(d)
-            else:
-                # TODO does that work with multiple tracks with the same track_id?
-                out.append(Track(track_id=tr.track_id, sorted_detections=run))
-                run = [d]
-            last_f = d.frame_idx
-        if run:
-            out.append(Track(track_id=tr.track_id, sorted_detections=run))
+    for track in tracks:
+        out.extend(
+            _split_track(
+                track,
+                cmc,
+                max_detections_to_compare=max_detections_to_compare,
+                use_position_only=use_position_only,
+                motion_split_nll_min=motion_split_nll_min,
+                appearance_split_nll_min=appearance_split_nll_min,
+                internal_split_gap_frames=internal_split_gap_frames,
+                max_splits_per_track=max_splits_per_track,
+            )
+        )
     return out
+
+
+def _split_track(
+    track: Track,
+    cmc: CMC,
+    *,
+    max_detections_to_compare: int,
+    use_position_only: bool,
+    motion_split_nll_min: float,
+    appearance_split_nll_min: float,
+    internal_split_gap_frames: int,
+    max_splits_per_track: Optional[int],
+) -> List[Track]:
+    """
+    Split tracks when a per-step motion or appearance anomaly is detected.
+    Motion: advance KF from previous detection to current and compute Mahalanobis distance → P_same.
+    Appearance: compare current embedding to rolling mean of previous W embeddings.
+    """
+    detections = track.sorted_detections
+    if len(detections) <= 1:
+        return [track]
+
+    G = internal_split_gap_frames if internal_split_gap_frames > 0 else float('inf')
+
+    splits: List[Track] = []
+
+    # initialize state with first detection
+    state = KFState.init(detections[0])
+    current_track = Track(track_id=track.track_id, sorted_detections=[detections[0]])
+
+    for i in range(1, len(detections)):
+        detection = detections[i]
+
+        rest_track = Track(track_id=track.track_id, sorted_detections=detections[i:])
+        # Motion anomaly
+        motion_nll = _motion_nll(state, rest_track, cmc, max_detections_to_compare, use_position_only)
+        appearance_nll = _appearance_nll(current_track, rest_track)
+
+        split_due_to_motion = motion_nll < motion_split_nll_min
+        split_due_to_app = appearance_nll < appearance_split_nll_min
+        split_due_to_gap = detection.frame_idx - current_track.end_frame - 1 > G
+
+        should_split = split_due_to_motion or split_due_to_app or split_due_to_gap
+        allow_more_splits = len(splits) < max_splits_per_track if max_splits_per_track is not None else True
+
+        if should_split and allow_more_splits:
+            splits.append(current_track)
+            # TODO does that work with multiple tracks with the same track_id?
+            current_track = Track(track_id=track.track_id, sorted_detections=[detection])
+            state = KFState.init(detection)
+        else:
+            current_track.sorted_detections.append(detection)
+            state = state.update_to_det(detection, cmc)  # incorporate measurement
+
+    if current_track.sorted_detections:
+        splits.append(current_track)
+
+    return splits
 
 
 def _possible_mergeable_candidates(fragments: List[Track], max_frame_gap: int) -> List[Tuple[TrackId, TrackId]]:
@@ -735,6 +823,29 @@ def _possible_mergeable_candidates(fragments: List[Track], max_frame_gap: int) -
             if gap >= 0 and gap <= max_frame_gap:
                 candidates.append((i, j))
     return candidates
+
+
+def _are_all_tracks_merged(new_tracks: List[Track], max_frame_gap: int) -> bool:
+    """Check if all tracks are merged."""
+    return all(
+        new_tracks[i].track_id == new_tracks[j].track_id
+        for i, j in _possible_mergeable_candidates(new_tracks, max_frame_gap)
+    )
+
+
+def _are_assignments_the_same(last_tracks: List[Track], new_tracks: List[Track]) -> bool:
+    """Check if the assignments are the same."""
+    first_detections = {track.sorted_detections[0]: track for track in last_tracks}
+    for track in new_tracks:
+        if track.sorted_detections[0] not in first_detections:
+            return False
+        old_track = first_detections[track.sorted_detections[0]]
+        if len(old_track.sorted_detections) != len(track.sorted_detections):
+            return False
+        for old_det, new_det in zip(old_track.sorted_detections, track.sorted_detections):
+            if old_det != new_det:
+                return False
+    return True
 
 
 def _remerge_tracks(tracks: List[Track]) -> List[Track]:
