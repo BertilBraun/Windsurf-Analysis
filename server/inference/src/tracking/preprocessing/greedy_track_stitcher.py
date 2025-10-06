@@ -131,7 +131,7 @@ class GreedyTrackStitcher:
             frame_detections: List[Detection] = detections_by_frame[frame_idx]
             track_by_id: Dict[int, Track] = {t.track_id: t for t in active_tracks}
 
-            tentative_proposals, detections_to_create_new_tracks, fade_track_ids = self._generate_tentative_proposals(
+            proposals, detections_to_create_new_tracks, fade_track_ids = self._generate_tentative_proposals(
                 frame_detections, active_tracks, cmc, kf, ema
             )
 
@@ -139,18 +139,15 @@ class GreedyTrackStitcher:
             for track_id in fade_track_ids:
                 stale_track(track_by_id[track_id])
 
-            # Drop proposals that touch faded tracks
-            valid_proposals = self._get_non_stale_proposals(tentative_proposals, stale_track_ids)
-
             # Cancel conflicts: tracks proposed to more than one detection
-            duplicated_assignment_proposals = self._get_duplicated_assignment_proposals(valid_proposals)
+            duplicated_assignment_proposals = self._get_duplicated_assignment_proposals(proposals)
             for track_id, detection_list in duplicated_assignment_proposals:
                 stale_track(track_by_id[track_id])
                 for detection in detection_list:
                     detections_to_create_new_tracks.append(detection)
 
             # Remove all proposals that reference newly stale tracks
-            valid_proposals = self._get_non_stale_proposals(valid_proposals, stale_track_ids)
+            valid_proposals = self._get_non_stale_proposals(proposals, stale_track_ids)
 
             # Apply surviving 1:1 proposals
             for track_id, detection in valid_proposals:
@@ -473,7 +470,9 @@ class GreedyTrackStitcher:
                 for track in clean_candidates + maybe_candidates:
                     fade_track_ids.add(track.track_id)
 
-        return tentative_proposals, detections_to_create_new_tracks, fade_track_ids
+        valid_tentative_proposals = self._get_non_stale_proposals(tentative_proposals, fade_track_ids)
+
+        return valid_tentative_proposals, detections_to_create_new_tracks, fade_track_ids
 
     def _compare_detection_to_track(
         self,
