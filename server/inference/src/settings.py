@@ -35,10 +35,12 @@ SMOOTHING_WINDOW_SIZE = 1  # TODO more or less?
 VIDEO_SUFFIX_SECONDS = 1.0
 
 # Greedy preprocessor settings
-GREEDY_PREPROCESSOR_MIN_IOU = 0.25
-GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY = 0.87
-GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE = 6
-GREEDY_PREPROCESSOR_EMA_ALPHA = 0.42
+GREEDY_PREPROCESSOR_APPEARANCE_STRICT = 0.05
+GREEDY_PREPROCESSOR_APPEARANCE_LOOSE = 0.20
+GREEDY_PREPROCESSOR_MOTION_STRICT = 0.5
+GREEDY_PREPROCESSOR_MOTION_LOOSE = 15.0
+GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE = 6  # stale cutoff (frames)
+GREEDY_PREPROCESSOR_EMA_ALPHA = 0.6  # appearance EMA smoothing
 
 # Greedy tracker settings
 # Greedy tracker merges tracks by average embedding cosine similarity of the tracks until no more possible merges exist, or the max average embedding cosine similarity is below the threshold

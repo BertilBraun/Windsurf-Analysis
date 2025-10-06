@@ -3,8 +3,10 @@ from server.inference.src.visualization.stabilize import Transform
 from ...util.video_io import VideoInfo
 from ...common_types import Track
 from ...settings import (
-    GREEDY_PREPROCESSOR_MIN_IOU,
-    GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY,
+    GREEDY_PREPROCESSOR_APPEARANCE_STRICT,
+    GREEDY_PREPROCESSOR_APPEARANCE_LOOSE,
+    GREEDY_PREPROCESSOR_MOTION_STRICT,
+    GREEDY_PREPROCESSOR_MOTION_LOOSE,
     GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE,
     GREEDY_PREPROCESSOR_EMA_ALPHA,
 )
@@ -15,12 +17,12 @@ from .greedy_track_stitcher import GreedyTrackStitcher
 class Preprocessor:
     def __init__(
         self,
-        appearance_strict: float = 0.05,
-        appearance_loose: float = 0.20,
-        motion_strict: float = 0.5,
-        motion_loose: float = 15.0,
-        max_frame_distance: int = 6,  # stale cutoff (frames)
-        ema_alpha: float = 0.6,  # appearance EMA smoothing
+        appearance_strict: float = GREEDY_PREPROCESSOR_APPEARANCE_STRICT,
+        appearance_loose: float = GREEDY_PREPROCESSOR_APPEARANCE_LOOSE,
+        motion_strict: float = GREEDY_PREPROCESSOR_MOTION_STRICT,
+        motion_loose: float = GREEDY_PREPROCESSOR_MOTION_LOOSE,
+        max_frame_distance: int = GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE,
+        ema_alpha: float = GREEDY_PREPROCESSOR_EMA_ALPHA,
         # non_surfer_min_frames: int = 5,
         # non_surfer_similarity_thresh: float = 0.8,
         debug_video_path: str | None = None,
