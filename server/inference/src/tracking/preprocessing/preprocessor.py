@@ -16,9 +16,9 @@ class Preprocessor:
     def __init__(
         self,
         appearance_strict: float = 0.05,
-        appearance_loose: float = 0.15,
-        motion_strict: float = 0.2,
-        motion_loose: float = 5.0,
+        appearance_loose: float = 0.20,
+        motion_strict: float = 0.5,
+        motion_loose: float = 15.0,
         max_frame_distance: int = 6,  # stale cutoff (frames)
         ema_alpha: float = 0.6,  # appearance EMA smoothing
         # non_surfer_min_frames: int = 5,

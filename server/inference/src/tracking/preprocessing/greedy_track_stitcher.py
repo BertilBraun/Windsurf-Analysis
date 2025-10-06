@@ -505,6 +505,9 @@ class GreedyTrackStitcher:
             # Strong matches are only allowed on frame gaps of 3 or less
             return _ComparisonResult.MATCH
 
+        if d2 <= self.motion_strict or chi2 <= self.appearance_strict:
+            return _ComparisonResult.MAY_MATCH
+
         if d2 <= self.motion_loose and chi2 <= self.appearance_loose:
             # Isolation logic intentionally disabled for now.
             # If needed later, reintroduce a tie-break under the loose gate.
