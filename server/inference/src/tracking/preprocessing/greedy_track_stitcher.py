@@ -110,7 +110,7 @@ class GreedyTrackStitcher:
             nonlocal next_track_id
             new_track = Track(track_id=next_track_id, sorted_detections=[detection])
             next_track_id += 1
-            kf[new_track.track_id] = KFState.init(new_track)
+            kf[new_track.track_id] = KFState.init(new_track.sorted_detections[0])
             ema[new_track.track_id] = detection.embedding
             return new_track
 
@@ -191,7 +191,7 @@ class GreedyTrackStitcher:
                             # Ensure KF/EMA state exists
                             kf_state = kf.get(track.track_id)
                             if kf_state is None:
-                                kf_state = kf[track.track_id] = KFState.init(track)
+                                kf_state = kf[track.track_id] = KFState.init(track.sorted_detections[0])
                             pred = kf_state.predict_to(frame_idx, cmc)
                             track_ema = ema.get(track.track_id, track.start.embedding)
                             for col_index, detection in enumerate(frame_detections_dbg):
@@ -283,7 +283,7 @@ class GreedyTrackStitcher:
                             try:
                                 kf_state = kf.get(track.track_id)
                                 if kf_state is None:
-                                    kf_state = kf[track.track_id] = KFState.init(track)
+                                    kf_state = kf[track.track_id] = KFState.init(track.sorted_detections[0])
                                 pred = kf_state.predict_to(frame_idx, cmc)
                                 cx, cy, w, h = pred.display_bbox(alpha=0.0)
                                 x1 = int(cx - w / 2.0)

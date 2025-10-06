@@ -3,13 +3,13 @@ from __future__ import annotations
 from bisect import bisect_right
 from dataclasses import dataclass, field
 import math
-from typing import TYPE_CHECKING, Dict, Literal, Tuple
+from typing import Dict, Literal, Tuple
 import numpy as np
 import numpy.typing as npt
 import scipy.linalg
 
 from server.inference.bot_sort.cmc import CMC
-from server.inference.src.common_types import FrameIndex
+from server.inference.src.common_types import Detection, FrameIndex
 from server.inference.src.settings import EPS
 
 
@@ -293,10 +293,6 @@ class _KalmanFilter:
         return m, P
 
 
-if TYPE_CHECKING:
-    from server.inference.src.common_types import Detection, Track
-
-
 KF = _KalmanFilter()
 
 
@@ -347,19 +343,16 @@ class KFState:
         return logdet
 
     @staticmethod
-    def init(track: Track) -> KFState:
-        m, P = KF.initiate(track.sorted_detections[0].bbox.center_wh)
-        return KFState(mean=m, cov=P, last_frame=track.start_frame)
+    def init(detection: Detection) -> KFState:
+        m, P = KF.initiate(detection.bbox.center_wh)
+        return KFState(mean=m, cov=P, last_frame=detection.frame_idx)
 
     @staticmethod
     def fit_kf_end_state(detections: list[Detection], cmc: CMC) -> KFState:
         assert len(detections) > 0, 'No detections to fit KF end state'
-        m, P = KF.initiate(detections[0].bbox.center_wh)
+        state = KFState.init(detections[0])
 
-        prev_f = detections[0].frame_idx
         for det in detections[1:]:
-            m, P = KF.advance_state_to_frame(m, P, cmc, prev_f, det.frame_idx)
-            m, P = KF.update(m, P, det.bbox.center_wh)
-            prev_f = det.frame_idx
+            state = state.update_to_det(det, cmc)
 
-        return KFState(mean=m, cov=P, last_frame=prev_f)
+        return state
