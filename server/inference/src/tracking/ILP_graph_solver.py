@@ -42,32 +42,56 @@ class FragmentGraph:
         """Get all connections and their costs."""
         return self.pair_costs
 
+    def limit_outgoing_links(self, max_outgoing_links: int) -> FragmentGraph:
+        """Limit the number of outgoing links to max_outgoing_links by sorting the outgoing links by cost and keeping the top max_outgoing_links."""
+        simplified_graph = FragmentGraph(self.fragments)
+        for i, connections in enumerate(self.successors):
+            connections.sort(key=lambda x: self.pair_costs[(i, x)])  # sort by cost
+            for j in connections[:max_outgoing_links]:
+                simplified_graph.add_connection(i, j, self.pair_costs[(i, j)])
+        return simplified_graph
+
+    def limit_cost(self, max_cost: float) -> FragmentGraph:
+        """Limit the cost of the connections to max_cost by sorting the connections by cost and keeping the top max_cost."""
+        simplified_graph = FragmentGraph(self.fragments)
+        for (i, j), cost in self.pair_costs.items():
+            if cost <= max_cost:
+                simplified_graph.add_connection(i, j, cost)
+        return simplified_graph
+
 
 class ILPGraphSolver:
     """Solve an assignment problem with ILP."""
 
-    def __init__(self, w_start: float):
+    def __init__(self, w_start: float, max_outgoing_links: int = 10):
         self.w_start = w_start
+        self.max_outgoing_links = max_outgoing_links
 
     def optimize_graph(self, graph: FragmentGraph) -> Tuple[List[Track], float]:
         """Solve the fragment linking optimization problem using ILP."""
         # Create the ILP problem
         problem = pulp.LpProblem('Fragment_Linking', pulp.LpMinimize)
 
+        simplified_graph = self._simplify_graph(graph)
+
         # Create decision variables
-        link_vars = self._create_link_variables(graph)
-        start_vars = self._create_start_variables(len(graph.fragments))
+        link_vars = self._create_link_variables(simplified_graph)
+        start_vars = self._create_start_variables(len(simplified_graph.fragments))
 
         # Add constraints
-        self._add_outgoing_constraints(problem, graph, link_vars)
-        self._add_incoming_constraints(problem, graph, link_vars)
-        self._add_start_constraints(problem, graph, link_vars, start_vars)
+        self._add_outgoing_constraints(problem, simplified_graph, link_vars)
+        self._add_incoming_constraints(problem, simplified_graph, link_vars)
+        self._add_start_constraints(problem, simplified_graph, link_vars, start_vars)
 
         # Set objective function
-        self._set_objective_function(problem, graph, link_vars, start_vars)
+        self._set_objective_function(problem, simplified_graph, link_vars, start_vars)
 
         # Solve and return solution
-        return self._solve_and_extract_solution(problem, graph, link_vars)
+        return self._solve_and_extract_solution(problem, simplified_graph, link_vars)
+
+    def _simplify_graph(self, graph: FragmentGraph) -> FragmentGraph:
+        """Simplify the graph by removing edges with cost greater than w_start and limiting the number of outgoing links to self.max_outgoing_links by sorting the outgoing links by cost and keeping the top self.max_outgoing_links."""
+        return graph.limit_outgoing_links(self.max_outgoing_links).limit_cost(self.w_start)
 
     def _create_link_variables(self, graph: FragmentGraph) -> Dict[Tuple[int, int], pulp.LpVariable]:
         """Create binary variables for fragment links."""
