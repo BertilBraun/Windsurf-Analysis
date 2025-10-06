@@ -43,29 +43,26 @@ class IterativeILPTracker:
         # costs
         p_miss: float = 0.97,  # for gap NLL
         # motion eval
-        motion_k_eval: int = 2,  # eval first K detections of B (1..3 recommended)
-        d2_drop_threshold: float = 100.0,  # hard-drop average d^2 above this
+        max_detections_to_compare: int = 2,  # eval first K detections of B (1..3 recommended)
         use_position_only: bool = True,  # gating_distance on (cx,cy) or (cx,cy,w,h)
         # iteration
-        max_iters: int = 4,
+        max_optimization_iterations: int = 4,
         # optional internal long-gap split during iteration (simple rule)
         internal_split_gap_frames: int = 3,  # 0 disables; >0 splits tracks on internal gaps > this
-        enable_edge_logging: bool = False,
-        # visualization
-        enable_graph_viz: bool = False,
-        inline_edge_windows: bool = False,
     ) -> None:
         self.video_path = video_path
         self.w_start = float(w_start)
         self.p_miss = float(p_miss)
-        self.motion_k_eval = int(max(1, motion_k_eval))
-        self.d2_drop_threshold = float(d2_drop_threshold)
+        self.max_detections_to_compare = int(max(1, max_detections_to_compare))
         self.use_position_only = bool(use_position_only)
-        self.max_iters = int(max(1, max_iters))
+        self.max_optimization_iterations = int(max(1, max_optimization_iterations))
         self.internal_split_gap_frames = int(max(0, internal_split_gap_frames))
-        self.enable_edge_logging = bool(enable_edge_logging)
-        self.enable_graph_viz = bool(enable_graph_viz)
-        self.inline_edge_windows = bool(inline_edge_windows)
+
+        # TODO remove
+        # Debugging/visualization
+        self.enable_edge_logging = False
+        self.enable_graph_viz = False
+        self.inline_edge_windows = False
 
         # Storage for debug visualization
         self._edge_debug_records: List[dict] = []
@@ -87,14 +84,14 @@ class IterativeILPTracker:
             for frame_idx, frame in reader.read_frames():
                 frame_dict[frame_idx] = frame
 
-        for it in range(self.max_iters):
+        for iteration in range(self.max_optimization_iterations):
             # Iteration-level debug: list fragments/ids before building the graph
             if self.enable_edge_logging:
                 try:
-                    print(f'Iteration {it}: fragments before graph build:')
+                    print(f'Iteration {iteration}: fragments before graph build:')
                     for idx, tr in enumerate(sorted(tracks, key=lambda t: t.start_frame)):
                         print(
-                            f'  it={it} frag[{idx}] id={tr.track_id} start={tr.start_frame} end={tr.end_frame} len={len(tr.sorted_detections)}'
+                            f'  it={iteration} frag[{idx}] id={tr.track_id} start={tr.start_frame} end={tr.end_frame} len={len(tr.sorted_detections)}'
                         )
                 except Exception:
                     pass
@@ -104,7 +101,7 @@ class IterativeILPTracker:
             if self.enable_edge_logging:
                 # debug graph - print:count of edges, min/median/max of costs, and how many edges have cost < current w_start*(it+1)
                 print(
-                    f'Iteration {it}: graph has {len(graph.pair_costs)} edges, min/median/max of costs: {min(graph.pair_costs.values())}/{np.median(list(graph.pair_costs.values()))}/{max(graph.pair_costs.values())}, {sum(1 for cost in graph.pair_costs.values() if cost < self.w_start * (it + 1))} edges have cost < {self.w_start * (it + 1)}'
+                    f'Iteration {iteration}: graph has {len(graph.pair_costs)} edges, min/median/max of costs: {min(graph.pair_costs.values())}/{np.median(list(graph.pair_costs.values()))}/{max(graph.pair_costs.values())}, {sum(1 for cost in graph.pair_costs.values() if cost < self.w_start * (iteration + 1))} edges have cost < {self.w_start * (iteration + 1)}'
                 )
 
             # Optional interactive graph visualization (source/sink + edges with costs)
@@ -115,18 +112,18 @@ class IterativeILPTracker:
                     # Non-fatal if viz fails (e.g., headless or missing deps)
                     pass
             # TODO increase start cost iteratively
-            new_tracks, new_cost = ILPGraphSolver(self.w_start * (it + 1)).optimize_graph(graph)
+            new_tracks, new_cost = ILPGraphSolver(self.w_start * (iteration + 1)).optimize_graph(graph)
 
             if self.enable_edge_logging:
-                print(f'Iteration {it}: new tracks after ILP solve:')
+                print(f'Iteration {iteration}: new tracks after ILP solve:')
                 for track in new_tracks:
                     print(
-                        f'  it={it} track[{track.track_id}] start={track.start_frame} end={track.end_frame} len={len(track.sorted_detections)}'
+                        f'  it={iteration} track[{track.track_id}] start={track.start_frame} end={track.end_frame} len={len(track.sorted_detections)}'
                     )
 
             if new_cost >= best_cost:  # no improvement → stop
                 if self.enable_edge_logging:
-                    print(f'No improvement in iteration {it}, stopping. {new_cost} >= {best_cost}')
+                    print(f'No improvement in iteration {iteration}, stopping. {new_cost} >= {best_cost}')
                 break
             tracks, best_cost = new_tracks, new_cost
 
@@ -170,18 +167,13 @@ class IterativeILPTracker:
             B = fragments[j]
             # compute costs
             motion_nll, avg_d2, avg_logdet, used_k = _motion_nll(
-                i,
-                j,
-                fragments,
-                kf_cache,
+                kf_cache[i],
+                B,
                 cmc,
-                self.motion_k_eval,
+                self.max_detections_to_compare,
                 self.use_position_only,
             )
             if math.isinf(motion_nll) or math.isnan(motion_nll):
-                continue
-            # hard-drop by average d^2 if requested
-            if avg_d2 is not None and avg_d2 > self.d2_drop_threshold:
                 continue
 
             appearance_nll = _appearance_nll(A, B)
@@ -638,12 +630,10 @@ def _appearance_nll(a: Track, b: Track) -> float:
 
 
 def _motion_nll(
-    idx_a: TrackId,
-    idx_b: TrackId,
-    frags: List[Track],
-    kf_cache: Dict[TrackId, KFState],
+    A: KFState,
+    B: Track,
     cmc: CMC,
-    motion_k_eval: int,
+    max_detections_to_compare: int,
     use_position_only: bool,
 ) -> Tuple[float, Optional[float], float, int]:
     """
@@ -654,15 +644,9 @@ def _motion_nll(
       - 0.5*d2 + 0.5*log|S_pos|, averaged across used dets
     Returns: (motion_nll, avg_d2, logdet, used_K)
     """
-    B = frags[idx_b]
-
-    kf_state = kf_cache[idx_a]
-
     if not B.sorted_detections:
         return 0.0, 0.0, 0.0, 0
 
-    # evaluate up to K detections at B's start
-    K = min(motion_k_eval, len(B.sorted_detections))
     total = 0.0
     d2_vals: List[float] = []
     logdet_vals: List[float] = []
@@ -670,11 +654,10 @@ def _motion_nll(
 
     cost_vals: List[float] = []
 
-    pred = kf_state
+    pred: KFState = A
 
-    for k in range(K):
-        db = B.sorted_detections[k]
-
+    # evaluate up to K detections at B's start
+    for db in B.sorted_detections[:max_detections_to_compare]:
         # predict from A.end by Δ
         pred = pred.predict_to(db.frame_idx, cmc)
 
