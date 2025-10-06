@@ -114,6 +114,12 @@ class IterativeILPTracker:
                         f'  it={it} track[{track.track_id}] start={track.start_frame} end={track.end_frame} len={len(track.sorted_detections)}'
                     )
 
+            if new_cost >= best_cost:  # no improvement → stop
+                if self.enable_edge_logging:
+                    print(f'No improvement in iteration {it}, stopping. {new_cost} >= {best_cost}')
+                break
+            tracks, best_cost = new_tracks, new_cost
+
             are_all_tracks_merged = all(
                 new_tracks[i].track_id == new_tracks[j].track_id
                 # Only tracks which were split on internal gaps remain, no other candidates
@@ -121,12 +127,10 @@ class IterativeILPTracker:
             )
             # TODO smarter stopping condition (no assignment changes?)
             if are_all_tracks_merged:
-                print(f'All tracks merged, stopping. {new_cost}')
+                if self.enable_edge_logging:
+                    print(f'All tracks merged, stopping. {new_cost}')
                 break
-            if new_cost >= best_cost:  # no improvement → stop
-                print(f'No improvement in iteration {it}, stopping. {new_cost} >= {best_cost}')
-                break
-            tracks, best_cost = new_tracks, new_cost
+
             # optional: after each solve, split again on internal gaps if enabled
             tracks = _maybe_split_on_internal_gaps(tracks, self.internal_split_gap_frames)
 
