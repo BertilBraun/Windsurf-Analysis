@@ -1,4 +1,3 @@
-from server.inference.src.tracking.preprocessing.old_greedy_track_stitcher import OldGreedyTrackStitcher
 from server.inference.src.visualization.stabilize import Transform
 from ...util.video_io import VideoInfo
 from ...common_types import Track
@@ -43,6 +42,5 @@ class Preprocessor:
 
     def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
         tracks = self.greedy_track_stitcher.track(tracks, video_properties, transforms)
-        # TODO tracks = OldGreedyTrackStitcher().track(tracks, video_properties)
         # tracks = self.filter_non_surfers.track(tracks, video_properties)
         return tracks
