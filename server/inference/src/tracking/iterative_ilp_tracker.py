@@ -110,9 +110,6 @@ class IterativeILPTracker:
         cmc = CMC(transforms)
         max_frame_gap = int(round(MAX_OVERLAP_LENGTH_SECONDS * video_properties.fps))
 
-        # Sanity: total detections in input
-        input_detection_count = sum(len(t.sorted_detections) for t in tracks)
-
         if self.enable_splitting:
             tracks = _split_tracks(
                 tracks,
@@ -201,16 +198,7 @@ class IterativeILPTracker:
                 )
 
         # Remerge tracks with same track id in case of internal splits
-        out_tracks = _remerge_tracks(tracks)
-
-        # Sanity: ensure we did not lose detections
-        output_detection_count = sum(len(t.sorted_detections) for t in out_tracks)
-        if output_detection_count != input_detection_count:
-            print(
-                f'IterativeILPTracker: detection count changed input={input_detection_count} output={output_detection_count}'
-            )
-
-        return out_tracks, iteration
+        return _remerge_tracks(tracks), iteration
 
     # ─────────────────────────────── graph building ────────────────────────────── #
 

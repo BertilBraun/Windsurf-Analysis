@@ -131,7 +131,7 @@ class GreedyTrackStitcher:
             frame_detections: List[Detection] = detections_by_frame[frame_idx]
             track_by_id: Dict[int, Track] = {t.track_id: t for t in active_tracks}
 
-            proposals, detections_to_create_new_tracks, fade_track_ids = self._generate_tentative_proposals(
+            valid_proposals, detections_to_create_new_tracks, fade_track_ids = self._generate_tentative_proposals(
                 frame_detections, active_tracks, cmc, kf, ema
             )
 
@@ -139,23 +139,13 @@ class GreedyTrackStitcher:
             for track_id in fade_track_ids:
                 stale_track(track_by_id[track_id])
 
-            # Cancel conflicts: tracks proposed to more than one detection
-            duplicated_assignment_proposals = self._get_duplicated_assignment_proposals(proposals)
-            for track_id, detection_list in duplicated_assignment_proposals:
-                stale_track(track_by_id[track_id])
-                for detection in detection_list:
-                    detections_to_create_new_tracks.append(detection)
-
-            # Remove all proposals that reference newly stale tracks
-            valid_proposals = self._get_non_stale_proposals(proposals, stale_track_ids)
-
             # Apply surviving 1:1 proposals
             for track_id, detection in valid_proposals:
                 assert track_id in track_by_id, f'Track {track_id} not found in track_by_id but must be present'
                 track = track_by_id[track_id]
                 if track.track_id in stale_track_ids:
                     # Track no longer active (e.g., faded); convert to new track
-                    detections_to_create_new_tracks.append(detection)
+                    detections_to_create_new_tracks.add(detection)
                 else:
                     update_track(track, detection, cmc)
 
@@ -434,10 +424,10 @@ class GreedyTrackStitcher:
         cmc: CMC,
         kf: Dict[TrackId, KFState],
         ema: Dict[TrackId, Embedding],
-    ) -> tuple[List[tuple[int, Detection]], List[Detection], set[int]]:
+    ) -> tuple[List[tuple[int, Detection]], set[Detection], set[int]]:
         # Tentative proposals and fade/new collections
         tentative_proposals: List[tuple[int, Detection]] = []
-        detections_to_create_new_tracks: List[Detection] = []
+        detections_to_create_new_tracks: set[Detection] = set()
         fade_track_ids: set[int] = set()
 
         for detection in frame_detections:
@@ -466,13 +456,25 @@ class GreedyTrackStitcher:
                 tentative_proposals.append((maybe_candidates[0].track_id, detection))
             else:
                 # Ambiguous or no candidates → new track; fade all candidates for this detection
-                detections_to_create_new_tracks.append(detection)
+                detections_to_create_new_tracks.add(detection)
                 for track in clean_candidates + maybe_candidates:
                     fade_track_ids.add(track.track_id)
 
-        valid_tentative_proposals = self._get_non_stale_proposals(tentative_proposals, fade_track_ids)
+        # Commit fades: any track with multiple proposals in this frame must be faded
+        duplicates = self._get_duplicated_assignment_proposals(tentative_proposals)
+        for track_id, detection_list in duplicates:
+            fade_track_ids.add(track_id)
+            detections_to_create_new_tracks.update(detection_list)
 
-        return valid_tentative_proposals, detections_to_create_new_tracks, fade_track_ids
+        # Finalize proposals by removing any that reference faded tracks
+        finalized_proposals = self._get_non_stale_proposals(tentative_proposals, fade_track_ids)
+
+        # Any detection that lost its proposal due to fading becomes a new track
+        for track_id, det in tentative_proposals:
+            if track_id in fade_track_ids:
+                detections_to_create_new_tracks.add(det)
+
+        return finalized_proposals, detections_to_create_new_tracks, fade_track_ids
 
     def _compare_detection_to_track(
         self,
