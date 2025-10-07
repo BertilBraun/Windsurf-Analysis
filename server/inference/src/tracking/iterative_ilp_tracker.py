@@ -58,8 +58,8 @@ class IterativeILPTracker:
         # optional splitting rules
         enable_splitting: bool = True,
         internal_split_gap_frames: int = 3,  # 0 disables; >0 splits tracks on internal gaps > this
-        motion_split_nll_min: float = 0.15,  # split if P_same(motion) < this
-        appearance_split_nll_min: float = 0.20,  # split if P_same(app) < this
+        motion_split_nll_max: float = 0.15,  # split if P_same(motion) < this
+        appearance_split_nll_max: float = 0.20,  # split if P_same(app) < this
         appearance_split_window: int = 3,  # mean of last W embeddings vs current
         max_splits_per_track: Optional[int] = None,
     ) -> None:
@@ -85,14 +85,14 @@ class IterativeILPTracker:
         # Splitting
         self.enable_splitting = bool(enable_splitting)
         self.internal_split_gap_frames = int(max(0, internal_split_gap_frames))
-        self.motion_split_nll_min = motion_split_nll_min
-        self.appearance_split_nll_min = appearance_split_nll_min
+        self.motion_split_nll_max = motion_split_nll_max
+        self.appearance_split_nll_max = appearance_split_nll_max
         self.appearance_split_window = int(max(1, appearance_split_window))
         self.max_splits_per_track = None if max_splits_per_track is None else int(max(0, max_splits_per_track))
 
         # TODO remove
         # Debugging/visualization
-        self.enable_edge_logging = False
+        self.enable_edge_logging = True
         self.enable_graph_viz = False
         self.inline_edge_windows = False
 
@@ -110,14 +110,17 @@ class IterativeILPTracker:
         cmc = CMC(transforms)
         max_frame_gap = int(round(MAX_OVERLAP_LENGTH_SECONDS * video_properties.fps))
 
+        # Sanity: total detections in input
+        input_detection_count = sum(len(t.sorted_detections) for t in tracks)
+
         if self.enable_splitting:
             tracks = _split_tracks(
                 tracks,
                 cmc,
                 max_detections_to_compare=self.max_detections_to_compare,
                 use_position_only=self.use_position_only,
-                motion_split_nll_min=self.motion_split_nll_min,
-                appearance_split_nll_min=self.appearance_split_nll_min,
+                motion_split_nll_max=self.motion_split_nll_max,
+                appearance_split_nll_max=self.appearance_split_nll_max,
                 internal_split_gap_frames=self.internal_split_gap_frames,
                 max_splits_per_track=self.max_splits_per_track,
             )
@@ -191,14 +194,23 @@ class IterativeILPTracker:
                     cmc,
                     max_detections_to_compare=self.max_detections_to_compare,
                     use_position_only=self.use_position_only,
-                    motion_split_nll_min=self.motion_split_nll_min,
-                    appearance_split_nll_min=self.appearance_split_nll_min,
+                    motion_split_nll_max=self.motion_split_nll_max,
+                    appearance_split_nll_max=self.appearance_split_nll_max,
                     internal_split_gap_frames=self.internal_split_gap_frames,
                     max_splits_per_track=self.max_splits_per_track,
                 )
 
         # Remerge tracks with same track id in case of internal splits
-        return _remerge_tracks(tracks), iteration  # TODO remove iteration
+        out_tracks = _remerge_tracks(tracks)
+
+        # Sanity: ensure we did not lose detections
+        output_detection_count = sum(len(t.sorted_detections) for t in out_tracks)
+        if output_detection_count != input_detection_count:
+            print(
+                f'IterativeILPTracker: detection count changed input={input_detection_count} output={output_detection_count}'
+            )
+
+        return out_tracks, iteration
 
     # ─────────────────────────────── graph building ────────────────────────────── #
 
@@ -734,8 +746,8 @@ def _split_tracks(
     *,
     max_detections_to_compare: int,
     use_position_only: bool,
-    motion_split_nll_min: float,
-    appearance_split_nll_min: float,
+    motion_split_nll_max: float,
+    appearance_split_nll_max: float,
     internal_split_gap_frames: int,
     max_splits_per_track: Optional[int],
 ) -> List[Track]:
@@ -747,8 +759,8 @@ def _split_tracks(
                 cmc,
                 max_detections_to_compare=max_detections_to_compare,
                 use_position_only=use_position_only,
-                motion_split_nll_min=motion_split_nll_min,
-                appearance_split_nll_min=appearance_split_nll_min,
+                motion_split_nll_max=motion_split_nll_max,
+                appearance_split_nll_max=appearance_split_nll_max,
                 internal_split_gap_frames=internal_split_gap_frames,
                 max_splits_per_track=max_splits_per_track,
             )
@@ -762,8 +774,8 @@ def _split_track(
     *,
     max_detections_to_compare: int,
     use_position_only: bool,
-    motion_split_nll_min: float,
-    appearance_split_nll_min: float,
+    motion_split_nll_max: float,
+    appearance_split_nll_max: float,
     internal_split_gap_frames: int,
     max_splits_per_track: Optional[int],
 ) -> List[Track]:
@@ -792,8 +804,9 @@ def _split_track(
         motion_nll = _motion_nll(state, rest_track, cmc, max_detections_to_compare, use_position_only)
         appearance_nll = _appearance_nll(current_track, rest_track)
 
-        split_due_to_motion = motion_nll < motion_split_nll_min
-        split_due_to_app = appearance_nll < appearance_split_nll_min
+        # Split when evidence suggests different identity (high NLL = low P_same)
+        split_due_to_motion = motion_nll > motion_split_nll_max
+        split_due_to_app = appearance_nll > appearance_split_nll_max
         split_due_to_gap = detection.frame_idx - current_track.end_frame - 1 > G
 
         should_split = split_due_to_motion or split_due_to_app or split_due_to_gap
