@@ -11,7 +11,7 @@ from server.inference.src.util.algebra import probability_from_dist
 
 from ..util.video_io import VideoInfo, VideoReader
 from ..common_types import Detection, Track, TrackId
-from ..settings import MAX_OVERLAP_LENGTH_SECONDS, OPTIMIZER_W_START, EPS
+from ..settings import MAX_OVERLAP_LENGTH_SECONDS, EPS
 from .ILP_graph_solver import FragmentGraph, ILPGraphSolver
 from server.inference.bot_sort.kalman_filter import KFState, _KalmanFilter
 from server.inference.src.visualization.stabilize import Transform
@@ -40,28 +40,28 @@ class IterativeILPTracker:
         self,
         video_path: str,
         # Start-cost schedule (controls edge cap and start penalty in ILP)
-        w_start: float = OPTIMIZER_W_START * 50,  # initial start cost (backward-compatible)
+        w_start: float = 83.18548233891453,  # initial start cost (backward-compatible)
         start_cost_mode: Literal['linear', 'geo'] = 'linear',  # 'linear' or 'geo'
-        start_cost_growth: float = 1.0,  # linear: additive step; geo: multiplicative factor
-        start_cost_max: Optional[float] = None,  # optional cap
+        start_cost_growth: float = 7.075710523532933,  # linear: additive step; geo: multiplicative factor
+        start_cost_max: Optional[float] = 76.21143004790967,  # optional cap
         # Per-term cost weights
-        w_motion: float = 1.0,
-        w_appearance: float = 1.0,
-        w_gap: float = 1.0,
+        w_motion: float = 2.4792939452722207,
+        w_appearance: float = 0.43588112965420484,
+        w_gap: float = 5.689009868203195,
         # Gap model
-        p_miss: float = 0.97,  # for gap NLL
+        p_miss: float = 0.8859392091825458,  # for gap NLL
         # Motion evaluation
         max_detections_to_compare: int = 2,  # eval first K detections of B (1..3 recommended)
-        use_position_only: bool = True,  # gating_distance on (cx,cy) or (cx,cy,w,h)
+        use_position_only: bool = False,  # gating_distance on (cx,cy) or (cx,cy,w,h)
         # Iteration & stopping
-        max_optimization_iterations: int = 4,
+        max_optimization_iterations: int = 5,
         # optional splitting rules
         enable_splitting: bool = True,
-        internal_split_gap_frames: int = 3,  # 0 disables; >0 splits tracks on internal gaps > this
-        motion_split_nll_max: float = 0.15,  # split if P_same(motion) < this
-        appearance_split_nll_max: float = 0.20,  # split if P_same(app) < this
-        appearance_split_window: int = 3,  # mean of last W embeddings vs current
-        max_splits_per_track: Optional[int] = None,
+        internal_split_gap_frames: int = 2,  # 0 disables; >0 splits tracks on internal gaps > this
+        motion_split_nll_max: float = 0.31442373897384446,  # split if P_same(motion) < this
+        appearance_split_nll_max: float = 2.1193150519036594,  # split if P_same(app) < this
+        appearance_split_window: int = 10,  # mean of last W embeddings vs current
+        max_splits_per_track: Optional[int] = 8,
     ) -> None:
         self.video_path = video_path
         # Start-cost scheduling
@@ -92,7 +92,7 @@ class IterativeILPTracker:
 
         # TODO remove
         # Debugging/visualization
-        self.enable_edge_logging = True
+        self.enable_edge_logging = False
         self.enable_graph_viz = False
         self.inline_edge_windows = False
 
@@ -101,8 +101,11 @@ class IterativeILPTracker:
         self._edge_fragments: List[Track] = []
 
     # ───────────────────────────────── public API ───────────────────────────────── #
+    def track(self, tracks: List[Track], video_properties: VideoInfo, transforms: List[Transform]) -> List[Track]:
+        """Run iterative graph building and ILP solve. Stops when cost does not improve."""
+        return self._internal_track_with_iteration_returned(tracks, video_properties, transforms)[0]
 
-    def track(
+    def _internal_track_with_iteration_returned(
         self, tracks: List[Track], video_properties: VideoInfo, transforms: List[Transform]
     ) -> tuple[List[Track], float]:
         """Run iterative graph building and ILP solve. Stops when cost does not improve."""
@@ -124,9 +127,10 @@ class IterativeILPTracker:
         best_cost = float('inf')
 
         frame_dict = {}
-        with VideoReader(self.video_path) as reader:
-            for frame_idx, frame in reader.read_frames():
-                frame_dict[frame_idx] = frame
+        if self.enable_graph_viz:
+            with VideoReader(self.video_path) as reader:
+                for frame_idx, frame in reader.read_frames():
+                    frame_dict[frame_idx] = frame
 
         iteration = 0  # TODO remove iteration
         for iteration in range(self.max_optimization_iterations):
