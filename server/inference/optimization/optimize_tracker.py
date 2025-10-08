@@ -279,8 +279,9 @@ def _evaluate_iter_ilp(params: Dict[str, Any], golden_dir: Path) -> float:
 
     average_iterations = sum(iterations for _, iterations in metrics) / len(metrics)
     print(f'Average iterations: {average_iterations}')
-    avg_f1 = sum(s.f1 - iterations / 100 for s, iterations in metrics) / len(metrics)
-    return float(avg_f1)
+    weighted_avg_f1 = sum(s.f1 * s.num_detections for s, _ in metrics) / sum(s.num_detections for s, _ in metrics)
+    print(f'Weighted avg F1: {weighted_avg_f1}')
+    return weighted_avg_f1 - average_iterations / 100
 
 
 def _run_iter_ilp(args) -> Tuple[float, Dict[str, Any]]:
@@ -294,15 +295,14 @@ def _run_iter_ilp(args) -> Tuple[float, Dict[str, Any]]:
             'w_appearance': trial.suggest_float('w_appearance', 0.0, 10.0),
             'w_gap': trial.suggest_float('w_gap', 0.0, 10.0),
             'p_miss': trial.suggest_float('p_miss', 0.8, 1.0),
-            'max_detections_to_compare': trial.suggest_int('max_detections_to_compare', 1, 10),
+            'max_detections_to_compare': trial.suggest_int('max_detections_to_compare', 1, 4),
             'use_position_only': trial.suggest_categorical('use_position_only', [True, False]),
-            'max_optimization_iterations': trial.suggest_int('max_optimization_iterations', 1, 5),
-            'enable_splitting': trial.suggest_categorical('enable_splitting', [True, False]),
-            'internal_split_gap_frames': trial.suggest_int('internal_split_gap_frames', 0, 10),
+            'max_optimization_iterations': trial.suggest_int('max_optimization_iterations', 2, 5),
+            'internal_split_gap_frames': trial.suggest_int('internal_split_gap_frames', 1, 10),
             'motion_split_nll_max': trial.suggest_float('motion_split_nll_max', 0.0, 10.0),
             'appearance_split_nll_max': trial.suggest_float('appearance_split_nll_max', 0.0, 10.0),
             'appearance_split_window': trial.suggest_int('appearance_split_window', 1, 10),
-            'max_splits_per_track': trial.suggest_int('max_splits_per_track', 1, 10),
+            'max_splits_per_track': trial.suggest_int('max_splits_per_track', 1, 10, step=2),
         }
         score = _evaluate_iter_ilp(params, args.golden_dir)
         return -1.0 if math.isnan(score) else float(score)

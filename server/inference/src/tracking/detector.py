@@ -98,10 +98,10 @@ class SurferDetector:
             # Prepare crops and metadata
             for i in range(len(boxes)):
                 bbox = BoundingBox(
-                    x1=boxes[i][0],
-                    y1=boxes[i][1],
-                    x2=boxes[i][2],
-                    y2=boxes[i][3],
+                    x1=int(boxes[i][0]),
+                    y1=int(boxes[i][1]),
+                    x2=int(boxes[i][2]),
+                    y2=int(boxes[i][3]),
                 )
 
                 h, w = orig_img.shape[:2]

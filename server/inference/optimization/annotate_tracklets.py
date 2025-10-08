@@ -23,6 +23,8 @@ from server.inference.src.settings import YOLO_MODEL_PATH
 from server.inference.src.player.core.video_manager import VideoManager
 from server.inference.src.player.ui.video_widget import VideoWidget
 
+from server.inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
+
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QMainWindow
 
@@ -402,7 +404,8 @@ class _BatchAnnotatorController:
         detector = SurferDetector(yolo_model_path=YOLO_MODEL_PATH)
         detections = detector.run_object_detection_on_video(video.as_posix())
         tracks: list[Track] = _detections_to_initial_tracks(detections)
-        tracks = Preprocessor().track(tracks, video_props)
+        transforms = compute_stabilization_transforms_gmc(video.as_posix())
+        tracks = Preprocessor().track(tracks, video_props, transforms)
 
         self._win = TrackAnnotatorWindow(video, video_props, tracks, self.output_dir, on_finished=self._next)
         self._win.show()

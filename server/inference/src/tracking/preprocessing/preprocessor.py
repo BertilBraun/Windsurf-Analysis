@@ -33,7 +33,7 @@ class Preprocessor:
             motion_loose=motion_loose,
             max_frame_distance=max_frame_distance,
             ema_alpha=ema_alpha,
-            debug_video_path=debug_video_path,
+            # debug_video_path=debug_video_path,
         )
         # self.filter_non_surfers = FilterNonSurfers(
         #     min_frames=non_surfer_min_frames,
