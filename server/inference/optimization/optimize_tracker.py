@@ -251,8 +251,8 @@ def _run_opt_botsort(args) -> Tuple[float, Dict[str, Any]]:
     return float(best_score), dict(best_params)
 
 
-def _evaluate_iter_ilp(params: Dict[str, Any], golden_dir: Path) -> Tuple[float, List[Tuple[str, PairwiseScores]]]:
-    metrics_list: List[Tuple[str, PairwiseScores]] = []
+def _evaluate_iter_ilp(params: Dict[str, Any], golden_dir: Path) -> float:
+    metrics: List[Tuple[PairwiseScores, float]] = []
 
     for tracks, meta in each_golden(golden_dir):
         video_path = Path(meta.input_video_path)
@@ -260,39 +260,56 @@ def _evaluate_iter_ilp(params: Dict[str, Any], golden_dir: Path) -> Tuple[float,
         input_tracks = _flatten_tracks(tracks)
         transforms = compute_stabilization_transforms_gmc(video_path.as_posix())
 
-        trackers = [
-            Preprocessor(),
-            IterativeILPTracker(video_path.as_posix(), w_start=float(params['w_start'])),
-        ]
+        preprocessed_tracks = Preprocessor().track(input_tracks, video_props, transforms)
 
-        pred_tracks = input_tracks
-        for tracker in trackers:
-            pred_tracks = tracker.track(pred_tracks, video_props, transforms)
+        tracker = IterativeILPTracker(video_path.as_posix(), **params)
+
+        iterative_ilp_tracks, iterations = tracker._internal_track_with_iteration_returned(
+            preprocessed_tracks, video_props, transforms
+        )
 
         gold_assign = build_assignment_from_metadata(meta)
-        pred_assign = build_assignment_from_tracks(pred_tracks)
+        pred_assign = build_assignment_from_tracks(iterative_ilp_tracks)
 
         s = pairwise_scores(gold_assign, pred_assign)
-        metrics_list.append((video_path.name, s))
+        metrics.append((s, iterations))
 
-    if not metrics_list:
-        return float('nan'), []
+    if not metrics:
+        return float('nan')
 
-    avg_f1 = sum(s.f1 for _, s in metrics_list) / len(metrics_list)
-    return float(avg_f1), metrics_list
+    average_iterations = sum(iterations for _, iterations in metrics) / len(metrics)
+    print(f'Average iterations: {average_iterations}')
+    avg_f1 = sum(s.f1 - iterations / 100 for s, iterations in metrics) / len(metrics)
+    return float(avg_f1)
 
 
 def _run_iter_ilp(args) -> Tuple[float, Dict[str, Any]]:
     def objective(trial: optuna.trial.Trial) -> float:
         params: Dict[str, Any] = {
-            'w_start': trial.suggest_float('w_start', 0.5, 1000.0),
+            'w_start': trial.suggest_float('w_start', 0.5, 100.0),
+            'start_cost_mode': trial.suggest_categorical('start_cost_mode', ['linear', 'geo']),
+            'start_cost_growth': trial.suggest_float('start_cost_growth', 0.0, 10.0),
+            'start_cost_max': trial.suggest_float('start_cost_max', 0.0, 100.0),
+            'w_motion': trial.suggest_float('w_motion', 0.0, 10.0),
+            'w_appearance': trial.suggest_float('w_appearance', 0.0, 10.0),
+            'w_gap': trial.suggest_float('w_gap', 0.0, 10.0),
+            'p_miss': trial.suggest_float('p_miss', 0.8, 1.0),
+            'max_detections_to_compare': trial.suggest_int('max_detections_to_compare', 1, 10),
+            'use_position_only': trial.suggest_categorical('use_position_only', [True, False]),
+            'max_optimization_iterations': trial.suggest_int('max_optimization_iterations', 1, 5),
+            'enable_splitting': trial.suggest_categorical('enable_splitting', [True, False]),
+            'internal_split_gap_frames': trial.suggest_int('internal_split_gap_frames', 0, 10),
+            'motion_split_nll_max': trial.suggest_float('motion_split_nll_max', 0.0, 10.0),
+            'appearance_split_nll_max': trial.suggest_float('appearance_split_nll_max', 0.0, 10.0),
+            'appearance_split_window': trial.suggest_int('appearance_split_window', 1, 10),
+            'max_splits_per_track': trial.suggest_int('max_splits_per_track', 1, 10),
         }
-        score, _ = _evaluate_iter_ilp(params, args.golden_dir)
+        score = _evaluate_iter_ilp(params, args.golden_dir)
         return -1.0 if math.isnan(score) else float(score)
 
     study = optimize(objective, direction='maximize', trials=args.trials, seed=args.seed)
     best_params = dict(study.best_trial.params)
-    best_score, _ = _evaluate_iter_ilp(best_params, args.golden_dir)
+    best_score = _evaluate_iter_ilp(best_params, args.golden_dir)
     return float(best_score), dict(best_params)
 
 
