@@ -13,7 +13,11 @@ os.environ['YOLO_CONFIG_DIR'] = str(server_root_dir / 'ultralytics')
 from ultralytics import YOLO
 
 
-from .reid import ReID, ReIDColorHistogram, ReIDViT, ReIDOSNet
+from .reid.reid import ReID
+from .reid.ReIDColorHistogram import ReIDColorHistogram
+from .reid.ReIDViT import ReIDViT
+from .reid.ReIDOSNet import ReIDOSNet
+from .reid.ReIDColorABStripeHistogram import ReIDColorABStripeHistogram
 from ..settings import (
     USE_GPU,
     YOLO_MODEL_PATH,
@@ -48,7 +52,7 @@ class SurferDetector:
             raise FileNotFoundError(f'YOLO model {yolo_model_path} not found')
 
         self.yolo_model = YOLO(model=yolo_model_path, verbose=False)
-        self.reid_model = _init_reid_model(REID_MODEL_TYPE)
+        self.reid_model = init_reid_model(REID_MODEL_TYPE)
 
     def run_object_detection_on_video(self, video_path: str) -> list[Detection]:
         """Two-pass pipeline: cached YOLO detection+crops, then cached ReID features."""
@@ -130,64 +134,54 @@ class SurferDetector:
 
         # Batch crops for efficiency
         all_detections: list[Detection] = []
-        pending_crops: list[np.ndarray] = []
-        pending_meta: list[tuple[BoundingBox, float, int]] = []
+        pending_detections: list[_RawDetection] = []
 
         for rd in raw_detections:
-            crop = rd.crop
-            if crop is None or crop.size == 0:
-                continue
-            pending_crops.append(crop)
-            pending_meta.append((rd.bbox, rd.confidence, rd.frame_idx))
-            if len(pending_crops) >= DETECTOR_BATCH_SIZE:
-                _flush_reid_batch(self.reid_model, pending_crops, pending_meta, all_detections)
+            pending_detections.append(rd)
+            if len(pending_detections) >= DETECTOR_BATCH_SIZE:
+                all_detections.extend(_flush_reid_batch(self.reid_model, pending_detections))
+                pending_detections.clear()
 
         # Flush remaining crops
-        if pending_crops:
-            _flush_reid_batch(self.reid_model, pending_crops, pending_meta, all_detections)
+        if pending_detections:
+            all_detections.extend(_flush_reid_batch(self.reid_model, pending_detections))
+            pending_detections.clear()
 
         return all_detections
 
 
-def _init_reid_model(model_type: Literal['color_hist', 'osnet', 'vit']) -> ReID:
+def init_reid_model(model_type: Literal['color_hist', 'osnet', 'vit', 'color_ab_stripe_hist']) -> ReID:
     if model_type == 'color_hist':
         return ReIDColorHistogram()
     if model_type == 'osnet':
         return ReIDOSNet(model_path=OSNET_REID_MODEL_PATH)
     if model_type == 'vit':
         return ReIDViT()
+    if model_type == 'color_ab_stripe_hist':
+        return ReIDColorABStripeHistogram()
     raise ValueError(f'Unknown REID_MODEL_TYPE: {model_type}')
 
 
-def _flush_reid_batch(
-    reid_model: ReID,
-    pending_crops: list[np.ndarray],
-    pending_meta: list[tuple[BoundingBox, float, int]],
-    output_detections: list[Detection],
-) -> None:
+def _flush_reid_batch(reid_model: ReID, pending_detections: list[_RawDetection]) -> list[Detection]:
     """Encode a batch of crops with ReID and append as Detection objects.
 
-    pending_meta must align 1:1 with pending_crops and contain:
-      (bbox, confidence, frame_idx)
+    pending_meta must align 1:1 with pending_crops
     """
-    if not pending_crops:
-        return
+    if not pending_detections:
+        return []
 
-    features = reid_model.get_features_for_crops(pending_crops)
-    assert len(features) == len(pending_meta)
+    features = reid_model.get_features_for_crops([detection.crop for detection in pending_detections])
+    assert len(features) == len(pending_detections)
 
-    for i, (bbox, confidence, frame_idx) in enumerate(pending_meta):
-        output_detections.append(
-            Detection(
-                bbox=bbox,
-                embedding=features[i],
-                confidence=confidence,
-                frame_idx=frame_idx,
-            )
+    return [
+        Detection(
+            bbox=detection.bbox,
+            embedding=feature,
+            confidence=detection.confidence,
+            frame_idx=detection.frame_idx,
         )
-
-    pending_crops.clear()
-    pending_meta.clear()
+        for feature, detection in zip(features, pending_detections)
+    ]
 
 
 def _to_numpy(tensor_or_array):
