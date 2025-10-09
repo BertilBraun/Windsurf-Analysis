@@ -8,11 +8,16 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from server.inference.bot_sort.cmc import CMC
-from server.inference.src.util.similarity_helpers import Embedding, HistogramEmbedding
+from server.inference.src.util.algebra import probability_from_dist
+from server.inference.src.util.similarity_helpers import Embedding
+from server.inference.src.visualization.debug.session import DebugSession
 from server.inference.src.visualization.stabilize import Transform
-from ...util.video_io import VideoInfo, VideoReader
+from ...util.video_io import VideoInfo
 from ...common_types import Detection, FrameIndex, Track, TrackId
 from server.inference.bot_sort.kalman_filter import KFState
+from server.inference.src.visualization.debug import get_debug_session
+from server.inference.src.visualization.debug.overlays import DetectionsOverlay, KalmanOverlay
+from server.inference.src.visualization.debug.draw import draw_heatmap
 
 
 class _ComparisonResult(Enum):
@@ -47,19 +52,19 @@ class GreedyTrackStitcher:
     def __init__(
         self,
         *,
-        motion_strict: float,
-        motion_loose: float,
-        appearance_strict: float,
-        appearance_loose: float,
+        motion_probability_strict: float,
+        motion_probability_loose: float,
+        appearance_probability_strict: float,
+        appearance_probability_loose: float,
         ema_alpha: float,
         max_frame_distance: int,
         # Debugging/visualization
         debug_video_path: Optional[str] = None,
     ):
-        self.motion_strict = float(motion_strict)
-        self.motion_loose = float(motion_loose)
-        self.appearance_strict = float(appearance_strict)
-        self.appearance_loose = float(appearance_loose)
+        self.motion_probability_strict = float(motion_probability_strict)
+        self.motion_probability_loose = float(motion_probability_loose)
+        self.appearance_probability_strict = float(appearance_probability_strict)
+        self.appearance_probability_loose = float(appearance_probability_loose)
         self.ema_alpha = float(ema_alpha)
         self.max_frame_distance = int(max_frame_distance)
 
@@ -497,20 +502,30 @@ class GreedyTrackStitcher:
 
         # Motion gating: squared Mahalanobis distance (df=2)
         d2 = pred.gating_distance(detection.bbox.center_wh)
+        motion_probability = probability_from_dist(d2, df=2)
 
         # Appearance: χ² on L1-normalized histograms with EMA
-        assert isinstance(ema, HistogramEmbedding)
-        chi2 = ema.distance(detection.embedding)
+        appearance_probability = ema.probability(detection.embedding)
 
         # Decision
-        if d2 <= self.motion_strict and chi2 <= self.appearance_strict and gap <= 3:
+        if (
+            motion_probability >= self.motion_probability_strict
+            and appearance_probability >= self.appearance_probability_strict
+            and gap <= 3
+        ):
             # Strong matches are only allowed on frame gaps of 3 or less
             return _ComparisonResult.MATCH
 
-        if d2 <= self.motion_strict or chi2 <= self.appearance_strict:
+        if (
+            motion_probability >= self.motion_probability_strict
+            or appearance_probability >= self.appearance_probability_strict
+        ):
             return _ComparisonResult.MAY_MATCH
 
-        if d2 <= self.motion_loose and chi2 <= self.appearance_loose:
+        if (
+            motion_probability >= self.motion_probability_loose
+            and appearance_probability >= self.appearance_probability_loose
+        ):
             # Isolation logic intentionally disabled for now.
             # If needed later, reintroduce a tie-break under the loose gate.
             return _ComparisonResult.MAY_MATCH

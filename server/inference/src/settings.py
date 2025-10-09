@@ -16,7 +16,7 @@ OSNET_REID_MODEL_PATH = inference_root_folder / 'weights/reid_models/common/osne
 OSNET_REID_MODEL_PATH = inference_root_folder / 'weights/reid_models/common/osnet_ain_x1_0_imagenet.pth'
 
 # ReID model selection
-REID_MODEL_TYPE: Literal['color_hist', 'osnet', 'vit'] = 'color_hist'
+REID_MODEL_TYPE: Literal['color_hist', 'osnet', 'vit', 'color_ab_stripe_hist'] = 'color_ab_stripe_hist'  # 'color_hist'
 
 DETECTOR_IOU_THRESHOLD = 0.2
 DETECTOR_CONFIDENCE_THRESHOLD = 0.6
@@ -35,10 +35,10 @@ SMOOTHING_WINDOW_SIZE = 1  # TODO more or less?
 VIDEO_SUFFIX_SECONDS = 1.0
 
 # Greedy preprocessor settings
-GREEDY_PREPROCESSOR_APPEARANCE_STRICT = 0.05
-GREEDY_PREPROCESSOR_APPEARANCE_LOOSE = 0.20
-GREEDY_PREPROCESSOR_MOTION_STRICT = 0.5
-GREEDY_PREPROCESSOR_MOTION_LOOSE = 15.0
+GREEDY_PREPROCESSOR_APPEARANCE_PROBABILITY_STRICT = 0.95
+GREEDY_PREPROCESSOR_APPEARANCE_PROBABILITY_LOOSE = 0.20
+GREEDY_PREPROCESSOR_MOTION_PROBABILITY_STRICT = 0.95
+GREEDY_PREPROCESSOR_MOTION_PROBABILITY_LOOSE = 0.5
 GREEDY_PREPROCESSOR_MAX_FRAME_DISTANCE = 6  # stale cutoff (frames)
 GREEDY_PREPROCESSOR_EMA_ALPHA = 0.6  # appearance EMA smoothing
 
