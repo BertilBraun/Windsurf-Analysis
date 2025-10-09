@@ -303,6 +303,7 @@ def _run_iter_ilp(args) -> Tuple[float, Dict[str, Any]]:
             'appearance_split_nll_max': trial.suggest_float('appearance_split_nll_max', 0.0, 10.0),
             'appearance_split_window': trial.suggest_int('appearance_split_window', 1, 10),
             'max_splits_per_track': trial.suggest_int('max_splits_per_track', 1, 10, step=2),
+            'appearance_similarity_gamma': trial.suggest_float('appearance_similarity_gamma', 2.0, 15.0),
         }
         score = _evaluate_iter_ilp(params, args.golden_dir)
         return -1.0 if math.isnan(score) else float(score)

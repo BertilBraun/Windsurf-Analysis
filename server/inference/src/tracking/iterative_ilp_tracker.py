@@ -383,14 +383,11 @@ def NLL_from_prob(p: float) -> float:
     return float(-math.log(p / (1.0 - p)))
 
 
-def _appearance_nll(a: Track, b: Track) -> float:
+def _appearance_nll(a: Track, b: Track, gamma: float) -> float:
     """Lab χ² distance between fragment prototypes → Platt → NLLR."""
     a_mean = a.mean_embedding()
     b_mean = b.mean_embedding()
-    assert isinstance(a_mean, HistogramEmbedding), f'assuming histogram embedding but got {type(a_mean)}'
-    assert isinstance(b_mean, HistogramEmbedding), f'assuming histogram embedding but got {type(b_mean)}'
-    probability = a_mean.probability(b_mean)
-    return NLL_from_prob(probability)
+    return NLL_from_prob(a_mean.probability(b_mean, gamma))
 
 
 def _motion_nll(A: KFState, B: Track, cmc: CMC, max_detections_to_compare: int, use_position_only: bool) -> float:
