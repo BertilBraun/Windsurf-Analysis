@@ -21,8 +21,8 @@ from server.inference.src.util.similarity_helpers import Embedding
 from server.inference.src.player.core.player_state import Metadata, TrackLite
 from server.inference.src.common_types import BoundingBox, Detection, Track
 from server.inference.src.util.video_io import VideoReader
-from server.inference.src.tracking.reid import ReID, ReIDColorHistogram, ReIDOSNet, ReIDViT
-from server.inference.src.settings import REID_MODEL_TYPE, OSNET_REID_MODEL_PATH
+from server.inference.src.tracking.detector import init_reid_model
+from server.inference.src.settings import REID_MODEL_TYPE
 
 
 # ----------------------------- Built-in configuration ----------------------------- #
@@ -40,16 +40,6 @@ def _load_golden(path: Path) -> Metadata:
     if not isinstance(data, Metadata):
         raise TypeError('Golden file does not contain Metadata')
     return data
-
-
-def _init_reid_model(model_type: str) -> ReID:
-    if model_type == 'color_hist':
-        return ReIDColorHistogram()
-    if model_type == 'osnet':
-        return ReIDOSNet(model_path=OSNET_REID_MODEL_PATH)
-    if model_type == 'vit':
-        return ReIDViT()
-    raise ValueError(f'Unknown REID_MODEL_TYPE: {model_type}')
 
 
 def _extract_embeddings_for_tracklets(video_path: str, tracklets: List[TrackLite]) -> List[List[Embedding]]:
@@ -71,7 +61,7 @@ def _extract_embeddings_for_tracklets(video_path: str, tracklets: List[TrackLite
 
     embeddings_by_tracklet: List[List[Optional[Embedding]]] = [[None for _ in t.detections] for t in tracklets]
 
-    reid = _init_reid_model(REID_MODEL_TYPE)
+    reid = init_reid_model(REID_MODEL_TYPE)
 
     with VideoReader(video_path) as reader:
         props = reader.get_properties()
