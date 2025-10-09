@@ -53,10 +53,10 @@ def _evaluate_preprocessor(params: Dict[str, Any], golden_dir: Path) -> float:
         transforms = compute_stabilization_transforms_gmc(video_path.as_posix())
 
         pre = Preprocessor(
-            appearance_strict=float(params['appearance_strict']),
-            appearance_loose=float(params['appearance_loose']),
-            motion_strict=float(params['motion_strict']),
-            motion_loose=float(params['motion_loose']),
+            appearance_probability_strict=float(params['appearance_strict']),
+            appearance_probability_loose=float(params['appearance_loose']),
+            motion_probability_strict=float(params['motion_strict']),
+            motion_probability_loose=float(params['motion_loose']),
             max_frame_distance=int(params['max_frame_distance']),
             ema_alpha=float(params['ema_alpha']),
             debug_video_path=video_path.as_posix(),
@@ -97,16 +97,16 @@ def _evaluate_preprocessor(params: Dict[str, Any], golden_dir: Path) -> float:
 def _run_opt_preprocessor(args) -> Tuple[float, Dict[str, Any]]:
     def objective(trial: optuna.trial.Trial) -> float:
         params = {
-            'appearance_strict': trial.suggest_float('appearance_strict', 0.00, 0.2),
-            'appearance_loose': trial.suggest_float('appearance_loose', 0.05, 0.4),
-            'motion_strict': trial.suggest_float('motion_strict', 0.05, 0.4),
-            'motion_loose': trial.suggest_float('motion_loose', 0.1, 10.0),
+            'appearance_strict': trial.suggest_float('appearance_strict', 0.70, 1.0),
+            'appearance_loose': trial.suggest_float('appearance_loose', 0.05, 1.0),
+            'motion_strict': trial.suggest_float('motion_strict', 0.70, 1.0),
+            'motion_loose': trial.suggest_float('motion_loose', 0.05, 1.0),
             'max_frame_distance': trial.suggest_int('max_frame_distance', 0, 10),
             'ema_alpha': trial.suggest_float('ema_alpha', 0.0, 1.0),
         }
-        if params['appearance_strict'] >= params['appearance_loose']:
+        if params['appearance_strict'] <= params['appearance_loose']:
             return -math.inf
-        if params['motion_strict'] >= params['motion_loose']:
+        if params['motion_strict'] <= params['motion_loose']:
             return -math.inf
         score = _evaluate_preprocessor(params, args.golden_dir)
         return float(score)
