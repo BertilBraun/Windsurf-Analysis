@@ -43,6 +43,10 @@ class BoundingBox:
             and isinstance(self.y2, int)
         ), 'Bounding boxes must be integers'
 
+    @staticmethod
+    def from_center_wh(cx: float, cy: float, w: float, h: float) -> BoundingBox:
+        return BoundingBox(int(cx - w / 2), int(cy - h / 2), int(cx + w / 2), int(cy + h / 2))
+
     @property
     def width(self) -> int:
         return self.x2 - self.x1
@@ -242,6 +246,9 @@ class Track:
         return embedding
 
         return Embedding.mean([d.embedding for d in self.sorted_detections])
+
+    def frame_gap(self, other: Track) -> int:
+        return other.start_frame - self.end_frame - 1
 
     def __hash__(self) -> int:
         return hash((self.track_id, tuple(self.sorted_detections)))

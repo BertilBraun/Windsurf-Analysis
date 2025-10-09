@@ -9,7 +9,7 @@ import numpy.typing as npt
 import scipy.linalg
 
 from server.inference.bot_sort.cmc import CMC
-from server.inference.src.common_types import Detection, FrameIndex
+from server.inference.src.common_types import BoundingBox, Detection, FrameIndex
 from server.inference.src.settings import EPS
 
 
@@ -332,8 +332,8 @@ class KFState:
     ) -> float:
         return float(KF.gating_distance(self.mean, self.cov, measurement[None, :], only_position, metric)[0])
 
-    def display_bbox(self, alpha: float = 0.90, include_size_unc: bool = False) -> NDArrayF:
-        return KF.display_bbox(self.mean, self.cov, alpha, include_size_unc)
+    def display_bbox(self, alpha: float = 0.90, include_size_unc: bool = False) -> BoundingBox:
+        return BoundingBox.from_center_wh(*KF.display_bbox(self.mean, self.cov, alpha, include_size_unc))
 
     def logdet(self, use_position_only: bool = True) -> float:
         _, S_full, _ = KF.project(self.mean, self.cov)
