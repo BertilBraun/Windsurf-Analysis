@@ -14,7 +14,15 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
 
-def chi2_dist(a: np.ndarray, b: np.ndarray, eps: float = 1e-8) -> float:
+def hellinger_distance(u: np.ndarray, v: np.ndarray) -> float:
+    """
+    After per-block L1->sqrt and final L2, cosine ~ Bhattacharyya.
+    We use 1 - cosine as a bounded [0,1] distance.
+    """
+    return float(1.0 - float(np.dot(u, v)))
+
+
+def chi2_distance(a: np.ndarray, b: np.ndarray, eps: float = 1e-8) -> float:
     num = (a - b) ** 2
     den = a + b + eps
     return 0.5 * float((num / den).sum())
