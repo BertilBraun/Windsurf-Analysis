@@ -41,7 +41,7 @@ class IterativeILPTracker:
 
     def __init__(
         self,
-        video_path: str,
+        video_path: str | None = None,
         # Start-cost schedule (controls edge cap and start penalty in ILP)
         w_start: float = 83.18548233891453,  # initial start cost (backward-compatible)
         start_cost_mode: Literal['linear', 'geo'] = 'linear',  # 'linear' or 'geo'
@@ -121,7 +121,7 @@ class IterativeILPTracker:
 
         # Initialize debug session if any debug feature is enabled
         debug_enabled = bool(self.enable_edge_logging or self.enable_graph_viz)
-        debug = get_debug_session(self.video_path, enabled=debug_enabled)
+        debug = get_debug_session(self.video_path or '', enabled=debug_enabled)
 
         tracks = self._maybe_split_tracks(tracks, cmc)
 

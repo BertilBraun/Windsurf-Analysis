@@ -1,22 +1,11 @@
+import modal
 import contextlib
 import requests
+
 from pathlib import Path
-from typing import Sequence
 
-import modal
-
-from .inference.src.windsurf_video_processor import (
-    SurferDetector,
-    get_video_properties,
-    Preprocessor,
-    DiscreteILPTracker,
-    TrackFiltering,
-    TrackRelabeling,
-    Track,
-    Tracker,
-)
 from .inference.src.util.timing import timeit
-from .inference.src.orientation_fixer import OrientationFixer
+from .inference.src.tracking.detector import ObjectDetector
 
 inference_root_folder = Path(__file__).parent / 'inference'
 
@@ -39,10 +28,6 @@ image = (
 
 app = modal.App('windsurf-analysis-inference', image=image)
 volume = modal.Volume.from_name('windsurf-analysis-volume', create_if_missing=True)
-
-
-def clamp_percentage(p: float) -> float:
-    return max(0, min(p, 1))
 
 
 # failure webhook context manager
@@ -68,16 +53,15 @@ def failure_webhook(webhook: str):
 class InferenceModel:
     @modal.enter()
     def setup(self):
-        self.processors: dict[str, SurferDetector] = {}
-        self.orientation_fixer = OrientationFixer('/root/weights/orientation_fixer/best.pt')
+        self.processors: dict[str, ObjectDetector] = {}
 
-    def _get_processor(self, yolo_model: str) -> SurferDetector:
+    def _get_processor(self, yolo_model: str) -> ObjectDetector:
         key = yolo_model
         processor = self.processors.get(key)
         if processor is None:
             # Initialize and cache processor for this model pair
             with timeit(f'Initializing processor for {yolo_model}'):
-                processor = SurferDetector(yolo_model_path='/root/weights/yolo_models/' + yolo_model)
+                processor = ObjectDetector(yolo_model_path='/root/weights/yolo_models/' + yolo_model)
                 self.processors[key] = processor
         return processor
 
@@ -97,73 +81,22 @@ class InferenceModel:
 
             processor = self._get_processor(yolo_model)
 
-            props = get_video_properties(stabilized_video_path)
-
             with timeit(f'{job_id}: Object detection'):
-                detections = processor.run_object_detection_on_video(stabilized_video_path)
+                raw_detections = processor.run_detection_pass(stabilized_video_path)
 
-            with timeit(f'{job_id}: Trackers'):
-                trackers: Sequence[Tracker] = [
-                    Preprocessor(),
-                    # GreedyTracker(),
-                    DiscreteILPTracker(),
-                    TrackFiltering(),
-                    # TrackInterpolation(), # Not needed - done in frontend
-                    # TrackSmoothing(), # Not needed - done in frontend
-                    TrackRelabeling(),
-                ]
-                processed_tracks = [
-                    Track(track_id=i, sorted_detections=[detection]) for i, detection in enumerate(detections)
-                ]
-                for tracker in trackers:
-                    processed_tracks = tracker.track(processed_tracks, props)
-
-            print(f'{job_id}: Found {len(processed_tracks)} tracks')
-
-            tracks = [
-                {
-                    'track_id': t.track_id,
-                    'start_percent': clamp_percentage(t.start_frame / props.total_frames),
-                    'end_percent': clamp_percentage(t.end_frame / props.total_frames),
-                    'start_time_seconds': clamp_percentage(t.start_frame / props.fps),
-                    'duration_seconds': clamp_percentage(t.duration_frames / props.fps),
-                    'detections': [
-                        {
-                            'time_percent': clamp_percentage(d.frame_idx / props.total_frames),
-                            'bbox': [
-                                clamp_percentage(d.bbox.x1 / props.width),
-                                clamp_percentage(d.bbox.y1 / props.height),
-                                clamp_percentage(d.bbox.x2 / props.width),
-                                clamp_percentage(d.bbox.y2 / props.height),
-                            ],
-                            'confidence': clamp_percentage(d.confidence),
-                        }
-                        for d in t.sorted_detections
-                    ],
-                }
-                for t in processed_tracks
-            ]
-
-            # Convert transforms payload into result with time_percent
-            stabilization_transforms = [
-                {
-                    'time_percent': clamp_percentage(i / max(1, len(transforms))),
-                    'dx': t['dx'],
-                    'dy': t['dy'],
-                    'da': t['da'],
-                }
-                for i, t in enumerate(transforms)
-            ]
-
-            results = {
-                'tracks': tracks,
-                'dominant_orientation': dominant_orientation,
-                'stabilization_transforms': stabilization_transforms,
-            }
-
-            res = requests.post(
-                complete_webhook,
-                json={'status': 'succeeded', 'results': results},
-                timeout=60,
+            # Enqueue embedding extraction and tracking
+            TrackingFn = modal.Function.from_name('windsurf-analysis', 'embedding_extraction_and_tracking')
+            TrackingFn.spawn(
+                job_id=str(job_id),
+                dominant_orientation=dominant_orientation,
+                transforms=transforms,
+                raw_detections=[
+                    {
+                        'bbox': {'x1': d.bbox.x1, 'y1': d.bbox.y1, 'x2': d.bbox.x2, 'y2': d.bbox.y2},
+                        'confidence': d.confidence,
+                        'frame_idx': d.frame_idx,
+                    }
+                    for d in raw_detections
+                ],
+                complete_webhook=complete_webhook,
             )
-            print(f'Completion webhook response: {res.status_code} {res.text}')

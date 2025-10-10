@@ -16,7 +16,8 @@ OSNET_REID_MODEL_PATH = inference_root_folder / 'weights/reid_models/common/osne
 OSNET_REID_MODEL_PATH = inference_root_folder / 'weights/reid_models/common/osnet_ain_x1_0_imagenet.pth'
 
 # ReID model selection
-REID_MODEL_TYPE: Literal['color_hist', 'osnet', 'vit', 'color_ab_stripe_hist'] = 'color_ab_stripe_hist'  # 'color_hist'
+REID_TYPE = Literal['color_hist', 'osnet', 'vit', 'color_ab_stripe_hist']
+REID_MODEL_TYPE: REID_TYPE = 'color_ab_stripe_hist'  # 'color_hist'
 
 DETECTOR_IOU_THRESHOLD = 0.2
 DETECTOR_CONFIDENCE_THRESHOLD = 0.6

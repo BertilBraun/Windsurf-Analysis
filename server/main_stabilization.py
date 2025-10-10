@@ -5,9 +5,9 @@ import shutil
 
 import modal
 
-from server.inference.src.visualization.stabilize import compute_stabilization_transforms, stabilize_video
 from .inference.src.util.timing import timeit
 from .inference.src.orientation_fixer import OrientationFixer
+from .inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
 from .main_inference import failure_webhook, image as inference_image, volume as shared_volume
 
 
@@ -30,34 +30,27 @@ def stabilize_and_enqueue(job_id: str, yolo_model: str, complete_webhook: str):
 
         # Work in ephemeral container FS for intermediates; write final stabilized to /data
         orientation_fixed_video_path = f'{job_id}_fixed_orientation.mp4'
-        stabilized_video_path = f'{job_id}_stabilized.mp4'
 
         with timeit(f'{job_id}: Orientation detection'):
             print(f'{job_id}: Starting Orientation detection')
             orientation_fixer = OrientationFixer('/root/weights/orientation_fixer/best.pt')
             dominant_orientation = orientation_fixer.fix_video(input_video_path, orientation_fixed_video_path)
 
-        with timeit(f'{job_id}: Stabilization (CPU)'):
+        with timeit(f'{job_id}: Stabilization'):
             print(f'{job_id}: Starting Stabilization')
-            transforms = compute_stabilization_transforms(orientation_fixed_video_path)
-            stabilize_video(
-                orientation_fixed_video_path,
-                stabilized_video_path,
-                transforms,
-            )
+            transforms = compute_stabilization_transforms_gmc(orientation_fixed_video_path)
 
         # Cleanup temporary file and move the stabilized video to the original video path
         os.remove(input_video_path)
         # copy to original video path
-        shutil.copy(stabilized_video_path, input_video_path)
-        os.remove(stabilized_video_path)
+        shutil.copy(orientation_fixed_video_path, input_video_path)
         os.remove(orientation_fixed_video_path)
 
         # Persist stabilized video into shared volume
         shared_volume.commit()
 
         # Convert transforms to primitive structure for cross-process call
-        transforms_payload = [{'dx': t.dx, 'dy': t.dy, 'da': t.da} for t in transforms]
+        transforms_payload = [t._asdict() for t in transforms]
 
         # Enqueue GPU inference continuation
         InferenceModel = modal.Cls.from_name('windsurf-analysis', 'InferenceModel')

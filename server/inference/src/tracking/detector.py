@@ -1,8 +1,8 @@
 import os
 import logging
-from pathlib import Path
-from typing import Literal
 import numpy as np
+
+from pathlib import Path
 from dataclasses import dataclass
 
 current_dir = Path(__file__).parent
@@ -19,6 +19,7 @@ from .reid.ReIDViT import ReIDViT
 from .reid.ReIDOSNet import ReIDOSNet
 from .reid.ReIDColorABStripeHistogram import ReIDColorABStripeHistogram
 from ..settings import (
+    REID_TYPE,
     USE_GPU,
     YOLO_MODEL_PATH,
     MIN_TRACKING_FPS,
@@ -34,7 +35,7 @@ from ..common_types import BoundingBox, Detection, FrameIndex
 
 
 @dataclass
-class _RawDetection:
+class RawDetection:
     bbox: BoundingBox
     confidence: float
     frame_idx: FrameIndex
@@ -45,6 +46,17 @@ class SurferDetector:
     """Pure detection and tracking class for surfers in video"""
 
     def __init__(self, yolo_model_path: os.PathLike | str):
+        self.object_detector = ObjectDetector(yolo_model_path)
+        self.embedding_extractor = EmbeddingExtractor(REID_MODEL_TYPE)
+
+    def run_object_detection_on_video(self, video_path: str) -> list[Detection]:
+        """Two-pass pipeline: cached YOLO detection+crops, then cached ReID features."""
+        raw_detections = self.object_detector.run_detection_pass(video_path)
+        return self.embedding_extractor.run_embedding_pass(raw_detections)
+
+
+class ObjectDetector:
+    def __init__(self, yolo_model_path: os.PathLike | str):
         logging.info(f'Using model: {yolo_model_path}')
         yolo_model_path = Path(yolo_model_path)
 
@@ -52,12 +64,6 @@ class SurferDetector:
             raise FileNotFoundError(f'YOLO model {yolo_model_path} not found')
 
         self.yolo_model = YOLO(model=yolo_model_path, verbose=False)
-        self.reid_model = init_reid_model(REID_MODEL_TYPE)
-
-    def run_object_detection_on_video(self, video_path: str) -> list[Detection]:
-        """Two-pass pipeline: cached YOLO detection+crops, then cached ReID features."""
-        raw_detections = self.run_detection_pass(video_path)
-        return self.run_reid_pass(raw_detections)
 
     @cache_to_file(
         'yolo_detections_raw',
@@ -70,7 +76,7 @@ class SurferDetector:
             MIN_TRACKING_FPS,
         ],
     )
-    def run_detection_pass(self, video_path: str) -> list[_RawDetection]:
+    def run_detection_pass(self, video_path: str) -> list[RawDetection]:
         """Run YOLO once and persist crops+metadata. Returns raw detections."""
 
         video_props = get_video_properties(video_path)
@@ -88,7 +94,7 @@ class SurferDetector:
             verbose=False,
         )
 
-        raw_detections: list[_RawDetection] = []
+        raw_detections: list[RawDetection] = []
 
         for frame_index, result in enumerate(results):
             frame_idx = frame_index * skip_frames
@@ -115,7 +121,7 @@ class SurferDetector:
                     continue
 
                 raw_detections.append(
-                    _RawDetection(
+                    RawDetection(
                         bbox=bbox,
                         confidence=float(confidences[i]),
                         crop=orig_img[bbox.y1 : bbox.y2, bbox.x1 : bbox.x2],
@@ -125,8 +131,13 @@ class SurferDetector:
 
         return raw_detections
 
+
+class EmbeddingExtractor:
+    def __init__(self, reid_model_path: REID_TYPE):
+        self.reid_model = init_reid_model(reid_model_path)
+
     @cache_to_file('reid_features', ignore_args=[0], additional_args=[REID_MODEL_TYPE])
-    def run_reid_pass(self, raw_detections: list[_RawDetection]) -> list[Detection]:
+    def run_embedding_pass(self, raw_detections: list[RawDetection]) -> list[Detection]:
         """Compute embeddings for saved crops based on current ReID model.
 
         Cached by (REID_MODEL_TYPE, det_key) so changing ReID invalidates only this pass.
@@ -134,7 +145,7 @@ class SurferDetector:
 
         # Batch crops for efficiency
         all_detections: list[Detection] = []
-        pending_detections: list[_RawDetection] = []
+        pending_detections: list[RawDetection] = []
 
         for rd in raw_detections:
             pending_detections.append(rd)
@@ -150,7 +161,7 @@ class SurferDetector:
         return all_detections
 
 
-def init_reid_model(model_type: Literal['color_hist', 'osnet', 'vit', 'color_ab_stripe_hist']) -> ReID:
+def init_reid_model(model_type: REID_TYPE) -> ReID:
     if model_type == 'color_hist':
         return ReIDColorHistogram()
     if model_type == 'osnet':
@@ -162,7 +173,7 @@ def init_reid_model(model_type: Literal['color_hist', 'osnet', 'vit', 'color_ab_
     raise ValueError(f'Unknown REID_MODEL_TYPE: {model_type}')
 
 
-def _flush_reid_batch(reid_model: ReID, pending_detections: list[_RawDetection]) -> list[Detection]:
+def _flush_reid_batch(reid_model: ReID, pending_detections: list[RawDetection]) -> list[Detection]:
     """Encode a batch of crops with ReID and append as Detection objects.
 
     pending_meta must align 1:1 with pending_crops
