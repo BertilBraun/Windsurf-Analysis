@@ -63,8 +63,15 @@ async def create_job(
     if await db.get_job_count(user) >= user.max_jobs_per_user:
         raise HTTPException(status_code=403, detail={'code': 'quota_exceeded', 'message': 'Job quota exceeded'})
 
-    if await db.does_video_exist(payload.original_checksum_sha256):
-        raise HTTPException(status_code=409, detail={'code': 'duplicate_original', 'message': 'Video already exists'})
+    res = await db.get_job_and_video_by_checksum_and_user(payload.original_checksum_sha256, user)
+    if res is not None:
+        job, video = res
+        if video.ac_checksum_sha256 != 'PENDING':
+            raise HTTPException(
+                status_code=409, detail={'code': 'duplicate_original', 'message': 'Video already exists'}
+            )
+        else:
+            return JobCreateResponse(job_id=str(job.id), status=job.status.value)
 
     # Create placeholder video record
     video = Video(

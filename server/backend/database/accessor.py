@@ -29,10 +29,6 @@ class DatabaseAccessor:
         res = await self.db.execute(select(func.count()).select_from(Job).where(Job.user_id == user.id))
         return res.scalar_one()
 
-    async def does_video_exist(self, original_checksum_sha256: str) -> bool:
-        res = await self.db.execute(select(Video).where(Video.original_checksum_sha256 == original_checksum_sha256))
-        return res.scalar_one_or_none() is not None
-
     async def get_job_by_id(self, job_id: str) -> Job | None:
         res = await self.db.execute(select(Job).where(Job.id == uuid.UUID(job_id)))
         return res.scalar_one_or_none()
