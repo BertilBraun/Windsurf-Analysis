@@ -20,6 +20,7 @@ from .main_inference import (
     report_job_failure_on_exception,
     image as inference_image,
     send_complete,
+    send_progress,
     volume as shared_volume,
 )
 
@@ -50,11 +51,15 @@ def embedding_extraction_and_tracking(
         if not os.path.exists(input_video_path):
             raise FileNotFoundError(f'Input video not found: {input_video_path}')
 
+        send_progress(job_id, 'appearance')
+
         parsed_transforms = [Transform(**transform) for transform in transforms]
         with timeit(f'{job_id}: Extracting detections'):
             detections = _extract_detections(raw_detections, input_video_path)
 
         props = get_video_properties(input_video_path)
+
+        send_progress(job_id, 'tracking')
 
         with timeit(f'{job_id}: Trackers'):
             trackers: Sequence[Tracker] = [

@@ -188,7 +188,7 @@ async def upload_complete(
     video.mime_type = meta.mime_type or 'video/mp4'
     video.ac_storage_url = 'N/A'
 
-    job.status = JobStatus.running
+    job.status = JobStatus.stabilization
     job.started_at = timestamp_now()
     await db.flush()
 

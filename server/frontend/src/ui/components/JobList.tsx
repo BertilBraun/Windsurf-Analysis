@@ -3,24 +3,6 @@ import { JobSummary, JobStatus } from '../types'
 import { AnimatedDots } from './AnimatedDots'
 import JobThumbnail from './JobThumbnail'
 
-export const StatusBadge: React.FC<{ status: JobStatus }> = ({ status }) => {
-    const color =
-        status === 'succeeded'
-            ? '#10b981'
-            : status === 'failed'
-            ? '#ef4444'
-            : status === 'running'
-            ? '#3b82f6'
-            : status === 'pending'
-            ? '#f59e0b'
-            : '#9ca3af'
-    return (
-        <span className="text-white rounded-md px-2 py-1 text-sm" style={{ background: color }}>
-            {status}
-        </span>
-    )
-}
-
 export const JobList: React.FC<{
     jobs: JobSummary[]
     onOpen: (id: string) => void

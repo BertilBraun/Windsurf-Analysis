@@ -18,7 +18,16 @@ from server.backend.models import Job, JobStatus, Report, ReportType, User, Vide
 
 router = APIRouter(prefix='/jobs', tags=['jobs'])
 
-job_status = Literal['pending', 'running', 'succeeded', 'failed', 'canceled']
+job_status = Literal[
+    'pending',
+    'stabilization',
+    'detection',
+    'appearance',
+    'tracking',
+    'succeeded',
+    'failed',
+    'canceled',
+]
 
 
 class JobCreateResponse(BaseModel):
@@ -214,6 +223,30 @@ async def jobs_complete(
     }
     job.status = JobStatus.succeeded
     job.finished_at = timestamp_now()
+    await db.flush()
+
+    return {'ok': True}
+
+
+class JobProgressRequest(BaseModel):
+    secret: str
+    status: Literal['stabilization', 'detection', 'appearance', 'tracking']
+
+
+@router.post('/{job_id}/update_progress')
+async def update_job_progress(
+    job_id: str,
+    payload: JobProgressRequest,
+    db: DatabaseAccessor = Depends(get_db),
+):
+    if payload.secret != Settings.BACKEND_WEBHOOK_SECRET:
+        raise HTTPException(status_code=401, detail='invalid secret')
+
+    job = await db.get_job_by_id(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail='Not found')
+
+    job.status = JobStatus(payload.status)
     await db.flush()
 
     return {'ok': True}

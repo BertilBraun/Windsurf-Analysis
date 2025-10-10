@@ -35,7 +35,14 @@ export function useJobs(): UseJobsReturn {
             }))
         )
         setJobs(enriched)
-        const anyOpen = enriched.some(job => job.status === 'pending' || job.status === 'running')
+        const anyOpen = enriched.some(
+            job =>
+                job.status === 'pending' ||
+                job.status === 'stabilization' ||
+                job.status === 'detection' ||
+                job.status === 'appearance' ||
+                job.status === 'tracking'
+        )
         if (!anyOpen) {
             if (pollingRef.current) window.clearInterval(pollingRef.current)
             pollingRef.current = null

@@ -54,6 +54,16 @@ def send_complete(job_id: str, status: Literal['succeeded', 'failed'], results: 
         print(f'Error posting complete webhook: {e}')
 
 
+def send_progress(job_id: str, status: Literal['stabilization', 'detection', 'appearance', 'tracking']):
+    try:
+        requests.post(
+            f'{Settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job_id}/update_progress',
+            json={'status': status, 'secret': Settings.BACKEND_WEBHOOK_SECRET},
+            timeout=60,
+        )
+    except Exception as e:
+        print(f'Error posting progress webhook: {e}')
+
 
 @app.cls(
     gpu='T4',
@@ -91,6 +101,7 @@ class InferenceModel:
             stabilized_video_path = f'/data/{job_id}.mp4'
 
             processor = self._get_processor(yolo_model)
+            send_progress(job_id, 'detection')
 
             with timeit(f'{job_id}: Object detection'):
                 raw_detections = processor.run_detection_pass(stabilized_video_path)

@@ -1,4 +1,12 @@
-export type JobStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled'
+export type JobStatus =
+    | 'pending'
+    | 'stabilization'
+    | 'detection'
+    | 'appearance'
+    | 'tracking'
+    | 'succeeded'
+    | 'failed'
+    | 'canceled'
 
 export type JobSummary = {
     id: string
