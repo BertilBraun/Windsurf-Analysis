@@ -6,7 +6,7 @@ import random
 import argparse
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import Callable, List, Tuple
 
 
 # Ensure project imports work when executed as a script
@@ -169,30 +169,51 @@ def _balanced_mse(pos_costs: List[float], neg_costs: List[float]) -> float:
     return 0.5 * pos_mse + 0.5 * neg_mse
 
 
-# def optimize_embedding_distance(track_a: Track, track_b: Track, video_path: str, params: dict) -> float:
-#     """
-#     For mean embedding chi2 distance (objective = 0.099057)
-#     a: 7.427828328625088
-#     b: 4.088360175681194
-#
-#     For mean embedding cosine similarity (objective = 0.253774):
-#     a: 0.0191976149872535
-#     b: -0.21355869883517353
-#     """
-#
-#     a = float(params['a'])
-#     b = float(params['b'])
-#
-#     mean_embedding_a = track_a.mean_embedding()
-#     mean_embedding_b = track_b.mean_embedding()
-#
-#     # d = mean_embedding_a.similarity(mean_embedding_b)
-#     # d = chi2_dist(mean_embedding_a, mean_embedding_b)
-#     # d = _calc_pairwise(track_a, track_b, lambda a, b: chi2_dist(a.embedding, b.embedding))  # too slow
-#     assert isinstance(mean_embedding_a, HistogramEmbedding)
-#     assert isinstance(mean_embedding_b, HistogramEmbedding)
-#     p_same = mean_embedding_a.probability(mean_embedding_b, a, b)
-#     return float(1.0 - p_same)  # 0 for positive, 1 for negative ideally
+def _run_optimization(
+    get_params: Callable[[optuna.trial.Trial], dict],
+    evaluate: Callable[[Track, Track, str, dict], float],
+    args: argparse.Namespace,
+) -> None:
+    dataset_tracks, dataset_pairs = _build_dataset(args.golden_dir)
+
+    def objective(trial: optuna.trial.Trial) -> float:
+        params = get_params(trial)
+
+        pos_costs: List[float] = []
+        neg_costs: List[float] = []
+        for i, j, label, video_path in dataset_pairs:
+            c = evaluate(dataset_tracks[i], dataset_tracks[j], video_path, params)
+            if label == 0:
+                pos_costs.append(c)
+            else:
+                neg_costs.append(c)
+
+        return _balanced_mse(pos_costs, neg_costs)
+
+    optimize(objective, direction='minimize', trials=args.trials)
+
+
+def optimize_embedding_distance(track_a: Track, track_b: Track, video_path: str, params: dict) -> float:
+    """
+    For mean embedding chi2 distance (objective = 0.099057)
+    a: 7.427828328625088
+    b: 4.088360175681194
+
+    For mean embedding cosine similarity (objective = 0.253774):
+    a: 0.0191976149872535
+    b: -0.21355869883517353
+    """
+
+    gamma = float(params['gamma'])
+
+    mean_embedding_a = track_a.mean_embedding()
+    mean_embedding_b = track_b.mean_embedding()
+
+    # d = mean_embedding_a.similarity(mean_embedding_b)
+    # d = chi2_dist(mean_embedding_a, mean_embedding_b)
+    # d = _calc_pairwise(track_a, track_b, lambda a, b: chi2_dist(a.embedding, b.embedding))  # too slow
+    p_same = mean_embedding_a.probability(mean_embedding_b, gamma=gamma)
+    return float(1.0 - p_same)  # 0 for positive, 1 for negative ideally
 
 
 _motion_cache: dict[str, tuple[CMC, dict[int, KFState]]] = {}
@@ -239,41 +260,30 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument('--golden-dir', type=str, required=True, help='Directory with *.golden.tracks.pkl files')
+    parser.add_argument('--trials', type=int, default=1000, help='Number of Optuna trials')
+    parser.add_argument(
+        '--type', type=str, default='motion', choices=['motion', 'embedding'], help='Type of association to optimize'
+    )
 
     args = parser.parse_args()
 
-    studies: List[optuna.study.Study] = []
-
-    for _ in range(1):
-        print(
-            f'Building dataset with POS_PER_TRACK_CONTIG={POS_PER_TRACK_CONTIG} and POS_PER_TRACK_NONCONTIG={POS_PER_TRACK_NONCONTIG} and MIN_SUB_LEN={MIN_SUB_LEN}'
-        )
-        dataset_tracks, dataset_pairs = _build_dataset(args.golden_dir)
-
-        def objective(trial: optuna.trial.Trial) -> float:
-            params = {
+    if args.type == 'motion':
+        _run_optimization(
+            get_params=lambda trial: {
                 'a': trial.suggest_float('a', 0.01, 10.0),
                 'b': trial.suggest_float('b', -10.0, 10.0),
-            }
-
-            pos_costs: List[float] = []
-            neg_costs: List[float] = []
-            for i, j, label, video_path in dataset_pairs:
-                # c = optimize_embedding_distance(dataset_tracks[i], dataset_tracks[j], video_path, params)
-                c = optimize_motion_distance(dataset_tracks[i], dataset_tracks[j], video_path, params)
-                if label == 0:
-                    pos_costs.append(c)
-                else:
-                    neg_costs.append(c)
-
-            return _balanced_mse(pos_costs, neg_costs)
-
-        study = optimize(objective, direction='minimize', trials=1000)
-        studies.append(study)
-
-    for study in studies:
-        print(study.best_trial.params)
-        print(study.best_value)
+            },
+            evaluate=optimize_motion_distance,
+            args=args,
+        )
+    elif args.type == 'embedding':
+        _run_optimization(
+            get_params=lambda trial: {
+                'gamma': trial.suggest_float('gamma', 0.01, 10.0),
+            },
+            evaluate=optimize_embedding_distance,
+            args=args,
+        )
 
 
 if __name__ == '__main__':
