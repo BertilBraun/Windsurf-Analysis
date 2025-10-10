@@ -115,7 +115,7 @@ class InferenceModel:
                 transforms=transforms,
                 raw_detections=[
                     {
-                        'bbox': {'x1': d.bbox.x1, 'y1': d.bbox.y1, 'x2': d.bbox.x2, 'y2': d.bbox.y2},
+                        'bbox': [d.bbox.x1, d.bbox.y1, d.bbox.x2, d.bbox.y2],
                         'confidence': d.confidence,
                         'frame_idx': d.frame_idx,
                     }

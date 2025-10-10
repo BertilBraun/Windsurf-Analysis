@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 import os
 from typing import Sequence
 
@@ -124,14 +125,24 @@ def embedding_extraction_and_tracking(
 
 def _extract_detections(raw_detections: list[dict], input_video_path: str) -> list[Detection]:
     # Extract detections from raw detections
-    detections_by_frame: dict[FrameIndex, list[tuple[BoundingBox, float]]] = {}
+    detections_by_frame: dict[FrameIndex, list[tuple[BoundingBox, float]]] = defaultdict(list)
     for detection in raw_detections:
-        detections_by_frame[detection['frame_idx']].append((BoundingBox(**detection['bbox']), detection['confidence']))
+        detections_by_frame[detection['frame_idx']].append(
+            (
+                BoundingBox(
+                    x1=int(detection['bbox'][0]),
+                    y1=int(detection['bbox'][1]),
+                    x2=int(detection['bbox'][2]),
+                    y2=int(detection['bbox'][3]),
+                ),
+                float(detection['confidence']),
+            )
+        )
 
     raw_detections_with_crops: list[RawDetection] = []
     with VideoReader(input_video_path) as reader:
         for frame_idx, frame in reader.read_frames():
-            for bbox, confidence in detections_by_frame.get(frame_idx, []):
+            for bbox, confidence in detections_by_frame[frame_idx]:
                 raw_detections_with_crops.append(
                     RawDetection(
                         bbox=bbox,
