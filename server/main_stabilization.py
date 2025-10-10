@@ -20,6 +20,7 @@ app = modal.App('windsurf-analysis-stabilization', image=inference_image)
 
 
 @app.function(
+    secrets=[modal.Secret.from_name('backend-secret')],
     volumes={'/data': shared_volume},
     scaledown_window=10,
     cpu=2.0,

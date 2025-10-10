@@ -33,6 +33,7 @@ def clamp_percentage(p: float) -> float:
 
 
 @app.function(
+    secrets=[modal.Secret.from_name('backend-secret')],
     volumes={'/data': shared_volume},
     scaledown_window=10,
     cpu=2.0,

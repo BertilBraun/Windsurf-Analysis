@@ -68,8 +68,9 @@ def send_progress(job_id: str, status: Literal['orientation', 'stabilization', '
 @app.cls(
     gpu='T4',
     max_containers=2,
-    scaledown_window=10,  # Scaledown window is 10 seconds
+    scaledown_window=5,  # Scaledown window is 5 seconds
     volumes={'/data': volume.read_only()},
+    secrets=[modal.Secret.from_name('backend-secret')],
 )
 @modal.concurrent(max_inputs=16, target_inputs=12)
 class InferenceModel:
