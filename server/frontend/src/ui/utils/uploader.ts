@@ -39,8 +39,10 @@ export function doXhrUpload(
 
 const CHUNK_SIZE = 8 * 1024 * 1024 // 8 MiB per part
 
-const PERCENT_PREPROCESS = 0.3
-const PERCENT_UPLOAD = 0.7
+// TODO with preprocess const PERCENT_PREPROCESS = 0.3
+// TODO with preprocess const PERCENT_UPLOAD = 0.7
+const PERCENT_PREPROCESS = 0.0
+const PERCENT_UPLOAD = 1.0
 
 export async function uploadVideoFile(
     file: File,
@@ -86,9 +88,9 @@ export async function uploadVideoFileToJob(
     onProgress: (percent: number) => void
 ): Promise<'uploaded'> {
     // Step 2: Preprocess
-    const processed = await preprocessVideo(file, quality, progress => onProgress(progress * PERCENT_PREPROCESS))
-    const processedBuffer = processed instanceof ArrayBuffer ? processed : (processed as Uint8Array).buffer
-    const totalSize = processedBuffer.byteLength
+    // TODO reenable: const processed = await preprocessVideo(file, quality, progress => onProgress(progress * PERCENT_PREPROCESS))
+    const processed = await file.arrayBuffer()
+    const totalSize = processed.byteLength
     const totalParts = Math.ceil(totalSize / CHUNK_SIZE)
 
     // Step 3: INIT chunked upload (also carries model params)
@@ -108,7 +110,7 @@ export async function uploadVideoFileToJob(
     const { resume_from_part } = (await initRes.json()) as { resume_from_part: number }
 
     // Step 4: Upload parts
-    const processedView = new Uint8Array(processedBuffer)
+    const processedView = new Uint8Array(processed)
     let uploadedBytesBeforeCurrentPart = resume_from_part * CHUNK_SIZE
     for (let partIndex = resume_from_part; partIndex < totalParts; partIndex++) {
         const start = partIndex * CHUNK_SIZE
