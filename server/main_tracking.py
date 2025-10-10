@@ -4,7 +4,6 @@ import os
 from typing import Sequence
 
 import modal
-import requests
 
 from server.inference.src.common_types import BoundingBox, Detection, FrameIndex, Track
 from server.inference.src.settings import REID_MODEL_TYPE
@@ -17,7 +16,12 @@ from server.inference.src.util.video_io import VideoReader, get_video_properties
 
 from .inference.src.util.timing import timeit
 from .inference.src.visualization.stabilize import Transform
-from .main_inference import failure_webhook, image as inference_image, volume as shared_volume
+from .main_inference import (
+    report_job_failure_on_exception,
+    image as inference_image,
+    send_complete,
+    volume as shared_volume,
+)
 
 
 app = modal.App('windsurf-analysis-tracking', image=inference_image)
@@ -38,9 +42,8 @@ def embedding_extraction_and_tracking(
     dominant_orientation: int,
     transforms: list[dict],
     raw_detections: list[dict],
-    complete_webhook: str,
 ):
-    with failure_webhook(complete_webhook):
+    with report_job_failure_on_exception(job_id):
         shared_volume.reload()
 
         input_video_path = f'/data/{job_id}.mp4'
@@ -110,12 +113,7 @@ def embedding_extraction_and_tracking(
             'stabilization_transforms': stabilization_transforms,
         }
 
-        res = requests.post(
-            complete_webhook,
-            json={'status': 'succeeded', 'results': results},
-            timeout=60,
-        )
-        print(f'Completion webhook response: {res.status_code} {res.text}')
+        send_complete(job_id, 'succeeded', results)
 
 
 def _extract_detections(raw_detections: list[dict], input_video_path: str) -> list[Detection]:

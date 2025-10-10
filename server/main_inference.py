@@ -1,8 +1,11 @@
+from typing import Literal
 import modal
 import contextlib
 import requests
 
 from pathlib import Path
+
+from server.backend.config import Settings
 
 from .inference.src.util.timing import timeit
 from .inference.src.tracking.detector import ObjectDetector
@@ -32,15 +35,24 @@ volume = modal.Volume.from_name('windsurf-analysis-volume', create_if_missing=Tr
 
 # failure webhook context manager
 @contextlib.contextmanager
-def failure_webhook(webhook: str):
+def report_job_failure_on_exception(job_id: str):
     try:
         yield
     except Exception as e:
-        print(f'Error in failure_webhook: {e}')
-        try:
-            requests.post(webhook, json={'status': 'failed', 'error': str(e), 'results': None}, timeout=60)
-        except Exception as e:
-            print(f'Error posting failure webhook: {e}')
+        print(f'Error in report_job_failure_on_exception: {e}')
+        send_complete(job_id, 'failed', None)
+
+
+def send_complete(job_id: str, status: Literal['succeeded', 'failed'], results: dict | None):
+    try:
+        requests.post(
+            f'{Settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job_id}/complete',
+            json={'status': status, 'results': results, 'secret': Settings.BACKEND_WEBHOOK_SECRET},
+            timeout=60,
+        )
+    except Exception as e:
+        print(f'Error posting complete webhook: {e}')
+
 
 
 @app.cls(
@@ -72,9 +84,8 @@ class InferenceModel:
         yolo_model: str,
         dominant_orientation: int,
         transforms: list[dict],
-        complete_webhook: str,
     ):
-        with failure_webhook(complete_webhook):
+        with report_job_failure_on_exception(job_id):
             volume.reload()
 
             stabilized_video_path = f'/data/{job_id}.mp4'
@@ -98,5 +109,4 @@ class InferenceModel:
                     }
                     for d in raw_detections
                 ],
-                complete_webhook=complete_webhook,
             )

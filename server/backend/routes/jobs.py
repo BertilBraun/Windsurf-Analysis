@@ -176,6 +176,7 @@ class JobsCompleteResults(BaseModel):
 
 
 class JobsCompleteRequest(BaseModel):
+    secret: str
     status: Literal['succeeded', 'failed']
     results: JobsCompleteResults | None
 
@@ -184,10 +185,9 @@ class JobsCompleteRequest(BaseModel):
 async def jobs_complete(
     job_id: str,
     payload: JobsCompleteRequest,
-    secret: str,
     db: DatabaseAccessor = Depends(get_db),
 ):
-    if secret != Settings.BACKEND_WEBHOOK_SECRET:
+    if payload.secret != Settings.BACKEND_WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail='invalid secret')
 
     job = await db.get_job_by_id(job_id)

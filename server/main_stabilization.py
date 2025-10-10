@@ -8,7 +8,7 @@ import modal
 from .inference.src.util.timing import timeit
 from .inference.src.orientation_fixer import OrientationFixer
 from .inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
-from .main_inference import failure_webhook, image as inference_image, volume as shared_volume
+from .main_inference import report_job_failure_on_exception, image as inference_image, volume as shared_volume
 
 
 app = modal.App('windsurf-analysis-stabilization', image=inference_image)
@@ -20,8 +20,8 @@ app = modal.App('windsurf-analysis-stabilization', image=inference_image)
     cpu=2.0,
 )
 @modal.concurrent(max_inputs=16, target_inputs=12)
-def stabilize_and_enqueue(job_id: str, yolo_model: str, complete_webhook: str):
-    with failure_webhook(complete_webhook):
+def stabilize_and_enqueue(job_id: str, yolo_model: str):
+    with report_job_failure_on_exception(job_id):
         shared_volume.reload()
 
         input_video_path = f'/data/{job_id}.mp4'
@@ -59,5 +59,4 @@ def stabilize_and_enqueue(job_id: str, yolo_model: str, complete_webhook: str):
             yolo_model=yolo_model,
             dominant_orientation=dominant_orientation,
             transforms=transforms_payload,
-            complete_webhook=complete_webhook,
         )

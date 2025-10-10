@@ -9,7 +9,6 @@ import modal
 from pydantic import BaseModel, Field
 
 from server.backend.auth import authenticate_user
-from server.backend.config import Settings
 from server.backend.database.accessor import DatabaseAccessor, timestamp_now
 from server.backend.database.db import get_db
 from server.backend.models import JobStatus, User
@@ -193,16 +192,8 @@ async def upload_complete(
     job.started_at = timestamp_now()
     await db.flush()
 
-    complete_url = (
-        f'{Settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job.id}/complete?secret={Settings.BACKEND_WEBHOOK_SECRET}'
-    )
-
     with timeit('spawn_stabilization'):
         StabilizeFn = modal.Function.from_name('windsurf-analysis', 'stabilize_and_enqueue')
-        StabilizeFn.spawn(
-            job_id=str(job.id),
-            yolo_model=meta.yolo_model,
-            complete_webhook=complete_url,
-        )
+        StabilizeFn.spawn(job_id=str(job.id), yolo_model=meta.yolo_model)
 
     return {'ok': True}
