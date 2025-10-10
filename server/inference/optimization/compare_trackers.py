@@ -17,7 +17,6 @@ from server.inference.src.tracking.tracking import Tracker
 from server.inference.src.common_types import Track
 from server.inference.src.util.video_io import get_video_properties
 from server.inference.src.settings import REID_MODEL_TYPE
-from server.inference.src.tracking.bot_sort import BotSortTracker
 from server.inference.src.tracking.discrete_opt_tracker import DiscreteOptTracker
 from server.inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
 from server.inference.src.tracking.oc_sort import OCSortEmbedTracker
@@ -69,7 +68,6 @@ def main() -> None:
 
         # Build per-tracker
         tracker_by_name: Dict[str, Tracker] = {
-            'botsort': BotSortTracker(vid_file_path=video_path.as_posix()),
             'discrete_opt': DiscreteOptTracker(),
             'iter_ilp': IterativeILPTracker(video_path.as_posix()),
             'oc_sort': OCSortEmbedTracker(),

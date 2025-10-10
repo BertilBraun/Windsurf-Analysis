@@ -5,7 +5,7 @@ from typing import Callable, Dict, List
 
 import numpy as np
 
-from server.inference.bot_sort.kalman_filter import KFState
+from server.inference.src.motion.kalman_filter import KFState
 from server.inference.src.common_types import Track
 
 

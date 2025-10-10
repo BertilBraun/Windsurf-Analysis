@@ -15,11 +15,10 @@ project_root = this_file.parents[3]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from server.inference.bot_sort.cmc import CMC
+from server.inference.src.motion.cmc import CMC
 from server.inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
-from server.inference.bot_sort.kalman_filter import KFState
+from server.inference.src.motion.kalman_filter import KFState
 from server.inference.src.util.algebra import platt_prob_from_dist
-from server.inference.src.util.similarity_helpers import HistogramEmbedding
 from server.inference.optimization.optimization_util import each_golden, optimize
 from server.inference.src.common_types import Track
 

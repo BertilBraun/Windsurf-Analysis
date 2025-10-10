@@ -9,7 +9,6 @@ from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 
 from server.inference.src.tracking.oc_sort import OCSortEmbedTracker
-from server.inference.src.tracking.bot_sort import BotSortTracker
 
 from .settings import YOLO_MODEL_PATH
 from .util.helpers import log_and_reraise
@@ -79,8 +78,6 @@ class WindsurfingVideoProcessor:
         transforms = compute_stabilization_transforms_gmc(input_path.as_posix(), downscale=2)
         # transforms = compute_stabilization_transforms(input_path.as_posix())
 
-        bot_sort_tracker = BotSortTracker(input_path.as_posix())
-
         processed_tracks = _process_detections_into_tracks(
             detections,
             props,
@@ -107,7 +104,6 @@ class WindsurfingVideoProcessor:
                 #      output_tentative_max=3,
                 #      dedup_enable=False,
                 #  ),
-                bot_sort_tracker,
                 TrackFiltering(),
                 TrackInterpolation(),
                 TrackSmoothing(),

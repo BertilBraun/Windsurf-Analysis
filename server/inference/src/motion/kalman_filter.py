@@ -8,7 +8,7 @@ import numpy as np
 import numpy.typing as npt
 import scipy.linalg
 
-from server.inference.bot_sort.cmc import CMC
+from server.inference.src.motion.cmc import CMC
 from server.inference.src.common_types import BoundingBox, Detection, FrameIndex
 from server.inference.src.settings import EPS
 
