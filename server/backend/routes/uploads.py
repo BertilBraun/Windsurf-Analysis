@@ -77,6 +77,10 @@ async def upload_init(
     while resume_from in existing_parts:
         resume_from += 1
 
+    from server.main_backend_frontend import volume
+
+    volume.commit()
+
     return UploadInitResponse(resume_from_part=resume_from)
 
 
@@ -108,6 +112,10 @@ async def upload_part(
     with open(tmp_path, 'wb') as f:
         f.write(content)
     os.replace(tmp_path, target_path)
+
+    from server.main_backend_frontend import volume
+
+    volume.commit()
 
     return {'ok': True}
 
@@ -195,5 +203,9 @@ async def upload_complete(
     with timeit('spawn_stabilization'):
         StabilizeFn = modal.Function.from_name('windsurf-analysis', 'stabilize_and_enqueue')
         StabilizeFn.spawn(job_id=str(job.id), yolo_model=meta.yolo_model)
+
+    from server.main_backend_frontend import volume
+
+    volume.commit()
 
     return {'ok': True}
