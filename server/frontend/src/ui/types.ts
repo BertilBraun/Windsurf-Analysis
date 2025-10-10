@@ -1,5 +1,6 @@
 export type JobStatus =
     | 'pending'
+    | 'orientation'
     | 'stabilization'
     | 'detection'
     | 'appearance'

@@ -38,6 +38,7 @@ export function useJobs(): UseJobsReturn {
         const anyOpen = enriched.some(
             job =>
                 job.status === 'pending' ||
+                job.status === 'orientation' ||
                 job.status === 'stabilization' ||
                 job.status === 'detection' ||
                 job.status === 'appearance' ||

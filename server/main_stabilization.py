@@ -8,7 +8,12 @@ import modal
 from .inference.src.util.timing import timeit
 from .inference.src.orientation_fixer import OrientationFixer
 from .inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
-from .main_inference import report_job_failure_on_exception, image as inference_image, volume as shared_volume
+from .main_inference import (
+    report_job_failure_on_exception,
+    image as inference_image,
+    send_progress,
+    volume as shared_volume,
+)
 
 
 app = modal.App('windsurf-analysis-stabilization', image=inference_image)
@@ -35,6 +40,8 @@ def stabilize_and_enqueue(job_id: str, yolo_model: str):
             print(f'{job_id}: Starting Orientation detection')
             orientation_fixer = OrientationFixer('/root/weights/orientation_fixer/best.pt')
             dominant_orientation = orientation_fixer.fix_video(input_video_path, orientation_fixed_video_path)
+
+        send_progress(job_id, 'stabilization')
 
         with timeit(f'{job_id}: Stabilization'):
             print(f'{job_id}: Starting Stabilization')

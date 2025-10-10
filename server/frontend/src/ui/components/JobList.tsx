@@ -1,5 +1,5 @@
 import React from 'react'
-import { JobSummary, JobStatus } from '../types'
+import { JobSummary } from '../types'
 import { AnimatedDots } from './AnimatedDots'
 import JobThumbnail from './JobThumbnail'
 

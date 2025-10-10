@@ -20,6 +20,7 @@ router = APIRouter(prefix='/jobs', tags=['jobs'])
 
 job_status = Literal[
     'pending',
+    'orientation',
     'stabilization',
     'detection',
     'appearance',
@@ -230,7 +231,7 @@ async def jobs_complete(
 
 class JobProgressRequest(BaseModel):
     secret: str
-    status: Literal['stabilization', 'detection', 'appearance', 'tracking']
+    status: Literal['orientation', 'stabilization', 'detection', 'appearance', 'tracking']
 
 
 @router.post('/{job_id}/update_progress')

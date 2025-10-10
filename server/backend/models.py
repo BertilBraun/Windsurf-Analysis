@@ -17,6 +17,7 @@ class Base(DeclarativeBase):
 
 class JobStatus(enum.Enum):
     pending = 'pending'
+    orientation = 'orientation'
     stabilization = 'stabilization'
     detection = 'detection'
     appearance = 'appearance'

@@ -111,6 +111,7 @@ export const JobThumbnail: React.FC<{
     // For non-succeeded jobs, show a status badge inside the box instead of a loading text
     if (job.status !== 'succeeded') {
         const isProcessing =
+            job.status === 'orientation' ||
             job.status === 'stabilization' ||
             job.status === 'detection' ||
             job.status === 'appearance' ||
@@ -131,6 +132,8 @@ export const JobThumbnail: React.FC<{
                 ? 'Canceled'
                 : job.status === 'failed'
                 ? 'Failed'
+                : job.status === 'orientation'
+                ? 'Orienting Video'
                 : job.status === 'stabilization'
                 ? 'Stabilizing Video'
                 : job.status === 'detection'

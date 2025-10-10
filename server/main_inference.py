@@ -54,7 +54,7 @@ def send_complete(job_id: str, status: Literal['succeeded', 'failed'], results: 
         print(f'Error posting complete webhook: {e}')
 
 
-def send_progress(job_id: str, status: Literal['stabilization', 'detection', 'appearance', 'tracking']):
+def send_progress(job_id: str, status: Literal['orientation', 'stabilization', 'detection', 'appearance', 'tracking']):
     try:
         requests.post(
             f'{Settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job_id}/update_progress',
