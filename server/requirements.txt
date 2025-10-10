@@ -3,11 +3,9 @@ uvicorn[standard]
 sqlalchemy[asyncio]
 asyncpg
 alembic
-passlib[bcrypt]
 python-multipart
 pydantic
 boto3
 botocore
 httpx
-bcrypt
-passlib
+bcrypt==4.3.0

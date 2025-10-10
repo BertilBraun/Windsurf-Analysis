@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import base64
+import bcrypt
 
 from fastapi import Depends, HTTPException, Request, status
-from passlib.context import CryptContext
 
 from server.backend.database.db import get_db
 from server.backend.database.accessor import DatabaseAccessor, timestamp_now
@@ -22,17 +22,16 @@ def parse_basic_auth(request: Request) -> tuple[str, str]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid auth header')
 
 
-pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
-
-
 async def authenticate_user(request: Request, db: DatabaseAccessor = Depends(get_db)) -> User:
     email, password = parse_basic_auth(request)
 
     user = await db.get_user_by_email(email)
     if not user:
+        print(f'User not found: {email}')
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid credentials')
 
-    if not pwd_context.verify(password, user.password_hash):
+    if not bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
+        print(f'Invalid password for user: {email}')
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid credentials')
 
     user.last_active_at = timestamp_now()

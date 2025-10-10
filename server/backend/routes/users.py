@@ -1,9 +1,9 @@
 from __future__ import annotations
+import bcrypt
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from passlib.context import CryptContext
 
 from server.backend.config import Settings
 from server.backend.models import User
@@ -32,12 +32,14 @@ async def create_user(payload: CreateUserRequest, db: DatabaseAccessor = Depends
     if payload.secret != Settings.USER_CREATE_SECRET:
         raise HTTPException(status_code=401, detail='invalid secret')
 
-    pwd = CryptContext(schemes=['bcrypt'], deprecated='auto')
     existing = await db.get_user_by_email(payload.email)
     if existing is not None:
         raise HTTPException(status_code=409, detail='email already exists')
 
-    user = User(email=payload.email, password_hash=pwd.hash(payload.password))
+    user = User(
+        email=payload.email,
+        password_hash=bcrypt.hashpw(payload.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
+    )
     await db.add(user)
 
     return CreateUserResponse(status='success', id=str(user.id), email=user.email)
