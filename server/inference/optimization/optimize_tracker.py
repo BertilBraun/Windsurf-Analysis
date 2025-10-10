@@ -20,7 +20,6 @@ from server.inference.src.tracking.iterative_ilp_tracker import IterativeILPTrac
 from server.inference.src.util.video_io import get_video_properties
 from server.inference.src.tracking.preprocessing.preprocessor import Preprocessor
 from server.inference.src.tracking.discrete_opt_tracker import DiscreteOptTracker
-from server.inference.src.tracking.bot_sort import BotSortTracker
 from server.inference.src.common_types import Track
 from server.inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
 from server.inference.optimization.optimization_util import (
@@ -191,66 +190,6 @@ def _run_opt_discrete(args) -> Tuple[float, Dict[str, Any]]:
 # ─────────────────────────────── BoT-SORT mode ─────────────────────────────── #
 
 
-def _evaluate_botsort(params: Dict[str, Any], golden_dir: Path) -> Tuple[float, List[Tuple[str, PairwiseScores]]]:
-    metrics_list: List[Tuple[str, PairwiseScores]] = []
-
-    for tracks, meta in each_golden(golden_dir):
-        video_path = Path(meta.input_video_path)
-
-        props = get_video_properties(video_path)
-        initial_tracks = _flatten_tracks(tracks)
-        transforms = compute_stabilization_transforms_gmc(video_path.as_posix())
-
-        # Prepare input for BoT-SORT (one detection per initial Track)
-        tracker = BotSortTracker(
-            vid_file_path=video_path.as_posix(),
-            track_high_thresh=float(params['track_high_thresh']),
-            track_low_thresh=float(params['track_low_thresh']),
-            new_track_thresh=float(params['new_track_thresh']),
-            track_buffer=int(params['track_buffer']),
-            proximity_thresh=float(params['proximity_thresh']),
-            appearance_thresh=float(params['appearance_thresh']),
-            match_thresh=float(params['match_thresh']),
-            cmc_method='sparseOptFlow',
-        )
-
-        pred_tracks = tracker.track(initial_tracks, props, transforms)
-
-        # Build gold and raw-detection key sets
-        gold_assign = build_assignment_from_metadata(meta)
-        pred_assign = build_assignment_from_tracks(pred_tracks)
-
-        s = pairwise_scores(gold_assign, pred_assign)
-        metrics_list.append((video_path.name, s))
-
-    if not metrics_list:
-        return float('nan'), []
-
-    avg_f1 = sum(s.f1 for _, s in metrics_list) / len(metrics_list)
-    return float(avg_f1), metrics_list
-
-
-def _run_opt_botsort(args) -> Tuple[float, Dict[str, Any]]:
-    def objective(trial: optuna.trial.Trial) -> float:
-        params: Dict[str, Any] = {
-            'track_high_thresh': trial.suggest_float('track_high_thresh', 0.3, 0.9),
-            'track_low_thresh': trial.suggest_float('track_low_thresh', 0.01, 0.3),
-            'new_track_thresh': trial.suggest_float('new_track_thresh', 0.4, 0.9),
-            'track_buffer': trial.suggest_int('track_buffer', 10, 150),
-            'proximity_thresh': trial.suggest_float('proximity_thresh', 0.3, 0.9),
-            'appearance_thresh': trial.suggest_float('appearance_thresh', 0.3, 0.9),
-            'match_thresh': trial.suggest_float('match_thresh', 0.5, 0.95),
-        }
-        score, _ = _evaluate_botsort(params, args.golden_dir)
-        return -1.0 if math.isnan(score) else float(score)
-
-    study = optimize(objective, direction='maximize', trials=args.trials, seed=args.seed)
-
-    best_params = dict(study.best_trial.params)
-    best_score, _ = _evaluate_botsort(best_params, args.golden_dir)
-    return float(best_score), dict(best_params)
-
-
 def _evaluate_iter_ilp(params: Dict[str, Any], golden_dir: Path) -> float:
     metrics: List[Tuple[PairwiseScores, float]] = []
 
@@ -302,7 +241,7 @@ def _run_iter_ilp(args) -> Tuple[float, Dict[str, Any]]:
             'motion_split_nll_max': trial.suggest_float('motion_split_nll_max', 0.0, 10.0),
             'appearance_split_nll_max': trial.suggest_float('appearance_split_nll_max', 0.0, 10.0),
             'appearance_split_window': trial.suggest_int('appearance_split_window', 1, 10),
-            'max_splits_per_track': trial.suggest_int('max_splits_per_track', 1, 10, step=2),
+            'max_splits_per_track': trial.suggest_int('max_splits_per_track', 1, 11, step=2),
             'appearance_similarity_gamma': trial.suggest_float('appearance_similarity_gamma', 2.0, 15.0),
         }
         score = _evaluate_iter_ilp(params, args.golden_dir)
@@ -334,8 +273,6 @@ def main() -> None:
         best_score, best_params = _run_opt_preprocessor(args)
     elif mode == 'ilp':
         best_score, best_params = _run_opt_discrete(args)
-    elif mode == 'botsort':
-        best_score, best_params = _run_opt_botsort(args)
     elif mode == 'iter_ilp':
         best_score, best_params = _run_iter_ilp(args)
     else:
