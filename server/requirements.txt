@@ -9,3 +9,4 @@ boto3
 botocore
 httpx
 bcrypt==4.3.0
+dotenv

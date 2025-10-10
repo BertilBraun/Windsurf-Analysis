@@ -22,3 +22,4 @@ tensorboard
 open-clip-torch
 
 scipy
+dotenv
