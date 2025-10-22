@@ -11,7 +11,7 @@ from server.backend.auth import authenticate_user
 from server.backend.config import Settings
 from server.backend.database.accessor import DatabaseAccessor, timestamp_now
 from server.backend.database.db import get_db
-from server.backend.models import Job, JobStatus, Report, ReportType, User, Video
+from server.backend.models import Job, JobStatus, Report, ReportType, User
 
 # from server.backend.s3 import object_url, s3_client
 
@@ -38,7 +38,6 @@ class JobCreateResponse(BaseModel):
 
 class JobSummaryItem(BaseModel):
     id: str
-    video_id: str
     status: job_status
     created_at: datetime
     updated_at: datetime
@@ -70,31 +69,28 @@ async def create_job(
     db: DatabaseAccessor = Depends(get_db),
     user: User = Depends(authenticate_user),
 ):
-    if await db.get_job_count(user) >= user.max_jobs_per_user:
+    if await db.get_total_processed_job_count(user) >= user.max_jobs_per_user:
         raise HTTPException(status_code=403, detail={'code': 'quota_exceeded', 'message': 'Job quota exceeded'})
 
-    res = await db.get_job_and_video_by_checksum_and_user(payload.original_checksum_sha256, user)
-    if res is not None:
-        job, video = res
-        if video.ac_checksum_sha256 != 'PENDING':
-            raise HTTPException(
-                status_code=409, detail={'code': 'duplicate_original', 'message': 'Video already exists'}
-            )
-        else:
-            return JobCreateResponse(job_id=str(job.id), status=job.status.value)
+    # If a global job exists for this checksum, reuse it and associate user
+    existing_job = await db.get_job_by_original_checksum(payload.original_checksum_sha256)
+    if existing_job is not None:
+        await db.ensure_user_job(user, existing_job)
+        await db.update_job_last_accessed_at(existing_job.id)
+        await db.flush()
+        return JobCreateResponse(job_id=str(existing_job.id), status=existing_job.status.value)
 
-    # Create placeholder video record
-    video = Video(
+    # Otherwise create a new placeholder job
+    job = Job(
         original_checksum_sha256=payload.original_checksum_sha256,
         ac_checksum_sha256='PENDING',
         size_bytes=-1,
         mime_type='video/mp4',
         ac_storage_url='N/A',
+        status=JobStatus.pending,
     )
-    await db.add(video)
-
-    job = Job(user_id=user.id, video_id=video.id, status=JobStatus.pending)
     await db.add(job)
+    await db.ensure_user_job(user, job)
     await db.flush()
 
     return JobCreateResponse(job_id=str(job.id), status=job.status.value)
@@ -111,27 +107,24 @@ async def list_jobs(
     items = [
         JobSummaryItem(
             id=str(job.id),
-            video_id=str(job.video_id),
             status=job.status.value,
             created_at=job.created_at,
             updated_at=job.updated_at,
-            original_checksum_sha256=video.original_checksum_sha256,
+            original_checksum_sha256=job.original_checksum_sha256,
             dominant_orientation=job.results['dominant_orientation'] if job.results else 0,
         )
-        for job, video in rows
+        for job in rows
     ]
     return JobListResponse(jobs=items)
 
 
 @router.get('/{job_id}', response_model=JobDetail)
 async def get_job(job_id: str, db: DatabaseAccessor = Depends(get_db), user: User = Depends(authenticate_user)):
-    existing = await db.get_job_and_video_by_id_and_user(job_id, user)
-    if existing is None:
+    job = await db.get_job_by_id_and_user(job_id, user)
+    if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
-    job, video = existing
-
-    await db.update_video_last_accessed_at(job.video_id)
+    await db.update_job_last_accessed_at(job.id)
     await db.flush()
 
     if job.status != JobStatus.succeeded or job.results is None:
@@ -139,24 +132,23 @@ async def get_job(job_id: str, db: DatabaseAccessor = Depends(get_db), user: Use
 
     return JobDetail(
         id=str(job.id),
-        video_id=str(job.video_id),
         status=job.status.value,
         created_at=job.created_at,
         updated_at=job.updated_at,
         tracks=job.results['tracks'],
         stabilization_transforms=job.results['stabilization_transforms'],
-        original_checksum_sha256=video.original_checksum_sha256,
+        original_checksum_sha256=job.original_checksum_sha256,
         dominant_orientation=job.results['dominant_orientation'],
     )
 
 
 @router.delete('/{job_id}')
 async def delete_job(job_id: str, db: DatabaseAccessor = Depends(get_db), user: User = Depends(authenticate_user)):
-    job = await db.get_job_by_id_and_user(job_id, user)
-    if job is None:
+    user_job = await db.get_user_job_by_job_id_and_user(job_id, user)
+    if user_job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
-    job.deleted_at = timestamp_now()
+    user_job.deleted_at = timestamp_now()
     await db.flush()
 
     return {'ok': True}

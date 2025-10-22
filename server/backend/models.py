@@ -5,7 +5,7 @@ from typing import Any
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Enum, ForeignKey, Index, UniqueConstraint, func, text
+from sqlalchemy import Enum, ForeignKey, Index, func, text
 from sqlalchemy.dialects.postgresql import CITEXT, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from server.backend.config import Settings
@@ -48,13 +48,15 @@ class User(Base):
     last_active_at: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
-    jobs: Mapped[list[Job]] = relationship('Job', back_populates='user')
+    # Association to jobs is now via UserJob
+    user_jobs: Mapped[list[UserJob]] = relationship('UserJob', back_populates='user')
 
 
-class Video(Base):
-    __tablename__ = 'videos'
+class Job(Base):
+    __tablename__ = 'jobs'
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # Merged former Video fields directly into Job
     original_checksum_sha256: Mapped[str] = mapped_column(unique=True, nullable=False)
     ac_checksum_sha256: Mapped[str] = mapped_column(nullable=False)
     size_bytes: Mapped[int] = mapped_column(nullable=False)
@@ -62,21 +64,6 @@ class Video(Base):
     ac_storage_url: Mapped[str] = mapped_column(nullable=False)
     uploaded_at: Mapped[datetime] = mapped_column(server_default=func.now())
     last_accessed_at: Mapped[datetime] = mapped_column(server_default=func.now())
-
-    jobs: Mapped[list[Job]] = relationship('Job', back_populates='video')
-
-    __table_args__ = (
-        Index('idx_videos_original', 'original_checksum_sha256'),
-        Index('idx_videos_last_accessed', 'last_accessed_at'),
-    )
-
-
-class Job(Base):
-    __tablename__ = 'jobs'
-
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    video_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('videos.id', ondelete='RESTRICT'), nullable=False)
     status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), default=JobStatus.pending, nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
@@ -86,14 +73,29 @@ class Job(Base):
     results: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
-    user: Mapped[User] = relationship('User', back_populates='jobs')
-    video: Mapped[Video] = relationship('Video', back_populates='jobs')
-    reports: Mapped[list[Report]] = relationship('Report', back_populates='job')
+    # Associations
+    user_jobs: Mapped[list['UserJob']] = relationship('UserJob', back_populates='job')
+    reports: Mapped[list['Report']] = relationship('Report', back_populates='job')
 
     __table_args__ = (
-        UniqueConstraint('user_id', 'video_id', name='uq_user_video'),
-        Index('idx_jobs_user_created', 'user_id', text('created_at DESC')),
+        Index('idx_jobs_original', 'original_checksum_sha256'),
+        Index('idx_jobs_last_accessed', 'last_accessed_at'),
+        Index('idx_jobs_created', text('created_at DESC')),
     )
+
+
+class UserJob(Base):
+    __tablename__ = 'user_jobs'
+
+    # Composite primary key (user_id, job_id)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    job_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('jobs.id', ondelete='CASCADE'), primary_key=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    user: Mapped[User] = relationship('User', back_populates='user_jobs')
+    job: Mapped[Job] = relationship('Job', back_populates='user_jobs')
+
+    __table_args__ = (Index('idx_user_jobs_user', 'user_id'),)
 
 
 class Report(Base):

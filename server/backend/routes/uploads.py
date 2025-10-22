@@ -49,11 +49,10 @@ async def upload_init(
     db: DatabaseAccessor = Depends(get_db),
     user: User = Depends(authenticate_user),
 ):
-    existing = await db.get_job_and_video_by_id_and_user(job_id, user)
-    if existing is None:
+    job = await db.get_job_by_id_and_user(job_id, user)
+    if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
-    job, _video = existing
     if job.status not in (JobStatus.pending,):
         raise HTTPException(status_code=409, detail='Job not in a state that accepts uploads')
 
@@ -92,11 +91,10 @@ async def upload_part(
     db: DatabaseAccessor = Depends(get_db),
     user: User = Depends(authenticate_user),
 ):
-    existing = await db.get_job_and_video_by_id_and_user(job_id, user)
-    if existing is None:
+    job = await db.get_job_by_id_and_user(job_id, user)
+    if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
-    job, _video = existing
     if job.status not in (JobStatus.pending,):
         raise HTTPException(status_code=409, detail='Job not in a state that accepts uploads')
 
@@ -141,11 +139,11 @@ async def upload_complete(
     db: DatabaseAccessor = Depends(get_db),
     user: User = Depends(authenticate_user),
 ):
-    existing = await db.get_job_and_video_by_id_and_user(job_id, user)
-    if existing is None:
+    existing_job = await db.get_job_by_id_and_user(job_id, user)
+    if existing_job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
-    job, video = existing
+    job = existing_job
     if job.status not in (JobStatus.pending,):
         raise HTTPException(status_code=409, detail='Job not in a state that accepts uploads')
 
@@ -191,18 +189,18 @@ async def upload_complete(
             hasher.update(block)
     ac_checksum = hasher.hexdigest()
 
-    video.ac_checksum_sha256 = ac_checksum
-    video.size_bytes = final_path.stat().st_size
-    video.mime_type = meta.mime_type or 'video/mp4'
-    video.ac_storage_url = 'N/A'
+    job.ac_checksum_sha256 = ac_checksum
+    job.size_bytes = final_path.stat().st_size
+    job.mime_type = meta.mime_type or 'video/mp4'
+    job.ac_storage_url = 'N/A'
 
     job.status = JobStatus.orientation
     job.started_at = timestamp_now()
     await db.flush()
 
     with timeit('spawn_stabilization'):
-        StabilizeFn = modal.Function.from_name('windsurf-analysis', 'stabilize_and_enqueue')
-        StabilizeFn.spawn(job_id=str(job.id), yolo_model=meta.yolo_model)
+        StabilizationModel = modal.Cls.from_name('windsurf-analysis-stabilization', 'StabilizationModel')
+        StabilizationModel().stabilize_and_enqueue.spawn(job_id=str(job.id), yolo_model=meta.yolo_model)
 
     from server.main_backend_frontend import volume
 
