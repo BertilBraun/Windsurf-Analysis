@@ -1,7 +1,7 @@
 import React from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { JobDetail, JobSummary, ReportType } from '../types'
-import { getPathForSha } from '../utils/idb'
+import { getPathForSha, loadSetting, saveSetting, deleteSetting } from '../utils/idb'
 import { assert } from '../utils/assert'
 
 type UseJobsReturn = {
@@ -23,6 +23,7 @@ export function useJobs(): UseJobsReturn {
     const [jobs, setJobs] = React.useState<JobSummary[]>([])
     const [isPolling, setIsPolling] = React.useState(false)
     const pollingRef = React.useRef<number | null>(null)
+    const jobDetailCacheRef = React.useRef<Map<string, Promise<JobDetail>>>(new Map())
 
     const tick = React.useCallback(async () => {
         const res = await authorizedFetch('/jobs')
@@ -67,29 +68,57 @@ export function useJobs(): UseJobsReturn {
 
     const refreshJobDetail = React.useCallback(
         async (id: string): Promise<JobDetail> => {
-            const res = await authorizedFetch(`/jobs/${id}`)
-            const data = (await res.json()) as JobDetail
-            assert(data.status === 'succeeded')
+            const cache = jobDetailCacheRef.current
+            const inFlight = cache.get(id)
+            if (inFlight) return inFlight
 
-            // TODO cache? If the job is done, we could cache the job detail
-            for (const track of data.tracks) {
-                _assertIsPercentage(track.start_percent)
-                _assertIsPercentage(track.end_percent)
-                for (const detection of track.detections) {
-                    _assertIsPercentage(detection.time_percent)
-                    for (const b of detection.bbox) {
-                        _assertIsPercentage(b)
+            const key = `jobDetail:${id}`
+            const fetchPromise = (async () => {
+                // 1) Try persistent cache first
+                const persisted = await loadSetting<JobDetail>(key)
+                if (persisted) {
+                    const local_relative_path = await getPathForSha(persisted.original_checksum_sha256)
+                    return { ...persisted, local_relative_path }
+                }
+
+                // 2) Fetch from network, validate, persist, and return
+                const res = await authorizedFetch(`/jobs/${id}`)
+                const data = (await res.json()) as JobDetail
+                assert(data.status === 'succeeded')
+
+                for (const track of data.tracks) {
+                    _assertIsPercentage(track.start_percent)
+                    _assertIsPercentage(track.end_percent)
+                    for (const detection of track.detections) {
+                        _assertIsPercentage(detection.time_percent)
+                        for (const b of detection.bbox) {
+                            _assertIsPercentage(b)
+                        }
                     }
                 }
+                for (const transform of data.stabilization_transforms) {
+                    _assertIsPercentage(transform.time_percent)
+                    assert(Number.isFinite(transform.dx))
+                    assert(Number.isFinite(transform.dy))
+                    assert(Number.isFinite(transform.da))
+                }
+
+                // Persist the canonical server response (without derived path)
+                await saveSetting(key, data)
+
+                const local_relative_path = await getPathForSha(data.original_checksum_sha256)
+                return { ...data, local_relative_path }
+            })()
+
+            cache.set(id, fetchPromise)
+
+            try {
+                return await fetchPromise
+            } catch (err) {
+                // Remove failed promise from cache to allow retry
+                cache.delete(id)
+                throw err
             }
-            for (const transform of data.stabilization_transforms) {
-                _assertIsPercentage(transform.time_percent)
-                assert(Number.isFinite(transform.dx))
-                assert(Number.isFinite(transform.dy))
-                assert(Number.isFinite(transform.da))
-            }
-            const local_relative_path = await getPathForSha(data.original_checksum_sha256)
-            return { ...data, local_relative_path }
         },
         [authorizedFetch]
     )
@@ -98,6 +127,8 @@ export function useJobs(): UseJobsReturn {
         async (id: string) => {
             await authorizedFetch(`/jobs/${id}`, { method: 'DELETE' })
             setJobs(jobs.filter(job => job.id !== id))
+            jobDetailCacheRef.current.delete(id)
+            await deleteSetting(`jobDetail:${id}`)
         },
         [authorizedFetch, jobs, setJobs]
     )

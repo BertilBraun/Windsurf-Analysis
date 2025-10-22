@@ -1,6 +1,6 @@
 import React from 'react'
 import { addProcessedHash, hasProcessedHash, saveShaPathMapping, getShaForPath } from '../utils/idb'
-import { UploadContext, uploadVideoFileToJob, computeSha256, createJobForChecksum } from '../utils/uploader'
+import { UploadContext, uploadVideoFile, computeSha256 } from '../utils/uploader'
 import { listFilesRecursively } from '../utils/fsAccess'
 import { useSettings } from './useSettings'
 
@@ -34,6 +34,10 @@ export function useIngressScanner(
         setUploads(prev => prev.map(u => (u.id === id ? { ...u, ...partial } : u)))
     }, [])
 
+    const removeUpload = React.useCallback((id: string) => {
+        setUploads(prev => prev.filter(u => u.id !== id))
+    }, [])
+
     const timerRef = React.useRef<number | null>(null)
 
     const processFile = React.useCallback(
@@ -63,21 +67,21 @@ export function useIngressScanner(
             try {
                 inProgressRef.current.add(identifier)
 
-                // Preflight: try to create job first
-                const createResult = await createJobForChecksum(identifier, uploadCtx)
-                if (createResult === 'skipped') {
-                    updateUpload(identifier, { status: 'skipped' })
-                    await addProcessedHash(identifier)
-                    return
-                }
-
+                // Delegate uploading to uploader util (handles preflight + upload)
                 updateUpload(identifier, { status: 'uploading' })
-                await uploadVideoFileToJob(file, settings.uploadQuality, uploadCtx, createResult.job_id, percent =>
+                const result = await uploadVideoFile(file, settings.uploadQuality, uploadCtx, percent =>
                     updateUpload(identifier, { progress: Math.round(percent * 100) })
                 )
-                await addProcessedHash(identifier)
-                updateUpload(identifier, { progress: 100, status: 'done' })
-                onUploaded()
+                if (result === 'skipped') {
+                    await addProcessedHash(identifier)
+                    removeUpload(identifier)
+                    onUploaded()
+                    return
+                } else {
+                    await addProcessedHash(identifier)
+                    updateUpload(identifier, { progress: 100, status: 'done' })
+                    onUploaded()
+                }
             } catch (e: any) {
                 console.error('Upload failed for', relPath, e)
                 setLastError(e?.message || String(e))
@@ -90,7 +94,7 @@ export function useIngressScanner(
                 setUploading(v => v - 1)
             }
         },
-        [dirHandle, uploadCtx, suspended]
+        [dirHandle, uploadCtx, suspended, removeUpload, onUploaded]
     )
 
     const scanOnce = React.useCallback(async () => {
