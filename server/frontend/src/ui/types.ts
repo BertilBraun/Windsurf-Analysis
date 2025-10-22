@@ -11,7 +11,6 @@ export type JobStatus =
 
 export type JobSummary = {
     id: string
-    video_id: string
     status: JobStatus
     created_at: string
     updated_at: string
