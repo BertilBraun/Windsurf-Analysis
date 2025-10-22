@@ -237,8 +237,8 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
         if (!v || !c || !player || !container) return
 
         let vfId: number | null = null
-        const onFrame = () => {
-            const nowSec = v.currentTime
+        const onFrame = (_now, meta) => {
+            const nowSec = meta.mediaTime // v.currentTime
             setPlayer(prev => (prev ? prev.copy({ currentTimeSec: nowSec }) : prev))
             // Draw the current frame immediately for smooth playback
             drawFrame(
@@ -377,6 +377,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
                             muted={false}
                             preload="metadata"
                             style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }}
+                            onEnded={() => setPlayer(p => (p ? p.copy({ isPlaying: false }) : p))}
                         />
                     )}
                 </div>

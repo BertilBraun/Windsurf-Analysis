@@ -24,13 +24,13 @@ export function useSeeker(
     const stepNext = React.useCallback(() => {
         const v = videoRef.current
         if (!player || !v || !frameDuration) return
-        seekTo((player?.currentTimeSec || 0) + frameDuration, false)
+        seekTo((player?.currentTimeSec || 0) + frameDuration + 0.001, false)
     }, [player, videoRef, frameDuration, seekTo])
 
     const stepPrev = React.useCallback(() => {
         const v = videoRef.current
         if (!player || !v || !frameDuration) return
-        seekTo((player?.currentTimeSec || 0) - frameDuration, false)
+        seekTo((player?.currentTimeSec || 0) - frameDuration - 0.001, false)
     }, [player, videoRef, frameDuration, seekTo])
 
     const onNewFile = React.useCallback(
