@@ -24,6 +24,10 @@ export const Modal: React.FC<ModalProps> = ({
 }) => {
     const defaultContent = 'rounded-md border border-gray-700 bg-[#111] shadow-xl'
     const contentClasses = contentClassName ?? defaultContent
+    const contentRef = React.useRef<HTMLDivElement | null>(null)
+    React.useEffect(() => {
+        contentRef.current?.focus?.()
+    }, [])
     return (
         <div
             className={`fixed inset-0 z-50 flex items-center justify-center ${containerClassName || ''}`}
@@ -31,7 +35,12 @@ export const Modal: React.FC<ModalProps> = ({
             aria-modal="true"
         >
             <div className={`absolute inset-0 ${backdropClassName || 'bg-black/60'}`} onClick={onClose} />
-            <div className={`relative z-10 ${contentClasses}`} onClick={e => e.stopPropagation()}>
+            <div
+                className={`relative z-10 ${contentClasses}`}
+                onClick={e => e.stopPropagation()}
+                tabIndex={-1}
+                ref={contentRef}
+            >
                 {(title || onClose || additionalHeader) && (
                     <div
                         className={`flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-black/60 rounded-t-md gap-2 ${

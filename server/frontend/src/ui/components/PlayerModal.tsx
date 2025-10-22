@@ -11,13 +11,16 @@ export const PlayerModal: React.FC<{
     onClose: () => void
     onDelete: (id: string) => void
     onReport: (id: string, type: ReportType, message: string) => void
+    onOpenNextJob?: () => void
+    onOpenPrevJob?: () => void
     deletingId?: string | null
-}> = ({ job, dirHandle, onClose, onDelete, onReport, deletingId }) => {
+}> = ({ job, dirHandle, onClose, onDelete, onReport, onOpenNextJob, onOpenPrevJob, deletingId }) => {
     const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
 
     return (
         <>
             <Modal
+                key={job.id}
                 onClose={onClose}
                 title={job.local_relative_path?.replace(/\.mp4$/i, '') ?? 'n/a'}
                 additionalHeader={
@@ -35,11 +38,14 @@ export const PlayerModal: React.FC<{
                 <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
                     <div className="w-full h-full overflow-hidden">
                         <CanvasPlayer
+                            key={job.id}
                             job={job}
                             dirHandle={dirHandle}
                             onClose={onClose}
                             onDelete={onDelete}
                             onReport={onReport}
+                            onOpenNextJob={onOpenNextJob}
+                            onOpenPrevJob={onOpenPrevJob}
                         />
                     </div>
                 </div>

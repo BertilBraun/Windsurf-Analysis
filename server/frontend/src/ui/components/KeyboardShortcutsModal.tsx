@@ -6,8 +6,8 @@ export const KeyboardShortcutsModal: React.FC<{ onClose: () => void }> = ({ onCl
         <Modal onClose={onClose} title="Keyboard Shortcuts">
             <div className="p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Shortcut keys={['Space']} desc="Play / Pause" />
-                    <Shortcut keys={['Esc']} desc="Exit detailed view" />
+                    <Shortcut keys={['Space']} desc="Play/Pause (restart if at end)" />
+                    <Shortcut keys={['Esc']} desc="Back: exit detailed; in overview close player" />
                     <Shortcut keys={['Arrow Left']} desc="Previous frame" />
                     <Shortcut keys={['Arrow Right']} desc="Next frame" />
                     <Shortcut keys={['Shift', 'Arrow Left']} desc="Seek -5s" />
@@ -16,6 +16,10 @@ export const KeyboardShortcutsModal: React.FC<{ onClose: () => void }> = ({ onCl
                     <Shortcut keys={['Ctrl', 'Arrow Right']} desc="Seek +30s" />
                     <Shortcut keys={['-']} desc="Slow down" />
                     <Shortcut keys={['+']} desc="Speed up" />
+                    <Shortcut keys={['N']} desc="Next track" />
+                    <Shortcut keys={['P']} desc="Previous track" />
+                    <Shortcut keys={['Shift', 'N']} desc="Open next video" />
+                    <Shortcut keys={['Shift', 'P']} desc="Open previous video" />
                 </div>
                 <div className="mt-4 text-sm text-gray-400">Tip: Use the mouse wheel to zoom in overview mode.</div>
             </div>

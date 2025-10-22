@@ -17,6 +17,8 @@ type Props = {
     onClose: () => void
     onDelete: (id: string) => void
     onReport: (id: string, type: ReportType, message: string) => void
+    onOpenNextJob?: () => void
+    onOpenPrevJob?: () => void
 }
 
 type OverviewView = {
@@ -26,7 +28,7 @@ type OverviewView = {
     hoveredTrackId: number | null
 }
 
-export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
+export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenNextJob, onOpenPrevJob }) => {
     const [error, setError] = React.useState<string | null>(null)
     const [fileMissing, setFileMissing] = React.useState<boolean>(false)
     const [videoUrl, setVideoUrl] = React.useState<string | null>(null)
@@ -111,44 +113,121 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose }) => {
     // Seeker (frame stepping and seeking)
     const { seekTo, stepNext, stepPrev, onNewFile } = useSeeker(videoRef, player, setPlayer)
 
+    // Helpers for track navigation
+    const getSortedTracks = React.useCallback(() => {
+        return [...(player?.tracks ?? [])].sort((a, b) => a.start_time_seconds - b.start_time_seconds)
+    }, [player?.tracks])
+
+    const goToTrack = React.useCallback(
+        (trackId: number, startTimeSec: number) => {
+            setPlayer(p => (p ? p.copy({ mode: 'detailed', currentTrackId: trackId }) : p))
+            const play = !!player?.isPlaying
+            seekTo(startTimeSec, play)
+        },
+        [player?.isPlaying, seekTo]
+    )
+
+    const goToAdjacentTrack = React.useCallback(
+        (forward: boolean) => {
+            if (!player) return
+            const tracks = getSortedTracks()
+            if (tracks.length === 0) return
+            const currentTime = player.currentTimeSec
+            if (player.mode === 'detailed' && player.currentTrackId != null) {
+                const idx = tracks.findIndex(t => t.track_id === player.currentTrackId)
+                if (idx < 0) return
+                const nextIdx = (idx + (forward ? 1 : -1) + tracks.length) % tracks.length
+                const t = tracks[nextIdx]
+                goToTrack(t.track_id, t.start_time_seconds)
+            } else {
+                if (forward) {
+                    const t = tracks.find(t => t.start_time_seconds > currentTime) ?? tracks[0]
+                    goToTrack(t.track_id, t.start_time_seconds)
+                } else {
+                    const t =
+                        [...tracks].reverse().find(t => t.start_time_seconds < currentTime) ?? tracks[tracks.length - 1]
+                    goToTrack(t.track_id, t.start_time_seconds)
+                }
+            }
+        },
+        [player, getSortedTracks, goToTrack]
+    )
+
     // Keyboard controls
     React.useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
+            // prevent interfering when typing
+            const target = e.target as HTMLElement | null
+            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable))
+                return
             if (!player) return
-            if (e.key === ' ') {
+            const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
+            if (key === ' ') {
                 e.preventDefault()
-                togglePlay()
-            } else if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey) {
+                const v = videoRef.current
+                if (v && v.duration && v.currentTime >= v.duration - 0.05) {
+                    seekTo(0, true)
+                } else {
+                    togglePlay()
+                }
+            } else if (key === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey) {
                 e.preventDefault()
                 stepPrev()
-            } else if (e.key === 'ArrowRight' && !e.ctrlKey && !e.shiftKey) {
+            } else if (key === 'ArrowRight' && !e.ctrlKey && !e.shiftKey) {
                 e.preventDefault()
                 stepNext()
-            } else if (e.ctrlKey && e.key === 'ArrowLeft') {
+            } else if (e.ctrlKey && key === 'ArrowLeft') {
                 e.preventDefault()
                 seekTo(player.currentTimeSec - 30, true)
-            } else if (e.ctrlKey && e.key === 'ArrowRight') {
+            } else if (e.ctrlKey && key === 'ArrowRight') {
                 e.preventDefault()
                 seekTo(player.currentTimeSec + 30, true)
-            } else if (e.shiftKey && e.key === 'ArrowLeft') {
+            } else if (e.shiftKey && key === 'ArrowLeft') {
                 e.preventDefault()
                 seekTo(player.currentTimeSec - 5, true)
-            } else if (e.shiftKey && e.key === 'ArrowRight') {
+            } else if (e.shiftKey && key === 'ArrowRight') {
                 e.preventDefault()
                 seekTo(player.currentTimeSec + 5, true)
-            } else if (e.key === '-') {
+            } else if (key === '-') {
                 e.preventDefault()
                 bumpSpeed(true)
-            } else if (e.key === '+' || e.key === '=') {
+            } else if (key === '+' || key === '=') {
                 e.preventDefault()
                 bumpSpeed(false)
-            } else if (e.key.toLowerCase() === 'escape') {
-                setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
+            } else if (key.toLowerCase() === 'escape') {
+                if (player.mode === 'overview') {
+                    onClose?.()
+                } else {
+                    setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
+                }
+            } else if (!e.shiftKey && key.toLowerCase() === 'n') {
+                e.preventDefault()
+                goToAdjacentTrack(true)
+            } else if (!e.shiftKey && key.toLowerCase() === 'p') {
+                e.preventDefault()
+                goToAdjacentTrack(false)
+            } else if (e.shiftKey && key.toLowerCase() === 'n') {
+                e.preventDefault()
+                onOpenNextJob?.()
+            } else if (e.shiftKey && key.toLowerCase() === 'p') {
+                e.preventDefault()
+                onOpenPrevJob?.()
             }
         }
         window.addEventListener('keydown', onKey)
         return () => window.removeEventListener('keydown', onKey)
-    }, [player, togglePlay, stepPrev, stepNext, seekTo, bumpSpeed])
+    }, [
+        player,
+        togglePlay,
+        stepPrev,
+        stepNext,
+        seekTo,
+        bumpSpeed,
+        goToAdjacentTrack,
+        onClose,
+        onOpenNextJob,
+        onOpenPrevJob,
+    ])
 
     // Video frame callback -> sync currentTimeSec + draw
     React.useEffect(() => {

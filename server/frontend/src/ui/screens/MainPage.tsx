@@ -112,6 +112,30 @@ export const MainPage: React.FC = () => {
                     job={selectedJob}
                     dirHandle={dirHandle}
                     onClose={() => setSelectedJob(null)}
+                    onOpenNextJob={async () => {
+                        if (!selectedJob || !jobs || jobs.length === 0) return
+                        const idx = Math.max(
+                            0,
+                            jobs.findIndex(j => j.id === selectedJob.id)
+                        )
+                        const nextIdx = (idx + 1) % jobs.length
+                        const target = jobs[nextIdx]
+                        if (!target) return
+                        const detail = await refreshJobDetail(target.id)
+                        setSelectedJob(detail)
+                    }}
+                    onOpenPrevJob={async () => {
+                        if (!selectedJob || !jobs || jobs.length === 0) return
+                        const idx = Math.max(
+                            0,
+                            jobs.findIndex(j => j.id === selectedJob.id)
+                        )
+                        const prevIdx = (idx - 1 + jobs.length) % jobs.length
+                        const target = jobs[prevIdx]
+                        if (!target) return
+                        const detail = await refreshJobDetail(target.id)
+                        setSelectedJob(detail)
+                    }}
                     onDelete={onDelete}
                     onReport={onReport}
                     deletingId={deletingId}
