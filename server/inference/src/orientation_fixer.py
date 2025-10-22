@@ -25,6 +25,7 @@ import numpy as np
 
 from ultralytics import YOLO
 
+from server.inference.src.util.timing import timeit
 from server.inference.src.util.video_io import get_video_properties
 
 DEGREES = (0, 90, 180, 270)
@@ -73,16 +74,18 @@ class OrientationFixer:
 
         props = get_video_properties(input_video)
 
-        # Pick indices and read frames (one batch per video)
-        indices = _sample_frame_indices(props.total_frames, n_samples, sampling)
-        frames = _read_frames_at_indices(input_video, indices)
+        with timeit(f'{input_video}: Reading frames'):
+            # Pick indices and read frames (one batch per video)
+            indices = _sample_frame_indices(props.total_frames, n_samples, sampling)
+            frames = _read_frames_at_indices(input_video, indices)
 
         if not frames:
             print(f'Warning: Could not read any frames from {input_video}')
             return 0
 
-        # One forward pass (single batch)
-        results = self.model(frames, verbose=False)
+        with timeit(f'{input_video}: Forward pass'):
+            # One forward pass (single batch)
+            results = self.model(frames, verbose=False)
         predicted_deg = [self.idx2deg[int(r.probs.top1)] for r in results]
 
         return _majority_vote(predicted_deg)
@@ -93,7 +96,8 @@ class OrientationFixer:
         """
         dominant = self.detect_orientation(input_video)
         print(f'Dominant orientation: {dominant}')
-        _apply_rotation_ffmpeg(input_video, output_video, dominant)
+        with timeit(f'{input_video}: Applying rotation'):
+            _apply_rotation_ffmpeg(input_video, output_video, dominant)
         return dominant
 
 

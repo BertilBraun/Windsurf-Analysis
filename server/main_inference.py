@@ -99,13 +99,13 @@ class InferenceModel:
         with report_job_failure_on_exception(job_id):
             volume.reload()
 
-            stabilized_video_path = f'/data/{job_id}.mp4'
+            video_path = f'/data/{job_id}.mp4'
 
             processor = self._get_processor(yolo_model)
             send_progress(job_id, 'detection')
 
             with timeit(f'{job_id}: Object detection'):
-                raw_detections = processor.run_detection_pass(stabilized_video_path)
+                raw_detections = processor.run_detection_pass(video_path)
 
             # Enqueue embedding extraction and tracking
             TrackingFn = modal.Function.from_name('windsurf-analysis', 'embedding_extraction_and_tracking')
