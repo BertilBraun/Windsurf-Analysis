@@ -38,6 +38,15 @@ export function doXhrUpload(
 }
 
 const CHUNK_SIZE = 8 * 1024 * 1024 // 8 MiB per part
+const MAX_CONCURRENCY = Math.min(
+    8,
+    Math.max(
+        2,
+        typeof navigator !== 'undefined' && (navigator as any).hardwareConcurrency
+            ? Math.floor((navigator as any).hardwareConcurrency / 2)
+            : 4
+    )
+)
 
 // TODO with preprocess const PERCENT_PREPROCESS = 0.3
 // TODO with preprocess const PERCENT_UPLOAD = 0.7
@@ -76,7 +85,10 @@ export async function createJobForChecksum(
         throw err
     }
     if (!createRes.ok) throw new Error(await createRes.text())
-    const { job_id } = (await createRes.json()) as { job_id: string; status: string }
+    const { job_id, status } = (await createRes.json()) as { job_id: string; status: string }
+    // If the server indicates this checksum already has a non-pending job (e.g. succeeded),
+    // treat it as a duplicate and skip uploading.
+    if (status !== 'pending') return 'skipped'
     return { job_id }
 }
 
@@ -109,14 +121,39 @@ export async function uploadVideoFileToJob(
     if (!initRes.ok) throw new Error(await initRes.text())
     const { resume_from_part } = (await initRes.json()) as { resume_from_part: number }
 
-    // Step 4: Upload parts
+    // Step 4: Upload parts (parallel with aggregated progress)
     const processedView = new Uint8Array(processed)
-    let uploadedBytesBeforeCurrentPart = resume_from_part * CHUNK_SIZE
-    for (let partIndex = resume_from_part; partIndex < totalParts; partIndex++) {
+
+    // Precompute part sizes
+    const partSizes: number[] = Array.from({ length: totalParts }, (_, i) => {
+        const start = i * CHUNK_SIZE
+        const end = Math.min(start + CHUNK_SIZE, totalSize)
+        return end - start
+    })
+
+    // Bytes already safely on server due to resume
+    const initialUploadedBytes = partSizes.slice(0, resume_from_part).reduce((a, b) => a + b, 0)
+
+    // Track per-part uploaded bytes to aggregate progress across concurrent uploads
+    const perPartUploaded: number[] = new Array(totalParts).fill(0)
+    let aggregatedUploaded = initialUploadedBytes
+
+    const updateOverallProgress = () => {
+        const overall = aggregatedUploaded / totalSize
+        onProgress(Math.min(0.99, overall * PERCENT_UPLOAD + PERCENT_PREPROCESS))
+    }
+
+    // Work queue of part indices to upload
+    const workIndices: number[] = []
+    for (let i = resume_from_part; i < totalParts; i++) workIndices.push(i)
+
+    let nextIdx = 0
+
+    async function uploadOnePart(partIndex: number): Promise<void> {
         const start = partIndex * CHUNK_SIZE
         const end = Math.min(start + CHUNK_SIZE, totalSize)
         const chunkBytes = processedView.subarray(start, end)
-        const partSize = end - start
+        const partSize = partSizes[partIndex]
 
         const partForm = new FormData()
         partForm.append('part_index', String(partIndex))
@@ -127,16 +164,37 @@ export async function uploadVideoFileToJob(
         )
 
         await doXhrUpload(`${API_BASE}/jobs/${job_id}/upload/part`, ctx.authHeader, partForm, (percent: number) => {
-            const partUploaded = Math.round(percent * partSize)
-            const overall = (uploadedBytesBeforeCurrentPart + partUploaded) / totalSize
-
-            onProgress(Math.min(0.99, overall * PERCENT_UPLOAD + PERCENT_PREPROCESS))
+            const bytes = Math.max(0, Math.min(partSize, Math.round(percent * partSize)))
+            const delta = bytes - perPartUploaded[partIndex]
+            if (delta > 0) {
+                perPartUploaded[partIndex] += delta
+                aggregatedUploaded += delta
+                updateOverallProgress()
+            }
         })
 
-        uploadedBytesBeforeCurrentPart += partSize
-        const overall = uploadedBytesBeforeCurrentPart / totalSize
-        onProgress(Math.min(0.99, overall * PERCENT_UPLOAD + PERCENT_PREPROCESS))
+        // Ensure we account for any rounding differences at completion
+        const deltaToFull = partSize - perPartUploaded[partIndex]
+        if (deltaToFull > 0) {
+            perPartUploaded[partIndex] += deltaToFull
+            aggregatedUploaded += deltaToFull
+            updateOverallProgress()
+        }
     }
+
+    async function worker(): Promise<void> {
+        while (true) {
+            const i = nextIdx
+            if (i >= workIndices.length) return
+            nextIdx = i + 1
+            const partIndex = workIndices[i]
+            await uploadOnePart(partIndex)
+        }
+    }
+
+    const concurrency = Math.min(MAX_CONCURRENCY, Math.max(1, workIndices.length))
+    const workers = Array.from({ length: concurrency }, () => worker())
+    await Promise.all(workers)
 
     // Step 5: COMPLETE upload (server concatenates, checksums, and spawns inference)
     const completeRes = await ctx.authorizedFetch(`/jobs/${job_id}/upload/complete`, { method: 'POST' })
