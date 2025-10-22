@@ -59,7 +59,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 window.location.href = '/login'
                 throw new Error('Not authenticated')
             }
-            if (!res.ok) throw new Error(await res.text())
             return res
         },
         [settings.authHeader]
