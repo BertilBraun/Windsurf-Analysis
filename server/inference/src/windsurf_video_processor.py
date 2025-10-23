@@ -6,9 +6,7 @@ from typing import Callable, Sequence, TypeVar
 from tqdm import tqdm
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
-import numpy as np
 
-from server.inference.src.tracking.oc_sort import OCSortEmbedTracker
 
 from .settings import YOLO_MODEL_PATH
 from .util.helpers import log_and_reraise
@@ -20,9 +18,11 @@ from .visualization.annotation_drawer import Annotation, AnnotationDrawer
 from .tracking.detector import SurferDetector
 from .tracking.tracking import Tracker
 from .tracking.track_processing import TrackFiltering, TrackInterpolation, TrackSmoothing, TrackRelabeling
-from .tracking.discrete_opt_tracker import DiscreteILPTracker
 from .tracking.preprocessing.preprocessor import Preprocessor
-from .tracking.greedy_tracker import GreedyTracker  # noqa: F401 (imported for optional use)
+from .tracking.iterative_ilp_tracker import IterativeILPTracker
+# from .tracking.discrete_opt_tracker import DiscreteOptTracker
+# from .tracking.greedy_tracker import GreedyTracker
+# from .tracking.oc_sort import OCSortEmbedTracker
 
 
 from .visualization.debug_drawer import generate_debug_video_worker_function, debug_track_similarities
@@ -83,7 +83,7 @@ class WindsurfingVideoProcessor:
             props,
             transforms,
             trackers=[
-                # Preprocessor(),
+                Preprocessor(debug_video_path=input_path.as_posix()),
                 # # GreedyTracker(),
                 # DiscreteILPTracker(),
                 #  OCSortEmbedTracker(
@@ -104,6 +104,7 @@ class WindsurfingVideoProcessor:
                 #      output_tentative_max=3,
                 #      dedup_enable=False,
                 #  ),
+                IterativeILPTracker(video_path=input_path.as_posix()),
                 TrackFiltering(),
                 TrackInterpolation(),
                 TrackSmoothing(),
