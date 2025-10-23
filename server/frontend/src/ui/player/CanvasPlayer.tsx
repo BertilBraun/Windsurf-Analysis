@@ -405,6 +405,13 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
 }
 
 // Helpers
+let _sharedOffscreenCanvas: HTMLCanvasElement | null = null
+function getSharedOffscreenCanvas(): HTMLCanvasElement {
+    if (!_sharedOffscreenCanvas) {
+        _sharedOffscreenCanvas = document.createElement('canvas')
+    }
+    return _sharedOffscreenCanvas
+}
 function ensureCanvasSize(canvas: HTMLCanvasElement, cssWidth: number, cssHeight: number) {
     const dpr = Math.max(1, Math.floor(window.devicePixelRatio))
     const needW = Math.max(1, Math.floor(cssWidth * dpr))
@@ -449,8 +456,8 @@ function drawFrame(
 
     if (!video.videoWidth || !video.videoHeight) return
 
-    // Prepare source draw surface with rotation applied
-    const offscreen = document.createElement('canvas')
+    // Prepare source draw surface with orientation applied (reuse a single offscreen canvas)
+    const offscreen = getSharedOffscreenCanvas()
     const rotatedVideo = drawRotatedToCanvas(video, offscreen, dominantOrientationDeg)
 
     // Optionally apply stabilization transform for current time
@@ -481,9 +488,12 @@ function drawFrame(
         const dy = base.y + ov.offsetY
         const dw = base.w * z
         const dh = base.h * z
+        ctx.save()
+        ctx.translate(cx, cy)
+        ctx.scale(sBase, sBase) // TODO * sZoom
         ctx.imageSmoothingEnabled = true
         ctx.imageSmoothingQuality = 'high'
-        ctx.drawImage(sourceCanvas, dx, dy, dw, dh)
+        ctx.drawImage(offscreen, -rotatedVideo.width * 0.5, -rotatedVideo.height * 0.5)
 
         // Draw detections at current time
         const now = timeOverrideSec ?? player.currentTimeSec
@@ -492,18 +502,19 @@ function drawFrame(
             const det = player.interpolateDetectionByTime(t.track_id, now)
             if (!det) continue
             const [x1p, y1p, x2p, y2p] = det.bbox
-            const x1 = dx + x1p * dw
-            const y1 = dy + y1p * dh
-            const w = Math.max(1, (x2p - x1p) * dw)
-            const h = Math.max(1, (y2p - y1p) * dh)
+            const x1 = x1p * rotatedVideo.width - rotatedVideo.width * 0.5
+            const y1 = y1p * rotatedVideo.height - rotatedVideo.height * 0.5
+            const w = Math.max(1, (x2p - x1p) * rotatedVideo.width)
+            const h = Math.max(1, (y2p - y1p) * rotatedVideo.height)
             const isHovered = ov.hoveredTrackId === t.track_id
             ctx.strokeStyle = isHovered ? '#10b981' : '#ef4444'
-            ctx.lineWidth = 2
+            ctx.lineWidth = 2 / (sBase * sZoom)
             ctx.strokeRect(Math.round(x1) + 0.5, Math.round(y1) + 0.5, Math.round(w), Math.round(h))
 
             // Track id label
             drawText(ctx, String(t.track_id), x1, y1, '#fff', 'rgba(0,0,0,0.7)')
         }
+        ctx.restore()
     } else if (player.mode === 'detailed' && player.currentTrackId != null) {
         const now = timeOverrideSec ?? player.currentTimeSec
         const det = player.interpolateDetectionByTime(player.currentTrackId, now)
