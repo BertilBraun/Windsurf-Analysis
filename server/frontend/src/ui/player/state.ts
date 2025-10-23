@@ -85,16 +85,35 @@ export class PlayerState {
     interpolateDetectionByTime(trackId: number, timeSec: number): TrackDetection | null {
         const detectionTimes = this.tracks.find(t => t.track_id === trackId)?.detections || []
         const n = detectionTimes.length
-        if (!n) return null
+        if (n < 5) return null
 
-        const firstTime = this.time(detectionTimes[0]) - DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
-        const lastTime = this.time(detectionTimes[n - 1]) + DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
+        const firstTime = this.time(detectionTimes[0]) // - DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
+        const lastTime = this.time(detectionTimes[n - 1]) // + DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
         if (timeSec < firstTime || timeSec > lastTime) return null
 
         const idx = binSearch(detectionTimes, timeSec, t => this.time(t))
         const i2 = Math.min(n - 1, idx)
         const i1 = Math.max(0, i2 - 1)
         if (i1 === i2) return detectionTimes[i1]
+
+        const alpha =
+            (timeSec - this.time(detectionTimes[i1])) / (this.time(detectionTimes[i2]) - this.time(detectionTimes[i1]))
+        const [x10, x11, x12, x13] = detectionTimes[i1].bbox
+        const [x20, x21, x22, x23] = detectionTimes[i2].bbox
+        const c1 = detectionTimes[i1].confidence
+        const c2 = detectionTimes[i2].confidence
+
+        return {
+            bbox: [
+                x10 + alpha * (x20 - x10),
+                x11 + alpha * (x21 - x11),
+                x12 + alpha * (x22 - x12),
+                x13 + alpha * (x23 - x13),
+            ],
+            confidence: c1 + alpha * (c2 - c1),
+            time_percent: timeSec / this.video.durationSeconds,
+        }
+
         const i0 = Math.max(0, i1 - 1)
         const i3 = Math.min(n - 1, i2 + 1)
         const P0 = detectionTimes[i0]
@@ -130,7 +149,7 @@ export class PlayerState {
     hasDetectionAfter(trackId: number, timeSec: number): boolean {
         const detectionTimes = this.tracks.find(t => t.track_id === trackId)?.detections || []
         return (
-            this.time(detectionTimes[detectionTimes.length - 1]) > timeSec - DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
+            this.time(detectionTimes[detectionTimes.length - 1]) > timeSec //  - DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
         )
     }
 
