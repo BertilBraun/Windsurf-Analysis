@@ -6,7 +6,9 @@ export function useVideoFps() {
 
     const analyzeFile = React.useCallback(async (file: File) => {
         try {
-            const mediaInfo = await MediaInfoFactory()
+            const mediaInfo = await MediaInfoFactory({
+                locateFile: (path: string) => `/${path}`,
+            })
             const arrayBuffer = await file.arrayBuffer()
             const result = await mediaInfo.analyzeData(
                 () => arrayBuffer.byteLength,
