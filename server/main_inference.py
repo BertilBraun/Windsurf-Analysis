@@ -41,6 +41,7 @@ def report_job_failure_on_exception(job_id: str):
     except Exception as e:
         print(f'Error in report_job_failure_on_exception: {e}')
         send_complete(job_id, 'failed', None)
+        raise e
 
 
 def send_complete(job_id: str, status: Literal['succeeded', 'failed'], results: dict | None):

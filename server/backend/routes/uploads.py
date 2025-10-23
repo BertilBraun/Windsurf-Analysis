@@ -199,7 +199,7 @@ async def upload_complete(
     await db.flush()
 
     with timeit('spawn_stabilization'):
-        StabilizationModel = modal.Cls.from_name('windsurf-analysis-stabilization', 'StabilizationModel')
+        StabilizationModel = modal.Cls.from_name('windsurf-analysis', 'StabilizationModel')
         StabilizationModel().stabilize_and_enqueue.spawn(job_id=str(job.id), yolo_model=meta.yolo_model)
 
     from server.main_backend_frontend import volume

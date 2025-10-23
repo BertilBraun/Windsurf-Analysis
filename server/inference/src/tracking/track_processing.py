@@ -17,27 +17,18 @@ from ..common_types import Detection, Track, BoundingBox
 class TrackFiltering:
     def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
         """Filter tracks for minimum duration requirement"""
-        tracks = [
-            Track(track.track_id, list(sorted(track.sorted_detections, key=lambda x: x.frame_idx))) for track in tracks
-        ]
         return _get_valid_tracks(tracks, video_properties.total_frames)
 
 
 class TrackInterpolation:
     def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
         """Interpolate missing detections"""
-        tracks = [
-            Track(track.track_id, list(sorted(track.sorted_detections, key=lambda x: x.frame_idx))) for track in tracks
-        ]
         return [Track(track.track_id, _interpolate_missing_boxes(track.sorted_detections)) for track in tracks]
 
 
 class TrackSmoothing:
     def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
         """Smooth the center positions of all tracks using a rolling window"""
-        tracks = [
-            Track(track.track_id, list(sorted(track.sorted_detections, key=lambda x: x.frame_idx))) for track in tracks
-        ]
         return [Track(track.track_id, _smooth_track(track.sorted_detections)) for track in tracks]
 
 

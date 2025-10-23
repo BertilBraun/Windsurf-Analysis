@@ -74,8 +74,8 @@ class Job(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     # Associations
-    user_jobs: Mapped[list['UserJob']] = relationship('UserJob', back_populates='job')
-    reports: Mapped[list['Report']] = relationship('Report', back_populates='job')
+    user_jobs: Mapped[list[UserJob]] = relationship('UserJob', back_populates='job')
+    reports: Mapped[list[Report]] = relationship('Report', back_populates='job')
 
     __table_args__ = (
         Index('idx_jobs_original', 'original_checksum_sha256'),

@@ -124,22 +124,24 @@ async def get_job(job_id: str, db: DatabaseAccessor = Depends(get_db), user: Use
     if job is None:
         raise HTTPException(status_code=404, detail='Not found')
 
-    await db.update_job_last_accessed_at(job.id)
-    await db.flush()
-
     if job.status != JobStatus.succeeded or job.results is None:
-        raise HTTPException(status_code=405, detail='Results not found')
+        raise HTTPException(status_code=405, detail='Job not completed')
 
-    return JobDetail(
+    detail = JobDetail(
         id=str(job.id),
         status=job.status.value,
         created_at=job.created_at,
         updated_at=job.updated_at,
-        tracks=job.results['tracks'],
-        stabilization_transforms=job.results['stabilization_transforms'],
         original_checksum_sha256=job.original_checksum_sha256,
         dominant_orientation=job.results['dominant_orientation'],
+        tracks=job.results['tracks'],
+        stabilization_transforms=job.results['stabilization_transforms'],
     )
+
+    await db.update_job_last_accessed_at(job.id)
+    await db.flush()
+
+    return detail
 
 
 @router.delete('/{job_id}')
