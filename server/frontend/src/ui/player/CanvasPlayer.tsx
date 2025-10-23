@@ -237,8 +237,8 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
         if (!v || !c || !player || !container) return
 
         let vfId: number | null = null
-        const onFrame = (_now, meta) => {
-            const nowSec = meta.mediaTime // v.currentTime
+        const onFrame = (_: number, meta: VideoFrameCallbackMetadata) => {
+            const nowSec = meta.mediaTime
             setPlayer(prev => (prev ? prev.copy({ currentTimeSec: nowSec }) : prev))
             // Draw the current frame immediately for smooth playback
             drawFrame(
@@ -332,22 +332,20 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
     )
 
     const onClick = React.useCallback(() => {
-        if (!player || player.mode !== 'overview') return
-        if (hoveredTrackId != null) {
+        setPlayer(p => {
+            if (!p) return p
+            if (p.mode !== 'overview' || hoveredTrackId == null)
+                return p.copy({ mode: 'overview', currentTrackId: null })
+
             const trackId = hoveredTrackId
-            setPlayer(p => {
-                if (!p) return p
-                const detection = p.interpolateDetectionByTime(trackId, p.currentTimeSec)
-                if (detection) {
-                    const t = detection.time_percent * p.video.durationSeconds
-                    const v = videoRef.current
-                    if (v) v.currentTime = t
-                    return p.copy({ mode: 'detailed', currentTrackId: trackId, currentTimeSec: t })
-                }
-                return p.copy({ mode: 'detailed', currentTrackId: trackId })
-            })
-        }
-    }, [player, hoveredTrackId])
+            const detection = p.interpolateDetectionByTime(trackId, p.currentTimeSec)
+            if (!detection) return p.copy({ mode: 'overview', currentTrackId: null })
+
+            const t = detection.time_percent * p.video.durationSeconds
+            videoRef.current!.currentTime = t
+            return p.copy({ mode: 'detailed', currentTrackId: trackId, currentTimeSec: t })
+        })
+    }, [hoveredTrackId])
 
     return (
         <div className="flex flex-col h-full">
@@ -374,10 +372,14 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
                             key={videoUrl}
                             src={videoUrl}
                             playsInline
-                            muted={false}
+                            muted={true}
+                            autoPlay={true}
                             preload="metadata"
                             style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }}
-                            onEnded={() => setPlayer(p => (p ? p.copy({ isPlaying: false }) : p))}
+                            onEnded={() => {
+                                setPlayer(p => (p ? p.copy({ isPlaying: false }) : p))
+                                videoRef.current?.pause()
+                            }}
                         />
                     )}
                 </div>
