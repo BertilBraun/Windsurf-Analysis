@@ -93,6 +93,9 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
                 durationSeconds: v.duration,
             }
             setPlayer(PlayerState.from(job, videoProps))
+            // Ensure autoplay starts as soon as metadata is ready
+            v.muted = true
+            v.play()
         }
         v.addEventListener('loadedmetadata', onLoadedMetadata)
         return () => v.removeEventListener('loadedmetadata', onLoadedMetadata)
