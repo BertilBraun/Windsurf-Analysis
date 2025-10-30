@@ -18,7 +18,7 @@ export const IngressPanel: React.FC<Props> = ({ dirHandle, dirPermission, onPick
     const [showQuotaModal, setShowQuotaModal] = React.useState(false)
 
     React.useEffect(() => {
-        if (scanner.lastError?.includes('quota')) setShowQuotaModal(true)
+        if (scanner.lastError?.toLowerCase().includes('quota')) setShowQuotaModal(true)
     }, [scanner.lastError])
 
     return (
