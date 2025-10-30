@@ -297,7 +297,14 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
     const onWheelCanvas = React.useCallback(
         (e: React.WheelEvent<HTMLCanvasElement>) => {
             if (!player || player.mode !== 'overview') return
-            onWheelZoom(e.clientX, e.clientY, e.deltaY)
+            const container = containerRef.current
+            const rect = (container ?? e.currentTarget).getBoundingClientRect()
+            const px = e.clientX - rect.left
+            const py = e.clientY - rect.top
+            // Pass coordinates relative to the container center to keep the cursor point anchored
+            const absX = rect.left + (px - rect.width * 0.5)
+            const absY = rect.top + (py - rect.height * 0.5)
+            onWheelZoom(absX, absY, e.deltaY)
         },
         [player, onWheelZoom]
     )
