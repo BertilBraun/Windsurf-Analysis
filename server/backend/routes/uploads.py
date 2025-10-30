@@ -147,6 +147,10 @@ async def upload_complete(
     if job.status not in (JobStatus.pending,):
         raise HTTPException(status_code=409, detail='Job not in a state that accepts uploads')
 
+    from server.main_backend_frontend import volume
+
+    volume.reload()
+
     upload_dir = _upload_dir_for_job(job_id)
     meta_path = upload_dir / 'meta.json'
     if not meta_path.exists():
@@ -174,8 +178,6 @@ async def upload_complete(
                         out.write(block)
 
     _cleanup_upload_dir(upload_dir)
-
-    from server.main_backend_frontend import volume
 
     volume.commit()
 
