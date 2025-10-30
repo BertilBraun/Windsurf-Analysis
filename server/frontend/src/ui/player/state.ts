@@ -75,7 +75,7 @@ export class PlayerState {
             currentTrackId: null,
             currentTimeSec: 0,
             playbackSpeed: 1.0,
-            isPlaying: false,
+            isPlaying: true,
             video,
             tracks: job.tracks,
             stabilizationTransforms: job.stabilization_transforms,
@@ -87,8 +87,8 @@ export class PlayerState {
         const n = detectionTimes.length
         if (n < 5) return null
 
-        const firstTime = this.time(detectionTimes[0]) // - DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
-        const lastTime = this.time(detectionTimes[n - 1]) // + DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
+        const firstTime = this.time(detectionTimes[0]) - DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
+        const lastTime = this.time(detectionTimes[n - 1]) + DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
         if (timeSec < firstTime || timeSec > lastTime) return null
 
         const idx = binSearch(detectionTimes, timeSec, t => this.time(t))
@@ -149,7 +149,7 @@ export class PlayerState {
     hasDetectionAfter(trackId: number, timeSec: number): boolean {
         const detectionTimes = this.tracks.find(t => t.track_id === trackId)?.detections || []
         return (
-            this.time(detectionTimes[detectionTimes.length - 1]) > timeSec //  - DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC
+            this.time(detectionTimes[detectionTimes.length - 1]) + DETAILED_PLAYBACK_AFTER_LAST_DETECTION_SEC >= timeSec
         )
     }
 
