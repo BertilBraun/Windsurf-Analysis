@@ -311,6 +311,10 @@ class ReIDColorABStripeHistogram:
         self.use_mask = bool(use_mask)
         self.pre_blur_crop_ksize = int(pre_blur_crop_ksize)
 
+    # public API
+    def get_features_for_crops(self, crops: List[np.ndarray]) -> Sequence[HellingerEmbedding]:
+        return [self._embedding_for_crop(crop) for crop in crops]
+
     # -------------------------
 
     def _compute_mask(self, bgr: np.ndarray) -> np.ndarray:
@@ -369,10 +373,6 @@ class ReIDColorABStripeHistogram:
         # self._visualize(crop_bgr, fg_mask, L, a, b)
 
         return HellingerEmbedding(l2_normalize(vec))
-
-    # public API
-    def get_features_for_crops(self, crops: List[np.ndarray]) -> Sequence[HellingerEmbedding]:
-        return [self._embedding_for_crop(crop) for crop in crops]
 
     def _visualize(self, crop_bgr: np.ndarray, fg_mask: np.ndarray, L: np.ndarray, a: np.ndarray, b: np.ndarray):
         import matplotlib.pyplot as plt
