@@ -6,12 +6,26 @@ maintaining any state, making it easier to test and reason about.
 """
 
 import logging
+from bisect import bisect_left
+from typing import Sequence
+import numpy as np
 
+from server.inference.src.tracking.tracking import Tracker
 from server.inference.src.visualization.stabilize import Transform
 
-from ..settings import MIN_FRAME_PERCENTAGE, SMOOTHING_WINDOW_SIZE
+from ..settings import MIN_FRAME_PERCENTAGE
 from ..util.video_io import VideoInfo
-from ..common_types import Detection, Track, BoundingBox
+from ..common_types import Detection, Track, BoundingBox, FrameIndex
+from ..motion.kalman_filter import KFState
+from ..motion.cmc import CMC
+
+
+class TrackPostProcessing:
+    def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
+        trackers: Sequence[Tracker] = [TrackFiltering(), TrackRTSSmoothing(), TrackRelabeling()]
+        for tracker in trackers:
+            tracks = tracker.track(tracks, video_properties, transforms)
+        return tracks
 
 
 class TrackFiltering:
@@ -20,97 +34,27 @@ class TrackFiltering:
         return _get_valid_tracks(tracks, video_properties.total_frames)
 
 
-class TrackInterpolation:
-    def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
-        """Interpolate missing detections"""
-        return [Track(track.track_id, _interpolate_missing_boxes(track.sorted_detections)) for track in tracks]
-
-
-class TrackSmoothing:
-    def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
-        """Smooth the center positions of all tracks using a rolling window"""
-        return [Track(track.track_id, _smooth_track(track.sorted_detections)) for track in tracks]
-
-
 class TrackRelabeling:
     def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
         """Relabel tracks from 1 to n"""
         return [Track(i, track.sorted_detections) for i, track in enumerate(tracks, start=1)]
 
 
-def _interpolate_missing_boxes(track_data: list[Detection]) -> list[Detection]:
-    """Interpolate bounding boxes for missing frames in a track"""
-    if len(track_data) < 2:
-        return track_data
+class TrackRTSSmoothing:
+    """
+    Combined interpolation and smoothing using Rauch-Tung-Striebel (RTS) smoother.
 
-    interpolated: list[Detection] = []
+    This replaces both TrackInterpolation and TrackSmoothing with a single,
+    theoretically optimal approach that:
+    1. Runs a forward Kalman filter pass with camera motion compensation
+    2. Runs a backward RTS smoothing pass
+    3. Fills gaps and smooths trajectories simultaneously
+    """
 
-    for i in range(len(track_data) - 1):
-        current = track_data[i]
-        interpolated.append(current)
-
-        # Check if there's a gap to the next detection
-        next_detection = track_data[i + 1]
-        frame_gap = next_detection.frame_idx - current.frame_idx
-
-        # Interpolate across any gap size
-        for gap_frame in range(1, frame_gap):
-            # Linear interpolation factor
-            alpha = gap_frame / frame_gap
-
-            interpolated.append(current.interpolate(next_detection, alpha, current.frame_idx + gap_frame))
-
-    interpolated.append(track_data[-1])
-    return list(sorted(interpolated, key=lambda x: x.frame_idx))
-
-
-def _smooth_track(track_data: list[Detection], window_size: int = SMOOTHING_WINDOW_SIZE) -> list[Detection]:
-    """Smooth the center positions of a single track using a rolling window"""
-    if len(track_data) <= 1:
-        return track_data
-
-    # Sort by frame index
-    track_data.sort(key=lambda x: x.frame_idx)
-
-    smoothed_track: list[Detection] = []
-
-    for i, detection in enumerate(track_data):
-        # Calculate original bbox dimensions
-        bbox = detection.bbox
-        width = bbox.width
-        height = bbox.height
-
-        # Determine the smoothing window (up to window_size frames before current)
-        start_idx = max(0, i - window_size + 1)
-        end_idx = i + 1
-
-        # Get centers from the window
-        centers_x = []
-        centers_y = []
-
-        for j in range(start_idx, end_idx):
-            window_bbox = track_data[j].bbox
-            center_x = (window_bbox.x1 + window_bbox.x2) / 2
-            center_y = (window_bbox.y1 + window_bbox.y2) / 2
-            centers_x.append(center_x)
-            centers_y.append(center_y)
-
-        # Calculate smoothed center (simple moving average)
-        smooth_center_x = sum(centers_x) / len(centers_x)
-        smooth_center_y = sum(centers_y) / len(centers_y)
-
-        # Reconstruct bbox with smoothed center but original dimensions
-        # Create new detection with smoothed bbox
-        smoothed_detection = detection.copy()
-        smoothed_detection.bbox = BoundingBox(
-            int(smooth_center_x - width / 2),  # x1
-            int(smooth_center_y - height / 2),  # y1
-            int(smooth_center_x + width / 2),  # x2
-            int(smooth_center_y + height / 2),  # y2
-        )
-        smoothed_track.append(smoothed_detection)
-
-    return smoothed_track
+    def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
+        """Apply RTS smoothing to all tracks with camera motion compensation"""
+        cmc = CMC(transforms)
+        return [Track(track.track_id, _rts_smooth_track(track.sorted_detections, cmc)) for track in tracks]
 
 
 def _get_valid_tracks(tracks: list[Track], total_frames: int) -> list[Track]:
@@ -134,3 +78,191 @@ def _get_valid_tracks(tracks: list[Track], total_frames: int) -> list[Track]:
             valid_tracks.append(track)
 
     return valid_tracks
+
+
+# ========================================================================================
+# RTS Smoothing Implementation
+# ========================================================================================
+
+
+def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
+    """
+    Apply RTS (Rauch-Tung-Striebel) smoothing to a track.
+
+    This function:
+    1. Runs a forward Kalman filter pass through all detections
+    2. Applies camera motion compensation at each step
+    3. Stores filtered and predicted states
+    4. Runs a backward RTS smoothing pass
+    5. Generates dense, smoothed detections for all frames in the track span
+
+    Args:
+        detections: List of detections (may have gaps)
+        cmc: Camera motion compensator
+
+    Returns:
+        Dense list of smoothed detections covering all frames from start to end
+    """
+    if len(detections) < 2:
+        return detections
+
+    # Sort detections by frame
+    detections = sorted(detections, key=lambda d: d.frame_idx)
+    start_frame = detections[0].frame_idx
+    end_frame = detections[-1].frame_idx
+    N = end_frame - start_frame + 1
+
+    # Initialize Kalman filter state from first detection
+    state = KFState.init(detections[0])
+
+    # Storage for forward pass results
+    # We store state for every frame in the track span, not just detection frames
+    mu_filt = np.zeros((N, 8))  # filtered means
+    P_filt = np.zeros((N, 8, 8))  # filtered covariances
+    mu_pred = np.zeros((N, 8))  # predicted means (before update)
+    P_pred = np.zeros((N, 8, 8))  # predicted covariances (before update)
+
+    # Map frame indices to detections for quick lookup
+    detection_dict = {d.frame_idx: d for d in detections}
+
+    # Forward pass: Kalman filter with camera motion compensation
+    for i, frame_idx in enumerate(range(start_frame, end_frame + 1)):
+        if i == 0:
+            # First frame: store initial state
+            mu_pred[i] = state.mean
+            P_pred[i] = state.cov
+            mu_filt[i] = state.mean
+            P_filt[i] = state.cov
+        else:
+            # Predict to current frame (includes CMC)
+            predicted_state = state.predict_to(frame_idx, cmc)
+            mu_pred[i] = predicted_state.mean
+            P_pred[i] = predicted_state.cov
+
+            # Update if we have a detection at this frame
+            if frame_idx in detection_dict:
+                state = predicted_state.update_to_det(detection_dict[frame_idx], cmc)
+                mu_filt[i] = state.mean
+                P_filt[i] = state.cov
+            else:
+                # No detection: filtered state = predicted state
+                state = predicted_state
+                mu_filt[i] = predicted_state.mean
+                P_filt[i] = predicted_state.cov
+
+    # Backward pass: RTS smoothing
+    mu_smooth, P_smooth = _rts_smoother(mu_filt, P_filt, mu_pred, P_pred)
+
+    # Generate smoothed detections for all frames
+    smoothed_detections: list[Detection] = []
+    for i, frame_idx in enumerate(range(start_frame, end_frame + 1)):
+        # Extract position and size from smoothed state
+        cx, cy, w, h = mu_smooth[i, :4]
+        w, h = max(w, 1), max(h, 1)
+
+        # Create bounding box from smoothed state
+        smoothed_bbox = BoundingBox.from_center_wh(cx, cy, w, h)
+
+        # Use original detection if available, otherwise create interpolated one
+        if frame_idx in detection_dict:
+            original_det = detection_dict[frame_idx]
+            smoothed_det = Detection(
+                bbox=smoothed_bbox,
+                embedding=original_det.embedding,
+                confidence=original_det.confidence,
+                frame_idx=frame_idx,
+            )
+        else:
+            # Interpolate embedding and confidence from nearest detections
+            embedding, confidence = _interpolate_detection_attributes(frame_idx, detections)
+            smoothed_det = Detection(
+                bbox=smoothed_bbox,
+                embedding=embedding,
+                confidence=confidence,
+                frame_idx=frame_idx,
+            )
+
+        smoothed_detections.append(smoothed_det)
+
+    return smoothed_detections
+
+
+def _rts_smoother(
+    mu_filt: np.ndarray, P_filt: np.ndarray, mu_pred: np.ndarray, P_pred: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    RTS smoother for linear Gaussian systems.
+
+    Inputs:
+      mu_filt:  [N, n]  filtered means AFTER update at each k
+      P_filt:   [N, n, n] filtered covariances AFTER update
+      mu_pred:  [N, n]  predicted means BEFORE update (k entry is μ_{k|k-1})
+      P_pred:   [N, n, n] predicted covariances BEFORE update
+
+    Returns:
+      mu_smooth, P_smooth arrays of same shape as inputs
+    """
+    N, n = mu_filt.shape
+    mu_smooth = mu_filt.copy()
+    P_smooth = P_filt.copy()
+
+    # Backward pass: k = N-2, N-3, ..., 0
+    for k in range(N - 2, -1, -1):
+        # Smoothing gain G_k = P_k @ (P_{k+1|k})^{-1}
+        # Use pseudo-inverse for numerical stability
+        G = P_filt[k] @ np.linalg.pinv(P_pred[k + 1])
+
+        # Mean correction: μ_k^s = μ_k + G @ (μ_{k+1}^s − μ_{k+1|k})
+        mu_smooth[k] += G @ (mu_smooth[k + 1] - mu_pred[k + 1])
+
+        # Covariance correction: P_k^s = P_k + G @ (P_{k+1}^s − P_{k+1|k}) @ G^T
+        P_smooth[k] += G @ (P_smooth[k + 1] - P_pred[k + 1]) @ G.T
+
+        # Ensure symmetry
+        P_smooth[k] = 0.5 * (P_smooth[k] + P_smooth[k].T)
+
+    return mu_smooth, P_smooth
+
+
+def _interpolate_detection_attributes(frame_idx: FrameIndex, detections: list[Detection]):
+    """
+    Interpolate embedding and confidence for a frame without a detection.
+
+    Uses binary search to find the nearest detections before and after,
+    then performs linear interpolation.
+
+    Args:
+        frame_idx: Frame index to interpolate at
+        detections: Sorted list of detections
+
+    Returns:
+        tuple: (embedding, confidence) where embedding is an Embedding object
+    """
+    # Binary search to find insertion point
+    # detections are already sorted by frame_idx
+    idx = bisect_left([d.frame_idx for d in detections], frame_idx)
+
+    # Handle edge cases
+    if idx == 0:
+        # Before all detections: use first
+        return detections[0].embedding, detections[0].confidence
+
+    if idx >= len(detections):
+        # After all detections: use last
+        return detections[-1].embedding, detections[-1].confidence
+
+    # Normal case: interpolate between detections[idx-1] and detections[idx]
+    before_det = detections[idx - 1]
+    after_det = detections[idx]
+
+    # Linear interpolation factor
+    total_gap = after_det.frame_idx - before_det.frame_idx
+    alpha = (frame_idx - before_det.frame_idx) / total_gap
+
+    # Use the Embedding protocol's interpolate method
+    embedding = before_det.embedding.interpolate(after_det.embedding, alpha)
+
+    # Interpolate confidence
+    confidence = before_det.confidence * (1 - alpha) + after_det.confidence * alpha
+
+    return embedding, confidence
