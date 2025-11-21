@@ -20,7 +20,7 @@ from server.inference.src.settings import REID_MODEL_TYPE
 from server.inference.src.tracking.discrete_opt_tracker import DiscreteOptTracker
 from server.inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
 from server.inference.src.tracking.oc_sort import OCSortEmbedTracker
-from server.inference.src.tracking.preprocessing.preprocessor import Preprocessor
+from server.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
 from server.inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
 
 from server.inference.optimization.optimization_util import (
@@ -71,7 +71,7 @@ def main() -> None:
             'discrete_opt': DiscreteOptTracker(),
             'iter_ilp': IterativeILPTracker(video_path.as_posix()),
             'oc_sort': OCSortEmbedTracker(),
-            'preprocessor': Preprocessor(),
+            'preprocessor': TrackPreProcessor(),
         }
         requires_preprocessor = ['discrete_opt', 'iter_ilp']
 
@@ -79,7 +79,7 @@ def main() -> None:
             assert name in tracker_by_name, f'Unknown tracker: {name}'
             current_input_tracks = list(input_tracks)
             if name in requires_preprocessor:
-                current_input_tracks = Preprocessor().track(current_input_tracks, props, transforms)
+                current_input_tracks = TrackPreProcessor().track(current_input_tracks, props, transforms)
 
             start_time = time.time()
             pred_tracks = tracker_by_name[name].track(current_input_tracks, props, transforms)

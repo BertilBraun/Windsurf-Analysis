@@ -18,7 +18,7 @@ if str(project_root) not in sys.path:
 
 from server.inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
 from server.inference.src.util.video_io import get_video_properties
-from server.inference.src.tracking.preprocessing.preprocessor import Preprocessor
+from server.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
 from server.inference.src.tracking.discrete_opt_tracker import DiscreteOptTracker
 from server.inference.src.common_types import Track
 from server.inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
@@ -51,7 +51,7 @@ def _evaluate_preprocessor(params: Dict[str, Any], golden_dir: Path) -> float:
         props = get_video_properties(video_path)
         transforms = compute_stabilization_transforms_gmc(video_path.as_posix())
 
-        pre = Preprocessor(
+        pre = TrackPreProcessor(
             appearance_probability_strict=float(params['appearance_strict']),
             appearance_probability_loose=float(params['appearance_loose']),
             motion_probability_strict=float(params['motion_strict']),
@@ -199,7 +199,7 @@ def _evaluate_iter_ilp(params: Dict[str, Any], golden_dir: Path) -> float:
         input_tracks = _flatten_tracks(tracks)
         transforms = compute_stabilization_transforms_gmc(video_path.as_posix())
 
-        preprocessed_tracks = Preprocessor().track(input_tracks, video_props, transforms)
+        preprocessed_tracks = TrackPreProcessor().track(input_tracks, video_props, transforms)
 
         tracker = IterativeILPTracker(video_path.as_posix(), **params)
 

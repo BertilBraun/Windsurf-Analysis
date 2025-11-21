@@ -18,7 +18,7 @@ if str(project_root) not in sys.path:
 
 from server.inference.src.util.video_io import get_video_properties
 from server.inference.src.tracking.detector import SurferDetector
-from server.inference.src.tracking.preprocessing.preprocessor import Preprocessor
+from server.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
 from server.inference.src.tracking.discrete_opt_tracker import DiscreteILPTracker
 from server.inference.src.common_types import Detection, Track
 from server.inference.src.player.core.player_state import Metadata
@@ -123,7 +123,7 @@ class DetectionCache:
             self._detections_by_video[video_path] = dets
 
         initial_tracks = _detections_to_initial_tracks(dets)
-        tracks = Preprocessor().track(initial_tracks, video_props)
+        tracks = TrackPreProcessor().track(initial_tracks, video_props)
         self._preprocessed_tracks_by_video[video_path] = (tracks, video_props)
         return tracks, video_props
 

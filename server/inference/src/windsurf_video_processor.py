@@ -18,7 +18,7 @@ from .visualization.annotation_drawer import Annotation, AnnotationDrawer
 from .tracking.detector import SurferDetector
 from .tracking.tracking import Tracker
 from .tracking.track_processing import TrackFiltering, TrackInterpolation, TrackSmoothing, TrackRelabeling
-from .tracking.preprocessing.preprocessor import Preprocessor
+from .tracking.preprocessing.preprocessor import TrackPreProcessor
 from .tracking.iterative_ilp_tracker import IterativeILPTracker
 # from .tracking.discrete_opt_tracker import DiscreteOptTracker
 # from .tracking.greedy_tracker import GreedyTracker
@@ -83,7 +83,7 @@ class WindsurfingVideoProcessor:
             props,
             transforms,
             trackers=[
-                Preprocessor(debug_video_path=input_path.as_posix()),
+                TrackPreProcessor(debug_video_path=input_path.as_posix()),
                 # # GreedyTracker(),
                 # DiscreteILPTracker(),
                 #  OCSortEmbedTracker(

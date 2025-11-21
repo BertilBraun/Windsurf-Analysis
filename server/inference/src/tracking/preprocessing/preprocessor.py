@@ -13,7 +13,7 @@ from .greedy_track_stitcher import GreedyTrackStitcher
 # from .filter_non_surfers import FilterNonSurfers
 
 
-class Preprocessor:
+class TrackPreProcessor:
     def __init__(
         self,
         appearance_probability_strict: float = GREEDY_PREPROCESSOR_APPEARANCE_PROBABILITY_STRICT,

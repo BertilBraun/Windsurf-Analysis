@@ -22,7 +22,7 @@ from server.inference.src.player.core.video_manager import VideoManager
 from server.inference.src.player.ui.video_widget import VideoWidget
 from server.inference.src.util.video_io import get_video_properties, VideoInfo
 from server.inference.src.tracking.detector import SurferDetector
-from server.inference.src.tracking.preprocessing.preprocessor import Preprocessor
+from server.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
 from server.inference.src.common_types import Detection, Track
 from server.inference.src.settings import (
     YOLO_MODEL_PATH,
@@ -124,7 +124,7 @@ class GreedyTunerWindow(QMainWindow):
 
     # ---------------------- Core logic ---------------------- #
     def _recompute_and_update(self) -> None:
-        pre = Preprocessor(
+        pre = TrackPreProcessor(
             greedy_min_iou=self.params.min_iou,
             greedy_min_cosine_similarity=self.params.min_cos,
             greedy_max_frame_distance=self.params.max_gap,

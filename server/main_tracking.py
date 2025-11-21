@@ -10,13 +10,13 @@ from server.inference.src.common_types import BoundingBox, Detection, FrameIndex
 from server.inference.src.settings import REID_MODEL_TYPE
 from server.inference.src.tracking.detector import EmbeddingExtractor, RawDetection
 from server.inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
-from server.inference.src.tracking.preprocessing.preprocessor import Preprocessor
 from server.inference.src.tracking.track_processing import (
     TrackFiltering,
     TrackInterpolation,
     TrackRelabeling,
     TrackSmoothing,
 )
+from server.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
 from server.inference.src.tracking.tracking import Tracker
 from server.inference.src.util.video_io import VideoReader, get_video_properties
 
@@ -70,7 +70,7 @@ def embedding_extraction_and_tracking(
 
         with timeit(f'{job_id}: Trackers'):
             trackers: Sequence[Tracker] = [
-                Preprocessor(),
+                TrackPreProcessor(),
                 IterativeILPTracker(),
                 TrackFiltering(),
                 TrackInterpolation(),
