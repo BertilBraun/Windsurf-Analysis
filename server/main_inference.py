@@ -80,14 +80,11 @@ class InferenceModel:
         self.processors: dict[str, ObjectDetector] = {}
 
     def _get_processor(self, yolo_model: str) -> ObjectDetector:
-        key = yolo_model
-        processor = self.processors.get(key)
-        if processor is None:
+        if yolo_model not in self.processors:
             # Initialize and cache processor for this model pair
             with timeit(f'Initializing processor for {yolo_model}'):
-                processor = ObjectDetector(yolo_model_path='/root/weights/yolo_models/' + yolo_model)
-                self.processors[key] = processor
-        return processor
+                self.processors[yolo_model] = ObjectDetector(yolo_model_path='/root/weights/yolo_models/' + yolo_model)
+        return self.processors[yolo_model]
 
     @modal.method()
     def inference_after_stabilization(
