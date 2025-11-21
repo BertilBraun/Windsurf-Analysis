@@ -1,5 +1,5 @@
 import { API_BASE } from '../auth/AuthProvider'
-import { preprocessVideo } from '../../preprocess/preprocess'
+import { getVideoTrack } from '../hooks/useVideoFps'
 import { UploadQuality } from '../types'
 
 export type UploadContext = {
@@ -60,6 +60,14 @@ export async function uploadVideoFile(
     onProgress: (percent: number) => void
 ): Promise<'uploaded' | 'skipped'> {
     // Step 1: Create job (also acts as duplicate/quota check)
+
+    // get number of frames of the video and skip if longer than MAX_FRAMES
+    const video = await getVideoTrack(file)
+    const frameCount = video?.FrameCount
+    console.log('frameCount pre upload for file', file.name, 'is', frameCount)
+    const MAX_FRAMES = 30 * 60 * 3 // 3 minutes at 30fps
+    if (!frameCount || frameCount > MAX_FRAMES) throw new Error('Video too long')
+
     const { sha256 } = await computeSha256(file)
     const created = await createJobForChecksum(sha256, ctx)
     if (created === 'skipped') return 'skipped'
