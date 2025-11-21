@@ -31,8 +31,6 @@ MAX_OVERLAP_LENGTH_SECONDS = 5
 # Minimum percentage of total frames a track must appear in (default 5%)
 MIN_FRAME_PERCENTAGE = 5
 
-SMOOTHING_WINDOW_SIZE = 1  # TODO more or less?
-
 VIDEO_SUFFIX_SECONDS = 1.0
 
 # Greedy preprocessor settings

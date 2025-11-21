@@ -17,7 +17,7 @@ from .visualization.annotation_drawer import Annotation, AnnotationDrawer
 
 from .tracking.detector import SurferDetector
 from .tracking.tracking import Tracker
-from .tracking.track_processing import TrackFiltering, TrackInterpolation, TrackSmoothing, TrackRelabeling
+from .tracking.track_processing import TrackPostProcessing
 from .tracking.preprocessing.preprocessor import TrackPreProcessor
 from .tracking.iterative_ilp_tracker import IterativeILPTracker
 # from .tracking.discrete_opt_tracker import DiscreteOptTracker
@@ -105,10 +105,7 @@ class WindsurfingVideoProcessor:
                 #      dedup_enable=False,
                 #  ),
                 IterativeILPTracker(video_path=input_path.as_posix()),
-                TrackFiltering(),
-                TrackInterpolation(),
-                TrackSmoothing(),
-                TrackRelabeling(),
+                TrackPostProcessing(),
             ],
         )
 
