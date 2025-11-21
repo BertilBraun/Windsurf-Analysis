@@ -14,11 +14,13 @@ Dependencies:
   (and make sure `ffmpeg` is on PATH)
 """
 
+import os
 import random
 import shutil
 import subprocess
 from collections import Counter
 from typing import Literal
+import uuid
 
 import cv2
 import numpy as np
@@ -29,6 +31,7 @@ from server.inference.src.util.timing import timeit
 from server.inference.src.util.video_io import get_video_properties
 
 DEGREES = (0, 90, 180, 270)
+SamplingMode = Literal['uniform', 'random', 'every-5th-frame']
 
 
 # -------------------
@@ -65,7 +68,7 @@ class OrientationFixer:
         self,
         input_video: str,
         n_samples: int = 16,
-        sampling: Literal['uniform', 'random'] = 'uniform',
+        sampling: SamplingMode = 'every-5th-frame',
     ) -> int:
         """
         Returns the dominant orientation of the video (0, 90, 180, 270)
@@ -90,15 +93,15 @@ class OrientationFixer:
 
         return _majority_vote(predicted_deg)
 
-    def fix_video(self, input_video: str, output_video: str) -> int:
+    def apply_rotation(self, video_path: str, dominant_orientation: int) -> None:
         """
         Rotates the video so that the dominant orientation is upright (0°).
         """
-        dominant = self.detect_orientation(input_video)
-        print(f'Dominant orientation: {dominant}')
-        with timeit(f'{input_video}: Applying rotation'):
-            _apply_rotation_ffmpeg(input_video, output_video, dominant)
-        return dominant
+        with timeit(f'{os.path.basename(video_path)}: Applying rotation'):
+            temp_video_path = f'tmp_{uuid.uuid4()}.mp4'
+            shutil.copy(video_path, temp_video_path)
+            _apply_rotation_ffmpeg(temp_video_path, video_path, dominant_orientation)
+            os.remove(temp_video_path)
 
 
 # -------------------
@@ -159,13 +162,15 @@ def _apply_rotation_ffmpeg(in_path: str, out_path: str, content_is_at_deg: int) 
 # -------------------
 # Frame sampling
 # -------------------
-def _sample_frame_indices(total_frames: int, n_samples: int, mode: str) -> list[int]:
+def _sample_frame_indices(total_frames: int, n_samples: int, mode: SamplingMode) -> list[int]:
     if total_frames <= 0:
         return []
     n = min(n_samples, total_frames)
     if n <= 0:
         return []
-    if mode == 'uniform':
+    if mode == 'every-5th-frame':
+        return list(range(0, total_frames, 5))[:n]
+    elif mode == 'uniform':
         # spread roughly evenly across the whole video
         if n == 1:
             return [total_frames // 2]

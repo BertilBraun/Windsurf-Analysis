@@ -43,11 +43,11 @@ class StabilizationModel:
 
             with timeit(f'{job_id}: Orientation detection'):
                 print(f'{job_id}: Starting Orientation detection')
-                input_video_path = 'tmp.mp4'
-                shutil.copy(shared_video_path, input_video_path)
-                # Write the fixed video back to the shared volume
-                dominant_orientation = self.orientation_fixer.fix_video(input_video_path, shared_video_path)
-                os.remove(input_video_path)
+                dominant_orientation = self.orientation_fixer.detect_orientation(shared_video_path)
+                print(f'{job_id}: Dominant orientation: {dominant_orientation}')
+
+            if dominant_orientation != 0:
+                self.orientation_fixer.apply_rotation(shared_video_path, dominant_orientation)
 
             send_progress(job_id, 'stabilization')
 
