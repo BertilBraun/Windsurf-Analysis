@@ -71,6 +71,7 @@ def send_progress(job_id: str, status: Literal['orientation', 'stabilization', '
     max_containers=2,
     scaledown_window=5,  # Scaledown window is 5 seconds
     volumes={'/data': volume.read_only()},
+    timeout=600,  # 10 minutes
     secrets=[modal.Secret.from_name('backend-secret')],
 )
 @modal.concurrent(max_inputs=16, target_inputs=12)
