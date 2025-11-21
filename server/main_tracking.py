@@ -15,8 +15,8 @@ from server.inference.src.tracking.track_processing import TrackPostProcessing
 from server.inference.src.tracking.tracking import Tracker
 from server.inference.src.util.video_io import VideoReader, get_video_properties
 
-from .inference.src.util.timing import timeit
-from .inference.src.visualization.stabilize import Transform
+from server.inference.src.util.timing import timeit
+from server.inference.src.visualization.stabilize import Transform, vidstab_like_transforms
 from .main_inference import (
     report_job_failure_on_exception,
     image as inference_image,
@@ -101,15 +101,21 @@ def embedding_extraction_and_tracking(
             for t in processed_tracks
         ]
 
+        with timeit(f'{job_id}: Stabilization Optimization'):
+            # Compute the transforms which the frontend should use as per frame warps for stabilization
+            # stabilized_transforms = optimize_trajectory_world(transforms, properties.width, properties.height)
+            smoothing_window = min(20, props.total_frames - 1)
+            stabilized_transforms = vidstab_like_transforms(parsed_transforms, smoothing_window)
+
         # Convert transforms payload into result with time_percent
         stabilization_transforms = [
             {
-                'time_percent': clamp_percentage(i / len(parsed_transforms)),
+                'time_percent': clamp_percentage(i / len(stabilized_transforms)),
                 'dx': t.dx,
                 'dy': t.dy,
                 'da': t.da,
             }
-            for i, t in enumerate(parsed_transforms)
+            for i, t in enumerate(stabilized_transforms)
         ]
 
         results = {

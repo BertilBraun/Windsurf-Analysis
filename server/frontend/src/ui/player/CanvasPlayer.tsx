@@ -326,7 +326,6 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
                 py,
                 rect.width,
                 rect.height,
-                videoRef.current!,
                 player,
                 {
                     zoom,
@@ -470,45 +469,34 @@ function drawFrame(
     const offscreen = getSharedOffscreenCanvas()
     const rotatedVideo = drawRotatedToCanvas(video, offscreen, dominantOrientationDeg)
 
-    // Optionally apply stabilization transform for current time
+    // Current time for stabilization lookup
     const now = timeOverrideSec ?? player.currentTimeSec
-    const stab = player.getStabilizationAt(now)
     let sourceCanvas: HTMLCanvasElement = offscreen
-    if (stab.dx !== 0 || stab.dy !== 0 || stab.da !== 0) {
-        const stabCanvas = document.createElement('canvas')
-        stabCanvas.width = offscreen.width
-        stabCanvas.height = offscreen.height
-        const sctx = stabCanvas.getContext('2d')!
-        sctx.setTransform(1, 0, 0, 1, 0, 0)
-        sctx.clearRect(0, 0, stabCanvas.width, stabCanvas.height)
-        const cos = Math.cos(stab.da)
-        const sin = Math.sin(stab.da)
-        sctx.imageSmoothingEnabled = true
-        sctx.imageSmoothingQuality = 'high'
-        // Apply rotation and translation in one affine transform
-        sctx.setTransform(cos, sin, -sin, cos, stab.dx, stab.dy)
-        sctx.drawImage(offscreen, 0, 0)
-        sourceCanvas = stabCanvas
-    }
 
     if (player.mode === 'overview') {
         const base = computeBaseRect(cssW, cssH, rotatedVideo.width, rotatedVideo.height)
         const z = ov.zoom
-        const dx = base.x + ov.offsetX
-        const dy = base.y + ov.offsetY
-        const dw = base.w * z
-        const dh = base.h * z
+        const cx = base.x + base.w * 0.5 + ov.offsetX
+        const cy = base.y + base.h * 0.5 + ov.offsetY
+        const sBase = (base.w / rotatedVideo.width) * z
+        const stab = player.getStabilizationAt(now)
+
         ctx.save()
         ctx.translate(cx, cy)
-        ctx.scale(sBase, sBase) // TODO * sZoom
+        ctx.scale(sBase, sBase)
+        // Apply cumulative stabilization as pre-apply transform: translate then rotate
+        ctx.translate(stab.dx, stab.dy)
+        ctx.rotate(stab.da)
         ctx.imageSmoothingEnabled = true
         ctx.imageSmoothingQuality = 'high'
         ctx.drawImage(offscreen, -rotatedVideo.width * 0.5, -rotatedVideo.height * 0.5)
 
-        // Draw detections at current time
-        const now = timeOverrideSec ?? player.currentTimeSec
+        if (false) {
+            drawStabilizationTransforms(ctx, player, now, sBase, cx, cy)
+        }
+
+        // Draw detections under same transform
         for (const t of player.tracks) {
-            if (!player.visibleTrackIds.has(t.track_id)) continue
             const det = player.interpolateDetectionByTime(t.track_id, now)
             if (!det) continue
             const [x1p, y1p, x2p, y2p] = det.bbox
@@ -518,10 +506,9 @@ function drawFrame(
             const h = Math.max(1, (y2p - y1p) * rotatedVideo.height)
             const isHovered = ov.hoveredTrackId === t.track_id
             ctx.strokeStyle = isHovered ? '#10b981' : '#ef4444'
-            ctx.lineWidth = 2 / (sBase * sZoom)
+            ctx.lineWidth = 2 / sBase
             ctx.strokeRect(Math.round(x1) + 0.5, Math.round(y1) + 0.5, Math.round(w), Math.round(h))
 
-            // Track id label
             drawText(ctx, String(t.track_id), x1, y1, '#fff', 'rgba(0,0,0,0.7)')
         }
         ctx.restore()
@@ -575,7 +562,6 @@ function drawFrame(
         }
 
         // optional: draw a subtle bbox overlay for context
-        // TODO remove
         ctx.strokeStyle = '#f59e0b'
         ctx.lineWidth = 2
         const bboxScreenX = (x1 - winX1) * s
@@ -604,20 +590,22 @@ function pickTrackAtScreenPoint(
     py: number,
     outW: number,
     outH: number,
-    video: HTMLVideoElement,
     player: PlayerState,
     ov: OverviewView,
     dominantOrientationDeg: number = 0
 ): number | null {
     const { width, height } = getRotatedDimensions(player.video.width, player.video.height, dominantOrientationDeg)
     const base = computeBaseRect(outW, outH, width, height)
-    const dx = base.x + ov.offsetX
-    const dy = base.y + ov.offsetY
+    const stab = player.getStabilizationAt(player.currentTimeSec)
+    // apply stabilization transform to the base rect
+    // TODO also apply the rotation transform
+    const dx = base.x + stab.dx + ov.offsetX
+    const dy = base.y + stab.dy + ov.offsetY
     const dw = base.w * ov.zoom
     const dh = base.h * ov.zoom
+
     // check from topmost to bottommost; here just iterate, but prefer smaller boxes first
     for (const t of player.tracks) {
-        if (!player.visibleTrackIds.has(t.track_id)) continue
         const det = player.interpolateDetectionByTime(t.track_id, player.currentTimeSec)
         if (!det) continue
         const [x1p, y1p, x2p, y2p] = det.bbox
@@ -628,4 +616,51 @@ function pickTrackAtScreenPoint(
         if (px >= x1 && px <= x2 && py >= y1 && py <= y2) return t.track_id
     }
     return null
+}
+
+function drawStabilizationTransforms(
+    ctx: CanvasRenderingContext2D,
+    player: PlayerState,
+    now: number,
+    sBase: number,
+    cx: number,
+    cy: number
+) {
+    // Debug: draw stabilization trail (last ~30 samples) anchored at center (relative to current)
+    try {
+        const N = 30
+        const dt = 1 / 30 // seconds per sample
+        const sScale = sBase
+        const pts: Array<{ x: number; y: number }> = []
+        const siNow = player.getStabilizationAt(now)
+        const vx0 = sScale * siNow.dx
+        const vy0 = sScale * siNow.dy
+        for (let i = 0; i < N; i++) {
+            const t = Math.max(0, now - i * dt)
+            const si = player.getStabilizationAt(t)
+            const vx = sScale * si.dx
+            const vy = sScale * si.dy
+            const px = cx + (vx - vx0) - 300
+            const py = cy + (vy - vy0) - 300
+            pts.push({ x: px, y: py })
+        }
+        if (pts.length >= 2) {
+            ctx.save()
+            ctx.lineWidth = 2
+            for (let i = 0; i < pts.length - 1; i++) {
+                const a = Math.max(0.15, 1 - i / pts.length)
+                ctx.strokeStyle = `rgba(56,189,248,${a})` // cyan-400 with fade
+                ctx.beginPath()
+                ctx.moveTo(pts[i].x, pts[i].y)
+                ctx.lineTo(pts[i + 1].x, pts[i + 1].y)
+                ctx.stroke()
+            }
+            // head marker
+            ctx.fillStyle = 'rgba(56,189,248,0.9)'
+            ctx.beginPath()
+            ctx.arc(cx, cy, 3, 0, Math.PI * 2)
+            ctx.fill()
+            ctx.restore()
+        }
+    } catch {}
 }

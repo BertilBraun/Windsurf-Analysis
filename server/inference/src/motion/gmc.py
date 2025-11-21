@@ -65,7 +65,7 @@ class GMC:
 
         # Find rigid matrix
         if (prevPointsNp.shape[0] > 4) and (prevPointsNp.shape[0] == currPointsNp.shape[0]):
-            H, inliers = cv2.estimateAffinePartial2D(prevPointsNp, currPointsNp, None, cv2.RANSAC)
+            H, inliers = cv2.estimateAffinePartial2D(prevPointsNp, currPointsNp, method=cv2.RANSAC)
 
             # Handle downscale
             if self.downscale > 1.0:

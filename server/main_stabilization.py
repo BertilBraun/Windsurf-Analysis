@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import os
-import shutil
 
 import modal
 
 from .inference.src.util.timing import timeit
 from .inference.src.orientation_fixer import OrientationFixer
-from .inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
+from .inference.src.visualization.stabilize import compute_stabilization_transforms
 from .main_inference import (
     report_job_failure_on_exception,
     image as inference_image,
@@ -41,6 +40,8 @@ class StabilizationModel:
             if not os.path.exists(shared_video_path):
                 raise FileNotFoundError(f'Input video not found: {shared_video_path}')
 
+            send_progress(job_id, 'orientation')
+
             with timeit(f'{job_id}: Orientation detection'):
                 print(f'{job_id}: Starting Orientation detection')
                 dominant_orientation = self.orientation_fixer.detect_orientation(shared_video_path)
@@ -53,7 +54,7 @@ class StabilizationModel:
 
             with timeit(f'{job_id}: Stabilization'):
                 print(f'{job_id}: Starting Stabilization')
-                transforms = compute_stabilization_transforms_gmc(shared_video_path)
+                transforms = compute_stabilization_transforms(shared_video_path)
 
             # Persist stabilized video into shared volume
             shared_volume.commit()

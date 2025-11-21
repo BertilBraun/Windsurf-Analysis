@@ -12,7 +12,7 @@ from ..util.video_io import get_video_properties
 
 Transform = NamedTuple(
     'Transform', [('dx', float), ('dy', float), ('da', float), ('frame_idx', int)]
-)  # dx, dy, da for each frame relative to the previous frame
+)  # dx, dy, da for each frame relative to the previous frame (frame[i] - frame[i-1]) -> frame[i] = frame[i-1] + dx, dy, da
 
 
 @cache_to_file('vidstab_transforms')
@@ -26,19 +26,12 @@ def compute_stabilization_transforms(input_video: str | os.PathLike) -> list[Tra
     stabilizer = VidStab()  # TODO: 'DENSE')
     stabilizer.gen_transforms(input_path=input_video, smoothing_window=min(20, video_properties.total_frames - 1))
 
-    assert stabilizer.transforms is not None
-    # VidStab stores cumulative-like smoothing outputs per frame index starting from 1 typically.
-    # Convert to per-frame deltas: delta[i] = params[i] - params[i-1]
-    raw = [(float(dx), float(dy), float(da)) for (dx, dy, da) in stabilizer.transforms]
-    deltas: list[Transform] = []
-    prev_dx, prev_dy, prev_da = 0.0, 0.0, 0.0
-    for i, (dx, dy, da) in enumerate(raw, start=1):
-        ddx = dx - prev_dx
-        ddy = dy - prev_dy
-        dda = da - prev_da
-        deltas.append(Transform(ddx, ddy, dda, i))
-        prev_dx, prev_dy, prev_da = dx, dy, da
-    return deltas
+    assert stabilizer._raw_transforms is not None
+    raw = [
+        Transform(float(dx), float(dy), float(da), i)
+        for i, (dx, dy, da) in enumerate(stabilizer._raw_transforms, start=1)
+    ]
+    return raw
 
 
 def stabilize_video(input_video: str | os.PathLike, output_video: str | os.PathLike, transforms: list[Transform]):
@@ -59,8 +52,6 @@ def compute_stabilization_transforms_gmc(input_video: str | os.PathLike, downsca
     with VideoReader(input_video) as reader:
         for f, frame in reader.read_frames():
             H_delta = gmc.apply(frame)
-            if not isinstance(H_delta, np.ndarray) or H_delta.shape != (2, 3):
-                H_delta = np.eye(2, 3, dtype=np.float64)
             # Extract rigid delta parameters from H (prev -> curr)
             R00, tx = float(H_delta[0, 0]), float(H_delta[0, 2])
             R10, ty = float(H_delta[1, 0]), float(H_delta[1, 2])
@@ -69,7 +60,41 @@ def compute_stabilization_transforms_gmc(input_video: str | os.PathLike, downsca
             dy = float(ty)
             transforms.append(Transform(dx, dy, da, int(f)))
 
-    # Ensure we have at least a zero transform for frame 0
-    if not transforms or transforms[0].frame_idx != 0:
-        transforms = [Transform(0.0, 0.0, 0.0, 0)] + transforms
     return transforms
+
+
+def vidstab_like_transforms(transforms: list[Transform], smoothing_window: int = 30) -> list[Transform]:
+    """
+    Return per-frame stabilized transforms with VidStab formula:
+    transforms_stab[i] = raw[i] + (smoothed_trajectory[i] - trajectory[i])
+    """
+    # raw per-frame deltas
+    raw = np.array([[t.dx, t.dy, t.da] for t in transforms], dtype=np.float64)  # shape (N,3)
+    N = raw.shape[0]
+    if N == 0:
+        return []
+
+    # cumulative trajectory (world-axis sum per column)
+    traj = np.cumsum(raw, axis=0)  # shape (N,3)
+
+    # rolling-mean smoothing with VidStab's backfill behavior
+    traj_s = _bfill_rolling_mean(traj, n=smoothing_window)  # shape (N,3)
+
+    # VidStab formula
+    stab = raw + (traj_s - traj)  # shape (N,3)
+    return [Transform(dx=float(dx), dy=float(dy), da=float(da), frame_idx=i) for i, (dx, dy, da) in enumerate(stab)]
+
+
+def _bfill_rolling_mean(arr: np.ndarray, n: int = 30) -> np.ndarray:
+    if arr.shape[0] < n:
+        raise ValueError('arr.shape[0] cannot be less than n')
+    if n == 1:
+        return arr
+    pre_buffer = np.zeros(3, dtype=arr.dtype).reshape(1, 3)
+    post_buffer = np.zeros(3 * n, dtype=arr.dtype).reshape(n, 3)
+    arr_cumsum = np.cumsum(np.vstack((pre_buffer, arr, post_buffer)), axis=0)
+    buffer_roll_mean = (arr_cumsum[n:, :] - arr_cumsum[:-n, :]) / float(n)
+    trunc_roll_mean = buffer_roll_mean[:-n, :]
+    bfill_size = arr.shape[0] - trunc_roll_mean.shape[0]
+    bfill = np.tile(trunc_roll_mean[0, :], (bfill_size, 1))
+    return np.vstack((bfill, trunc_roll_mean))

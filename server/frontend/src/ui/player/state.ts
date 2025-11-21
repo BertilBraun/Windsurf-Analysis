@@ -34,7 +34,6 @@ export class PlayerState {
     video: VideoProperties
     tracks: Track[]
     private stabilizationTransforms: StabilizationTransform[]
-    private stabilizationCumulative: StabilizationTransform[]
     private visibleTrackIds: Set<number>
 
     constructor(params: PlayerStateInit) {
@@ -46,7 +45,6 @@ export class PlayerState {
         this.video = params.video
         this.tracks = params.tracks
         this.stabilizationTransforms = params.stabilizationTransforms.sort((a, b) => a.time_percent - b.time_percent)
-        this.stabilizationCumulative = buildCumulativeInverse(this.stabilizationTransforms)
         this.visibleTrackIds = new Set(params.tracks.map(t => t.track_id))
 
         for (const track of this.tracks) {
@@ -94,10 +92,11 @@ export class PlayerState {
         const idx = binSearch(detectionTimes, timeSec, t => this.time(t))
         const i2 = Math.min(n - 1, idx)
         const i1 = Math.max(0, i2 - 1)
+
         if (i1 === i2) return detectionTimes[i1]
 
-        const alpha =
-            (timeSec - this.time(detectionTimes[i1])) / (this.time(detectionTimes[i2]) - this.time(detectionTimes[i1]))
+        const alpha = this.interpolationAlpha(timeSec, detectionTimes[i1], detectionTimes[i2])
+
         const [x10, x11, x12, x13] = detectionTimes[i1].bbox
         const [x20, x21, x22, x23] = detectionTimes[i2].bbox
         const c1 = detectionTimes[i1].confidence
@@ -105,13 +104,22 @@ export class PlayerState {
 
         return {
             bbox: [
-                x10 + alpha * (x20 - x10),
-                x11 + alpha * (x21 - x11),
-                x12 + alpha * (x22 - x12),
-                x13 + alpha * (x23 - x13),
+                interpolate(x10, x20, alpha),
+                interpolate(x11, x21, alpha),
+                interpolate(x12, x22, alpha),
+                interpolate(x13, x23, alpha),
             ],
-            confidence: c1 + alpha * (c2 - c1),
+            confidence: interpolate(c1, c2, alpha),
             time_percent: timeSec / this.video.durationSeconds,
+        }
+
+        const timeDiffToI2 = Math.abs(timeSec - this.time(detectionTimes[i2]))
+        const timeDiffToI1 = Math.abs(timeSec - this.time(detectionTimes[i1]))
+
+        if (timeDiffToI2 < timeDiffToI1) {
+            return detectionTimes[i2]
+        } else {
+            return detectionTimes[i1]
         }
 
         const i0 = Math.max(0, i1 - 1)
@@ -154,63 +162,39 @@ export class PlayerState {
     }
 
     getStabilizationAt(timeSec: number): { dx: number; dy: number; da: number } {
-        const arr = this.stabilizationCumulative
+        // Interpolate along the stabilization transforms
+        const arr = this.stabilizationTransforms
         const n = arr.length
-        if (!n) return { dx: 0, dy: 0, da: 0 }
-        // indices for Catmull–Rom interpolation
+        if (n === 0) return { dx: 0, dy: 0, da: 0 }
         const idx = binSearch(arr, timeSec, t => this.time(t))
-        const i2 = Math.min(n - 1, idx)
-        // Temporary: nearest-sample; interpolation below can be re-enabled if needed
-        return { dx: arr[i2].dx, dy: arr[i2].dy, da: arr[i2].da }
 
-        const i1 = Math.max(0, i2 - 1)
-        if (i1 === i2) return { dx: arr[i1].dx, dy: arr[i1].dy, da: arr[i1].da }
-        const i0 = Math.max(0, i1 - 1)
-        const i3 = Math.min(n - 1, i2 + 1)
-        const P0 = arr[i0]
-        const P1 = arr[i1]
-        const P2 = arr[i2]
-        const P3 = arr[i3]
-        const x0 = this.time(P0)
-        const x1 = this.time(P1)
-        const x2 = this.time(P2)
-        const x3 = this.time(P3)
-        const dx = catmullRom1D(P0.dx, P1.dx, P2.dx, P3.dx, x0, x1, x2, x3, timeSec)
-        const dy = catmullRom1D(P0.dy, P1.dy, P2.dy, P3.dy, x0, x1, x2, x3, timeSec)
-        const da = catmullRom1D(P0.da, P1.da, P2.da, P3.da, x0, x1, x2, x3, timeSec)
-        return { dx, dy, da }
+        if (idx <= 0) return { dx: arr[0].dx, dy: arr[0].dy, da: arr[0].da }
+        if (idx >= n) return { dx: arr[n - 1].dx, dy: arr[n - 1].dy, da: arr[n - 1].da }
+
+        const a = arr[idx - 1]
+        const b = arr[idx]
+        const alpha = this.interpolationAlpha(timeSec, a, b)
+        return {
+            dx: interpolate(a.dx, b.dx, alpha),
+            dy: interpolate(a.dy, b.dy, alpha),
+            da: interpolate(a.da, b.da, alpha),
+        }
     }
 
     time(t: { time_percent: number }): number {
         return t.time_percent * this.video.durationSeconds
     }
+
+    interpolationAlpha(timeSec: number, a: { time_percent: number }, b: { time_percent: number }): number {
+        const timeA = this.time(a)
+        const timeB = this.time(b)
+        const denom = Math.max(1e-6, timeB - timeA)
+        return (timeSec - timeA) / denom
+    }
 }
 
-function buildCumulativeInverse(arr: StabilizationTransform[]): StabilizationTransform[] {
-    if (!arr || arr.length === 0) return []
-    const out: StabilizationTransform[] = []
-    let cumAngle = 0
-    let cumTx = 0
-    let cumTy = 0
-    for (const t of arr) {
-        const ca = Math.cos(t.da)
-        const sa = Math.sin(t.da)
-        // Update cumulative camera motion: C_total = H_delta * C_total
-        const newTx = ca * cumTx - sa * cumTy + t.dx
-        const newTy = sa * cumTx + ca * cumTy + t.dy
-        cumTx = newTx
-        cumTy = newTy
-        cumAngle += t.da
-
-        // Inverse to stabilize: R_inv = R_total^T, T_inv = -R_total^T * T_total
-        const c = Math.cos(cumAngle)
-        const s = Math.sin(cumAngle)
-        const invDx = -(c * cumTx + s * cumTy)
-        const invDy = -(-s * cumTx + c * cumTy)
-        const invAngle = -cumAngle
-        out.push({ time_percent: t.time_percent, dx: invDx, dy: invDy, da: invAngle })
-    }
-    return out
+function interpolate(a: number, b: number, alpha: number): number {
+    return a + alpha * (b - a)
 }
 
 // Non-uniform Catmull-Rom spline interpolation for a scalar value over time (centripetal, alpha=0.5)
