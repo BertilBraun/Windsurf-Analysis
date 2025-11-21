@@ -70,9 +70,6 @@ async def create_job(
     db: DatabaseAccessor = Depends(get_db),
     user: User = Depends(authenticate_user),
 ):
-    if await db.get_total_processed_job_count(user) >= user.max_jobs_per_user:
-        raise HTTPException(status_code=403, detail={'code': 'quota_exceeded', 'message': 'Job quota exceeded'})
-
     # If a global job exists for this checksum, reuse it and associate user
     existing_job = await db.get_job_by_original_checksum(payload.original_checksum_sha256)
     if existing_job is not None:
@@ -80,6 +77,9 @@ async def create_job(
         await db.update_job_last_accessed_at(existing_job.id)
         await db.flush()
         return JobCreateResponse(job_id=str(existing_job.id), status=existing_job.status.value)
+
+    if await db.get_total_processed_job_count(user) >= user.max_jobs_per_user:
+        raise HTTPException(status_code=403, detail={'code': 'quota_exceeded', 'message': 'Job quota exceeded'})
 
     # Otherwise create a new placeholder job
     job = Job(
