@@ -7,6 +7,36 @@ export type UploadContext = {
     authHeader: string | null
 }
 
+const MAX_PARALLEL_UPLOAD_REQUESTS = 8
+const uploadSlotWaiters: Array<() => void> = []
+let uploadRequestsInFlight = 0
+
+function createRelease(): () => void {
+    let released = false
+    return () => {
+        if (released) return
+        released = true
+        if (uploadRequestsInFlight > 0) uploadRequestsInFlight -= 1
+        const next = uploadSlotWaiters.shift()
+        if (next) next()
+    }
+}
+
+async function acquireUploadSlot(): Promise<() => void> {
+    const release = createRelease()
+    if (uploadRequestsInFlight < MAX_PARALLEL_UPLOAD_REQUESTS) {
+        uploadRequestsInFlight += 1
+        return release
+    }
+
+    return new Promise(resolve => {
+        uploadSlotWaiters.push(() => {
+            uploadRequestsInFlight += 1
+            resolve(release)
+        })
+    })
+}
+
 export async function computeSha256(file: File): Promise<{ arrayBuffer: ArrayBuffer; sha256: string }> {
     const arrayBuffer = await file.arrayBuffer()
     const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer)
@@ -15,31 +45,36 @@ export async function computeSha256(file: File): Promise<{ arrayBuffer: ArrayBuf
     return { arrayBuffer, sha256 }
 }
 
-export function doXhrUpload(
+export async function doXhrUpload(
     url: string,
     authHeader: string | null,
     form: FormData,
     onProgress?: (percent: number) => void
 ): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.open('POST', url, true)
-        if (authHeader) xhr.setRequestHeader('Authorization', authHeader)
-        xhr.upload.onprogress = e => {
-            if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total)
-        }
-        xhr.onerror = () => reject(new Error('Network error'))
-        xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) resolve()
-            else reject(new Error(xhr.responseText || `HTTP ${xhr.status}`))
-        }
-        xhr.send(form)
-    })
+    const release = await acquireUploadSlot()
+    try {
+        await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest()
+            xhr.open('POST', url, true)
+            if (authHeader) xhr.setRequestHeader('Authorization', authHeader)
+            xhr.upload.onprogress = e => {
+                if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total)
+            }
+            xhr.onerror = () => reject(new Error('Network error'))
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) resolve()
+                else reject(new Error(xhr.responseText || `HTTP ${xhr.status}`))
+            }
+            xhr.send(form)
+        })
+    } finally {
+        release()
+    }
 }
 
 const CHUNK_SIZE = 8 * 1024 * 1024 // 8 MiB per part
 const MAX_CONCURRENCY = Math.min(
-    8,
+    MAX_PARALLEL_UPLOAD_REQUESTS,
     Math.max(
         2,
         typeof navigator !== 'undefined' && (navigator as any).hardwareConcurrency
