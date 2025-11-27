@@ -597,23 +597,44 @@ function pickTrackAtScreenPoint(
     const { width, height } = getRotatedDimensions(player.video.width, player.video.height, dominantOrientationDeg)
     const base = computeBaseRect(outW, outH, width, height)
     const stab = player.getStabilizationAt(player.currentTimeSec)
-    // apply stabilization transform to the base rect
-    // TODO also apply the rotation transform
-    const dx = base.x + stab.dx + ov.offsetX
-    const dy = base.y + stab.dy + ov.offsetY
-    const dw = base.w * ov.zoom
-    const dh = base.h * ov.zoom
 
-    // check from topmost to bottommost; here just iterate, but prefer smaller boxes first
+    const z = ov.zoom
+    const cx = base.x + base.w * 0.5 + ov.offsetX
+    const cy = base.y + base.h * 0.5 + ov.offsetY
+    const sBase = (base.w / width) * z
+
+    // Undo transform chain: Translate(cx,cy) -> Scale(s) -> Translate(stab) -> Rotate(stab)
+
+    // 1. Undo Screen Center Translation
+    const dx0 = px - cx
+    const dy0 = py - cy
+
+    // 2. Undo Scale
+    const dx1 = dx0 / sBase
+    const dy1 = dy0 / sBase
+
+    // 3. Undo Stabilization Translation
+    const dx2 = dx1 - stab.dx
+    const dy2 = dy1 - stab.dy
+
+    // 4. Undo Stabilization Rotation
+    const cos = Math.cos(-stab.da)
+    const sin = Math.sin(-stab.da)
+    const dx3 = dx2 * cos - dy2 * sin
+    const dy3 = dx2 * sin + dy2 * cos
+
+    // Convert from centered coords to normalized [0,1]
+    const xNorm = (dx3 + width * 0.5) / width
+    const yNorm = (dy3 + height * 0.5) / height
+
     for (const t of player.tracks) {
         const det = player.interpolateDetectionByTime(t.track_id, player.currentTimeSec)
         if (!det) continue
         const [x1p, y1p, x2p, y2p] = det.bbox
-        const x1 = dx + x1p * dw
-        const y1 = dy + y1p * dh
-        const x2 = dx + x2p * dw
-        const y2 = dy + y2p * dh
-        if (px >= x1 && px <= x2 && py >= y1 && py <= y2) return t.track_id
+
+        if (xNorm >= x1p && xNorm <= x2p && yNorm >= y1p && yNorm <= y2p) {
+            return t.track_id
+        }
     }
     return null
 }
