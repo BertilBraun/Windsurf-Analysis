@@ -201,7 +201,10 @@ async def jobs_complete(
 
     # Optionally delete the video files
     try:
-        os.remove(f'/data/{job_id}.mp4')
+        os.remove(f'/data/{job_id}_upright.mp4')
+        from server.main_backend_frontend import volume
+
+        volume.commit()
     except Exception as e:
         print(f'Error deleting video file: {e}')
 

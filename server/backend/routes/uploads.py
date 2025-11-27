@@ -204,8 +204,4 @@ async def upload_complete(
         StabilizationModel = modal.Cls.from_name('windsurf-analysis', 'StabilizationModel')
         StabilizationModel().stabilize_and_enqueue.spawn(job_id=str(job.id), yolo_model=meta.yolo_model)
 
-    from server.main_backend_frontend import volume
-
-    volume.commit()
-
     return {'ok': True}
