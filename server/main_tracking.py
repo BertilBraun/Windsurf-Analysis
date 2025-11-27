@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-import os
 from typing import Sequence
 
 import modal
@@ -23,6 +22,7 @@ from .main_inference import (
     send_complete,
     send_progress,
     volume as shared_volume,
+    wait_for_volume_reload,
 )
 
 
@@ -47,11 +47,8 @@ def embedding_extraction_and_tracking(
     raw_detections: list[dict],
 ):
     with report_job_failure_on_exception(job_id):
-        shared_volume.reload()
-
-        input_video_path = f'/data/{job_id}.mp4'
-        if not os.path.exists(input_video_path):
-            raise FileNotFoundError(f'Input video not found: {input_video_path}')
+        input_video_path = f'/data/{job_id}_upright.mp4'
+        wait_for_volume_reload(input_video_path)
 
         send_progress(job_id, 'appearance')
 

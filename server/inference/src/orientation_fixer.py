@@ -20,7 +20,6 @@ import shutil
 import subprocess
 from collections import Counter
 from typing import Literal
-import uuid
 
 import cv2
 import numpy as np
@@ -93,15 +92,12 @@ class OrientationFixer:
 
         return _majority_vote(predicted_deg)
 
-    def apply_rotation(self, video_path: str, dominant_orientation: int) -> None:
+    def apply_rotation(self, input_video_path: str, output_video_path: str, dominant_orientation: int) -> None:
         """
         Rotates the video so that the dominant orientation is upright (0°).
         """
-        with timeit(f'{os.path.basename(video_path)}: Applying rotation'):
-            temp_video_path = f'tmp_{uuid.uuid4()}.mp4'
-            shutil.copy(video_path, temp_video_path)
-            _apply_rotation_ffmpeg(temp_video_path, video_path, dominant_orientation)
-            os.remove(temp_video_path)
+        with timeit(f'{os.path.basename(input_video_path)}: Applying rotation'):
+            _apply_rotation_ffmpeg(input_video_path, output_video_path, dominant_orientation)
 
 
 # -------------------

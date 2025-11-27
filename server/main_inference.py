@@ -1,3 +1,5 @@
+import os
+import time
 from typing import Literal
 import modal
 import contextlib
@@ -66,6 +68,21 @@ def send_progress(job_id: str, status: Literal['orientation', 'stabilization', '
         print(f'Error posting progress webhook: {e}')
 
 
+def wait_for_volume_reload(video_path: str, max_attempts: int = 10, delay: float = 5.0) -> None:
+    for _ in range(max_attempts):
+        if os.path.exists(video_path):
+            return
+        print(f'Video {video_path} not found, retrying...')
+        time.sleep(delay)
+        print('Reloading volume...')
+        try:
+            volume.reload()
+            print('Volume reloaded')
+        except Exception as e:
+            print(f'Error reloading volume - retrying: {e}')
+    raise Exception(f'Failed to reload volume after {max_attempts} attempts or video {video_path} not found')
+
+
 @app.cls(
     gpu='T4',
     max_containers=2,
@@ -84,7 +101,8 @@ class InferenceModel:
         if yolo_model not in self.processors:
             # Initialize and cache processor for this model pair
             with timeit(f'Initializing processor for {yolo_model}'):
-                self.processors[yolo_model] = ObjectDetector(yolo_model_path='/root/weights/yolo_models/' + yolo_model)
+                yolo_model_path = '/root/weights/yolo_models/' + yolo_model
+                self.processors[yolo_model] = ObjectDetector(yolo_model_path)
         return self.processors[yolo_model]
 
     @modal.method()
@@ -96,9 +114,8 @@ class InferenceModel:
         transforms: list[dict],
     ):
         with report_job_failure_on_exception(job_id):
-            volume.reload()
-
-            video_path = f'/data/{job_id}.mp4'
+            video_path = f'/data/{job_id}_upright.mp4'
+            wait_for_volume_reload(video_path)
 
             processor = self._get_processor(yolo_model)
             send_progress(job_id, 'detection')

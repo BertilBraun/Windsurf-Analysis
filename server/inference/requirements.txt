@@ -23,4 +23,3 @@ open-clip-torch
 
 scipy
 dotenv
-uuid
