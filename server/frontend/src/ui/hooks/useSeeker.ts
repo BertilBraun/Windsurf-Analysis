@@ -16,7 +16,7 @@ export function useSeeker(
             if (!player || !v) return
             const t = clamp(timeSec, 0, v.duration)
             v.currentTime = t
-            setPlayer(p => (p ? p.copy({ currentTimeSec: t, isPlaying: play }) : p))
+            setPlayer(p => (p ? p.copy({ isPlaying: play }) : p))
         },
         [player, videoRef, setPlayer]
     )
@@ -24,13 +24,13 @@ export function useSeeker(
     const stepNext = React.useCallback(() => {
         const v = videoRef.current
         if (!player || !v || !frameDuration) return
-        seekTo((player?.currentTimeSec || 0) + frameDuration + 0.001, false)
+        seekTo(v.currentTime + frameDuration + 0.001, false)
     }, [player, videoRef, frameDuration, seekTo])
 
     const stepPrev = React.useCallback(() => {
         const v = videoRef.current
         if (!player || !v || !frameDuration) return
-        seekTo((player?.currentTimeSec || 0) - frameDuration - 0.001, false)
+        seekTo(v.currentTime - frameDuration - 0.001, false)
     }, [player, videoRef, frameDuration, seekTo])
 
     const onNewFile = React.useCallback(
