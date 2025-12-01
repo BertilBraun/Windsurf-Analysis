@@ -79,8 +79,8 @@ def embedding_extraction_and_tracking(
                 'track_id': t.track_id,
                 'start_percent': clamp_percentage(t.start_frame / props.total_frames),
                 'end_percent': clamp_percentage(t.end_frame / props.total_frames),
-                'start_time_seconds': clamp_percentage(t.start_frame / props.fps),
-                'duration_seconds': clamp_percentage(t.duration_frames / props.fps),
+                'start_time_seconds': t.start_frame / props.fps,
+                'duration_seconds': t.duration_frames / props.fps,
                 'detections': [
                     {
                         'time_percent': clamp_percentage(d.frame_idx / props.total_frames),
@@ -107,7 +107,9 @@ def embedding_extraction_and_tracking(
         # Convert transforms payload into result with time_percent
         stabilization_transforms = [
             {
-                'time_percent': clamp_percentage(i / len(stabilized_transforms)),
+                'time_percent': clamp_percentage(
+                    i / (len(stabilized_transforms) + 1)
+                ),  # NOTE +1 because we have one transform less than the number of frames
                 'dx': t.dx,
                 'dy': t.dy,
                 'da': t.da,
