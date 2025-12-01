@@ -16,7 +16,7 @@ from server.inference.src.visualization.stabilize import Transform
 from ..settings import MIN_FRAME_PERCENTAGE
 from ..util.video_io import VideoInfo
 from ..common_types import Detection, Track, BoundingBox, FrameIndex
-from ..motion.kalman_filter import KFState
+from ..motion.kalman_filter import KFState, KF
 from ..motion.cmc import CMC
 
 
@@ -122,6 +122,9 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
     mu_pred = np.zeros((N, 8))  # predicted means (before update)
     P_pred = np.zeros((N, 8, 8))  # predicted covariances (before update)
 
+    # Storage for transition matrices
+    Fs = np.zeros((N - 1, 8, 8))
+
     # Map frame indices to detections for quick lookup
     detection_dict = {d.frame_idx: d for d in detections}
 
@@ -134,6 +137,23 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
             mu_filt[i] = state.mean
             P_filt[i] = state.cov
         else:
+            # Calculate transition matrix for (i-1) -> i
+            # This matches the operation in state.predict_to -> advance_state_to_frame
+            # x_pred = A_cmc @ F_kf @ x_prev
+            prev_frame_idx = frame_idx - 1
+            F_kf = KF._F_gap(1)
+            
+            # CMC transition
+            if prev_frame_idx in cmc._transforms_dict:
+                transform = cmc._transforms_dict[prev_frame_idx]
+                A_cmc, _ = cmc._build_A_T(transform)
+                F_total = A_cmc @ F_kf
+            else:
+                # Fallback if no transform available
+                F_total = F_kf
+            
+            Fs[i-1] = F_total
+
             # Predict to current frame (includes CMC)
             predicted_state = state.predict_to(frame_idx, cmc)
             mu_pred[i] = predicted_state.mean
@@ -151,7 +171,7 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
                 P_filt[i] = predicted_state.cov
 
     # Backward pass: RTS smoothing
-    mu_smooth, P_smooth = _rts_smoother(mu_filt, P_filt, mu_pred, P_pred)
+    mu_smooth, P_smooth = _rts_smoother(mu_filt, P_filt, mu_pred, P_pred, Fs)
 
     # Generate smoothed detections for all frames
     smoothed_detections: list[Detection] = []
@@ -188,7 +208,11 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
 
 
 def _rts_smoother(
-    mu_filt: np.ndarray, P_filt: np.ndarray, mu_pred: np.ndarray, P_pred: np.ndarray
+    mu_filt: np.ndarray, 
+    P_filt: np.ndarray, 
+    mu_pred: np.ndarray, 
+    P_pred: np.ndarray,
+    Fs: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     RTS smoother for linear Gaussian systems.
@@ -198,6 +222,7 @@ def _rts_smoother(
       P_filt:   [N, n, n] filtered covariances AFTER update
       mu_pred:  [N, n]  predicted means BEFORE update (k entry is μ_{k|k-1})
       P_pred:   [N, n, n] predicted covariances BEFORE update
+      Fs:       [N-1, n, n] transition matrices F_k (x_{k+1} = F_k x_k + ...)
 
     Returns:
       mu_smooth, P_smooth arrays of same shape as inputs
@@ -208,9 +233,9 @@ def _rts_smoother(
 
     # Backward pass: k = N-2, N-3, ..., 0
     for k in range(N - 2, -1, -1):
-        # Smoothing gain G_k = P_k @ (P_{k+1|k})^{-1}
+        # Smoothing gain G_k = P_k @ F_k^T @ (P_{k+1|k})^{-1}
         # Use pseudo-inverse for numerical stability
-        G = P_filt[k] @ np.linalg.pinv(P_pred[k + 1])
+        G = P_filt[k] @ Fs[k].T @ np.linalg.pinv(P_pred[k + 1])
 
         # Mean correction: μ_k^s = μ_k + G @ (μ_{k+1}^s − μ_{k+1|k})
         mu_smooth[k] += G @ (mu_smooth[k + 1] - mu_pred[k + 1])

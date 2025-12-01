@@ -43,9 +43,9 @@ class _KalmanFilter:
         self,
         dt: float = 1.0,
         proc_std_weight_pos: float = 1.0 / 20.0,
-        proc_std_weight_vel: float = 1.0 / 80.0,
-        meas_std_weight_pos: float = 1.0 / 10.0,
-        meas_std_weight_size: float = 1.0 / 40.0,
+        proc_std_weight_vel: float = 1.0 / 40.0,
+        meas_std_weight_pos: float = 1.0 / 100.0,
+        meas_std_weight_size: float = 1.0 / 100.0,
         q_growth: float = 1.01,
         x_scale: float = 1.5,  # scale for width, larger than 1 means more uncertainty in width
         y_scale: float = 0.5,  # scale for height, larger than 1 means more uncertainty in height
