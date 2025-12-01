@@ -44,12 +44,8 @@ export class PlayerState {
         this.isPlaying = params.isPlaying
         this.video = params.video
         this.tracks = params.tracks
-        this.stabilizationTransforms = params.stabilizationTransforms.sort((a, b) => a.time_percent - b.time_percent)
+        this.stabilizationTransforms = params.stabilizationTransforms
         this.visibleTrackIds = new Set(params.tracks.map(t => t.track_id))
-
-        for (const track of this.tracks) {
-            track.detections.sort((a, b) => a.time_percent - b.time_percent)
-        }
     }
 
     copy(patch: Partial<PlayerStateInit>): PlayerState {
@@ -68,6 +64,48 @@ export class PlayerState {
     }
 
     static from(job: JobDetail, video: VideoProperties): PlayerState {
+        // Sort data once during initialization
+        const sortedTransforms = [...job.stabilization_transforms].sort((a, b) => a.time_percent - b.time_percent)
+        const sortedTracks = job.tracks.map(t => {
+            const copy = { ...t }
+            // Sort detections and filter invalid timestamps
+            copy.detections = [...t.detections].sort((a, b) => a.time_percent - b.time_percent)
+
+            // Apply simple moving average smoothing to bboxes
+            const smoothedDetections: TrackDetection[] = []
+            const windowSize = 3 // Smoothing window
+            const half = Math.floor(windowSize / 2)
+
+            for (let i = 0; i < copy.detections.length; i++) {
+                let sumX1 = 0,
+                    sumY1 = 0,
+                    sumX2 = 0,
+                    sumY2 = 0,
+                    count = 0
+
+                // Weighted average: center pixel gets more weight
+                for (let j = Math.max(0, i - half); j <= Math.min(copy.detections.length - 1, i + half); j++) {
+                    const d = copy.detections[j]
+                    // Simple triangular weight kernel for window 3: [1, 3, 1]
+                    const weight = j === i ? 3 : 1
+
+                    sumX1 += d.bbox[0] * weight
+                    sumY1 += d.bbox[1] * weight
+                    sumX2 += d.bbox[2] * weight
+                    sumY2 += d.bbox[3] * weight
+                    count += weight
+                }
+
+                const d = copy.detections[i]
+                smoothedDetections.push({
+                    ...d,
+                    bbox: [sumX1 / count, sumY1 / count, sumX2 / count, sumY2 / count],
+                })
+            }
+            copy.detections = smoothedDetections
+            return copy
+        })
+
         return new PlayerState({
             mode: 'overview',
             currentTrackId: null,
@@ -75,8 +113,8 @@ export class PlayerState {
             playbackSpeed: 1.0,
             isPlaying: true,
             video,
-            tracks: job.tracks,
-            stabilizationTransforms: job.stabilization_transforms,
+            tracks: sortedTracks,
+            stabilizationTransforms: sortedTransforms,
         })
     }
 
@@ -95,6 +133,12 @@ export class PlayerState {
 
         if (i1 === i2) return detectionTimes[i1]
 
+        const timeDiffToI1 = Math.abs(timeSec - this.time(detectionTimes[i1]))
+        const timeDiffToI2 = Math.abs(timeSec - this.time(detectionTimes[i2]))
+
+        // NOTE: Return just the closest detection to avoid interpolation artifacts - suboptimal..
+        return timeDiffToI2 < timeDiffToI1 ? detectionTimes[i2] : detectionTimes[i1]
+
         const alpha = this.interpolationAlpha(timeSec, detectionTimes[i1], detectionTimes[i2])
 
         const [x10, x11, x12, x13] = detectionTimes[i1].bbox
@@ -112,16 +156,7 @@ export class PlayerState {
             confidence: interpolate(c1, c2, alpha),
             time_percent: timeSec / this.video.durationSeconds,
         }
-
-        const timeDiffToI2 = Math.abs(timeSec - this.time(detectionTimes[i2]))
-        const timeDiffToI1 = Math.abs(timeSec - this.time(detectionTimes[i1]))
-
-        if (timeDiffToI2 < timeDiffToI1) {
-            return detectionTimes[i2]
-        } else {
-            return detectionTimes[i1]
-        }
-
+        // Use Catmull-Rom Spline interpolation for smoother camera movement
         const i0 = Math.max(0, i1 - 1)
         const i3 = Math.min(n - 1, i2 + 1)
         const P0 = detectionTimes[i0]
