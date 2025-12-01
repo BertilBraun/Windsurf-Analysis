@@ -142,7 +142,7 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
             # x_pred = A_cmc @ F_kf @ x_prev
             prev_frame_idx = frame_idx - 1
             F_kf = KF._F_gap(1)
-            
+
             # CMC transition
             if prev_frame_idx in cmc._transforms_dict:
                 transform = cmc._transforms_dict[prev_frame_idx]
@@ -151,8 +151,8 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
             else:
                 # Fallback if no transform available
                 F_total = F_kf
-            
-            Fs[i-1] = F_total
+
+            Fs[i - 1] = F_total
 
             # Predict to current frame (includes CMC)
             predicted_state = state.predict_to(frame_idx, cmc)
@@ -208,9 +208,9 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
 
 
 def _rts_smoother(
-    mu_filt: np.ndarray, 
-    P_filt: np.ndarray, 
-    mu_pred: np.ndarray, 
+    mu_filt: np.ndarray,
+    P_filt: np.ndarray,
+    mu_pred: np.ndarray,
     P_pred: np.ndarray,
     Fs: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
