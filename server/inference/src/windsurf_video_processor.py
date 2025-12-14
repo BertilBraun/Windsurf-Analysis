@@ -7,6 +7,8 @@ from tqdm import tqdm
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 
+from server.inference.src.tracking.ilp_tracker import ILPTracker
+
 
 from .settings import YOLO_MODEL_PATH
 from .util.helpers import log_and_reraise
@@ -104,7 +106,8 @@ class WindsurfingVideoProcessor:
                 #      output_tentative_max=3,
                 #      dedup_enable=False,
                 #  ),
-                IterativeILPTracker(video_path=input_path.as_posix()),
+                # IterativeILPTracker(video_path=input_path.as_posix()),
+                ILPTracker(video_path=input_path.as_posix()),
                 TrackPostProcessing(),
             ],
         )

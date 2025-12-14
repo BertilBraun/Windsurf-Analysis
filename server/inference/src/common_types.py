@@ -247,6 +247,13 @@ class Track:
 
         return Embedding.mean([d.embedding for d in self.sorted_detections])
 
+    def mean_embedding_reverse(self, ema: float = 0.9) -> Embedding:
+        assert self.sorted_detections, 'Track has no detections.'
+        embedding: Embedding = self.sorted_detections[-1].embedding
+        for detection in self.sorted_detections[-2::-1]:
+            embedding = embedding.interpolate(detection.embedding, ema)  # type: ignore
+        return embedding
+
     def frame_gap(self, other: Track) -> int:
         return other.start_frame - self.end_frame - 1
 

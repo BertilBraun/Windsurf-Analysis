@@ -16,6 +16,7 @@ project_root = this_file.parents[3]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
+from server.inference.src.tracking.ilp_tracker import ILPTracker
 from server.inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
 from server.inference.src.util.video_io import get_video_properties
 from server.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
@@ -201,17 +202,20 @@ def _evaluate_iter_ilp(params: Dict[str, Any], golden_dir: Path) -> float:
 
         preprocessed_tracks = TrackPreProcessor().track(input_tracks, video_props, transforms)
 
-        tracker = IterativeILPTracker(video_path.as_posix(), **params)
+        # tracker = IterativeILPTracker(video_path.as_posix(), **params)
+        tracker = ILPTracker(video_path.as_posix(), **params)
 
-        iterative_ilp_tracks, iterations = tracker._internal_track_with_iteration_returned(
-            preprocessed_tracks, video_props, transforms
-        )
+        # iterative_ilp_tracks, iterations = tracker._internal_track_with_iteration_returned(
+        #     preprocessed_tracks, video_props, transforms
+        # )
+        iterative_ilp_tracks = tracker.track(preprocessed_tracks, video_props, transforms)
 
         gold_assign = build_assignment_from_metadata(meta)
         pred_assign = build_assignment_from_tracks(iterative_ilp_tracks)
 
         s = pairwise_scores(gold_assign, pred_assign)
-        metrics.append((s, iterations))
+        # metrics.append((s, iterations))
+        metrics.append((s, 0))
 
     if not metrics:
         return float('nan')
@@ -226,22 +230,23 @@ def _evaluate_iter_ilp(params: Dict[str, Any], golden_dir: Path) -> float:
 def _run_iter_ilp(args) -> Tuple[float, Dict[str, Any]]:
     def objective(trial: optuna.trial.Trial) -> float:
         params: Dict[str, Any] = {
+            # NOTE: All commented out params are not used with only one optimization iteration
             'w_start': trial.suggest_float('w_start', 0.5, 100.0),
-            'start_cost_mode': trial.suggest_categorical('start_cost_mode', ['linear', 'geo']),
-            'start_cost_growth': trial.suggest_float('start_cost_growth', 0.0, 10.0),
-            'start_cost_max': trial.suggest_float('start_cost_max', 0.0, 100.0),
+            # 'start_cost_mode': trial.suggest_categorical('start_cost_mode', ['linear', 'geo']),
+            # 'start_cost_growth': trial.suggest_float('start_cost_growth', 0.0, 10.0),
+            # 'start_cost_max': trial.suggest_float('start_cost_max', 0.0, 100.0),
             'w_motion': trial.suggest_float('w_motion', 0.0, 10.0),
             'w_appearance': trial.suggest_float('w_appearance', 0.0, 10.0),
             'w_gap': trial.suggest_float('w_gap', 0.0, 10.0),
             'p_miss': trial.suggest_float('p_miss', 0.8, 1.0),
-            'max_detections_to_compare': trial.suggest_int('max_detections_to_compare', 1, 4),
-            'use_position_only': trial.suggest_categorical('use_position_only', [True, False]),
-            'max_optimization_iterations': trial.suggest_int('max_optimization_iterations', 2, 5),
-            'internal_split_gap_frames': trial.suggest_int('internal_split_gap_frames', 1, 10),
-            'motion_split_nll_max': trial.suggest_float('motion_split_nll_max', 0.0, 10.0),
-            'appearance_split_nll_max': trial.suggest_float('appearance_split_nll_max', 0.0, 10.0),
-            'appearance_split_window': trial.suggest_int('appearance_split_window', 1, 10),
-            'max_splits_per_track': trial.suggest_int('max_splits_per_track', 1, 11, step=2),
+            # 'max_detections_to_compare': trial.suggest_int('max_detections_to_compare', 1, 4),
+            # 'use_position_only': trial.suggest_categorical('use_position_only', [True, False]),
+            # 'max_optimization_iterations': trial.suggest_int('max_optimization_iterations', 2, 5),
+            # 'internal_split_gap_frames': trial.suggest_int('internal_split_gap_frames', 1, 10),
+            # 'motion_split_nll_max': trial.suggest_float('motion_split_nll_max', 0.0, 10.0),
+            # 'appearance_split_nll_max': trial.suggest_float('appearance_split_nll_max', 0.0, 10.0),
+            # 'appearance_split_window': trial.suggest_int('appearance_split_window', 1, 10),
+            # 'max_splits_per_track': trial.suggest_int('max_splits_per_track', 1, 11, step=2),
             'appearance_similarity_gamma': trial.suggest_float('appearance_similarity_gamma', 2.0, 15.0),
         }
         score = _evaluate_iter_ilp(params, args.golden_dir)
