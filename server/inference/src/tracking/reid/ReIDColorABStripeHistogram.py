@@ -6,7 +6,7 @@ from typing import List, Optional, Sequence, Tuple
 import cv2
 import numpy as np
 
-from server.inference.src.util.algebra import l1_normalize, l2_normalize
+from server.inference.src.util.algebra import floor, ceil, l1_normalize, l2_normalize
 from server.inference.src.util.similarity_helpers import HellingerEmbedding
 
 
@@ -318,6 +318,17 @@ class ReIDColorABStripeHistogram:
     # -------------------------
 
     def _compute_mask(self, bgr: np.ndarray) -> np.ndarray:
+        # return a mask where the background is black and the foreground is white
+        # for now, return a mask where the outer 10% of the image is black and the rest is white
+        h, w = bgr.shape[:2]
+        outer_mask = np.zeros((h, w), dtype=bool)
+        margin = 0.1
+        y0 = floor(h * margin)
+        y1 = ceil(h * (1 - margin))
+        x0 = floor(w * margin)
+        x1 = ceil(w * (1 - margin))
+        outer_mask[y0:y1, x0:x1] = True
+        return outer_mask
         return build_fg_mask_from_border(bgr, self.masks) if self.use_mask else np.ones(bgr.shape[:2], bool)
 
     def _build_block(

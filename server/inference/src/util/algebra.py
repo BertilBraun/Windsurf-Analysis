@@ -1,6 +1,12 @@
 import numpy as np
 from scipy.stats import chi2
 
+def floor(x: float) -> int:
+    return int(np.floor(x))
+
+
+def ceil(x: float) -> int:
+    return int(np.ceil(x))
 
 def l2_normalize(a: np.ndarray) -> np.ndarray:
     return a / (np.maximum(1e-8, np.linalg.norm(a)))
