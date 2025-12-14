@@ -74,8 +74,15 @@ def _get_valid_tracks(tracks: list[Track], total_frames: int) -> list[Track]:
         # Calculate track duration in frames
         duration_frames = track.end_frame - track.start_frame
 
-        if duration_frames >= min_frames:
-            valid_tracks.append(track)
+        if duration_frames < min_frames:
+            # if the track is too short, it is likely a false positive
+            continue
+
+        if len(track.sorted_detections) < duration_frames * 0.3:
+            # if less than 30% of the track is actually based on detections, it is likely a false positive
+            continue
+
+        valid_tracks.append(track)
 
     return valid_tracks
 
