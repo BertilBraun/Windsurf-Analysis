@@ -157,6 +157,9 @@ class GreedyTrackStitcher:
                 frame_detections, active_tracks, cmc, kf, ema
             )
 
+            # ── optional debug: visualize match scores before updates ──
+            self._debug_visualize(detections_by_frame, frame_idx, active_tracks, kf, ema, cmc, debug, video_properties)
+
             # Stale faded tracks now (single commit point)
             for track_id in fade_track_ids:
                 stale_track(track_by_id[track_id])
@@ -191,9 +194,6 @@ class GreedyTrackStitcher:
                 for t in overlapping_tracks:
                     split_track_at_last_detection(t)
                 active_tracks.append(create_new_track(detection))
-
-            # ── optional debug: visualize current frame before resolving conflicts ──
-            self._debug_visualize(detections_by_frame, frame_idx, active_tracks, kf, ema, cmc, debug, video_properties)
 
         debug.close()
 
