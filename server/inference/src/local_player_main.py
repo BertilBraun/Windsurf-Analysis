@@ -17,4 +17,5 @@ def run_player(start_dir: Optional[str] = None) -> None:
 
 
 if __name__ == '__main__':
-    run_player()
+    # start directory from sys args
+    run_player(start_dir=sys.argv[1] if len(sys.argv) > 1 else None)

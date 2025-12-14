@@ -72,7 +72,7 @@
         {
             "label": "local_player",
             "type": "shell",
-            "command": "python -m server.inference.src.local_player_main",
+            "command": "python -m server.inference.src.local_player_main \"C:\\Projects\\Windsurf-Analysis\\tmp\\test\"",
             "problemMatcher": []
         },
         {
