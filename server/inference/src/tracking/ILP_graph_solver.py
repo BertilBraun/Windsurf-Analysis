@@ -68,35 +68,40 @@ class FragmentGraph:
 class ILPGraphSolver:
     """Solve an assignment problem with ILP."""
 
-    def __init__(self, w_start: float, max_outgoing_links: int = 10):
-        self.w_start = w_start
+    def __init__(self, max_outgoing_links: int = 10):
         self.max_outgoing_links = max_outgoing_links
 
-    def optimize_graph(self, graph: FragmentGraph) -> Tuple[List[Track], float]:
+    def optimize_graph(
+        self,
+        graph: FragmentGraph,
+        start_costs: List[float],
+        end_costs: List[float],
+        max_cost_limit: float,
+    ) -> Tuple[List[Track], float]:
         """Solve the fragment linking optimization problem using ILP."""
         # Create the ILP problem
         problem = pulp.LpProblem('Fragment_Linking', pulp.LpMinimize)
 
-        simplified_graph = self._simplify_graph(graph)
+        simplified_graph = self._simplify_graph(graph, max_cost_limit)
 
         # Create decision variables
         link_vars = self._create_link_variables(simplified_graph)
         start_vars = self._create_start_variables(simplified_graph.N)
+        end_vars = self._create_end_variables(simplified_graph.N)
 
         # Add constraints
-        self._add_outgoing_constraints(problem, simplified_graph, link_vars)
-        self._add_incoming_constraints(problem, simplified_graph, link_vars)
-        self._add_start_constraints(problem, simplified_graph, link_vars, start_vars)
+        self._add_outgoing_constraints(problem, simplified_graph, link_vars, end_vars)
+        self._add_incoming_constraints(problem, simplified_graph, link_vars, start_vars)
 
         # Set objective function
-        self._set_objective_function(problem, simplified_graph, link_vars, start_vars)
+        self._set_objective_function(problem, simplified_graph, link_vars, start_vars, end_vars, start_costs, end_costs)
 
         # Solve and return solution
         return self._solve_and_extract_solution(problem, simplified_graph, link_vars)
 
-    def _simplify_graph(self, graph: FragmentGraph) -> FragmentGraph:
-        """Simplify the graph by removing edges with cost greater than w_start and limiting the number of outgoing links to self.max_outgoing_links by sorting the outgoing links by cost and keeping the top self.max_outgoing_links."""
-        return graph.limit_outgoing_links(self.max_outgoing_links).limit_cost(self.w_start)
+    def _simplify_graph(self, graph: FragmentGraph, max_cost: float) -> FragmentGraph:
+        """Simplify the graph by removing edges with cost greater than max_cost and limiting the number of outgoing links."""
+        return graph.limit_outgoing_links(self.max_outgoing_links).limit_cost(max_cost)
 
     def _create_link_variables(self, graph: FragmentGraph) -> Dict[Tuple[int, int], pulp.LpVariable]:
         """Create binary variables for fragment links."""
@@ -114,22 +119,42 @@ class ILPGraphSolver:
             start_vars.append(pulp.LpVariable(var_name, cat='Binary'))
         return start_vars
 
+    def _create_end_variables(self, num_fragments: int) -> List[pulp.LpVariable]:
+        """Create binary variables for fragment ends."""
+        end_vars = []
+        for i in range(num_fragments):
+            var_name = f'end_{i}'
+            end_vars.append(pulp.LpVariable(var_name, cat='Binary'))
+        return end_vars
+
     def _add_outgoing_constraints(
-        self, problem: pulp.LpProblem, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], pulp.LpVariable]
+        self,
+        problem: pulp.LpProblem,
+        graph: FragmentGraph,
+        link_vars: Dict[Tuple[int, int], pulp.LpVariable],
+        end_vars: List[pulp.LpVariable],
     ) -> None:
-        """Add constraints ensuring each fragment has at most one outgoing link."""
+        """Add constraints ensuring each fragment has exactly one outgoing path (link or end)."""
         for i in range(graph.N):
             outgoing_connections = graph.get_outgoing_connections(i)
+            # end_i + sum(outgoing_links_from_i) == 1
             if outgoing_connections:
-                # Sum of outgoing links <= 1
                 outgoing_vars = [link_vars[(i, j)] for j in outgoing_connections]
                 constraint_name = f'outgoing_{i}'
-                problem += pulp.lpSum(outgoing_vars) <= 1, constraint_name
+                problem += end_vars[i] + pulp.lpSum(outgoing_vars) == 1, constraint_name
+            else:
+                # No outgoing links, so must be an end
+                constraint_name = f'end_forced_{i}'
+                problem += end_vars[i] == 1, constraint_name
 
     def _add_incoming_constraints(
-        self, problem: pulp.LpProblem, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], pulp.LpVariable]
+        self,
+        problem: pulp.LpProblem,
+        graph: FragmentGraph,
+        link_vars: Dict[Tuple[int, int], pulp.LpVariable],
+        start_vars: List[pulp.LpVariable],
     ) -> None:
-        """Add constraints ensuring each fragment has at most one incoming link."""
+        """Add constraints ensuring each fragment has exactly one incoming path (start or link)."""
         # Build incoming connections mapping
         incoming: List[List[pulp.LpVariable]] = [[] for _ in range(graph.N)]
         for (i, j), var in link_vars.items():
@@ -137,34 +162,14 @@ class ILPGraphSolver:
 
         # Add constraints
         for j in range(graph.N):
+            # start_j + sum(incoming_links_to_j) == 1
             if incoming[j]:
                 constraint_name = f'incoming_{j}'
-                problem += pulp.lpSum(incoming[j]) <= 1, constraint_name
-
-    def _add_start_constraints(
-        self,
-        problem: pulp.LpProblem,
-        graph: FragmentGraph,
-        link_vars: Dict[Tuple[int, int], pulp.LpVariable],
-        start_vars: List[pulp.LpVariable],
-    ) -> None:
-        """Add constraints defining when a fragment is a start of a track."""
-        # Build incoming connections mapping
-        incoming: List[List[pulp.LpVariable]] = [[] for _ in range(graph.N)]
-        for (i, j), var in link_vars.items():
-            incoming[j].append(var)
-
-        # Add start constraints
-        for i in range(graph.N):
-            if incoming[i]:
-                # start_i = 1 - sum(incoming_links_to_i)
-                # This means: start_i + sum(incoming_links_to_i) = 1
-                constraint_name = f'start_{i}'
-                problem += start_vars[i] + pulp.lpSum(incoming[i]) == 1, constraint_name
+                problem += start_vars[j] + pulp.lpSum(incoming[j]) == 1, constraint_name
             else:
                 # No incoming links, so must be a start
-                constraint_name = f'start_forced_{i}'
-                problem += start_vars[i] == 1, constraint_name
+                constraint_name = f'start_forced_{j}'
+                problem += start_vars[j] == 1, constraint_name
 
     def _set_objective_function(
         self,
@@ -172,6 +177,9 @@ class ILPGraphSolver:
         graph: FragmentGraph,
         link_vars: Dict[Tuple[int, int], pulp.LpVariable],
         start_vars: List[pulp.LpVariable],
+        end_vars: List[pulp.LpVariable],
+        start_costs: List[float],
+        end_costs: List[float],
     ) -> None:
         """Set the objective function to minimize total cost."""
         objective_terms = []
@@ -182,8 +190,12 @@ class ILPGraphSolver:
             objective_terms.append(cost * var)
 
         # Start costs
-        for var in start_vars:
-            objective_terms.append(self.w_start * var)
+        for i, var in enumerate(start_vars):
+            objective_terms.append(start_costs[i] * var)
+
+        # End costs
+        for i, var in enumerate(end_vars):
+            objective_terms.append(end_costs[i] * var)
 
         # Set objective
         problem += pulp.lpSum(objective_terms)

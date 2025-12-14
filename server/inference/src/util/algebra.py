@@ -1,12 +1,20 @@
 import numpy as np
 from scipy.stats import chi2
 
+from server.inference.src.settings import EPS
+
+
 def floor(x: float) -> int:
     return int(np.floor(x))
 
 
 def ceil(x: float) -> int:
     return int(np.ceil(x))
+
+
+def lerp(a: float, b: float, t: float) -> float:
+    return a + t * (b - a)
+
 
 def l2_normalize(a: np.ndarray) -> np.ndarray:
     return a / (np.maximum(1e-8, np.linalg.norm(a)))
@@ -49,3 +57,13 @@ def platt_prob_from_dist(d: float, a: float, b: float) -> float:
 def probability_from_dist(d: float, df: int = 2) -> float:
     """Calculate the probability for a distance to say, that the two tracks are the same. `df` is the degrees of freedom."""
     return 1 - float(chi2.cdf(d, df=df))
+
+
+def clamp_prob(p: float) -> float:
+    return max(EPS, min(1.0 - EPS, float(p)))
+
+
+def NLL_from_prob(p: float) -> float:
+    """Negative log-likelihood ratio cost: -logit(p)."""
+    p = clamp_prob(p)
+    return float(-np.log(p / (1.0 - p)))

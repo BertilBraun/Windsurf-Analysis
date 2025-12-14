@@ -110,7 +110,14 @@ class DiscreteOptTracker:
     def track(self, tracks: List[Track], video_properties: VideoInfo, transforms: List[Transform]) -> List[Track]:
         """Track objects using discrete optimization."""
         graph = self._build_fragment_graph(tracks, video_properties.fps)
-        return ILPGraphSolver(self.w_start).optimize_graph(graph)[0]
+
+        # Configure costs to match legacy behavior (free termination)
+        N = len(graph.fragments)
+        start_costs = [self.w_start] * N
+        end_costs = [0.0] * N  # Legacy behavior: ending a track was free (implicit)
+        max_cost_limit = self.w_start
+
+        return ILPGraphSolver().optimize_graph(graph, start_costs, end_costs, max_cost_limit)[0]
 
     def _build_fragment_graph(self, fragments: List[Track], video_fps: int) -> FragmentGraph:
         """Build a graph of possible fragment connections with their costs."""

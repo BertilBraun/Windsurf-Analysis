@@ -6,19 +6,19 @@ import math
 import numpy as np
 
 from server.inference.src.motion.cmc import CMC
-from server.inference.src.util.algebra import probability_from_dist
 from server.inference.src.visualization.debug.session import DebugSession
 
 
 from ..util.video_io import VideoInfo
 from ..common_types import Detection, Track, TrackId
-from ..settings import MAX_OVERLAP_LENGTH_SECONDS, EPS
+from ..settings import MAX_OVERLAP_LENGTH_SECONDS
 from .ILP_graph_solver import FragmentGraph, ILPGraphSolver
 from server.inference.src.motion.kalman_filter import KFState
 from server.inference.src.visualization.stabilize import Transform
 from server.inference.src.visualization.debug import get_debug_session
 from server.inference.src.visualization.debug.graph import EdgeRecord, show_graph_interactive
 from server.inference.src.visualization.debug.overlays import EdgeMetrics, compose_fragment_pair_view
+from server.inference.src.tracking.ilp_tracker import _appearance_nll, _motion_nll, _gap_nll
 
 
 class IterativeILPTracker:
@@ -43,28 +43,29 @@ class IterativeILPTracker:
         self,
         video_path: str | None = None,
         # Start-cost schedule (controls edge cap and start penalty in ILP)
-        w_start: float = 83.18548233891453,  # initial start cost (backward-compatible)
+        w_start: float = 50.0,  # initial start cost (backward-compatible)
+        w_end: Optional[float] = None,  # initial end cost
         start_cost_mode: Literal['linear', 'geo'] = 'linear',  # 'linear' or 'geo'
         start_cost_growth: float = 7.075710523532933,  # linear: additive step; geo: multiplicative factor
-        start_cost_max: Optional[float] = 76.21143004790967,  # optional cap
+        start_cost_max: Optional[float] = 100.0,  # optional cap
         # Per-term cost weights
-        w_motion: float = 2.4792939452722207,
-        w_appearance: float = 0.43588112965420484,
-        w_gap: float = 5.689009868203195,
+        w_motion: float = 1.5,
+        w_appearance: float = 3.0,
+        w_gap: float = 0.1,
         # Gap model
-        p_miss: float = 0.8859392091825458,  # for gap NLL
+        p_miss: float = 0.95,  # for gap NLL
         # Motion evaluation
         max_detections_to_compare: int = 2,  # eval first K detections of B (1..3 recommended)
         use_position_only: bool = False,  # gating_distance on (cx,cy) or (cx,cy,w,h)
         # Appearance similarity
         appearance_similarity_gamma: float = 10,
         # Iteration & stopping
-        max_optimization_iterations: int = 5,
+        max_optimization_iterations: int = 1,
         # optional splitting rules
         enable_splitting: bool = True,
         internal_split_gap_frames: int = 2,  # 0 disables; >0 splits tracks on internal gaps > this
-        motion_split_nll_max: float = 0.31442373897384446,  # split if P_same(motion) < this
-        appearance_split_nll_max: float = 2.1193150519036594,  # split if P_same(app) < this
+        motion_split_nll_max: float = 25.0,  # split if P_same(motion) < this
+        appearance_split_nll_max: float = 5.0,  # split if P_same(app) < this
         appearance_split_window: int = 10,  # mean of last W embeddings vs current
         max_splits_per_track: Optional[int] = 8,
     ) -> None:
@@ -73,6 +74,7 @@ class IterativeILPTracker:
         assert start_cost_mode in ['linear', 'geo']
         assert start_cost_growth > 0.0
         self.w_start_initial = w_start
+        self.w_end_initial = w_end if w_end is not None else w_start
         self.start_cost_mode = start_cost_mode
         self.start_cost_growth = start_cost_growth
         self.start_cost_max = start_cost_max
@@ -139,7 +141,16 @@ class IterativeILPTracker:
 
             # Solve with scheduled start cost
             scheduled_w_start = self._scheduled_start_cost(iteration)
-            new_tracks, new_cost = ILPGraphSolver(scheduled_w_start).optimize_graph(graph)
+            scheduled_w_end = self._scheduled_end_cost(iteration)
+
+            start_costs, end_costs = self._compute_spatial_costs(
+                tracks, video_properties, scheduled_w_start, scheduled_w_end
+            )
+
+            # Pass max_cost_limit as the max of scheduled costs to allow pruning
+            max_cost_limit = max(scheduled_w_start, scheduled_w_end)
+
+            new_tracks, new_cost = ILPGraphSolver().optimize_graph(graph, start_costs, end_costs, max_cost_limit)
 
             self._log_tracks(iteration, new_tracks, 'new tracks after ILP solve')
 
@@ -164,7 +175,9 @@ class IterativeILPTracker:
         debug.close()
 
         # Remerge tracks with same track id in case of internal splits
-        return _remerge_tracks(tracks), iteration
+        merged_tracks = _remerge_tracks(tracks)
+        print(f'ILP tracker finished in {iteration} iterations with {len(merged_tracks)} tracks')
+        return merged_tracks, iteration
 
     # ─────────────────────────────── graph building ────────────────────────────── #
 
@@ -235,6 +248,57 @@ class IterativeILPTracker:
         if self.start_cost_max is not None:
             w = min(w, self.start_cost_max)
         return w
+
+    def _scheduled_end_cost(self, iteration: int) -> float:
+        """Compute the end-cost for a given iteration based on configured schedule."""
+        # For now, end cost follows the same schedule as start cost but using w_end_initial
+        w = self.w_end_initial
+        if self.start_cost_mode == 'geo':
+            w = w * (self.start_cost_growth**iteration)
+        else:
+            # linear by default
+            w = w + iteration * self.start_cost_growth
+        if self.start_cost_max is not None:
+            w = min(w, self.start_cost_max)
+        return w
+
+    def _compute_spatial_costs(
+        self,
+        tracks: List[Track],
+        video_properties: VideoInfo,
+        scheduled_w_start: float,
+        scheduled_w_end: float,
+    ) -> Tuple[List[float], List[float]]:
+        """Compute start and end costs for each track based on spatial position (border proximity)."""
+        start_costs = []
+        end_costs = []
+        W = video_properties.width
+        H = video_properties.height
+        margin = 50  # pixels
+
+        # Lower cost for starting/ending near border
+        # We use a fixed low cost for border starts/ends to encourage them
+        low_cost_start = min(scheduled_w_start, 5.0)
+        low_cost_end = min(scheduled_w_end, 5.0)
+
+        for track in tracks:
+            # Start cost
+            start_det = track.sorted_detections[0]
+            cx, cy = start_det.bbox.center
+            if cx < margin or cx > W - margin or cy < margin or cy > H - margin:
+                start_costs.append(low_cost_start)
+            else:
+                start_costs.append(scheduled_w_start)
+
+            # End cost
+            end_det = track.sorted_detections[-1]
+            cx, cy = end_det.bbox.center
+            if cx < margin or cx > W - margin or cy < margin or cy > H - margin:
+                end_costs.append(low_cost_end)
+            else:
+                end_costs.append(scheduled_w_end)
+
+        return start_costs, end_costs
 
     def _maybe_split_tracks(
         self,
@@ -368,60 +432,6 @@ class IterativeILPTracker:
             )
             # After closing the graph, optionally wait for a keypress to step iteration
             _ = debug.wait_step()
-
-
-# ──────────────────────────────── cost helpers ─────────────────────────────── #
-
-
-def clamp_prob(p: float) -> float:
-    return max(EPS, min(1.0 - EPS, float(p)))
-
-
-def NLL_from_prob(p: float) -> float:
-    """Negative log-likelihood ratio cost: -logit(p)."""
-    p = clamp_prob(p)
-    return float(-math.log(p / (1.0 - p)))
-
-
-def _appearance_nll(a: Track, b: Track, gamma: float) -> float:
-    """Lab χ² distance between fragment prototypes → Platt → NLLR."""
-    a_mean = a.mean_embedding()
-    b_mean = b.mean_embedding()
-    return NLL_from_prob(a_mean.probability(b_mean, gamma))
-
-
-def _motion_nll(A: KFState, B: Track, cmc: CMC, max_detections_to_compare: int, use_position_only: bool) -> float:
-    """
-    Motion NLL between frags[idx_a] → frags[idx_b]:
-      - use cached KF end state for A
-      - predict by Δ to each of first K detections of B
-      - inverse-GMC the observation into A.end frame
-      - 0.5*d2 + 0.5*log|S_pos|, averaged across used dets
-    Returns: (motion_nll)
-    """
-    nll_values: List[float] = []
-
-    pred: KFState = A
-
-    # evaluate up to K detections at B's start
-    for detection in B.sorted_detections[:max_detections_to_compare]:
-        # predict from A.end by Δ
-        pred = pred.predict_to(detection.frame_idx, cmc)
-
-        # position-only mahalanobis + log|S_pos|
-        d2 = pred.gating_distance(detection.bbox.center_wh, only_position=use_position_only)
-
-        p_same = probability_from_dist(d2, df=2 if use_position_only else 4)
-        nll_values.append(NLL_from_prob(p_same))
-
-    return float(np.mean(nll_values or [0.0]))
-
-
-# ───────────────────────────────────── gap ─────────────────────────────────── #
-
-
-def _gap_nll(gap_frames: int, p_miss: float) -> float:
-    return float(gap_frames) * (-math.log(p_miss))
 
 
 # ────────────────────────────── simple track splitter ───────────────────────── #
