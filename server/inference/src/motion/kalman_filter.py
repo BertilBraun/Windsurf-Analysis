@@ -42,11 +42,15 @@ class _KalmanFilter:
     def __init__(
         self,
         dt: float = 1.0,
-        proc_std_weight_pos: float = 1.0 / 20.0,
-        proc_std_weight_vel: float = 1.0 / 40.0,
-        meas_std_weight_pos: float = 1.0 / 100.0,
-        meas_std_weight_size: float = 1.0 / 100.0,
-        q_growth: float = 1.01,
+        # proc_std_weight_pos: float = 1.0 / 20.0,
+        # proc_std_weight_vel: float = 1.0 / 80.0,
+        # meas_std_weight_pos: float = 1.0 / 10.0,
+        # meas_std_weight_size: float = 1.0 / 40.0,
+        meas_std_weight_pos: float = 0.07477916001610004,
+        meas_std_weight_size: float = 0.12104326889075724,
+        proc_std_weight_pos: float = 0.020694001560159197,
+        proc_std_weight_vel: float = 0.06810446203045982,
+        q_growth: float = 1.015,
         x_scale: float = 1.5,  # scale for width, larger than 1 means more uncertainty in width
         y_scale: float = 0.5,  # scale for height, larger than 1 means more uncertainty in height
     ) -> None:
