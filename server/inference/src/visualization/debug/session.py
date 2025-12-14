@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional, Protocol
+from typing import Callable, Dict, List, Optional, Protocol
 
 import numpy as np
 
@@ -20,6 +20,9 @@ class DebugSession(Protocol):
     ) -> None: ...
     def show(self, *images, window_name: str = '') -> None: ...
     def get_frame(self, frame_index: int) -> Optional[np.ndarray]: ...
+    def set_mouse_callback(
+        self, window_name: str, callback: Callable[[int, int, int, int, object], None] | None
+    ) -> None: ...
     def scroll(self, start_frame_index: int = 0) -> None: ...
     def hud(self, message: str) -> None: ...
     def wait_step(self) -> int: ...
@@ -46,6 +49,11 @@ class NullDebugSession(DebugSession):
         return
 
     def show(self, *images, window_name: str = '') -> None:
+        return
+
+    def set_mouse_callback(
+        self, window_name: str, callback: Callable[[int, int, int, int, object], None] | None
+    ) -> None:
         return
 
     def scroll(self, start_frame_index: int = 0) -> None:
@@ -115,6 +123,16 @@ class Cv2DebugSession(DebugSession):
             return
         viewer = self._get_viewer()
         viewer.show(window_name, compose_side_by_side(*images))
+
+    def set_mouse_callback(
+        self, window_name: str, callback: Callable[[int, int, int, int, object], None] | None
+    ) -> None:
+        if self._closed:
+            return
+        viewer = self._get_viewer()
+        # ViewerCV2 supports this; keep optional to avoid tightening interface too much.
+        if hasattr(viewer, 'set_mouse_callback'):
+            viewer.set_mouse_callback(window_name, callback)  # type: ignore[attr-defined]
 
     def get_frame(self, frame_index: int) -> Optional[np.ndarray]:
         return self._frames.get(int(frame_index))

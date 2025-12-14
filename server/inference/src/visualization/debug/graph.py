@@ -130,7 +130,7 @@ def show_graph_interactive(
         artist = event.artist
         if artist is nodes_main:
             ind_list = getattr(event, 'ind', None)
-            if not ind_list:
+            if ind_list is None or len(ind_list) == 0:
                 return
             pick_idx = int(ind_list[0])
             node_id = node_index_to_id.get(pick_idx)

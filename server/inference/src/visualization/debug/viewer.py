@@ -3,7 +3,7 @@ from __future__ import annotations
 import cv2
 
 import numpy as np
-from typing import Dict, Optional, Protocol
+from typing import Callable, Dict, Optional, Protocol
 
 
 class ViewerInterface(Protocol):
@@ -23,9 +23,12 @@ class ViewerCV2(ViewerInterface):
 
     def __init__(self) -> None:
         self._hud_text: str | None = None
+        # Optional per-window mouse callbacks (enables interactive inspection in debug views)
+        self._mouse_callbacks: Dict[str, Callable[[int, int, int, int, object], None]] = {}
 
     def destroy_all(self) -> None:
         cv2.destroyAllWindows()
+        self._mouse_callbacks.clear()
 
     def show(self, window_name: str, image: np.ndarray, hud_text: str | None = None) -> None:
         to_show = image
@@ -42,10 +45,31 @@ class ViewerCV2(ViewerInterface):
                 cv2.LINE_AA,
             )
         cv2.imshow(window_name, to_show)
+        # If a mouse callback exists for this window, bind it (safe to call repeatedly)
+        cb = self._mouse_callbacks.get(window_name)
+        if cb is not None:
+            cv2.setMouseCallback(window_name, cb)
         cv2.waitKey(1)
 
     def set_hud(self, message: str) -> None:
         self._hud_text = message
+
+    def set_mouse_callback(self, window_name: str, callback: Callable[[int, int, int, int, object], None] | None) -> None:
+        """
+        Register an OpenCV mouse callback for a named window.
+        Callback signature matches cv2.setMouseCallback: (event, x, y, flags, param).
+        """
+        if callback is None:
+            self._mouse_callbacks.pop(window_name, None)
+        else:
+            self._mouse_callbacks[window_name] = callback
+            # If the window already exists (e.g., callback registered right after first show),
+            # bind immediately so clicks work without requiring another show() call.
+            try:
+                cv2.setMouseCallback(window_name, callback)
+            except Exception:
+                # Safe to ignore: window may not exist yet on some backends.
+                pass
 
     def scroll(self, frames: Dict[int, np.ndarray], start_frame_index: int) -> None:
         if not frames:
