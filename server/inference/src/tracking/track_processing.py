@@ -16,7 +16,7 @@ from server.inference.src.visualization.stabilize import Transform
 from ..settings import MIN_FRAME_PERCENTAGE
 from ..util.video_io import VideoInfo
 from ..common_types import Detection, Track, BoundingBox, FrameIndex
-from ..motion.kalman_filter import KFState, KF
+from ..motion.kalman_filter import KFState, _KalmanFilter, KF
 from ..motion.cmc import CMC
 
 
@@ -113,7 +113,15 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
     N = end_frame - start_frame + 1
 
     # Initialize Kalman filter state from first detection
-    state = KFState.init(detections[0])
+    state = KFState.init(
+        detections[0],
+        _KalmanFilter(
+            proc_std_weight_pos=1.0 / 20.0,
+            proc_std_weight_vel=1.0 / 40.0,
+            meas_std_weight_pos=1.0 / 100.0,
+            meas_std_weight_size=1.0 / 100.0,
+        ),
+    )
 
     # Storage for forward pass results
     # We store state for every frame in the track span, not just detection frames

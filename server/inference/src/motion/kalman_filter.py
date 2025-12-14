@@ -307,10 +307,11 @@ class KFState:
     last_frame: int
 
     _cached_predictions: Dict[int, KFState] = field(default_factory=dict)
+    _kf: _KalmanFilter = field(default_factory=_KalmanFilter)
 
     def predict_to(self, to_frame: int, cmc: CMC) -> KFState:
         if to_frame <= self.last_frame:
-            return KFState(mean=self.mean, cov=self.cov, last_frame=self.last_frame)
+            return KFState(mean=self.mean, cov=self.cov, last_frame=self.last_frame, _kf=self._kf)
         if to_frame in self._cached_predictions:
             return self._cached_predictions[to_frame]
 
@@ -322,39 +323,43 @@ class KFState:
             prediction = self._cached_predictions[frames[idx]]
             start_m, start_P, start_frame = prediction.mean, prediction.cov, prediction.last_frame
 
-        m, P = KF.advance_state_to_frame(start_m, start_P, cmc, start_frame, int(to_frame))
-        self._cached_predictions[to_frame] = KFState(mean=m, cov=P, last_frame=int(to_frame))
-        return KFState(mean=m, cov=P, last_frame=int(to_frame))
+        m, P = self._kf.advance_state_to_frame(start_m, start_P, cmc, start_frame, int(to_frame))
+        self._cached_predictions[to_frame] = KFState(mean=m, cov=P, last_frame=int(to_frame), _kf=self._kf)
+        return self._cached_predictions[to_frame]
 
     def update_to_det(self, det: Detection, cmc: CMC) -> KFState:
         prediction = self.predict_to(det.frame_idx, cmc)
-        m2, P2 = KF.update(prediction.mean, prediction.cov, det.bbox.center_wh)
+        m2, P2 = self._kf.update(prediction.mean, prediction.cov, det.bbox.center_wh)
         return KFState(mean=m2, cov=P2, last_frame=det.frame_idx)
 
     def gating_distance(
         self, measurement: NDArrayF, only_position: bool = True, metric: Literal['maha', 'gaussian'] = 'maha'
     ) -> float:
-        return float(KF.gating_distance(self.mean, self.cov, measurement[None, :], only_position, metric)[0])
+        return float(self._kf.gating_distance(self.mean, self.cov, measurement[None, :], only_position, metric)[0])
 
     def display_bbox(self, alpha: float = 0.90, include_size_unc: bool = False) -> BoundingBox:
-        return BoundingBox.from_center_wh(*KF.display_bbox(self.mean, self.cov, alpha, include_size_unc))
+        return BoundingBox.from_center_wh(*self._kf.display_bbox(self.mean, self.cov, alpha, include_size_unc))
 
     def logdet(self, use_position_only: bool = True) -> float:
-        _, S_full, _ = KF.project(self.mean, self.cov)
+        _, S_full, _ = self._kf.project(self.mean, self.cov)
         S_pos = S_full[:2, :2] if use_position_only else S_full
         S_pos = np.clip(S_pos, 1.0, 1e4)
         logdet = math.log(max(np.linalg.det(S_pos), EPS))
         return logdet
 
     @staticmethod
-    def init(detection: Detection) -> KFState:
-        m, P = KF.initiate(detection.bbox.center_wh)
-        return KFState(mean=m, cov=P, last_frame=detection.frame_idx)
+    def init(detection: Detection, kf: _KalmanFilter | None = None) -> KFState:
+        if kf is None:
+            kf = _KalmanFilter()
+        m, P = kf.initiate(detection.bbox.center_wh)
+        return KFState(mean=m, cov=P, last_frame=detection.frame_idx, _kf=kf)
 
     @staticmethod
-    def fit_kf_end_state(detections: list[Detection], cmc: CMC) -> KFState:
+    def fit_kf_end_state(detections: list[Detection], cmc: CMC, kf: _KalmanFilter | None = None) -> KFState:
+        if kf is None:
+            kf = _KalmanFilter()
         assert len(detections) > 0, 'No detections to fit KF end state'
-        state = KFState.init(detections[0])
+        state = KFState.init(detections[0], kf)
 
         for det in detections[1:]:
             state = state.update_to_det(det, cmc)
