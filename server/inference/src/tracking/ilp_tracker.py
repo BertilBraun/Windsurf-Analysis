@@ -42,19 +42,19 @@ class ILPTracker:
         self,
         video_path: str | None = None,
         # Start-cost schedule (controls edge cap and start penalty in ILP)
-        w_start: float = 47.269762352285554,  # initial start cost (backward-compatible)
+        w_start: float = 90.19570414175368,  # initial start cost (backward-compatible)
         w_end: Optional[float] = None,  # initial end cost
         # Per-term cost weights
-        w_motion: float = 0.9471913269870326,
-        w_appearance: float = 5.169978837313107,
-        w_gap: float = 1.9646775109244419,
+        w_motion: float = 0.3708452033348393,
+        w_appearance: float = 2.2935669734544937,
+        w_gap: float = 9.446696614284106,
         # Gap model
-        p_miss: float = 0.8470990959600678,  # for gap NLL
+        p_miss: float = 0.9411498635286982,  # for gap NLL
         # Motion evaluation
         max_detections_to_compare: int = 2,  # eval first K detections of B (1..3 recommended)
         use_position_only: bool = True,  # gating_distance on (cx,cy) or (cx,cy,w,h)
         # Appearance similarity
-        appearance_similarity_gamma: float = 6.252005756094864,
+        appearance_similarity_gamma: float = 11.535947876483421,
     ) -> None:
         self.video_path = video_path
         self.w_start = w_start
