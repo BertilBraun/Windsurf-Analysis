@@ -123,6 +123,33 @@ class GreedyTrackStitcher:
             kf[track.track_id] = kf[track.track_id].update_to_det(detection, cmc)
             ema[track.track_id] = ema[track.track_id].interpolate(detection.embedding, self.ema_alpha)
 
+        def split_track_at_last_detection(track: Track) -> None:
+            """
+            Split an active track into:
+              - a finalized prefix (up to frame before its last detection)
+              - a new track seeded with its last detection
+
+            Used to resolve overlapping detections: if a new track is started for a detection that overlaps
+            another track's detection on the same frame, we end (stale) the other track and restart it from
+            that last detection as a fresh track id.
+            """
+            # Only meaningful if there's something to keep as "prefix"
+            if len(track.sorted_detections) < 2:
+                return
+            if track.track_id in stale_track_ids:
+                return
+
+            last_det = track.sorted_detections.pop()  # last detection becomes the seed for a new track
+            # Finalize the prefix
+            stale_track(track)
+            # Ensure the stale track is removed from active list (we already filtered earlier in the loop)
+            try:
+                active_tracks.remove(track)
+            except ValueError:
+                pass
+            # Restart from the last detection
+            active_tracks.append(create_new_track(last_det))
+
         for frame_idx, frame_detections in detections_by_frame.items():
             track_by_id: Dict[int, Track] = {t.track_id: t for t in active_tracks}
 
@@ -152,8 +179,17 @@ class GreedyTrackStitcher:
             # keep only non-stale active tracks
             active_tracks = [track for track in active_tracks if track.track_id not in stale_track_ids]
 
-            # Create new tracks for remaining detections
+            # Create new tracks for remaining detections.
+            # If a new track is started on this frame and it overlaps an existing track's detection on this frame,
+            # split the existing track at this frame (end prefix, restart from its last detection).
             for detection in detections_to_create_new_tracks:
+                overlapping_tracks = [
+                    t
+                    for t in list(active_tracks)
+                    if t.end_frame == detection.frame_idx and t.end.bbox.overlaps(detection.bbox)
+                ]
+                for t in overlapping_tracks:
+                    split_track_at_last_detection(t)
                 active_tracks.append(create_new_track(detection))
 
             # ── optional debug: visualize current frame before resolving conflicts ──
@@ -184,8 +220,8 @@ class GreedyTrackStitcher:
 
             for candidate_track in active_tracks:
                 result = self._compare_detection_to_track(
-                    candidate_track,
                     detection,
+                    candidate_track,
                     cmc=cmc,
                     kf=kf[candidate_track.track_id],
                     ema=ema[candidate_track.track_id],
@@ -226,8 +262,8 @@ class GreedyTrackStitcher:
 
     def _compare_detection_to_track(
         self,
-        track: Track,
         detection: Detection,
+        track: Track,
         cmc: CMC,
         kf: KFState,
         ema: Embedding,
@@ -236,7 +272,7 @@ class GreedyTrackStitcher:
         Score motion (Mahalanobis d² on [cx,cy]) + appearance (χ² on L1-hist EMA).
         """
         # Early guard on excessive frame gap (keeps candidate set small)
-        gap = detection.frame_idx - track.end.frame_idx
+        gap = detection.frame_idx - track.end_frame
         if gap <= 0 or gap > self.max_frame_distance:
             return _ComparisonResult.NO_MATCH
 
