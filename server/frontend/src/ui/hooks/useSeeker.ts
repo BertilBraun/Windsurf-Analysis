@@ -14,9 +14,8 @@ export function useSeeker(
         (timeSec: number, play: boolean) => {
             const v = videoRef.current
             if (!player || !v) return
-            const t = clamp(timeSec, 0, v.duration)
-            v.currentTime = t
-            setPlayer(p => (p ? p.copy({ isPlaying: play }) : p))
+            v.currentTime = clamp(timeSec, 0, v.duration)
+            setPlayer(prev => (prev ? prev.copy({ isPlaying: play }) : prev))
         },
         [player, videoRef, setPlayer]
     )
