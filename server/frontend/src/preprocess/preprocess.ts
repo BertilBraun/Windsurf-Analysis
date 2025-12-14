@@ -67,19 +67,16 @@ function chooseSpec(w: number, h: number, q: UploadQuality): TargetSpec {
     return { longSide: 640, fps: 15 }
 }
 
-/**
- * Read a video file, downscale/reframe it by quality (resolution + fps),
- * and return an MP4 ArrayBuffer encoded with WebCodecs + mp4-muxer.
- *
- * Strategy:
- * - Demux+decode with MP4FrameSource
- * - Resize each kept frame onto a 2D canvas
- * - Pick frames using a Bresenham-style accumulator so we hit target FPS evenly
- * - Encode CFR with Mp4Encoder and return the resulting ArrayBuffer
- */
-export async function preprocessVideo(
+export async function processVideo(
     file: File,
-    quality: UploadQuality,
+    onFrame: (
+        frame: VideoFrame,
+        ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D
+    ) => Promise<boolean | 'stop'>,
+    outputWidth: number,
+    outputHeight: number,
+    outputFps?: number,
+    bitrate?: number,
     onProgress?: (p: number) => void
 ): Promise<ArrayBuffer> {
     // Tiny reporter with throttling to avoid spamming the callback
@@ -103,35 +100,20 @@ export async function preprocessVideo(
     // 2) Set up the source (demux+decode)
     const src = new MP4FrameSource(inputBuffer)
     const info = await src.getTrackInfo()
-    const srcW = info.width
-    const srcH = info.height
     const srcFps = Math.max(1, info.approxFps)
 
-    // 3) Decide target spec (resolution + fps)
-    const spec = chooseSpec(srcW, srcH, quality)
-    const { width: outW, height: outH } =
-        quality === 'original'
-            ? { width: ensureEven(srcW), height: ensureEven(srcH) }
-            : fitToLongSide(srcW, srcH, spec.longSide)
-
-    // Keep source FPS if spec.fps == 0; otherwise, never exceed source fps (we don’t synthesize extra frames here)
-    const outFps = spec.fps === 0 ? srcFps : Math.min(spec.fps, srcFps)
+    outputFps = outputFps ?? srcFps
 
     // 4) Choose a bitrate (codec-agnostic heuristic)
-    const bitrate = estimateBitrate(outW, outH, outFps, quality)
+    bitrate = bitrate ?? estimateBitrate(outputWidth, outputHeight, outputFps, 'high')
 
     // 5) Set up encoder + canvas
-    const enc = new Mp4Encoder({ width: outW, height: outH, fps: outFps, bitrate })
-    const { canvas, ctx } = create2DCanvas(outW, outH)
+    const enc = new Mp4Encoder({ width: outputWidth, height: outputHeight, fps: outputFps, bitrate })
+    const { canvas, ctx } = create2DCanvas(outputWidth, outputHeight)
 
     // total "units" for progress (prefer exact nbSamples; else fall back to duration * fps)
     const totalUnits = Math.max(1, info.nbSamples > 0 ? info.nbSamples : Math.round((info.durationSec || 0) * srcFps))
     let processedUnits = 0
-
-    // 6) Frame selection using a Bresenham-style accumulator.
-    //    ratio = outFps / srcFps. For each decoded frame: acc += ratio; if acc >= 1 → keep (emit), acc -= 1.
-    const ratio = outFps / srcFps
-    let acc = 0
 
     try {
         for await (const frame of src.frames()) {
@@ -141,22 +123,20 @@ export async function preprocessVideo(
             const decodePortion = 0.95
             report((processedUnits / totalUnits) * decodePortion)
 
-            acc += ratio
-            if (acc >= 1) {
-                acc -= 1
-
-                // Draw scaled
-                // Clear is not strictly required if we always cover the full frame,
-                // but it can help avoid artifacts when scaling down non-integer ratios.
-                ctx.clearRect(0, 0, outW, outH)
-                ctx.drawImage(frame, 0, 0, outW, outH)
-
-                // Push to encoder at constant frame rate
-                await enc.appendFrame(canvas)
+            // Draw scaled
+            // Clear is not strictly required if we always cover the full frame,
+            // but it can help avoid artifacts when scaling down non-integer ratios.
+            ctx.clearRect(0, 0, outputWidth, outputHeight)
+            const keepFrame = await onFrame(frame, ctx)
+            if (keepFrame === 'stop') {
+                // Stop decode as soon as possible (important for export speed / resource usage).
+                src.close()
+                break
             }
+            if (!keepFrame) continue
 
-            // Always release decoded frames
-            frame.close()
+            // Push to encoder at constant frame rate
+            await enc.appendFrame(canvas)
         }
 
         report(0.95)
@@ -171,4 +151,58 @@ export async function preprocessVideo(
         src.close()
         enc.destroy()
     }
+}
+
+/**
+ * Read a video file, downscale/reframe it by quality (resolution + fps),
+ * and return an MP4 ArrayBuffer encoded with WebCodecs + mp4-muxer.
+ *
+ * Strategy:
+ * - Demux+decode with MP4FrameSource
+ * - Resize each kept frame onto a 2D canvas
+ * - Pick frames using a Bresenham-style accumulator so we hit target FPS evenly
+ * - Encode CFR with Mp4Encoder and return the resulting ArrayBuffer
+ */
+export async function preprocessVideo(
+    file: File,
+    quality: UploadQuality,
+    onProgress?: (p: number) => void
+): Promise<ArrayBuffer> {
+    // 1) Read the file into memory
+    const inputBuffer = await file.arrayBuffer()
+
+    // 2) Set up the source (demux+decode)
+    const src = new MP4FrameSource(inputBuffer)
+    const info = await src.getTrackInfo()
+    const srcW = info.width
+    const srcH = info.height
+    const srcFps = Math.max(1, info.approxFps)
+
+    // 3) Decide target spec (resolution + fps)
+    const spec = chooseSpec(srcW, srcH, quality)
+    const { width: outW, height: outH } =
+        quality === 'original'
+            ? { width: ensureEven(srcW), height: ensureEven(srcH) }
+            : fitToLongSide(srcW, srcH, spec.longSide)
+
+    // Keep source FPS if spec.fps == 0; otherwise, never exceed source fps (we don’t synthesize extra frames here)
+    const outFps = spec.fps === 0 ? srcFps : Math.min(spec.fps, srcFps)
+
+    const bitrate = estimateBitrate(outW, outH, outFps, quality)
+
+    // 6) Frame selection using a Bresenham-style accumulator.
+    //    ratio = outFps / srcFps. For each decoded frame: acc += ratio; if acc >= 1 → keep (emit), acc -= 1.
+    const ratio = outFps / srcFps
+    let acc = 0
+
+    const onFrame = async (frame: VideoFrame, ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D) => {
+        ctx.drawImage(frame, 0, 0, ctx.canvas.width, ctx.canvas.height)
+        acc += ratio
+        if (acc >= 1) {
+            acc -= 1
+            return true
+        }
+        return false
+    }
+    return processVideo(file, onFrame, outW, outH, outFps, bitrate, onProgress)
 }

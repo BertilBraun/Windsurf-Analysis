@@ -13,12 +13,17 @@ export function getRotatedDimensions(width: number, height: number, deg: number)
 }
 
 export function drawRotatedToCanvas(
-    video: HTMLVideoElement,
+    frame: VideoFrame | HTMLVideoElement,
     target: HTMLCanvasElement,
     deg: number
 ): { width: number; height: number } {
-    const srcW = video.videoWidth
-    const srcH = video.videoHeight
+    if (frame instanceof HTMLVideoElement) {
+        var srcW = frame.videoWidth
+        var srcH = frame.videoHeight
+    } else {
+        var srcW = frame.displayWidth || frame.codedWidth
+        var srcH = frame.displayHeight || frame.codedHeight
+    }
     const rot = quantizeOrientation(deg)
     let outW = srcW
     let outH = srcH
@@ -45,6 +50,6 @@ export function drawRotatedToCanvas(
     }
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = 'high'
-    ctx.drawImage(video, 0, 0)
+    ctx.drawImage(frame, 0, 0)
     return { width: outW, height: outH }
 }

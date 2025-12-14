@@ -107,12 +107,14 @@ export class Mp4Encoder {
             await new Promise(resolve => setTimeout(resolve, 10))
         }
 
-        const usPerFrame = Math.round(1_000_000 / this.fps)
-
-        const timestamp = this.frameIndex * usPerFrame
+        // Allow non-integer FPS (e.g. 29.97). We synthesize CFR timestamps in microseconds.
+        const usPerFrame = 1_000_000 / this.fps
+        const timestamp = Math.round(this.frameIndex * usPerFrame)
         const vf = new VideoFrame(source, { timestamp })
 
-        this.encoder.encode(vf, { keyFrame: this.frameIndex % this.fps === 0 })
+        // Keyframe about once per second (works for float fps too).
+        const keyIntervalFrames = Math.max(1, Math.round(this.fps))
+        this.encoder.encode(vf, { keyFrame: this.frameIndex % keyIntervalFrames === 0 })
 
         vf.close()
 

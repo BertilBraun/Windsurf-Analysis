@@ -30,6 +30,8 @@ app = modal.App('windsurf-analysis-tracking', image=inference_image)
 
 
 def clamp_percentage(p: float) -> float:
+    if p < -1 or p > 2:
+        print(f'WARNING: Clamping percentage {p} to 0-1')
     return max(0, min(p, 1))
 
 

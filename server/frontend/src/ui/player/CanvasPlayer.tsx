@@ -4,12 +4,13 @@ import { getFileByRelativePath } from '../utils/fsAccess'
 import { PlayerState, VideoProperties } from './state'
 import { ControlsBar } from './ControlsBar'
 import { Timeline } from './Timeline'
-import { TARGET_BBOX_HEIGHT_RATIO, MIN_SCALE, MAX_SCALE } from './constants'
+import { MAX_SCALE, MIN_SCALE, TARGET_BBOX_HEIGHT_RATIO } from './constants'
 import { useZoom } from '../hooks/useZoom'
 import { usePlaybackSpeed } from '../hooks/usePlaybackSpeed'
 import { useSeeker } from '../hooks/useSeeker'
 import { clamp } from '../utils/clamp'
 import { drawRotatedToCanvas, getRotatedDimensions } from './rotation'
+import { processVideo } from '../../preprocess/preprocess'
 
 type Props = {
     job: JobDetail
@@ -28,10 +29,15 @@ type OverviewView = {
     hoveredTrackId: number | null
 }
 
+type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+type TimedBBox = { time_percent: number; bbox: [number, number, number, number] }
+
 export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenNextJob, onOpenPrevJob }) => {
     const [error, setError] = React.useState<string | null>(null)
+    const [exportError, setExportError] = React.useState<string | null>(null)
     const [fileMissing, setFileMissing] = React.useState<boolean>(false)
     const [videoUrl, setVideoUrl] = React.useState<string | null>(null)
+    const [sourceFile, setSourceFile] = React.useState<File | null>(null)
     const videoRef = React.useRef<HTMLVideoElement | null>(null)
     const containerRef = React.useRef<HTMLDivElement | null>(null)
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null)
@@ -39,12 +45,13 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
     const { zoom, offset, onWheelZoom } = useZoom(containerRef)
     const { speed, bumpSpeed } = usePlaybackSpeed(1.0)
     const [hoveredTrackId, setHoveredTrackId] = React.useState<number | null>(null)
+    const [isExporting, setIsExporting] = React.useState<boolean>(false)
+    const [exportProgressPct, setExportProgressPct] = React.useState<number | null>(null)
 
     // Resolve file URL
     const resolveFileFromRelativePath = React.useCallback(async () => {
         if (!dirHandle) {
             setError('No ingress folder selected')
-            console.log('No dirHandle; cannot resolve', job.local_relative_path)
             return null
         }
         try {
@@ -60,7 +67,6 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
             } else {
                 setError(msg || 'Failed to access file from folder')
             }
-            console.log('Error resolving file', e)
             return null
         }
     }, [dirHandle, job.local_relative_path])
@@ -69,12 +75,17 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
         let revoked: string | null = null
         setVideoUrl(null)
         setError(null)
+        setExportError(null)
+        setIsExporting(false)
+        setExportProgressPct(null)
         setFileMissing(false)
+        setSourceFile(null)
         resolveFileFromRelativePath().then(file => {
             if (!file) return
             const url = URL.createObjectURL(file)
             revoked = url
             setVideoUrl(url)
+            setSourceFile(file)
             onNewFile(file)
         })
         return () => {
@@ -105,11 +116,13 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
     React.useEffect(() => {
         const v = videoRef.current
         if (!v || !player) return
+        // During export we temporarily take over playback rate + play/pause.
+        if (isExporting) return
         v.defaultPlaybackRate = speed
         v.playbackRate = speed
         if (player.isPlaying) v.play().catch(() => {})
         else v.pause()
-    }, [player?.isPlaying, speed])
+    }, [isExporting, player?.isPlaying, speed])
 
     const togglePlay = React.useCallback(() => setPlayer(p => (p ? p.copy({ isPlaying: !p.isPlaying }) : p)), [])
 
@@ -163,6 +176,8 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
             const target = e.target as HTMLElement | null
             if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable))
                 return
+            // Avoid any user interactions while export temporarily controls playback/seek.
+            if (isExporting) return
             if (!player) return
             const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
             if (key === ' ') {
@@ -221,6 +236,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
         return () => window.removeEventListener('keydown', onKey)
     }, [
         player,
+        isExporting,
         togglePlay,
         stepPrev,
         stepNext,
@@ -238,6 +254,8 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
         const c = canvasRef.current
         const container = containerRef.current
         if (!v || !c || !player || !container) return
+        // During export we drive the decoder timeline ourselves; avoid mutating player state while exporting.
+        if (isExporting) return
 
         let vfId: number | null = null
         const onFrame = (_: number, meta: VideoFrameCallbackMetadata) => {
@@ -259,7 +277,17 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
         return () => {
             if (vfId) v.cancelVideoFrameCallback(vfId)
         }
-    }, [player?.isPlaying, player?.mode, player?.currentTrackId, zoom, offset.x, offset.y, hoveredTrackId, videoUrl])
+    }, [
+        isExporting,
+        player?.isPlaying,
+        player?.mode,
+        player?.currentTrackId,
+        zoom,
+        offset.x,
+        offset.y,
+        hoveredTrackId,
+        videoUrl,
+    ])
 
     // Redraw on resize or when paused and state changes
     React.useEffect(() => {
@@ -267,6 +295,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
         const v = videoRef.current
         const container = containerRef.current
         if (!c || !v || !player || !container) return
+        if (isExporting) return
         drawFrame(
             c,
             container,
@@ -277,6 +306,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
             job.dominant_orientation
         )
     }, [
+        isExporting,
         player?.currentTimeSec,
         player?.mode,
         player?.currentTrackId,
@@ -289,11 +319,12 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
 
     // Auto-exit detailed mode if no reasonably recent detection around current time
     React.useEffect(() => {
+        if (isExporting) return
         if (!player || player.mode !== 'detailed' || player.currentTrackId == null) return
         if (!player.hasDetectionAfter(player.currentTrackId, player.currentTimeSec)) {
             setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
         }
-    }, [player?.currentTimeSec, player?.mode, player?.currentTrackId])
+    }, [isExporting, player?.currentTimeSec, player?.mode, player?.currentTrackId])
 
     // bumpSpeed is provided by usePlaybackSpeed
 
@@ -356,10 +387,64 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
         })
     }, [hoveredTrackId])
 
+    const exportVisible = !!player && player.mode === 'detailed' && player.currentTrackId != null
+    const exportEnabled = exportVisible && !isExporting
+
+    const onExportTrack = React.useCallback(async () => {
+        if (isExporting) return
+        setExportError(null)
+        setIsExporting(true)
+        setExportProgressPct(0)
+
+        try {
+            const file = sourceFile
+            const p = player
+            if (!file || !p) throw new Error('Not ready')
+            if (p.mode !== 'detailed' || p.currentTrackId == null) throw new Error('Select a track')
+
+            const track = p.tracks.find(t => t.track_id === p.currentTrackId)
+            if (!track) throw new Error('Track not found')
+
+            const padSec = 0.25
+            const startSec = Math.max(0, track.start_time_seconds - padSec)
+            const endSec = Math.min(
+                p.video.durationSeconds || Infinity,
+                track.start_time_seconds + track.duration_seconds + padSec
+            )
+            if (!(endSec > startSec + 1e-3)) throw new Error('Track duration too short')
+
+            const outBlob = await exportTrackMp4({
+                file,
+                player: p,
+                dominantOrientationDeg: job.dominant_orientation,
+                trackId: track.track_id,
+                startSec,
+                endSec,
+                onProgress: prog01 => setExportProgressPct(clamp(prog01 * 100, 0, 100)),
+            })
+
+            const filename = buildExportFilename({
+                sourceFileName: sourceFile?.name,
+                localRelativePath: job.local_relative_path,
+                trackId: track.track_id,
+                startSec,
+                endSec,
+            })
+
+            downloadBlob(outBlob, filename)
+        } catch (e: any) {
+            setExportError(String(e?.message || e || 'Export failed'))
+        } finally {
+            setIsExporting(false)
+            setExportProgressPct(null)
+        }
+    }, [isExporting, job.dominant_orientation, job.id, job.local_relative_path, player, sourceFile])
+
     return (
-        <div className="flex flex-col h-full">
+        <div className="relative flex flex-col h-full">
             <div className="relative flex-1 bg-black overflow-hidden">
                 {error && <div className="absolute left-2 top-2 text-red-500 text-sm">{error}</div>}
+                {exportError && <div className="absolute left-2 top-7 text-red-400 text-sm">Export: {exportError}</div>}
                 {fileMissing && (
                     <div className="absolute inset-0 flex items-center justify-center">
                         <div className="text-red-500 text-3xl font-extrabold tracking-wide">VIDEO FILE NOT FOUND</div>
@@ -406,7 +491,36 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
                         isPlaying={player.isPlaying}
                         speed={speed}
                         zoom={zoom}
+                        onExportTrack={onExportTrack}
+                        exportVisible={exportVisible}
+                        exportEnabled={exportEnabled}
+                        isExporting={isExporting}
+                        exportProgressPct={exportProgressPct}
                     />
+                </div>
+            )}
+
+            {/* Blocking overlay during export (covers canvas + controls, captures all pointer interactions) */}
+            {isExporting && (
+                <div
+                    className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={e => e.preventDefault()}
+                    onWheel={e => e.preventDefault()}
+                >
+                    <div className="px-4 py-3 rounded-lg bg-black/60 border border-gray-700 text-gray-100 text-center">
+                        <div className="text-base font-semibold">Exporting track…</div>
+                        {typeof exportProgressPct === 'number' ? (
+                            <div className="mt-1 text-sm tabular-nums">
+                                {Math.max(0, Math.min(100, exportProgressPct)).toFixed(0)}%
+                            </div>
+                        ) : (
+                            <div className="mt-1 text-sm">Starting…</div>
+                        )}
+                        <div className="mt-2 text-xs text-gray-300">
+                            Please wait — playback controls are temporarily disabled.
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
@@ -421,6 +535,7 @@ function getSharedOffscreenCanvas(): HTMLCanvasElement {
     }
     return _sharedOffscreenCanvas
 }
+
 function ensureCanvasSize(canvas: HTMLCanvasElement, cssWidth: number, cssHeight: number) {
     const dpr = Math.max(1, Math.floor(window.devicePixelRatio))
     const needW = Math.max(1, Math.floor(cssWidth * dpr))
@@ -444,6 +559,73 @@ function computeBaseRect(outW: number, outH: number, vidW: number, vidH: number)
     const offX = (outW - dispW) / 2
     const offY = (outH - dispH) / 2
     return { x: offX, y: offY, w: dispW, h: dispH, scale }
+}
+
+function drawFitContain(ctx: Ctx2D, outW: number, outH: number, src: CanvasImageSource, srcW: number, srcH: number) {
+    const base = computeBaseRect(outW, outH, srcW, srcH)
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(src, 0, 0, srcW, srcH, base.x, base.y, base.w, base.h)
+}
+
+function drawDetailedCrop(
+    ctx: Ctx2D,
+    outW: number,
+    outH: number,
+    srcCanvas: CanvasImageSource,
+    srcW: number,
+    srcH: number,
+    det: TimedBBox | null
+) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.fillStyle = '#000'
+    ctx.fillRect(0, 0, outW, outH)
+
+    if (!det) {
+        drawFitContain(ctx, outW, outH, srcCanvas, srcW, srcH)
+        return
+    }
+
+    const [x1p, y1p, x2p, y2p] = det.bbox
+    const x1 = x1p * srcW
+    const y1 = y1p * srcH
+    const x2 = x2p * srcW
+    const y2 = y2p * srcH
+    const bboxW = Math.max(1, x2 - x1)
+    const bboxH = Math.max(1, y2 - y1)
+
+    const sHeight = (TARGET_BBOX_HEIGHT_RATIO * outH) / bboxH
+    const sWidthLimit = outW / bboxW
+    const s = clamp(Math.min(sHeight, sWidthLimit), MIN_SCALE, MAX_SCALE)
+
+    const cx = (x1 + x2) * 0.5
+    const cy = (y1 + y2) * 0.5
+    const cropW = outW / s
+    const cropH = outH / s
+    const winX1 = cx - cropW / 2
+    const winY1 = cy - cropH / 2
+    const winX2 = winX1 + cropW
+    const winY2 = winY1 + cropH
+
+    const srcX1 = Math.max(0, Math.floor(winX1))
+    const srcY1 = Math.max(0, Math.floor(winY1))
+    const srcX2 = Math.min(srcW, Math.ceil(winX2))
+    const srcY2 = Math.min(srcH, Math.ceil(winY2))
+    const dstX1 = Math.max(0, Math.floor((srcX1 - winX1) * s))
+    const dstY1 = Math.max(0, Math.floor((srcY1 - winY1) * s))
+    const dstX2 = Math.min(outW, Math.ceil((srcX2 - winX1) * s))
+    const dstY2 = Math.min(outH, Math.ceil((srcY2 - winY1) * s))
+
+    const srcWW = clamp(srcX2 - srcX1, 0, srcW)
+    const srcHH = clamp(srcY2 - srcY1, 0, srcH)
+    const dstWW = clamp(dstX2 - dstX1, 0, outW)
+    const dstHH = clamp(dstY2 - dstY1, 0, outH)
+
+    if (srcWW > 0 && srcHH > 0 && dstWW > 0 && dstHH > 0) {
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
+        ctx.drawImage(srcCanvas, srcX1, srcY1, srcWW, srcHH, dstX1, dstY1, dstWW, dstHH)
+    }
 }
 
 function drawFrame(
@@ -520,63 +702,9 @@ function drawFrame(
 
         const vidW = rotatedVideo.width
         const vidH = rotatedVideo.height
-        const [x1p, y1p, x2p, y2p] = det.bbox
-        const x1 = x1p * vidW
-        const y1 = y1p * vidH
-        const x2 = x2p * vidW
-        const y2 = y2p * vidH
-        const bboxW = Math.max(1, x2 - x1)
-        const bboxH = Math.max(1, y2 - y1)
-
-        const sHeight = (TARGET_BBOX_HEIGHT_RATIO * cssH) / bboxH
-        const sWidthLimit = cssW / bboxW
-        const s = clamp(Math.min(sHeight, sWidthLimit), MIN_SCALE, MAX_SCALE)
-
-        const cx = (x1 + x2) * 0.5
-        const cy = (y1 + y2) * 0.5
-        const cropW = cssW / s
-        const cropH = cssH / s
-        const winX1 = cx - cropW / 2
-        const winY1 = cy - cropH / 2
-        const winX2 = winX1 + cropW
-        const winY2 = winY1 + cropH
-
-        const srcX1 = Math.max(0, Math.floor(winX1))
-        const srcY1 = Math.max(0, Math.floor(winY1))
-        const srcX2 = Math.min(vidW, Math.ceil(winX2))
-        const srcY2 = Math.min(vidH, Math.ceil(winY2))
-        const dstX1 = Math.max(0, Math.floor((srcX1 - winX1) * s))
-        const dstY1 = Math.max(0, Math.floor((srcY1 - winY1) * s))
-        const dstX2 = Math.min(cssW, Math.ceil((srcX2 - winX1) * s))
-        const dstY2 = Math.min(cssH, Math.ceil((srcY2 - winY1) * s))
-        const srcW = clamp(srcX2 - srcX1, 0, vidW)
-        const srcH = clamp(srcY2 - srcY1, 0, vidH)
-        const dstW = clamp(dstX2 - dstX1, 0, cssW)
-        const dstH = clamp(dstY2 - dstY1, 0, cssH)
-
-        if (srcW > 0 && srcH > 0 && dstW > 0 && dstH > 0) {
-            try {
-                ctx.imageSmoothingEnabled = true
-                ctx.imageSmoothingQuality = 'high'
-                ctx.drawImage(sourceCanvas, srcX1, srcY1, srcW, srcH, dstX1, dstY1, dstW, dstH)
-            } catch {}
-        }
-
-        if (false) {
-            // optional: draw a subtle bbox overlay for context
-            ctx.strokeStyle = '#f59e0b'
-            ctx.lineWidth = 2
-            const bboxScreenX = (x1 - winX1) * s
-            const bboxScreenY = (y1 - winY1) * s
-            const bboxScreenW = bboxW * s
-            const bboxScreenH = bboxH * s
-            ctx.strokeRect(
-                Math.round(bboxScreenX) + 0.5,
-                Math.round(bboxScreenY) + 0.5,
-                Math.round(bboxScreenW),
-                Math.round(bboxScreenH)
-            )
-        }
+        // Reuse shared crop-draw logic (same as export path).
+        const detTimed: TimedBBox = { time_percent: det.time_percent, bbox: det.bbox }
+        drawDetailedCrop(ctx, cssW, cssH, sourceCanvas, vidW, vidH, detTimed)
     }
 }
 
@@ -687,4 +815,80 @@ function drawStabilizationTransforms(
             ctx.restore()
         }
     } catch {}
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.style.display = 'none'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // Give the download a moment to start before revoking.
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+function sanitizeFilenameBase(name: string): string {
+    // Basic Windows/macOS-friendly sanitization.
+    const cleaned = name.replace(/[<>:"/\\|?*\x00-\x1F]+/g, '_').trim()
+    return cleaned.length > 0 ? cleaned : 'export'
+}
+
+function basename(path: string): string {
+    const parts = path.split(/[\\/]+/).filter(Boolean)
+    return parts.length ? parts[parts.length - 1] : path
+}
+
+function stripExtension(name: string): string {
+    return name.replace(/\.[^./\\]+$/, '')
+}
+
+function buildExportFilename(params: {
+    sourceFileName: string | null
+    localRelativePath: string | null | undefined
+    trackId: number
+    startSec: number
+    endSec: number
+}): string {
+    const baseFromFile = params.sourceFileName ? stripExtension(basename(params.sourceFileName)) : ''
+    const baseFromPath = params.localRelativePath ? stripExtension(basename(params.localRelativePath)) : ''
+    const base = sanitizeFilenameBase(baseFromFile || baseFromPath)
+    const start = params.startSec.toFixed(2)
+    const end = params.endSec.toFixed(2)
+    return `${base}_track_${params.trackId}_${start}-${end}.mp4`
+}
+
+async function exportTrackMp4(params: {
+    file: File
+    player: PlayerState
+    dominantOrientationDeg: number
+    trackId: number
+    startSec: number
+    endSec: number
+    onProgress?: (p01: number) => void
+}): Promise<Blob> {
+    const { file, player, dominantOrientationDeg, trackId, startSec, endSec, onProgress } = params
+
+    const outW = 1280
+    const outH = 720
+    const bitrate = 2_000_000
+
+    const onFrame = async (frame: VideoFrame, ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D) => {
+        const tSec = (frame.timestamp || 0) / 1_000_000
+
+        if (tSec + 1e-6 < startSec) return false
+        if (tSec >= endSec) return 'stop'
+
+        const rotCanvas = getSharedOffscreenCanvas()
+        const rotated = drawRotatedToCanvas(frame, rotCanvas, dominantOrientationDeg)
+
+        const det = player.interpolateDetectionByTime(trackId, tSec)
+        drawDetailedCrop(ctx, outW, outH, rotCanvas, rotated.width, rotated.height, det)
+        return true
+    }
+
+    const outBuf = await processVideo(file, onFrame, outW, outH, undefined, bitrate, onProgress)
+    return new Blob([outBuf], { type: 'video/mp4' })
 }
