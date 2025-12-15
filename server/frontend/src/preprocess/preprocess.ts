@@ -67,18 +67,19 @@ function chooseSpec(w: number, h: number, q: UploadQuality): TargetSpec {
     return { longSide: 640, fps: 15 }
 }
 
-export async function processVideo(
-    file: File,
+export async function processVideo(params: {
+    file: File
     onFrame: (
         frame: VideoFrame,
         ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D
-    ) => Promise<boolean | 'stop'>,
-    outputWidth: number,
-    outputHeight: number,
-    outputFps?: number,
-    bitrate?: number,
+    ) => Promise<boolean | 'stop'>
+    outputWidth: number
+    outputHeight: number
+    outputFps?: number
+    bitrate?: number
     onProgress?: (p: number) => void
-): Promise<ArrayBuffer> {
+}): Promise<ArrayBuffer> {
+    const { file, onFrame, outputWidth, outputHeight, outputFps, bitrate, onProgress } = params
     // Tiny reporter with throttling to avoid spamming the callback
     let lastReported = -1
     const report = (p: number) => {
@@ -102,13 +103,13 @@ export async function processVideo(
     const info = await src.getTrackInfo()
     const srcFps = Math.max(1, info.approxFps)
 
-    outputFps = outputFps ?? srcFps
+    const outFps = outputFps ?? srcFps
 
     // 4) Choose a bitrate (codec-agnostic heuristic)
-    bitrate = bitrate ?? estimateBitrate(outputWidth, outputHeight, outputFps, 'high')
+    const outBitrate = bitrate ?? estimateBitrate(outputWidth, outputHeight, outFps, 'high')
 
     // 5) Set up encoder + canvas
-    const enc = new Mp4Encoder({ width: outputWidth, height: outputHeight, fps: outputFps, bitrate })
+    const enc = new Mp4Encoder({ width: outputWidth, height: outputHeight, fps: outFps, bitrate: outBitrate })
     const { canvas, ctx } = create2DCanvas(outputWidth, outputHeight)
 
     // total "units" for progress (prefer exact nbSamples; else fall back to duration * fps)
@@ -204,5 +205,13 @@ export async function preprocessVideo(
         }
         return false
     }
-    return processVideo(file, onFrame, outW, outH, outFps, bitrate, onProgress)
+    return processVideo({
+        file,
+        onFrame,
+        outputWidth: outW,
+        outputHeight: outH,
+        outputFps: outFps,
+        bitrate,
+        onProgress,
+    })
 }

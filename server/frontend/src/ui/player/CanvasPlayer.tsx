@@ -570,38 +570,38 @@ function drawFitContain(ctx: Ctx2D, outW: number, outH: number, src: CanvasImage
 
 function drawDetailedCrop(
     ctx: Ctx2D,
-    outW: number,
-    outH: number,
+    outputWidth: number,
+    outputHeight: number,
     srcCanvas: CanvasImageSource,
-    srcW: number,
-    srcH: number,
+    srcWidth: number,
+    srcHeight: number,
     det: TimedBBox | null
 ) {
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.fillStyle = '#000'
-    ctx.fillRect(0, 0, outW, outH)
+    ctx.fillRect(0, 0, outputWidth, outputHeight)
 
     if (!det) {
-        drawFitContain(ctx, outW, outH, srcCanvas, srcW, srcH)
+        drawFitContain(ctx, outputWidth, outputHeight, srcCanvas, srcWidth, srcHeight)
         return
     }
 
     const [x1p, y1p, x2p, y2p] = det.bbox
-    const x1 = x1p * srcW
-    const y1 = y1p * srcH
-    const x2 = x2p * srcW
-    const y2 = y2p * srcH
+    const x1 = x1p * srcWidth
+    const y1 = y1p * srcHeight
+    const x2 = x2p * srcWidth
+    const y2 = y2p * srcHeight
     const bboxW = Math.max(1, x2 - x1)
     const bboxH = Math.max(1, y2 - y1)
 
-    const sHeight = (TARGET_BBOX_HEIGHT_RATIO * outH) / bboxH
-    const sWidthLimit = outW / bboxW
+    const sHeight = (TARGET_BBOX_HEIGHT_RATIO * outputHeight) / bboxH
+    const sWidthLimit = outputWidth / bboxW
     const s = clamp(Math.min(sHeight, sWidthLimit), MIN_SCALE, MAX_SCALE)
 
     const cx = (x1 + x2) * 0.5
     const cy = (y1 + y2) * 0.5
-    const cropW = outW / s
-    const cropH = outH / s
+    const cropW = outputWidth / s
+    const cropH = outputHeight / s
     const winX1 = cx - cropW / 2
     const winY1 = cy - cropH / 2
     const winX2 = winX1 + cropW
@@ -609,17 +609,17 @@ function drawDetailedCrop(
 
     const srcX1 = Math.max(0, Math.floor(winX1))
     const srcY1 = Math.max(0, Math.floor(winY1))
-    const srcX2 = Math.min(srcW, Math.ceil(winX2))
-    const srcY2 = Math.min(srcH, Math.ceil(winY2))
+    const srcX2 = Math.min(srcWidth, Math.ceil(winX2))
+    const srcY2 = Math.min(srcHeight, Math.ceil(winY2))
     const dstX1 = Math.max(0, Math.floor((srcX1 - winX1) * s))
     const dstY1 = Math.max(0, Math.floor((srcY1 - winY1) * s))
-    const dstX2 = Math.min(outW, Math.ceil((srcX2 - winX1) * s))
-    const dstY2 = Math.min(outH, Math.ceil((srcY2 - winY1) * s))
+    const dstX2 = Math.min(outputWidth, Math.ceil((srcX2 - winX1) * s))
+    const dstY2 = Math.min(outputHeight, Math.ceil((srcY2 - winY1) * s))
 
-    const srcWW = clamp(srcX2 - srcX1, 0, srcW)
-    const srcHH = clamp(srcY2 - srcY1, 0, srcH)
-    const dstWW = clamp(dstX2 - dstX1, 0, outW)
-    const dstHH = clamp(dstY2 - dstY1, 0, outH)
+    const srcWW = clamp(srcX2 - srcX1, 0, srcWidth)
+    const srcHH = clamp(srcY2 - srcY1, 0, srcHeight)
+    const dstWW = clamp(dstX2 - dstX1, 0, outputWidth)
+    const dstHH = clamp(dstY2 - dstY1, 0, outputHeight)
 
     if (srcWW > 0 && srcHH > 0 && dstWW > 0 && dstHH > 0) {
         ctx.imageSmoothingEnabled = true
@@ -871,8 +871,8 @@ async function exportTrackMp4(params: {
 }): Promise<Blob> {
     const { file, player, dominantOrientationDeg, trackId, startSec, endSec, onProgress } = params
 
-    const outW = 1280
-    const outH = 720
+    const outputWidth = 1280
+    const outputHeight = 720
     const bitrate = 2_000_000
 
     const onFrame = async (frame: VideoFrame, ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D) => {
@@ -885,10 +885,10 @@ async function exportTrackMp4(params: {
         const rotated = drawRotatedToCanvas(frame, rotCanvas, dominantOrientationDeg)
 
         const det = player.interpolateDetectionByTime(trackId, tSec)
-        drawDetailedCrop(ctx, outW, outH, rotCanvas, rotated.width, rotated.height, det)
+        drawDetailedCrop(ctx, outputWidth, outputHeight, rotCanvas, rotated.width, rotated.height, det)
         return true
     }
 
-    const outBuf = await processVideo(file, onFrame, outW, outH, undefined, bitrate, onProgress)
+    const outBuf = await processVideo({ file, onFrame, outputWidth, outputHeight, bitrate, onProgress })
     return new Blob([outBuf], { type: 'video/mp4' })
 }
