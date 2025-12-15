@@ -1,42 +1,32 @@
 import React from 'react'
 import { Modal } from './Modal'
-import { Button } from './Button'
-import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
 import { CanvasPlayer } from '../player/CanvasPlayer'
 import { JobDetail, ReportType } from '../types'
+import { LogoButton } from './LogoButton'
 
 export const PlayerModal: React.FC<{
     job: JobDetail
     dirHandle: FileSystemDirectoryHandle | null
     onClose: () => void
+    onGoHome?: () => void
     onDelete: (id: string) => void
     onReport: (id: string, type: ReportType, message: string) => void
     onOpenNextJob?: () => void
     onOpenPrevJob?: () => void
     deletingId?: string | null
-}> = ({ job, dirHandle, onClose, onDelete, onReport, onOpenNextJob, onOpenPrevJob, deletingId }) => {
-    const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
-
+}> = ({ job, dirHandle, onClose, onGoHome, onDelete, onReport, onOpenNextJob, onOpenPrevJob, deletingId }) => {
     return (
         <>
             <Modal
                 key={job.id}
                 onClose={onClose}
-                title={job.local_relative_path?.replace(/\.mp4$/i, '') ?? 'n/a'}
-                additionalHeader={
-                    <>
-                        <Button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" text="Shortcuts" />
-                        <Button
-                            onClick={() => onDelete(job.id)}
-                            title="Delete job"
-                            text="Delete"
-                            isPending={deletingId === job.id}
-                        />
-                    </>
-                }
+                hideHeader
             >
-                <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
-                    <div className="w-full h-full overflow-hidden">
+                <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+                    <div className="h-full w-full flex flex-col overflow-hidden">
+                        <div className="h-12 flex items-center px-4 border-b border-slate-200 bg-white/80 backdrop-blur">
+                            <LogoButton onClick={() => (onGoHome ? onGoHome() : onClose())} />
+                        </div>
                         <CanvasPlayer
                             key={job.id}
                             job={job}
@@ -50,8 +40,6 @@ export const PlayerModal: React.FC<{
                     </div>
                 </div>
             </Modal>
-
-            {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
         </>
     )
 }

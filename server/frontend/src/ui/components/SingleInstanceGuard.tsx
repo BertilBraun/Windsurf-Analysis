@@ -90,6 +90,8 @@ export const SingleInstanceGuard: React.FC<{ children: React.ReactNode }> = ({ c
             if (hbRef.current) window.clearInterval(hbRef.current)
             hbRef.current = null
             window.removeEventListener('beforeunload', onUnload)
+            // If this guard unmounts (e.g. user navigates away from Analyzer), release the lock.
+            if (leaderRef.current) removeLock()
         }
     }, [isDuplicate])
 

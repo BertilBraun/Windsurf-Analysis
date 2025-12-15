@@ -56,7 +56,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // if 401 go to login page
             if (res.status === 401) {
                 clearAuth()
-                window.location.href = '/login'
+                // Login is handled inside the Analyzer route.
+                window.location.href = '/analyzer'
                 throw new Error('Not authenticated')
             }
             return res

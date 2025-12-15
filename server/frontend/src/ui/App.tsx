@@ -5,7 +5,7 @@ import { Router } from './routes/Router'
 export const App: React.FC = () => {
     return (
         <AuthProvider>
-            <div style={{ fontFamily: 'Inter, system-ui, Arial', margin: '24px', lineHeight: 1.4 }}>
+            <div style={{ fontFamily: 'Inter, system-ui, Arial', lineHeight: 1.4 }}>
                 <Router />
             </div>
         </AuthProvider>

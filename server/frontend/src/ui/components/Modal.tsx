@@ -10,6 +10,7 @@ export type ModalProps = {
     contentClassName?: string
     title?: string
     headerClassName?: string
+    hideHeader?: boolean
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -21,8 +22,9 @@ export const Modal: React.FC<ModalProps> = ({
     contentClassName,
     title,
     headerClassName,
+    hideHeader,
 }) => {
-    const defaultContent = 'rounded-md border border-gray-700 bg-[#111] shadow-xl'
+    const defaultContent = 'rounded-2xl border border-slate-200 bg-white shadow-xl'
     const contentClasses = contentClassName ?? defaultContent
     const contentRef = React.useRef<HTMLDivElement | null>(null)
     React.useEffect(() => {
@@ -41,16 +43,16 @@ export const Modal: React.FC<ModalProps> = ({
                 tabIndex={-1}
                 ref={contentRef}
             >
-                {(title || onClose || additionalHeader) && (
+                {!hideHeader && (title || onClose || additionalHeader) && (
                     <div
-                        className={`flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-black/60 rounded-t-md gap-2 ${
+                        className={`flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white/80 backdrop-blur rounded-t-2xl gap-2 ${
                             headerClassName || ''
                         }`}
                     >
-                        <div className="font-semibold text-gray-100">{title}</div>
+                        <div className="font-semibold text-slate-900">{title}</div>
                         <div className="flex-1" />
                         {additionalHeader}
-                        {onClose && <Button className="text-sm text-black" onClick={onClose} text="Close" />}
+                        {onClose && <Button size="sm" variant="ghost" onClick={onClose} text="Close" />}
                     </div>
                 )}
                 {children}

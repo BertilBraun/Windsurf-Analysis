@@ -21,7 +21,7 @@ export const KeyboardShortcutsModal: React.FC<{ onClose: () => void }> = ({ onCl
                     <Shortcut keys={['Shift', 'N']} desc="Open next video" />
                     <Shortcut keys={['Shift', 'P']} desc="Open previous video" />
                 </div>
-                <div className="mt-4 text-sm text-gray-400">Tip: Use the mouse wheel to zoom in overview mode.</div>
+                <div className="mt-4 text-sm text-slate-600">Tip: Use the mouse wheel to zoom in overview mode.</div>
             </div>
         </Modal>
     )
@@ -29,18 +29,18 @@ export const KeyboardShortcutsModal: React.FC<{ onClose: () => void }> = ({ onCl
 
 const Shortcut: React.FC<{ keys: string[]; desc: string }> = ({ keys, desc }) => {
     return (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-gray-700 bg-black/40 px-3 py-2">
+        <div className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
             <div className="flex flex-wrap items-center gap-1">
                 {keys.map((k, idx) => (
                     <kbd
                         key={`${k}-${idx}`}
-                        className="rounded border border-gray-600 bg-[#1a1a1a] px-2 py-1 text-xs font-mono text-gray-200"
+                        className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-mono text-slate-700"
                     >
                         {k}
                     </kbd>
                 ))}
             </div>
-            <div className="text-sm text-gray-200">{desc}</div>
+            <div className="text-sm text-slate-700">{desc}</div>
         </div>
     )
 }

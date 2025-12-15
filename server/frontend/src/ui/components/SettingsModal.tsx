@@ -13,9 +13,9 @@ export const SettingsModal: React.FC<{
         <Modal onClose={onClose} title="Settings">
             <div className="p-4 space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-200 mb-1">Upload quality</label>
+                    <label className="block text-sm font-medium text-slate-900 mb-1">Upload quality</label>
                     <select
-                        className="w-full bg-[#1a1a1a] border border-gray-700 rounded-md p-2 text-gray-100"
+                        className="w-full bg-white border border-slate-200 rounded-md p-2 text-slate-900"
                         value={settings.uploadQuality}
                         onChange={e => setUploadQuality(e.target.value as UploadQuality)}
                     >
@@ -24,13 +24,13 @@ export const SettingsModal: React.FC<{
                         <option value="medium">Medium quality (recommended)</option>
                         <option value="minimum">Minimum size</option>
                     </select>
-                    <p className="mt-2 text-sm text-gray-400">
+                    <p className="mt-2 text-sm text-slate-600">
                         Higher quality improves detections but increases upload time and bandwidth.
                     </p>
                 </div>
 
-                <div className="pt-2 border-t border-gray-800">
-                    <Button onClick={onLogout} text="Logout" />
+                <div className="pt-2 border-t border-slate-200">
+                    <Button variant="danger" onClick={onLogout} text="Logout" />
                 </div>
             </div>
         </Modal>
