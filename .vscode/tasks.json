@@ -94,9 +94,21 @@
             "problemMatcher": []
         },
         {
+            "label": "run_backend_local",
+            "type": "shell",
+            "command": "cd backend && python main.py",
+            "problemMatcher": []
+        },
+        {
             "label": "deploy_frontend",
             "type": "shell",
-            "command": "cd frontend && firebase deploy --only hosting",
+            "command": "cd frontend && npm run build && firebase deploy --only hosting",
+            "problemMatcher": []
+        },
+        {
+            "label": "run_frontend_local",
+            "type": "shell",
+            "command": "cd frontend && npm run dev",
             "problemMatcher": []
         }
     ],

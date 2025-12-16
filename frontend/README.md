@@ -1,26 +1,60 @@
-## Static frontend (Firebase Hosting)
+## Frontend (React + TypeScript + Vite) + Firebase Hosting
 
-### Preview locally
+### Setup (Firebase Console)
+- Create / select your Firebase project
+- **Authentication**: enable a provider (e.g. Google)
+- **Firestore Database**: create the database (Native mode)
+- Copy your web app config into env vars (see below)
+
+### Configure env vars
+This app reads config from Vite env vars (`VITE_*`).
+
+Create a local file **(don’t commit it)**:
+- `frontend/.env.local`
+
+Use `frontend/env.example` as a template.
+
+### Debug locally (hot reload / watch mode)
 From repo root:
 
 ```bash
 cd frontend
-python -m http.server 8081
+npm install
+npm run dev
 ```
 
-Then open `http://localhost:8081/`
+Open `http://localhost:5173`
 
-### Deploy (Firebase Hosting)
-1) Install Firebase CLI:
+#### Point the frontend at your local backend
+Set this in `frontend/.env.local`:
+- `VITE_BACKEND_URL=http://localhost:8080`
 
-`npm i -g firebase-tools`
+Then restart `npm run dev`.
 
-2) Login & deploy:
+### Debug locally as “built” app
+From repo root:
 
 ```bash
 cd frontend
-firebase login
+npm run build
+npm run preview -- --host --port 5173
+```
+
+### Debug locally via Firebase Hosting emulator (optional)
+This serves what would be deployed (from `dist/`), so build first:
+
+```bash
+cd frontend
+npm run build
+firebase emulators:start --only hosting
+```
+
+### Deploy (Firebase Hosting)
+```bash
+cd frontend
+npm run build
 firebase deploy --only hosting
 ```
 
-Firebase will print your Hosting URL.
+### Notes
+- The frontend signs in with Firebase Auth, gets an ID token, and calls the backend with `Authorization: Bearer <token>`.

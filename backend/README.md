@@ -10,6 +10,16 @@ pip install -r backend/requirements.txt
 python backend/main.py
 ```
 
+### Run locally (Firebase Auth + Firestore enabled)
+You need a **Firebase Admin SDK service account** for your Firebase project.
+
+Then run (Windows PowerShell):
+
+```powershell
+gcloud auth application-default login
+python backend/main.py
+```
+
 ### Deploy to Google Cloud Run
 From repo root (example):
 
@@ -17,7 +27,7 @@ From repo root (example):
 cd backend
 gcloud init
 gcloud auth login
-gcloud config set project gybelock
+gcloud config set project gybelock-00
 gcloud run deploy backend \
   --source . \
   --region europe-west3 \
@@ -27,3 +37,7 @@ gcloud run deploy backend \
 ### CORS (calling from Firebase Hosting)
 If your frontend is hosted on Firebase (e.g. `https://gybelock-00.web.app`) and you call this backend from the browser,
 the backend must allow that origin via CORS. Configure `allowed_origins` in `main.py` and redeploy.
+
+### Firebase Auth + Firestore
+- **Auth**: the backend expects `Authorization: Bearer <Firebase ID token>` and verifies it (`GET /whoami`).
+- **Firestore**: `POST /firestore/ping` writes a doc under `backendPings/{uid}`.
