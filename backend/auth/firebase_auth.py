@@ -21,7 +21,7 @@ if not firebase_admin._apps:
     firebase_admin.initialize_app()
 
 
-def get_current_user(authorization: str | None = Header(default=None)) -> User:
+def get_current_user_without_email_verification(authorization: str | None = Header(default=None)) -> User:
     if not authorization or not authorization.lower().startswith('bearer '):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -38,14 +38,17 @@ def get_current_user(authorization: str | None = Header(default=None)) -> User:
             name=decoded.get('name'),
             picture=decoded.get('picture'),
         )
-        # For email/password sign-in, require verified email
-        if not user.email or not user.email_verified:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail='Please verify your email address before using this service.',
-            )
         return user
     except HTTPException:
         raise
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid or expired Firebase ID token')
+
+
+def get_current_user(authorization: str | None = Header(default=None)) -> User:
+    user = get_current_user_without_email_verification(authorization)
+    if not user.email or not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail='Please verify your email address before using this service.'
+        )
+    return user

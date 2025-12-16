@@ -17,6 +17,8 @@ class JobsRepo:
         return JobRecord.model_validate(snap.to_dict() or {})
 
     def get_jobs(self, job_ids: list[str]) -> list[JobRecord]:
+        if not job_ids:
+            return []
         snaps = jobs.where('job_id', 'in', job_ids).stream()
         return [JobRecord.model_validate(snap.to_dict() or {}) for snap in snaps]
 

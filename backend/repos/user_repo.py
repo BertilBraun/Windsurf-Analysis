@@ -32,3 +32,6 @@ class UserRepo:
         if not snap.exists:
             raise HTTPException(status_code=404, detail='User not found')
         return UserRecord.model_validate(snap.to_dict() or {})
+
+    def delete_user(self, user_id: str) -> None:
+        users.document(user_id).delete()

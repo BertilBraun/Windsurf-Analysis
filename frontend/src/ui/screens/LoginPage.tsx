@@ -2,15 +2,17 @@ import React from 'react'
 import { useAuth } from '../auth/AuthProvider'
 
 export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }> = ({ onSignup, onSuccess }) => {
-    const { login } = useAuth()
+    const { login, loginWithGoogle, resetPassword } = useAuth()
     const [email, setEmail] = React.useState('')
     const [password, setPassword] = React.useState('')
     const [error, setError] = React.useState<string | null>(null)
+    const [info, setInfo] = React.useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setError(null)
+        setInfo(null)
         setIsSubmitting(true)
         try {
             await login(email, password)
@@ -34,9 +36,49 @@ export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }
                         value={password}
                         onChange={e => setPassword(e.target.value)}
                     />
+                    {info && <div style={{ color: '#0f766e', fontSize: 12 }}>{info}</div>}
                     {error && <div style={{ color: '#ef4444' }}>{error}</div>}
                     <button type="submit" disabled={!email || !password || isSubmitting}>
                         Login
+                    </button>
+                    <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={async () => {
+                            setError(null)
+                            setInfo(null)
+                            setIsSubmitting(true)
+                            try {
+                                await loginWithGoogle()
+                                onSuccess()
+                            } catch (err: any) {
+                                setError(String(err?.message || 'Google sign-in failed'))
+                            } finally {
+                                setIsSubmitting(false)
+                            }
+                        }}
+                    >
+                        Sign in with Google
+                    </button>
+                    <button
+                        type="button"
+                        disabled={!email || isSubmitting}
+                        onClick={async () => {
+                            setError(null)
+                            setInfo(null)
+                            setIsSubmitting(true)
+                            try {
+                                await resetPassword(email)
+                                setInfo(`Password reset email sent to ${email.trim()}.`)
+                            } catch (err: any) {
+                                setError(String(err?.message || 'Could not send password reset email'))
+                            } finally {
+                                setIsSubmitting(false)
+                            }
+                        }}
+                        style={{ fontSize: 12 }}
+                    >
+                        Forgot password
                     </button>
                 </div>
             </form>

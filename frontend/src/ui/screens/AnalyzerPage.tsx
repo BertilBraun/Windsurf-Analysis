@@ -15,7 +15,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     onGoHome,
     onGoPricing,
 }) => {
-    const { logout, email, authorizedFetch, authHeader } = useAuth()
+    const { logout, email, authorizedFetch, getAuthHeader } = useAuth()
     const { jobs, startPolling, stopPolling, refreshJobDetail, deleteJob, reportJob } = useJobs()
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
     const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
@@ -29,7 +29,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     // Ingress folder handle stored at the page level for the whole session
     const [dirHandle, setDirHandle] = React.useState<FileSystemDirectoryHandle | null>(null)
     const [dirPermission, setDirPermission] = React.useState<'granted' | 'denied' | 'prompt' | null>(null)
-    const uploadCtx = React.useMemo(() => ({ authorizedFetch, authHeader }), [authorizedFetch, authHeader])
+    const uploadCtx = React.useMemo(() => ({ authorizedFetch, getAuthHeader }), [authorizedFetch, getAuthHeader])
 
     // Try to restore directory handle from IndexedDB on mount
     React.useEffect(() => {

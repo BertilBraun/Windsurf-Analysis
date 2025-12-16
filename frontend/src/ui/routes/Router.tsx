@@ -10,14 +10,24 @@ import { ImpressumPage } from '../screens/ImpressumPage'
 import { AppShellLayout } from '../components/AppShell'
 import { SingleInstanceGuard } from '../components/SingleInstanceGuard'
 import { LoginPage } from '../screens/LoginPage'
+import { SignupPage } from '../screens/SignupPage'
 import { LogoButton } from '../components/LogoButton'
 
 const AnalyzerRoute: React.FC = () => {
-    const { isAuthenticated } = useAuth()
+    const {
+        isAuthenticated,
+        isSignedIn,
+        needsEmailVerification,
+        email,
+        logout,
+        resendVerificationEmail,
+        refreshVerificationStatus,
+    } = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
+    const [authMode, setAuthMode] = React.useState<'login' | 'signup'>('login')
 
-    if (!isAuthenticated) {
+    if (!isSignedIn) {
         return (
             <div className="min-h-dvh bg-white text-slate-900">
                 <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
@@ -29,22 +39,90 @@ const AnalyzerRoute: React.FC = () => {
 
                 <main className="mx-auto max-w-[1400px] px-4 sm:px-6 py-10">
                     <div className="max-w-md">
-                        <div className="text-sm text-slate-600 mb-4">Log in to access the Analyzer.</div>
+                        <div className="text-sm text-slate-600 mb-4">
+                            {authMode === 'signup'
+                                ? 'Create an account to access the Analyzer.'
+                                : 'Log in to access the Analyzer.'}
+                        </div>
                         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <LoginPage
-                                onSignup={() => navigate('/pricing')}
-                                onSuccess={() => {
-                                    // Stay on /analyzer; the authenticated state will re-render the Analyzer view.
-                                    // Preserve deep-link intent if any (future-proof).
-                                    const from = (location.state as any)?.from
-                                    if (typeof from === 'string' && from.startsWith('/')) navigate(from)
-                                }}
-                            />
+                            {authMode === 'signup' ? (
+                                <SignupPage
+                                    onBackToLogin={() => setAuthMode('login')}
+                                    onSuccess={() => {
+                                        // After signup the user will be signed in; if email is unverified,
+                                        // this route will immediately show the verification screen.
+                                    }}
+                                />
+                            ) : (
+                                <LoginPage
+                                    onSignup={() => setAuthMode('signup')}
+                                    onSuccess={() => {
+                                        // Stay on /analyzer; the authenticated state will re-render the Analyzer view.
+                                        // Preserve deep-link intent if any (future-proof).
+                                        const from = (location.state as any)?.from
+                                        if (typeof from === 'string' && from.startsWith('/')) navigate(from)
+                                    }}
+                                />
+                            )}
                         </div>
                     </div>
                 </main>
             </div>
         )
+    }
+
+    if (needsEmailVerification) {
+        return (
+            <div className="min-h-dvh bg-white text-slate-900">
+                <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
+                    <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3 flex items-center gap-3">
+                        <LogoButton onClick={() => navigate('/')} />
+                        <div className="flex-1" />
+                    </div>
+                </header>
+
+                <main className="mx-auto max-w-[1400px] px-4 sm:px-6 py-10">
+                    <div className="max-w-xl">
+                        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <h3 className="m-0">Verify your email to continue</h3>
+                            <p className="text-sm text-slate-600 mt-2">
+                                The backend requires a verified email address. Please verify{' '}
+                                <b>{email ?? 'your email'}</b> (check inbox/spam), then click “I verified”.
+                            </p>
+                            <div className="flex flex-wrap gap-2 mt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => void resendVerificationEmail()}
+                                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                >
+                                    Resend verification email
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void refreshVerificationStatus()}
+                                    className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm"
+                                >
+                                    I verified
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={logout}
+                                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                >
+                                    Sign out
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        )
+    }
+
+    if (!isAuthenticated) {
+        // Should be unreachable (isAuthenticated === isSignedIn && verified),
+        // but keep a safe fallback.
+        return <Navigate to="/analyzer" replace />
     }
 
     return <AnalyzerPage onGoHome={() => navigate('/')} onGoPricing={() => navigate('/pricing')} />

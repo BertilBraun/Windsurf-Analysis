@@ -4,7 +4,7 @@ import { UploadQuality } from '../types'
 
 export type UploadContext = {
     authorizedFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>
-    authHeader: string | null
+    getAuthHeader: () => Promise<string>
 }
 
 const MAX_PARALLEL_UPLOAD_REQUESTS = 8
@@ -47,12 +47,13 @@ export async function computeSha256(file: File): Promise<{ arrayBuffer: ArrayBuf
 
 export async function doXhrUpload(
     url: string,
-    authHeader: string | null,
+    getAuthHeader: (() => Promise<string>) | null,
     form: FormData,
     onProgress?: (percent: number) => void
 ): Promise<void> {
     const release = await acquireUploadSlot()
     try {
+        const authHeader = getAuthHeader ? await getAuthHeader() : null
         await new Promise<void>((resolve, reject) => {
             const xhr = new XMLHttpRequest()
             xhr.open('POST', url, true)
@@ -206,7 +207,7 @@ export async function uploadVideoFileToJob(
             `${file.name}.part${partIndex}`
         )
 
-        await doXhrUpload(`${API_BASE}/jobs/${job_id}/upload/part`, ctx.authHeader, partForm, (percent: number) => {
+        await doXhrUpload(`${API_BASE}/jobs/${job_id}/upload/part`, ctx.getAuthHeader, partForm, (percent: number) => {
             const bytes = Math.max(0, Math.min(partSize, Math.round(percent * partSize)))
             const delta = bytes - perPartUploaded[partIndex]
             if (delta > 0) {
