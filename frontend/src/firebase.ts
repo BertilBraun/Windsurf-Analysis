@@ -22,6 +22,7 @@ const firebaseConfig = {
 }
 
 export const backendUrl = requireEnv('VITE_BACKEND_URL')
+export const modalUrl = requireEnv('VITE_MODAL_API_BASE').replace(/\/+$/, '')
 
 export const firebaseApp = initializeApp(firebaseConfig)
 export const auth = getAuth(firebaseApp)
