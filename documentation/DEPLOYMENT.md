@@ -8,12 +8,6 @@ Prerequisites
 
 Environment variables (shared)
 
-- DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST/DB       # Here '+asyncpg' is important
-- S3_ENDPOINT_URL=https://<accountid>.r2.cloudflarestorage.com
-- S3_REGION=auto
-- S3_BUCKET=<bucket-name>
-- S3_ACCESS_KEY_ID=...
-- S3_SECRET_ACCESS_KEY=...
 - BACKEND_WEBHOOK_SECRET=<random>
 - BACKEND_PUBLIC_BASE_URL=https://api.example.com            # This is the URL of the backend API
 - MODAL_INVOKE_URL=https://<modal-web-endpoint>
