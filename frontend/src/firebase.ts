@@ -25,5 +25,5 @@ export const backendUrl = requireEnv('VITE_BACKEND_URL')
 
 export const firebaseApp = initializeApp(firebaseConfig)
 export const auth = getAuth(firebaseApp)
-export const db = initializeFirestore(firebaseApp, {}, '(default)')
+export const db = initializeFirestore(firebaseApp, {}, requireEnv('VITE_FIREBASE_DATABASE_ID'))
 export const googleProvider = new GoogleAuthProvider()

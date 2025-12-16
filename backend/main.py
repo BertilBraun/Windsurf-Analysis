@@ -5,10 +5,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 import firebase_admin
-from firebase_admin import credentials as fb_credentials
 from firebase_admin import auth as fb_auth
 from google.cloud import firestore as g_firestore
-from google.oauth2 import service_account
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger('backend')
@@ -48,7 +46,7 @@ def cors_preflight(path: str) -> Response:
 if not firebase_admin._apps:
     firebase_admin.initialize_app()
 
-db = g_firestore.Client(database='(default)')
+db = g_firestore.Client(database='(default)')  # NOTE: Ensure this is the same as in the .env.XXX files in the frontend
 
 
 def get_current_user(authorization: str | None = Header(default=None)) -> dict:
