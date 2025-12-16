@@ -86,6 +86,12 @@
             "type": "shell",
             "command": "cd server/frontend && npm run build && npm run preview",
             "problemMatcher": []
+        },
+        {
+            "label": "deploy_backend",
+            "type": "shell",
+            "command": "cd backend && gcloud run deploy backend --source . --allow-unauthenticated",
+            "problemMatcher": []
         }
     ],
     "inputs": [
