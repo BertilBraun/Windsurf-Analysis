@@ -1,12 +1,13 @@
 import os
 import logging
+from dataclasses import dataclass
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 import firebase_admin
-from firebase_admin import auth as fb_auth
-from google.cloud import firestore as g_firestore
+from firebase_admin import auth
+from google.cloud import firestore
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger('backend')
@@ -46,10 +47,19 @@ def cors_preflight(path: str) -> Response:
 if not firebase_admin._apps:
     firebase_admin.initialize_app()
 
-db = g_firestore.Client(database='(default)')  # NOTE: Ensure this is the same as in the .env.XXX files in the frontend
+db = firestore.Client(database='(default)')  # NOTE: Ensure this is the same as in the .env.XXX files in the frontend
 
 
-def get_current_user(authorization: str | None = Header(default=None)) -> dict:
+@dataclass
+class User:
+    uid: str
+    email: str
+    email_verified: bool
+    name: str | None = None
+    picture: str | None = None
+
+
+def get_current_user(authorization: str | None = Header(default=None)) -> User:
     if not authorization or not authorization.lower().startswith('bearer '):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -58,23 +68,23 @@ def get_current_user(authorization: str | None = Header(default=None)) -> dict:
     token = authorization.split(' ', 1)[1].strip()
     try:
         # clock_skew_seconds helps avoid rare issues if server time is slightly off.
-        decoded = fb_auth.verify_id_token(token, clock_skew_seconds=60)
+        decoded = auth.verify_id_token(token, clock_skew_seconds=60)
         # If the user has an email, require it to be verified (email/password sign-in).
-        if decoded.get('email') and not decoded.get('email_verified', False):
+        user = User(
+            uid=decoded['uid'],
+            email=decoded['email'],
+            email_verified=decoded['email_verified'],
+            name=decoded.get('name'),
+            picture=decoded.get('picture'),
+        )
+        if not user.email or not user.email_verified:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail='Please verify your email address before using this service.',
             )
-        return decoded
-    except Exception as e:
-        detail = 'Invalid or expired Firebase ID token'
-        # Safe-ish for debugging: includes reason but not the token.
-        detail = f'{detail} ({type(e).__name__}: {e})'  # TODO remove
-        log.warning('Auth error: %s', detail)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=detail,
-        )
+        return user
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid or expired Firebase ID token')
 
 
 @app.get('/hello/world')
@@ -88,27 +98,23 @@ def test() -> dict:
 
 
 @app.get('/whoami')
-def whoami(user: dict = Depends(get_current_user)) -> dict:
+def whoami(user: User = Depends(get_current_user)) -> dict:
     return {
-        'uid': user.get('uid'),
-        'email': user.get('email'),
-        'email_verified': user.get('email_verified'),
-        'name': user.get('name'),
-        'picture': user.get('picture'),
-        'issuer': user.get('iss'),
+        'uid': user.uid,
+        'email': user.email,
+        'email_verified': user.email_verified,
+        'name': user.name,
+        'picture': user.picture,
     }
 
 
 @app.post('/firestore/ping')
-def firestore_ping(user: dict = Depends(get_current_user)) -> dict:
+def firestore_ping(user: User = Depends(get_current_user)) -> dict:
     try:
-        uid = user.get('uid')
-        if not uid:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='User has no UID')
-        ref = db.collection('backendPings').document(uid)
-        ref.set({'ts': g_firestore.SERVER_TIMESTAMP}, merge=True)
+        ref = db.collection('backendPings').document(user.uid)
+        ref.set({'ts': firestore.SERVER_TIMESTAMP}, merge=True)
         snap = ref.get()
-        return {'ok': True, 'uid': uid, 'doc': snap.to_dict()}
+        return {'ok': True, 'uid': user.uid, 'doc': snap.to_dict()}
     except Exception as e:
         log.exception('Error in firestore_ping')
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

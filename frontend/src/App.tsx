@@ -41,7 +41,7 @@ export default function App() {
         const base = `Signed in: ${user.email ?? user.uid}`
         if (emailNeedsVerification) return `${base} (email not verified)`
         return base
-    }, [user])
+    }, [user, emailNeedsVerification])
 
     async function doGoogleSignIn() {
         try {
