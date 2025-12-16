@@ -5,21 +5,21 @@ from typing import Dict, Tuple, List, Optional
 import math
 import numpy as np
 
-from server.inference.src.motion.cmc import CMC
-from server.inference.src.util.algebra import NLL_from_prob, lerp, probability_from_dist
-from server.inference.src.visualization.debug.session import DebugSession
+from inference.src.motion.cmc import CMC
+from inference.src.util.algebra import NLL_from_prob, lerp, probability_from_dist
+from inference.src.visualization.debug.session import DebugSession
 
 
 from ..util.video_io import VideoInfo
 from ..common_types import Point, Track, TrackId
 from ..settings import MAX_OVERLAP_LENGTH_SECONDS
 from .ILP_graph_solver import FragmentGraph, ILPGraphSolver
-from server.inference.src.motion.kalman_filter import KFState
-from server.inference.src.visualization.stabilize import Transform
-from server.inference.src.visualization.debug import get_debug_session
-from server.inference.src.visualization.debug.graph import EdgeRecord, show_graph_interactive
-from server.inference.src.visualization.debug.draw import draw_bounding_box, draw_heatmap
-from server.inference.src.visualization.debug.overlays import EdgeMetrics, compose_fragment_pair_view
+from inference.src.motion.kalman_filter import KFState
+from inference.src.visualization.stabilize import Transform
+from inference.src.visualization.debug import get_debug_session
+from inference.src.visualization.debug.graph import EdgeRecord, show_graph_interactive
+from inference.src.visualization.debug.draw import draw_bounding_box, draw_heatmap
+from inference.src.visualization.debug.overlays import EdgeMetrics, compose_fragment_pair_view
 
 
 class ILPTracker:

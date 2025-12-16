@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 
-from server.inference.src.motion.kalman_filter import KFState
-from server.inference.src.motion.cmc import CMC
-from server.inference.src.common_types import Detection, Track
+from inference.src.motion.kalman_filter import KFState
+from inference.src.motion.cmc import CMC
+from inference.src.common_types import Detection, Track
 from .draw import draw_bounding_box, draw_text, draw_arrow, compose_side_by_side
 
 

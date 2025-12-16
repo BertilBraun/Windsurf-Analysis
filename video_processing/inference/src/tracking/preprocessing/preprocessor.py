@@ -1,4 +1,4 @@
-from server.inference.src.visualization.stabilize import Transform
+from inference.src.visualization.stabilize import Transform
 from ...util.video_io import VideoInfo
 from ...common_types import Track
 from ...settings import (

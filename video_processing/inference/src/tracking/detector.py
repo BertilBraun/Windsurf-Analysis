@@ -6,7 +6,7 @@ from pathlib import Path
 from dataclasses import dataclass
 
 current_dir = Path(__file__).parent
-server_root_dir = current_dir.parent.parent.parent
+server_root_dir = current_dir.parent.parent
 
 os.environ['YOLO_CONFIG_DIR'] = str(server_root_dir / 'ultralytics')
 

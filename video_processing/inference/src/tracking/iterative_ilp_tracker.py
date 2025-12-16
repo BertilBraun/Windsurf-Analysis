@@ -5,20 +5,20 @@ from typing import Dict, Literal, Tuple, List, Optional
 import math
 import numpy as np
 
-from server.inference.src.motion.cmc import CMC
-from server.inference.src.visualization.debug.session import DebugSession
+from inference.src.motion.cmc import CMC
+from inference.src.visualization.debug.session import DebugSession
 
 
 from ..util.video_io import VideoInfo
 from ..common_types import Detection, Track, TrackId
 from ..settings import MAX_OVERLAP_LENGTH_SECONDS
 from .ILP_graph_solver import FragmentGraph, ILPGraphSolver
-from server.inference.src.motion.kalman_filter import KFState
-from server.inference.src.visualization.stabilize import Transform
-from server.inference.src.visualization.debug import get_debug_session
-from server.inference.src.visualization.debug.graph import EdgeRecord, show_graph_interactive
-from server.inference.src.visualization.debug.overlays import EdgeMetrics, compose_fragment_pair_view
-from server.inference.src.tracking.ilp_tracker import _appearance_nll, _motion_nll, _gap_nll
+from inference.src.motion.kalman_filter import KFState
+from inference.src.visualization.stabilize import Transform
+from inference.src.visualization.debug import get_debug_session
+from inference.src.visualization.debug.graph import EdgeRecord, show_graph_interactive
+from inference.src.visualization.debug.overlays import EdgeMetrics, compose_fragment_pair_view
+from inference.src.tracking.ilp_tracker import _appearance_nll, _motion_nll, _gap_nll
 
 
 class IterativeILPTracker:

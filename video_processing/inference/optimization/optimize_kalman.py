@@ -22,11 +22,11 @@ project_root = this_file.parents[3]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from server.inference.src.motion.kalman_filter import _KalmanFilter, KFState
-from server.inference.src.motion.cmc import CMC
-from server.inference.src.common_types import Track, BoundingBox
-from server.inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
-from server.inference.optimization.optimization_util import each_golden, optimize
+from inference.src.motion.kalman_filter import _KalmanFilter, KFState
+from inference.src.motion.cmc import CMC
+from inference.src.common_types import Track, BoundingBox
+from inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
+from inference.optimization.optimization_util import each_golden, optimize
 
 
 def _evaluate_kalman(params: Dict[str, Any], data_cache: List[Dict[str, Any]]) -> float:

@@ -4,9 +4,9 @@ from typing import NamedTuple
 
 from vidstab import VidStab
 
-from server.inference.src.util.cache import cache_to_file
+from inference.src.util.cache import cache_to_file
 from ..util.video_io import VideoReader
-from server.inference.src.motion.gmc import GMC
+from inference.src.motion.gmc import GMC
 
 from ..util.video_io import get_video_properties
 

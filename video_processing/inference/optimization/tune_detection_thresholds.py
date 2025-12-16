@@ -16,7 +16,7 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 # Ensure ultralytics config dir is the repo one (weights/settings)
-server_root = project_root / 'server'
+server_root = project_root
 os.environ.setdefault('YOLO_CONFIG_DIR', str(server_root / 'ultralytics'))
 
 from ultralytics import YOLO  # type: ignore
@@ -27,10 +27,10 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QMainWindow, QToolBar, QMessageBox
 from PySide6.QtGui import QAction
 
-from server.inference.src.player.core.player_state import PlayerState, VideoProperties, TrackLite, DetectionLite
-from server.inference.src.player.core.video_manager import VideoManager
-from server.inference.src.player.ui.video_widget import VideoWidget
-from server.inference.src.settings import YOLO_MODEL_PATH, DETECTOR_IOU_THRESHOLD, DETECTOR_CONFIDENCE_THRESHOLD
+from inference.src.player.core.player_state import PlayerState, VideoProperties, TrackLite, DetectionLite
+from inference.src.player.core.video_manager import VideoManager
+from inference.src.player.ui.video_widget import VideoWidget
+from inference.src.settings import YOLO_MODEL_PATH, DETECTOR_IOU_THRESHOLD, DETECTOR_CONFIDENCE_THRESHOLD
 
 
 @dataclass

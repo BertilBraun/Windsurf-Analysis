@@ -7,10 +7,10 @@ import requests
 
 from pathlib import Path
 
-from server.backend.config import Settings
+from config import settings
 
-from .inference.src.util.timing import timeit
-from .inference.src.tracking.detector import ObjectDetector
+from inference.src.util.timing import timeit
+from inference.src.tracking.detector import ObjectDetector
 
 inference_root_folder = Path(__file__).parent / 'inference'
 
@@ -18,7 +18,9 @@ inference_root_folder = Path(__file__).parent / 'inference'
 image = (
     modal.Image.debian_slim(python_version='3.10')
     .apt_install('ffmpeg', 'libgl1', 'git')
-    .add_local_dir(inference_root_folder / 'src', remote_path='/root/src', copy=True)
+    .add_local_dir(
+        inference_root_folder / 'src', remote_path='/root/src', copy=True, ignore=lambda p: '__pycache__' in p.parts
+    )
     .add_local_dir(
         inference_root_folder / 'weights/orientation_fixer', remote_path='/root/weights/orientation_fixer', copy=True
     )
@@ -49,19 +51,24 @@ def report_job_failure_on_exception(job_id: str):
 def send_complete(job_id: str, status: Literal['succeeded', 'failed'], results: dict | None):
     try:
         requests.post(
-            f'{Settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job_id}/complete',
-            json={'status': status, 'results': results, 'secret': Settings.BACKEND_WEBHOOK_SECRET},
+            f'{settings.modal_backend_base_url}/v1/jobs/{job_id}/complete',
+            json={'status': status, 'results': results},
+            headers={'X-Modal-Secret': settings.modal_shared_secret},
             timeout=60,
         )
     except Exception as e:
         print(f'Error posting complete webhook: {e}')
 
 
-def send_progress(job_id: str, status: Literal['orientation', 'stabilization', 'detection', 'appearance', 'tracking']):
+def send_progress(
+    job_id: str,
+    status: Literal['orientation', 'stabilization', 'detection', 'appearance', 'tracking'],
+):
     try:
         requests.post(
-            f'{Settings.BACKEND_PUBLIC_BASE_URL}/v1/jobs/{job_id}/update_progress',
-            json={'status': status, 'secret': Settings.BACKEND_WEBHOOK_SECRET},
+            f'{settings.cloud_run_base_url}/v1/jobs/{job_id}/status',
+            json={'status': status},
+            headers={'X-Modal-Secret': settings.modal_shared_secret},
             timeout=60,
         )
     except Exception as e:
@@ -112,6 +119,7 @@ class InferenceModel:
         yolo_model: str,
         dominant_orientation: int,
         transforms: list[dict],
+        authorization: str,
     ):
         with report_job_failure_on_exception(job_id):
             video_path = f'/data/{job_id}_upright.mp4'

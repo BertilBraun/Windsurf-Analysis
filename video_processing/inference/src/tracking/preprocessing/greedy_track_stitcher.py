@@ -7,17 +7,17 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-from server.inference.src.motion.cmc import CMC
-from server.inference.src.util.algebra import probability_from_dist
-from server.inference.src.util.similarity_helpers import Embedding
-from server.inference.src.visualization.debug.session import DebugSession
-from server.inference.src.visualization.stabilize import Transform
+from inference.src.motion.cmc import CMC
+from inference.src.util.algebra import probability_from_dist
+from inference.src.util.similarity_helpers import Embedding
+from inference.src.visualization.debug.session import DebugSession
+from inference.src.visualization.stabilize import Transform
 from ...util.video_io import VideoInfo
 from ...common_types import Detection, FrameIndex, Track, TrackId
-from server.inference.src.motion.kalman_filter import KFState
-from server.inference.src.visualization.debug import get_debug_session
-from server.inference.src.visualization.debug.overlays import DetectionsOverlay, KalmanOverlay
-from server.inference.src.visualization.debug.draw import draw_heatmap
+from inference.src.motion.kalman_filter import KFState
+from inference.src.visualization.debug import get_debug_session
+from inference.src.visualization.debug.overlays import DetectionsOverlay, KalmanOverlay
+from inference.src.visualization.debug.draw import draw_heatmap
 
 
 class _ComparisonResult(Enum):

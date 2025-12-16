@@ -7,7 +7,7 @@ from tqdm import tqdm
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 
-from server.inference.src.tracking.ilp_tracker import ILPTracker
+from inference.src.tracking.ilp_tracker import ILPTracker
 
 
 from .settings import YOLO_MODEL_PATH

@@ -26,8 +26,8 @@ import numpy as np
 
 from ultralytics import YOLO
 
-from server.inference.src.util.timing import timeit
-from server.inference.src.util.video_io import get_video_properties
+from inference.src.util.timing import timeit
+from inference.src.util.video_io import get_video_properties
 
 DEGREES = (0, 90, 180, 270)
 SamplingMode = Literal['uniform', 'random', 'every-5th-frame']

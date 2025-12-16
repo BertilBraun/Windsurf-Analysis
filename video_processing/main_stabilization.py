@@ -3,10 +3,10 @@ import os
 
 import modal
 
-from .inference.src.util.timing import timeit
-from .inference.src.orientation_fixer import OrientationFixer
-from .inference.src.visualization.stabilize import compute_stabilization_transforms
-from .main_inference import (
+from inference.src.util.timing import timeit
+from inference.src.orientation_fixer import OrientationFixer
+from inference.src.visualization.stabilize import compute_stabilization_transforms
+from main_inference import (
     report_job_failure_on_exception,
     image as inference_image,
     send_progress,

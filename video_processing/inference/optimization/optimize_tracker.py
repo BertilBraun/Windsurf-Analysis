@@ -16,14 +16,14 @@ project_root = this_file.parents[3]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from server.inference.src.tracking.ilp_tracker import ILPTracker
-from server.inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
-from server.inference.src.util.video_io import get_video_properties
-from server.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
-from server.inference.src.tracking.discrete_opt_tracker import DiscreteOptTracker
-from server.inference.src.common_types import Track
-from server.inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
-from server.inference.optimization.optimization_util import (
+from inference.src.tracking.ilp_tracker import ILPTracker
+from inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
+from inference.src.util.video_io import get_video_properties
+from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
+from inference.src.tracking.discrete_opt_tracker import DiscreteOptTracker
+from inference.src.common_types import Track
+from inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
+from inference.optimization.optimization_util import (
     PairwiseScores,
     optimize,
     each_golden,

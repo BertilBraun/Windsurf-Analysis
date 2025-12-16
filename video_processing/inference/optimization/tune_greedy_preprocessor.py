@@ -17,14 +17,14 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QMainWindow, QToolBar, QMessageBox
 from PySide6.QtGui import QAction
 
-from server.inference.src.player.core.player_state import PlayerState, VideoProperties, TrackLite, DetectionLite
-from server.inference.src.player.core.video_manager import VideoManager
-from server.inference.src.player.ui.video_widget import VideoWidget
-from server.inference.src.util.video_io import get_video_properties, VideoInfo
-from server.inference.src.tracking.detector import SurferDetector
-from server.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
-from server.inference.src.common_types import Detection, Track
-from server.inference.src.settings import (
+from inference.src.player.core.player_state import PlayerState, VideoProperties, TrackLite, DetectionLite
+from inference.src.player.core.video_manager import VideoManager
+from inference.src.player.ui.video_widget import VideoWidget
+from inference.src.util.video_io import get_video_properties, VideoInfo
+from inference.src.tracking.detector import SurferDetector
+from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
+from inference.src.common_types import Detection, Track
+from inference.src.settings import (
     YOLO_MODEL_PATH,
     GREEDY_PREPROCESSOR_MIN_IOU,
     GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY,

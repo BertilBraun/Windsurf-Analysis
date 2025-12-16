@@ -5,18 +5,18 @@ from typing import Sequence
 
 import modal
 
-from server.inference.src.common_types import BoundingBox, Detection, FrameIndex, Track
-from server.inference.src.settings import REID_MODEL_TYPE
-from server.inference.src.tracking.detector import EmbeddingExtractor, RawDetection
-from server.inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
-from server.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
-from server.inference.src.tracking.track_processing import TrackPostProcessing
-from server.inference.src.tracking.tracking import Tracker
-from server.inference.src.util.video_io import VideoReader, get_video_properties
+from inference.src.common_types import BoundingBox, Detection, FrameIndex, Track
+from inference.src.settings import REID_MODEL_TYPE
+from inference.src.tracking.detector import EmbeddingExtractor, RawDetection
+from inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
+from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
+from inference.src.tracking.track_processing import TrackPostProcessing
+from inference.src.tracking.tracking import Tracker
+from inference.src.util.video_io import VideoReader, get_video_properties
+from inference.src.util.timing import timeit
+from inference.src.visualization.stabilize import Transform, vidstab_like_transforms
 
-from server.inference.src.util.timing import timeit
-from server.inference.src.visualization.stabilize import Transform, vidstab_like_transforms
-from .main_inference import (
+from main_inference import (
     report_job_failure_on_exception,
     image as inference_image,
     send_complete,

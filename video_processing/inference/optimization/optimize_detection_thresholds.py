@@ -20,12 +20,12 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 # Ensure ultralytics config dir is the repo one (weights/settings)
-server_root = project_root / 'server'
+server_root = project_root
 os.environ.setdefault('YOLO_CONFIG_DIR', str(server_root / 'ultralytics'))
 
 from ultralytics import YOLO  # type: ignore
 
-from server.inference.src.settings import YOLO_MODEL_PATH, DETECTOR_BATCH_SIZE
+from inference.src.settings import YOLO_MODEL_PATH, DETECTOR_BATCH_SIZE
 
 
 IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp'}

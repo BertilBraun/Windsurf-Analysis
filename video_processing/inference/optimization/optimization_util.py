@@ -17,12 +17,12 @@ project_root = this_file.parents[3]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from server.inference.src.util.similarity_helpers import Embedding
-from server.inference.src.player.core.player_state import Metadata, TrackLite
-from server.inference.src.common_types import BoundingBox, Detection, Track
-from server.inference.src.util.video_io import VideoReader
-from server.inference.src.tracking.detector import init_reid_model
-from server.inference.src.settings import REID_MODEL_TYPE
+from inference.src.util.similarity_helpers import Embedding
+from inference.src.player.core.player_state import Metadata, TrackLite
+from inference.src.common_types import BoundingBox, Detection, Track
+from inference.src.util.video_io import VideoReader
+from inference.src.tracking.detector import init_reid_model
+from inference.src.settings import REID_MODEL_TYPE
 
 
 # ----------------------------- Built-in configuration ----------------------------- #

@@ -5,8 +5,8 @@ import numpy as np
 
 NDArrayF = np.ndarray
 
-from server.inference.src.common_types import FrameIndex
-from server.inference.src.visualization.stabilize import Transform
+from inference.src.common_types import FrameIndex
+from inference.src.visualization.stabilize import Transform
 
 
 class CMC:

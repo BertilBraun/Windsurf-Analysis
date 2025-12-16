@@ -12,14 +12,14 @@ project_root = this_file.parents[3]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from server.inference.src.util.video_io import get_video_properties
-from server.inference.src.tracking.detector import SurferDetector
-from server.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
-from server.inference.src.tracking.greedy_tracker import GreedyTracker
-from server.inference.src.tracking.discrete_opt_tracker import DiscreteILPTracker
-from server.inference.src.common_types import Detection, Track
-from server.inference.src.player.core.player_state import Metadata, TrackLite, DetectionLite
-from server.inference.src.settings import YOLO_MODEL_PATH
+from inference.src.util.video_io import get_video_properties
+from inference.src.tracking.detector import SurferDetector
+from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
+from inference.src.tracking.greedy_tracker import GreedyTracker
+from inference.src.tracking.discrete_opt_tracker import DiscreteILPTracker
+from inference.src.common_types import Detection, Track
+from inference.src.player.core.player_state import Metadata, TrackLite, DetectionLite
+from inference.src.settings import YOLO_MODEL_PATH
 
 
 def _detections_to_initial_tracks(detections: list[Detection]) -> list[Track]:
