@@ -23,3 +23,7 @@ gcloud run deploy backend \
   --region europe-west3 \
   --allow-unauthenticated
 ```
+
+### CORS (calling from Firebase Hosting)
+If your frontend is hosted on Firebase (e.g. `https://gybelock-00.web.app`) and you call this backend from the browser,
+the backend must allow that origin via CORS. Configure `allowed_origins` in `main.py` and redeploy.

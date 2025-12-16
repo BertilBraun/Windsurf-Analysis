@@ -92,6 +92,12 @@
             "type": "shell",
             "command": "cd backend && gcloud run deploy backend --source . --allow-unauthenticated",
             "problemMatcher": []
+        },
+        {
+            "label": "deploy_frontend",
+            "type": "shell",
+            "command": "cd frontend && firebase deploy --only hosting",
+            "problemMatcher": []
         }
     ],
     "inputs": [
