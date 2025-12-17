@@ -15,6 +15,7 @@ import { LogoButton } from '../components/LogoButton'
 
 const AnalyzerRoute: React.FC = () => {
     const {
+        isAuthReady,
         isAuthenticated,
         isSignedIn,
         needsEmailVerification,
@@ -26,6 +27,23 @@ const AnalyzerRoute: React.FC = () => {
     const navigate = useNavigate()
     const location = useLocation()
     const [authMode, setAuthMode] = React.useState<'login' | 'signup'>('login')
+
+    if (!isAuthReady) {
+        // Avoid a flash of the logged-out UI while Firebase restores the persisted session.
+        return (
+            <div className="min-h-dvh bg-white text-slate-900">
+                <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
+                    <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3 flex items-center gap-3">
+                        <LogoButton onClick={() => navigate('/')} />
+                        <div className="flex-1" />
+                    </div>
+                </header>
+                <main className="mx-auto max-w-[1400px] px-4 sm:px-6 py-10">
+                    <div className="text-sm text-slate-600">Loading your session…</div>
+                </main>
+            </div>
+        )
+    }
 
     if (!isSignedIn) {
         return (

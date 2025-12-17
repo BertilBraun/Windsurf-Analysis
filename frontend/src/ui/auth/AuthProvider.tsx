@@ -14,6 +14,7 @@ import { auth, backendUrl, googleProvider } from '../../firebase'
 import { useSettings } from '../hooks/useSettings'
 
 type AuthContextValue = {
+    isAuthReady: boolean
     isAuthenticated: boolean
     isSignedIn: boolean
     needsEmailVerification: boolean
@@ -41,6 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [user, setUser] = useState<User | null>(auth.currentUser)
     const [authHeader, setAuthHeader] = useState<string | null>(null)
     const [email, setEmail] = useState<string | null>(auth.currentUser?.email ?? null)
+    const [isAuthReady, setIsAuthReady] = useState(false)
 
     const getAuthHeader = useCallback(async (forceRefreshToken?: boolean) => {
         const u = auth.currentUser
@@ -130,6 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const unsub = onIdTokenChanged(auth, async u => {
             setUser(u)
             setEmail(u?.email ?? null)
+            setIsAuthReady(true) // first callback means Firebase finished restoring auth state
             if (!u) {
                 setAuthHeader(null)
                 return
@@ -170,6 +173,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const value = useMemo<AuthContextValue>(
         () => ({
+            isAuthReady,
             isAuthenticated: !!user && !!user.emailVerified,
             isSignedIn: !!user,
             needsEmailVerification: !!user && !user.emailVerified,
@@ -191,6 +195,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             user,
             authHeader,
             email,
+            isAuthReady,
             login,
             signup,
             loginWithGoogle,
