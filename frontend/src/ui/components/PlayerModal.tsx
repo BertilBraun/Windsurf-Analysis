@@ -1,5 +1,7 @@
 import React from 'react'
 import { Modal } from './Modal'
+import { Button } from './Button'
+import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
 import { CanvasPlayer } from '../player/CanvasPlayer'
 import { JobDetail, ReportType } from '../types'
 
@@ -11,12 +13,30 @@ export const PlayerModal: React.FC<{
     onReport: (id: string, type: ReportType, message: string) => void
     onOpenNextJob?: () => void
     onOpenPrevJob?: () => void
-}> = ({ job, dirHandle, onClose, onDelete, onReport, onOpenNextJob, onOpenPrevJob }) => {
+    deletingId?: string | null
+}> = ({ job, dirHandle, onClose, onDelete, onReport, onOpenNextJob, onOpenPrevJob, deletingId }) => {
+    const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
+
     return (
         <>
-            <Modal key={job.id} onClose={onClose}>
-                <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-2xl shadow-xl overflow-hidden border border-slate-200">
-                    <div className="h-full w-full flex flex-col overflow-hidden">
+            <Modal
+                key={job.id}
+                onClose={onClose}
+                title={job.local_relative_path?.replace(/\.mp4$/i, '') ?? 'n/a'}
+                additionalHeader={
+                    <>
+                        <Button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" text="Shortcuts" />
+                        <Button
+                            onClick={() => onDelete(job.id)}
+                            title="Delete job"
+                            text="Delete"
+                            isPending={deletingId === job.id}
+                        />
+                    </>
+                }
+            >
+                <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
+                    <div className="w-full h-full overflow-hidden">
                         <CanvasPlayer
                             key={job.id}
                             job={job}
@@ -30,6 +50,8 @@ export const PlayerModal: React.FC<{
                     </div>
                 </div>
             </Modal>
+
+            {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
         </>
     )
 }

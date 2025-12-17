@@ -66,6 +66,15 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         }
     }
 
+    const [deletingId, setDeletingId] = React.useState<string | null>(null)
+    const onDelete = async (id: string) => {
+        setDeletingId(id)
+        try {
+            await deleteJob(id)
+        } finally {
+            setDeletingId(null)
+        }
+    }
     let greeting = ''
     if (user) {
         if (user.displayName) greeting += ` — ${user.displayName}`
@@ -134,8 +143,9 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                             const detail = await refreshJobDetail(target.id)
                             setSelectedJob(detail)
                         }}
-                        onDelete={deleteJob}
+                        onDelete={onDelete}
                         onReport={reportJob}
+                        deletingId={deletingId}
                     />
                 )}
                 {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
