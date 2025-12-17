@@ -10,6 +10,7 @@ import { Button } from '../components/Button'
 import { SettingsModal } from '../components/SettingsModal'
 import { PlayerModal } from '../components/PlayerModal'
 import { LogoButton } from '../components/LogoButton'
+import { trackEvent } from '../utils/analytics'
 
 export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => void }> = ({
     onGoHome,
@@ -51,8 +52,11 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
             setDirPermission(perm || null)
             setDirHandle(handle)
             await saveDirectoryHandle(handle)
+            trackEvent('ingress_folder_selected', { permission: perm || null })
         } catch (e) {
             // user cancelled or unsupported
+            const name = (e as any)?.name
+            trackEvent('ingress_folder_select_failed', { name: name ? String(name) : 'unknown' })
         }
     }
 
@@ -60,6 +64,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const onOpen = async (id: string) => {
         setOpeningId(id)
         try {
+            trackEvent('job_open', { job_id: id })
             setSelectedJob(await refreshJobDetail(id))
         } finally {
             setOpeningId(null)
@@ -92,8 +97,24 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     <div className="flex-1" />
 
                     <div className="flex items-center gap-2">
-                        <Button size="sm" variant="ghost" onClick={() => setShowShortcuts(true)} text="Shortcuts" />
-                        <Button size="sm" variant="secondary" onClick={() => setShowSettings(true)} text="Settings" />
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                                trackEvent('open_shortcuts')
+                                setShowShortcuts(true)
+                            }}
+                            text="Shortcuts"
+                        />
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                                trackEvent('open_settings')
+                                setShowSettings(true)
+                            }}
+                            text="Settings"
+                        />
                     </div>
                 </div>
             </header>
@@ -156,7 +177,10 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
             <div className="fixed bottom-4 left-4">
                 <button
                     type="button"
-                    onClick={onGoPricing}
+                    onClick={() => {
+                        trackEvent('open_pricing_from_beta_badge')
+                        onGoPricing()
+                    }}
                     className="group flex items-center gap-2 rounded-full border border-brand-600/25 bg-white/90 backdrop-blur px-3 py-2 shadow-sm hover:shadow transition hover:cursor-pointer"
                     title="Beta — read more"
                     aria-label="Beta — read more"

@@ -11,6 +11,7 @@ import { useSeeker } from '../hooks/useSeeker'
 import { clamp } from '../utils/clamp'
 import { drawRotatedToCanvas, getRotatedDimensions } from './rotation'
 import { processVideo } from '../../preprocess/preprocess'
+import { trackEvent } from '../utils/analytics'
 
 type Props = {
     job: JobDetail
@@ -72,6 +73,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
     }, [dirHandle, job.local_relative_path])
 
     React.useEffect(() => {
+        trackEvent('player_open', { job_id: job.id })
         let revoked: string | null = null
         setVideoUrl(null)
         setError(null)
@@ -184,51 +186,67 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
                 e.preventDefault()
                 const v = videoRef.current
                 if (v && v.duration && v.currentTime >= v.duration - 0.05) {
+                    trackEvent('shortcut_used', { action: 'restart_play' })
                     seekTo(0, true)
                 } else {
+                    trackEvent('shortcut_used', { action: 'toggle_play' })
                     togglePlay()
                 }
             } else if (key === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey) {
                 e.preventDefault()
+                trackEvent('shortcut_used', { action: 'step_prev_frame' })
                 stepPrev()
             } else if (key === 'ArrowRight' && !e.ctrlKey && !e.shiftKey) {
                 e.preventDefault()
+                trackEvent('shortcut_used', { action: 'step_next_frame' })
                 stepNext()
             } else if (e.ctrlKey && key === 'ArrowLeft') {
                 e.preventDefault()
+                trackEvent('shortcut_used', { action: 'seek_minus_30s' })
                 seekTo(player.currentTimeSec - 30, true)
             } else if (e.ctrlKey && key === 'ArrowRight') {
                 e.preventDefault()
+                trackEvent('shortcut_used', { action: 'seek_plus_30s' })
                 seekTo(player.currentTimeSec + 30, true)
             } else if (e.shiftKey && key === 'ArrowLeft') {
                 e.preventDefault()
+                trackEvent('shortcut_used', { action: 'seek_minus_5s' })
                 seekTo(player.currentTimeSec - 5, true)
             } else if (e.shiftKey && key === 'ArrowRight') {
                 e.preventDefault()
+                trackEvent('shortcut_used', { action: 'seek_plus_5s' })
                 seekTo(player.currentTimeSec + 5, true)
             } else if (key === '-') {
                 e.preventDefault()
+                trackEvent('shortcut_used', { action: 'speed_down' })
                 bumpSpeed(true)
             } else if (key === '+' || key === '=') {
                 e.preventDefault()
+                trackEvent('shortcut_used', { action: 'speed_up' })
                 bumpSpeed(false)
             } else if (key.toLowerCase() === 'escape') {
                 if (player.mode === 'overview') {
+                    trackEvent('shortcut_used', { action: 'close_player' })
                     onClose?.()
                 } else {
+                    trackEvent('shortcut_used', { action: 'exit_detailed_view' })
                     setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
                 }
             } else if (!e.shiftKey && key.toLowerCase() === 'n') {
                 e.preventDefault()
+                trackEvent('shortcut_used', { action: 'next_track' })
                 goToAdjacentTrack(true)
             } else if (!e.shiftKey && key.toLowerCase() === 'p') {
                 e.preventDefault()
+                trackEvent('shortcut_used', { action: 'prev_track' })
                 goToAdjacentTrack(false)
             } else if (e.shiftKey && key.toLowerCase() === 'n') {
                 e.preventDefault()
+                trackEvent('shortcut_used', { action: 'next_video' })
                 onOpenNextJob?.()
             } else if (e.shiftKey && key.toLowerCase() === 'p') {
                 e.preventDefault()
+                trackEvent('shortcut_used', { action: 'prev_video' })
                 onOpenPrevJob?.()
             }
         }
@@ -378,6 +396,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
                 return p.copy({ mode: 'overview', currentTrackId: null })
 
             const trackId = hoveredTrackId
+            trackEvent('surfer_clicked', { track_id: trackId })
             const detection = p.interpolateDetectionByTime(trackId, p.currentTimeSec)
             if (!detection) return p.copy({ mode: 'overview', currentTrackId: null })
 
@@ -404,6 +423,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
 
             const track = p.tracks.find(t => t.track_id === p.currentTrackId)
             if (!track) throw new Error('Track not found')
+            trackEvent('export_track_start', { job_id: job.id, track_id: track.track_id })
 
             const padSec = 0.25
             const startSec = Math.max(0, track.start_time_seconds - padSec)
@@ -432,8 +452,10 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
             })
 
             downloadBlob(outBlob, filename)
+            trackEvent('export_track_success', { job_id: job.id, track_id: track.track_id })
         } catch (e: any) {
             setExportError(String(e?.message || e || 'Export failed'))
+            trackEvent('export_track_failed', { job_id: job.id, message: String(e?.message || e || 'Export failed') })
         } finally {
             setIsExporting(false)
             setExportProgressPct(null)
@@ -485,9 +507,18 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
                         <Timeline state={player} onSeekTime={t => seekTo(t, false)} />
                     </div>
                     <ControlsBar
-                        onPlayPause={togglePlay}
-                        onSpeedDown={() => bumpSpeed(true)}
-                        onSpeedUp={() => bumpSpeed(false)}
+                        onPlayPause={() => {
+                            trackEvent('player_play_pause_clicked', { job_id: job.id })
+                            togglePlay()
+                        }}
+                        onSpeedDown={() => {
+                            trackEvent('player_speed_down_clicked', { job_id: job.id })
+                            bumpSpeed(true)
+                        }}
+                        onSpeedUp={() => {
+                            trackEvent('player_speed_up_clicked', { job_id: job.id })
+                            bumpSpeed(false)
+                        }}
                         isPlaying={player.isPlaying}
                         speed={speed}
                         zoom={zoom}

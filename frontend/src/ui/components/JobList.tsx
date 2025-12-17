@@ -2,6 +2,7 @@ import React from 'react'
 import { JobSummary } from '../types'
 import { AnimatedDots } from './AnimatedDots'
 import JobThumbnail from './JobThumbnail'
+import { trackEvent } from '../utils/analytics'
 
 export const JobList: React.FC<{
     jobs: JobSummary[]
@@ -60,7 +61,10 @@ export const JobList: React.FC<{
                                 ? 'bg-gray-700 text-gray-100 border-gray-700'
                                 : 'bg-gray-100 text-gray-800 border-gray-300'
                         }`}
-                        onClick={() => toggleSort('name')}
+                        onClick={() => {
+                            trackEvent('joblist_sort', { key: 'name' })
+                            onToggleSort('name')
+                        }}
                     >
                         Name {sortKey === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
                     </button>
@@ -70,7 +74,10 @@ export const JobList: React.FC<{
                                 ? 'bg-gray-700 text-gray-100 border-gray-700'
                                 : 'bg-gray-100 text-gray-800 border-gray-300'
                         }`}
-                        onClick={() => toggleSort('date')}
+                        onClick={() => {
+                            trackEvent('joblist_sort', { key: 'date' })
+                            onToggleSort('date')
+                        }}
                     >
                         Date {sortKey === 'date' ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
                     </button>

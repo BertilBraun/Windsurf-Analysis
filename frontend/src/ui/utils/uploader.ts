@@ -1,6 +1,7 @@
 import { modalUrl } from '../../firebase'
 import { getVideoTrack } from '../hooks/useVideoFps'
 import { UploadQuality } from '../types'
+import { trackEvent } from './analytics'
 
 export type UploadContext = {
     authorizedFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>
@@ -98,6 +99,11 @@ export async function uploadVideoFile(
     onProgress: (percent: number) => void
 ): Promise<'uploaded' | 'skipped'> {
     // Step 1: Create job (also acts as duplicate/quota check)
+    trackEvent('analysis_upload_start', {
+        file_size_bytes: file.size,
+        mime: file.type || 'video/mp4',
+        quality,
+    })
 
     // get number of frames of the video and skip if longer than MAX_FRAMES
     const video = await getVideoTrack(file)
@@ -110,8 +116,16 @@ export async function uploadVideoFile(
     const created = await createJobForChecksum(sha256, ctx)
     if (created === 'skipped') return 'skipped'
     const job_id = created.job_id
+    trackEvent('analysis_job_created', { job_id })
 
-    return uploadVideoFileToJob(file, quality, ctx, job_id, onProgress)
+    try {
+        const result = await uploadVideoFileToJob(file, quality, ctx, job_id, onProgress)
+        trackEvent('analysis_upload_complete', { job_id })
+        return result
+    } catch (e: any) {
+        trackEvent('analysis_upload_failed', { job_id, message: String(e?.message || e || 'upload failed') })
+        throw e
+    }
 }
 
 export async function createJobForChecksum(

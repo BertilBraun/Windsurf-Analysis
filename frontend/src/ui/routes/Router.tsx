@@ -12,6 +12,7 @@ import { SingleInstanceGuard } from '../components/SingleInstanceGuard'
 import { LoginPage } from '../screens/LoginPage'
 import { SignupPage } from '../screens/SignupPage'
 import { LogoButton } from '../components/LogoButton'
+import { trackPageView } from '../utils/analytics'
 
 const AnalyzerRoute: React.FC = () => {
     const {
@@ -147,6 +148,12 @@ const AnalyzerRoute: React.FC = () => {
 }
 
 export const Router: React.FC = () => {
+    const location = useLocation()
+
+    React.useEffect(() => {
+        trackPageView(`${location.pathname}${location.search}${location.hash}`)
+    }, [location.pathname, location.search, location.hash])
+
     return (
         <Routes>
             <Route

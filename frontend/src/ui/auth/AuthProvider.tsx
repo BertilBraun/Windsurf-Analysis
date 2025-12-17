@@ -12,6 +12,7 @@ import {
 } from 'firebase/auth'
 import { auth, backendUrl, googleProvider } from '../../firebase'
 import { useSettings } from '../hooks/useSettings'
+import { setUserId, trackEvent } from '../utils/analytics'
 
 type AuthContextValue = {
     user: User | null
@@ -72,6 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const login = useCallback(async (e: string, p: string) => {
         await signInWithEmailAndPassword(auth, e.trim(), p)
         // Token + email are picked up via onIdTokenChanged below.
+        trackEvent('auth_login', { method: 'password' })
     }, [])
 
     const signup = useCallback(
@@ -86,6 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await sendEmailVerification(result.user)
             // Always create the backend user record after signup
             await ensureBackendUser(result.user)
+            trackEvent('auth_signup', { method: 'password' })
         },
         [ensureBackendUser]
     )
@@ -96,6 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Calling this every time is fine; backend treats "already exists" as 400.
         await ensureBackendUser(result.user)
         // Token + email are picked up via onIdTokenChanged below.
+        trackEvent('auth_login', { method: 'google' })
     }, [ensureBackendUser])
 
     const resetPassword = useCallback(async (e: string) => {
@@ -108,6 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         void (async () => {
             await signOut(auth)
             await clearAuth() // remove any legacy stored basic auth (if present)
+            trackEvent('auth_logout')
         })()
     }, [clearAuth])
 
@@ -136,10 +141,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsAuthReady(true) // first callback means Firebase finished restoring auth state
             if (!u) {
                 setAuthHeader(null)
+                setUserId(null)
                 return
             }
             const token = await u.getIdToken()
             setAuthHeader(`Bearer ${token}`)
+            setUserId(u.uid)
         })
 
         return () => unsub()
