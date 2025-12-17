@@ -16,12 +16,6 @@ class JobsRepo:
             raise HTTPException(status_code=404, detail='Job not found')
         return JobRecord.model_validate(snap.to_dict() or {})
 
-    def get_jobs(self, job_ids: list[str]) -> list[JobRecord]:
-        if not job_ids:
-            return []
-        snaps = jobs.where('job_id', 'in', job_ids).stream()
-        return [JobRecord.model_validate(snap.to_dict() or {}) for snap in snaps]
-
     def get_job_by_checksum(self, checksum: str) -> JobRecord | None:
         q = jobs.where('original_checksum_sha256', '==', checksum).limit(1).stream()
         for snap in q:

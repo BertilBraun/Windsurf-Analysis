@@ -35,31 +35,6 @@ export function useJobs(): UseJobsReturn {
         jobsByIdRef.current.clear()
     }, [])
 
-    const tick = React.useCallback(async () => {
-        const res = await authorizedFetch('/jobs')
-        const data = (await res.json()) as { jobs: JobSummary[] }
-        // Enrich with local_relative_path from IDB mapping
-        const enriched: JobSummary[] = await Promise.all(
-            data.jobs.map(async job => ({
-                ...job,
-                local_relative_path: await getPathForSha(job.original_checksum_sha256),
-            }))
-        )
-        setJobs(enriched)
-        const anyOpen = enriched.some(
-            job =>
-                job.status === 'pending' ||
-                job.status === 'starting' ||
-                job.status === 'orientation' ||
-                job.status === 'stabilization' ||
-                job.status === 'detection' ||
-                job.status === 'appearance' ||
-                job.status === 'tracking'
-        )
-        // Note: realtime mode handles stopping naturally; this is just for initial hydration UX.
-        if (!anyOpen) return
-    }, [authorizedFetch])
-
     // Start realtime subscriptions on mount; cleanup on unmount.
     React.useEffect(() => {
         stopRealtime()
@@ -147,15 +122,11 @@ export function useJobs(): UseJobsReturn {
             err => {
                 console.warn('user_jobs snapshot error; falling back to one-time fetch', err)
                 stopRealtime()
-                tick()
             }
         )
 
-        // Kick an initial backend fetch to populate immediately (nice UX) until first snapshots arrive.
-        void tick()
-
         return () => stopRealtime()
-    }, [uid, stopRealtime, tick])
+    }, [uid, stopRealtime])
 
     const refreshJobDetail = React.useCallback(
         async (id: string): Promise<JobDetail> => {

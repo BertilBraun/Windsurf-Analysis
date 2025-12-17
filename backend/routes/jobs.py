@@ -80,28 +80,6 @@ def create_job(payload: JobCreateRequest, user: User = Depends(get_current_user)
     return JobCreateResponse(job_id=job_record.job_id, status=job_record.status)
 
 
-@router.get('', response_model=JobListResponse)
-def list_jobs(user: User = Depends(get_current_user)):
-    job_ids = user_jobs_repo.list_job_ids_for_user(user.uid)
-
-    rows = jobs_repo.get_jobs(job_ids)
-    rows.sort(key=lambda j: (j.updated_at or j.created_at), reverse=True)
-
-    return JobListResponse(
-        jobs=[
-            JobSummaryItem(
-                id=j.job_id,
-                status=j.status,
-                created_at=j.created_at,
-                updated_at=j.updated_at,
-                original_checksum_sha256=j.original_checksum_sha256,
-                dominant_orientation=j.dominant_orientation,
-            )
-            for j in rows
-        ]
-    )
-
-
 @router.get('/{job_id}', response_model=JobDetail)
 def get_job(job_id: str, user: User = Depends(get_current_user)):
     _require_owned(user, job_id)

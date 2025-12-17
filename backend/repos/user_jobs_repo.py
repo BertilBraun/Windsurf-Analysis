@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from google.cloud import firestore
-from google.cloud.firestore_v1.base_query import BaseCompositeFilter
-from google.cloud.firestore_v1.types import StructuredQuery
 
 from db.firestore_client import db, now, user_jobs
 from models import UserJobRecord
@@ -28,19 +26,6 @@ class UserJobsRepo:
         self._doc(user_id, job_id).set(
             UserJobRecord(user_id=user_id, job_id=job_id, deleted_at=now()).model_dump(mode='json')
         )
-
-    def list_job_ids_for_user(self, user_id: str) -> list[str]:
-        # Avoid composite-index requirements by filtering deleted_at client-side.
-        snaps = user_jobs.where(
-            filter=BaseCompositeFilter(
-                operator=StructuredQuery.CompositeFilter.Operator.AND,
-                filters=[
-                    firestore.FieldFilter('user_id', '==', user_id),
-                    firestore.FieldFilter('deleted_at', '==', None),
-                ],
-            )
-        ).stream()
-        return [UserJobRecord.model_validate(snap.to_dict() or {}).job_id for snap in snaps]
 
     def delete_all_for_user(self, user_id: str) -> int:
         """Hard-delete all user_jobs docs for a user. Returns count deleted."""
