@@ -9,7 +9,6 @@ from fastapi import HTTPException
 
 
 class JobsRepo:
-    # Jobs
     def get_job(self, job_id: str) -> JobRecord:
         snap = jobs.document(job_id).get()
         if not snap.exists:

@@ -56,20 +56,22 @@ def _require_owned(user: User, job_id: str) -> None:
 @router.post('/{job_id}/verify')
 def verify_job(job_id: str, payload: InternalVerifyRequest, user: User = Depends(get_current_user)):
     _require_owned(user, job_id)
+
     required = payload.required_statuses
     if required:
-        job = jobs_repo.get_job(job_id)
-        if job.status not in required:
+        if jobs_repo.get_job(job_id).status not in required:
             raise HTTPException(status_code=409, detail='Job not in allowed state')
+
     return {'ok': True}
 
 
 @router.post('/{job_id}/uploaded')
 def mark_uploaded(job_id: str, payload: InternalUploadedRequest, user: User = Depends(get_current_user)):
     _require_owned(user, job_id)
-    job = jobs_repo.get_job(job_id)
-    if job.status != JobStatus.pending:
+
+    if jobs_repo.get_job(job_id).status != JobStatus.pending:
         raise HTTPException(status_code=409, detail='Job not in a state that accepts uploads')
+
     jobs_repo.update_job(
         job_id,
         JobPatch(

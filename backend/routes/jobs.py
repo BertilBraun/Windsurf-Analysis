@@ -68,8 +68,7 @@ def create_job(payload: JobCreateRequest, user: User = Depends(get_current_user)
     if existing is not None:
         user_jobs_repo.create_user_job(user.uid, existing.job_id)
         jobs_repo.touch_job_accessed(existing.job_id)
-        status = existing.status
-        return JobCreateResponse(job_id=existing.job_id, status=status)
+        return JobCreateResponse(job_id=existing.job_id, status=existing.status)
 
     user_record = user_repo.get_user(user.uid)
     if user_record.processed_jobs_count >= user_record.max_jobs:
@@ -83,14 +82,14 @@ def create_job(payload: JobCreateRequest, user: User = Depends(get_current_user)
 @router.get('/{job_id}', response_model=JobDetail)
 def get_job(job_id: str, user: User = Depends(get_current_user)):
     _require_owned(user, job_id)
+
     job = jobs_repo.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail='Not found')
-    jobs_repo.touch_job_accessed(job_id)
     results = jobs_repo.get_results(job_id)
 
     if job.status != JobStatus.succeeded or results is None:
         raise HTTPException(status_code=405, detail='Job not completed')
+
+    jobs_repo.touch_job_accessed(job_id)
 
     return JobDetail(
         id=job_id,
