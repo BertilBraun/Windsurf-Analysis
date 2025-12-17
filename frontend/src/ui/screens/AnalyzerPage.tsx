@@ -45,9 +45,9 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
 
     const pickDirectory = async () => {
         try {
-            const handle = await (window as any).showDirectoryPicker?.({ id: 'windsurf-ingress' })
+            const handle = await window.showDirectoryPicker({ id: 'windsurf-ingress' })
             if (!handle) return
-            const perm = await handle.requestPermission?.({ mode: 'read' })
+            const perm = await handle.requestPermission({ mode: 'read' })
             setDirPermission(perm || null)
             setDirHandle(handle)
             await saveDirectoryHandle(handle)
@@ -60,25 +60,10 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const onOpen = async (id: string) => {
         setOpeningId(id)
         try {
-            const detail = await refreshJobDetail(id)
-            setSelectedJob(detail)
+            setSelectedJob(await refreshJobDetail(id))
         } finally {
             setOpeningId(null)
         }
-    }
-
-    const [deletingId, setDeletingId] = React.useState<string | null>(null)
-    const onDelete = async (id: string) => {
-        setDeletingId(id)
-        try {
-            await deleteJob(id)
-        } finally {
-            setDeletingId(null)
-        }
-    }
-
-    const onReport = async (id: string, type: ReportType, message: string) => {
-        await reportJob(id, type, message)
     }
 
     let greeting = ''
@@ -125,10 +110,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                         job={selectedJob}
                         dirHandle={dirHandle}
                         onClose={() => setSelectedJob(null)}
-                        onGoHome={() => {
-                            setSelectedJob(null)
-                            onGoHome()
-                        }}
                         onOpenNextJob={async () => {
                             if (!selectedJob || !jobs || jobs.length === 0) return
                             const idx = Math.max(
@@ -153,9 +134,8 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                             const detail = await refreshJobDetail(target.id)
                             setSelectedJob(detail)
                         }}
-                        onDelete={onDelete}
-                        onReport={onReport}
-                        deletingId={deletingId}
+                        onDelete={deleteJob}
+                        onReport={reportJob}
                     />
                 )}
                 {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
