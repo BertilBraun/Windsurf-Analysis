@@ -10,11 +10,13 @@ from auth.internal_auth import require_modal_secret
 from models import JobPatch, JobResults, JobStatus
 from repos.jobs_repo import JobsRepo
 from repos.user_jobs_repo import UserJobsRepo
+from repos.user_repo import UserRepo
 
 
 router = APIRouter(prefix='/internal/jobs', tags=['internal-jobs'], dependencies=[Depends(require_modal_secret)])
 jobs_repo = JobsRepo()
 user_jobs_repo = UserJobsRepo()
+user_repo = UserRepo()
 
 
 class InternalVerifyRequest(BaseModel):
@@ -124,4 +126,6 @@ def set_results(job_id: str, payload: InternalResultsRequest):
             dominant_orientation=results.dominant_orientation,
         ),
     )
+    for user_id in user_jobs_repo.get_user_ids_for_job(job_id):
+        user_repo.increment_processed_jobs_count(user_id, 1)
     return {'ok': True}

@@ -108,7 +108,7 @@ def get_job(job_id: str, user: User = Depends(get_current_user)):
 def delete_job(job_id: str, user: User = Depends(get_current_user)):
     _require_owned(user, job_id)
     user_jobs_repo.mark_user_job_deleted(user.uid, job_id)
-    # TODO: if no other user jobs point at this job, delete the job?
+    # TODO: if no other user jobs point at this job, delete the job? Recursive delete to also delete the results document
     return {'ok': True}
 
 

@@ -35,3 +35,6 @@ class UserRepo:
 
     def delete_user(self, user_id: str) -> None:
         users.document(user_id).delete()
+
+    def increment_processed_jobs_count(self, user_id: str, delta: int = 1) -> None:
+        users.document(user_id).set({'processed_jobs_count': firestore.Increment(delta)}, merge=True)

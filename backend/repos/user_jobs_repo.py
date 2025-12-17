@@ -40,4 +40,14 @@ class UserJobsRepo:
                 batch = db.batch()
         if deleted % 450 != 0:
             batch.commit()
+        # TODO: if no other user jobs point at this job, delete the job? Recursive delete to also delete the results document
         return deleted
+
+    def get_user_ids_for_job(self, job_id: str) -> list[str]:
+        """Returns user_ids associated with a job (excluding soft-deleted associations)."""
+        user_ids: list[str] = []
+        for snap in user_jobs.where('job_id', '==', job_id).stream():
+            record = UserJobRecord.model_validate(snap.to_dict() or {})
+            if record.deleted_at is None:
+                user_ids.append(record.user_id)
+        return user_ids
