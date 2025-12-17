@@ -14,6 +14,7 @@ import { auth, backendUrl, googleProvider } from '../../firebase'
 import { useSettings } from '../hooks/useSettings'
 
 type AuthContextValue = {
+    user: User | null
     isAuthReady: boolean
     isAuthenticated: boolean
     isSignedIn: boolean
@@ -173,6 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const value = useMemo<AuthContextValue>(
         () => ({
+            user,
             isAuthReady,
             isAuthenticated: !!user && !!user.emailVerified,
             isSignedIn: !!user,

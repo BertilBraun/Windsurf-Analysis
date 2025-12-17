@@ -29,7 +29,7 @@ class StabilizationModel:
     @modal.enter()
     def setup(self):
         # Cache OrientationFixer once per container
-        self.orientation_fixer = OrientationFixer('/root/weights/orientation_fixer/best.pt')
+        self.orientation_fixer = OrientationFixer('/root/inference/weights/orientation_fixer/best.pt')
 
     @modal.method()
     def stabilize_and_enqueue(self, job_id: str, yolo_model: str):

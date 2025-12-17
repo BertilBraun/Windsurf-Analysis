@@ -43,7 +43,13 @@ const Ring: React.FC<{ percent: number }> = ({ percent }) => {
     )
 }
 
-export const IngressWidget: React.FC<Props> = ({ dirHandle, dirPermission, onPickDirectory, uploadCtx, onUploaded }) => {
+export const IngressWidget: React.FC<Props> = ({
+    dirHandle,
+    dirPermission,
+    onPickDirectory,
+    uploadCtx,
+    onUploaded,
+}) => {
     const scanner = useIngressScanner(dirHandle, uploadCtx, onUploaded)
     const [expanded, setExpanded] = React.useState(false)
     const [showQuotaModal, setShowQuotaModal] = React.useState(false)
@@ -73,11 +79,7 @@ export const IngressWidget: React.FC<Props> = ({ dirHandle, dirPermission, onPic
                         <div className="flex flex-col items-start leading-tight">
                             <div className="text-xs font-semibold text-slate-900">Ingress</div>
                             <div className="text-[11px] text-slate-500">
-                                {uploading > 0
-                                    ? `Uploading ${uploading}…`
-                                    : dirHandle
-                                      ? 'Monitoring'
-                                      : 'Select folder'}
+                                {uploading > 0 ? `Uploading ${uploading}…` : dirHandle ? 'Monitoring' : 'Select folder'}
                             </div>
                         </div>
                         {uploading > 0 && (
@@ -161,8 +163,8 @@ export const IngressWidget: React.FC<Props> = ({ dirHandle, dirPermission, onPic
                 <Modal onClose={() => setShowQuotaModal(false)} title="You're out of free jobs">
                     <div className="p-4 text-slate-900">
                         <p className="mb-3">
-                            Hey, you've gotten a sneak peek of the Windsurf Analyzer. We'd love to get in contact to hear
-                            your opinions — what you liked and what we could improve.
+                            Hey, you've gotten a sneak peek of the Windsurf Analyzer. We'd love to get in contact to
+                            hear your opinions — what you liked and what we could improve.
                         </p>
                         <p className="mb-1">
                             To get full and unlimited access to the analyzer, please reach out to us at
@@ -181,7 +183,9 @@ export const IngressWidget: React.FC<Props> = ({ dirHandle, dirPermission, onPic
 const SuspendedBanner: React.FC<{ onRetryFailed: () => void }> = ({ onRetryFailed }) => {
     return (
         <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
-            <div className="text-xs text-amber-800 mb-2">Uploads paused due to an error. You can retry failed uploads.</div>
+            <div className="text-xs text-amber-800 mb-2">
+                Uploads paused due to an error. You can retry failed uploads.
+            </div>
             <div className="flex gap-2">
                 <button
                     type="button"
@@ -216,7 +220,8 @@ const StatusLine: React.FC<StatusLineProps> = ({
         if (!dirHandle) return { text: 'Idle — no folder selected', color: '#b45309' }
         if (dirPermission === 'denied') return { text: 'Permission denied', color: '#b91c1c' }
         if (lastError) return { text: `Error — ${lastError}`, color: '#b91c1c' }
-        if (uploading > 0) return { text: `Uploading ${uploading} file${uploading > 1 ? 's' : ''}…`, color: 'var(--brand-600)' }
+        if (uploading > 0)
+            return { text: `Uploading ${uploading} file${uploading > 1 ? 's' : ''}…`, color: 'var(--brand-600)' }
         if (active)
             return {
                 text: `Monitoring — last scan ${lastRunAt ? new Date(lastRunAt).toLocaleTimeString() : 'just now'}`,
@@ -241,7 +246,9 @@ const UploadItem: React.FC<{ item: IngressUploadItem }> = ({ item }) => {
         <div className="flex flex-col gap-1">
             <div className="flex justify-between gap-2">
                 <span
-                    className={`text-xs ${isError ? 'text-red-700' : 'text-slate-700'} overflow-hidden text-ellipsis whitespace-nowrap flex-1`}
+                    className={`text-xs ${
+                        isError ? 'text-red-700' : 'text-slate-700'
+                    } overflow-hidden text-ellipsis whitespace-nowrap flex-1`}
                     title={item.relativePath}
                 >
                     {item.relativePath}
@@ -263,17 +270,18 @@ const ProgressBar: React.FC<{
         status === 'error'
             ? 'bg-red-300'
             : status === 'uploading'
-              ? 'bg-brand-600'
-              : status === 'done'
-                ? 'bg-green-500'
-                : status === 'skipped'
-                  ? 'bg-slate-400'
-                  : 'bg-slate-400'
+            ? 'bg-green-500'
+            : status === 'done'
+            ? 'bg-green-500'
+            : status === 'skipped'
+            ? 'bg-slate-400'
+            : 'bg-slate-400'
     return (
         <div className="relative h-1.5 bg-slate-200 rounded-full overflow-hidden">
-            <div className={`absolute left-0 top-0 bottom-0 ${color}`} style={{ width: `${percent}%` }} />
+            <div
+                className={`absolute left-0 top-0 bottom-0 ${color} transition-[width] duration-150 ease-linear`}
+                style={{ width: `${percent}%` }}
+            />
         </div>
     )
 }
-
-

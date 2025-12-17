@@ -31,13 +31,13 @@ def _require_bearer(authorization: str | None) -> str:
 
 
 def _reload_volume() -> None:
-    from video_processing.main_api import volume
+    from main_api import volume
 
     volume.reload()
 
 
 def _commit_volume() -> None:
-    from video_processing.main_api import volume
+    from main_api import volume
 
     volume.commit()
 
@@ -138,11 +138,11 @@ async def complete_job(
     status: str = Form(...),
     results_json: str | None = Form(None),
     error_message: str | None = Form(None),
-    modal_shared_secret: str = Header(default=None),
+    x_modal_secret: str | None = Header(default=None, alias='X-Modal-Secret'),
 ):
     """Called when processing is finished."""
     # verify, that the modal shared secret is present
-    if not modal_shared_secret or modal_shared_secret != settings.modal_shared_secret:
+    if not x_modal_secret or x_modal_secret != settings.modal_shared_secret:
         raise HTTPException(status_code=401, detail='Invalid modal shared secret')
     _reload_volume()
 

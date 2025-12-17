@@ -4,6 +4,7 @@ from typing import Literal
 import modal
 import contextlib
 import requests
+import json
 
 from pathlib import Path
 
@@ -14,21 +15,28 @@ from inference.src.tracking.detector import ObjectDetector
 
 inference_root_folder = Path(__file__).parent / 'inference'
 
+
 # Container image with system deps for OpenCV/torch
+def ignore_files(p: Path) -> bool:
+    # if is .py file, keep it
+    if p.name.endswith('.py'):
+        return False
+
+    # if is best.pt file, keep it
+    if p.name == 'best.pt':
+        return False
+
+    return True  # otherwise, ignore it
+
+
 image = (
     modal.Image.debian_slim(python_version='3.10')
     .apt_install('ffmpeg', 'libgl1', 'git')
     .add_local_dir(
-        inference_root_folder / 'src', remote_path='/root/src', copy=True, ignore=lambda p: '__pycache__' in p.parts
-    )
-    .add_local_dir(
-        inference_root_folder / 'weights/orientation_fixer', remote_path='/root/weights/orientation_fixer', copy=True
-    )
-    .add_local_dir(
-        inference_root_folder / 'weights/yolo_models',
-        remote_path='/root/weights/yolo_models',
+        Path(__file__).parent,
+        remote_path='/root',
         copy=True,
-        ignore=lambda p: p.name != 'best.pt',
+        ignore=ignore_files,
     )
     .pip_install_from_requirements(str(inference_root_folder / 'requirements.txt'))
 )
@@ -44,18 +52,32 @@ def report_job_failure_on_exception(job_id: str):
         yield
     except Exception as e:
         print(f'Error in report_job_failure_on_exception: {e}')
-        send_complete(job_id, 'failed', None)
+        send_complete(job_id, 'failed', None, error_message=str(e))
         raise e
 
 
-def send_complete(job_id: str, status: Literal['succeeded', 'failed'], results: dict | None):
+def send_complete(
+    job_id: str,
+    status: Literal['succeeded', 'failed'],
+    results: dict | None,
+    *,
+    error_message: str | None = None,
+):
     try:
+        # NOTE: Modal API expects multipart/form fields (FastAPI Form), not JSON.
+        # It forwards results to Cloud Run via /internal/jobs/{job_id}/results.
+        data: dict[str, str] = {'status': status}
+        if results is not None:
+            data['results_json'] = json.dumps(results)
+        if error_message is not None:
+            data['error_message'] = error_message
+
         requests.post(
-            f'{settings.modal_backend_base_url}/v1/jobs/{job_id}/complete',
-            json={'status': status, 'results': results},
+            f'{settings.modal_backend_base_url}/jobs/{job_id}/complete',
+            data=data,
             headers={'X-Modal-Secret': settings.modal_shared_secret},
             timeout=60,
-        )
+        ).raise_for_status()
     except Exception as e:
         print(f'Error posting complete webhook: {e}')
 
@@ -66,11 +88,12 @@ def send_progress(
 ):
     try:
         requests.post(
-            f'{settings.cloud_run_base_url}/v1/jobs/{job_id}/status',
+            # Cloud Run only accepts internal job updates under /internal/jobs/...
+            f'{settings.cloud_run_base_url}/internal/jobs/{job_id}/status',
             json={'status': status},
             headers={'X-Modal-Secret': settings.modal_shared_secret},
             timeout=60,
-        )
+        ).raise_for_status()
     except Exception as e:
         print(f'Error posting progress webhook: {e}')
 
@@ -108,7 +131,7 @@ class InferenceModel:
         if yolo_model not in self.processors:
             # Initialize and cache processor for this model pair
             with timeit(f'Initializing processor for {yolo_model}'):
-                yolo_model_path = '/root/weights/yolo_models/' + yolo_model
+                yolo_model_path = '/root/inference/weights/yolo_models/' + yolo_model
                 self.processors[yolo_model] = ObjectDetector(yolo_model_path)
         return self.processors[yolo_model]
 
@@ -119,7 +142,6 @@ class InferenceModel:
         yolo_model: str,
         dominant_orientation: int,
         transforms: list[dict],
-        authorization: str,
     ):
         with report_job_failure_on_exception(job_id):
             video_path = f'/data/{job_id}_upright.mp4'

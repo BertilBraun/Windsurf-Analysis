@@ -1,4 +1,4 @@
-import { API_BASE } from '../auth/AuthProvider'
+import { modalUrl } from '../../firebase'
 import { getVideoTrack } from '../hooks/useVideoFps'
 import { UploadQuality } from '../types'
 
@@ -6,6 +6,8 @@ export type UploadContext = {
     authorizedFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>
     getAuthHeader: () => Promise<string>
 }
+
+const MODAL_BASE = modalUrl + '/api/v1'
 
 const MAX_PARALLEL_UPLOAD_REQUESTS = 8
 const uploadSlotWaiters: Array<() => void> = []
@@ -158,8 +160,9 @@ export async function uploadVideoFileToJob(
     initForm.append('mime_type', file.type || 'video/mp4')
     initForm.append('yolo_model', 'windsurfing/best.pt')
 
-    const initRes = await ctx.authorizedFetch(`/jobs/${job_id}/upload/init`, {
+    const initRes = await fetch(`${MODAL_BASE}/jobs/${job_id}/upload/init`, {
         method: 'POST',
+        headers: { Authorization: await ctx.getAuthHeader() },
         body: initForm,
     })
     if (!initRes.ok) throw new Error(await initRes.text())
@@ -207,15 +210,20 @@ export async function uploadVideoFileToJob(
             `${file.name}.part${partIndex}`
         )
 
-        await doXhrUpload(`${API_BASE}/jobs/${job_id}/upload/part`, ctx.getAuthHeader, partForm, (percent: number) => {
-            const bytes = Math.max(0, Math.min(partSize, Math.round(percent * partSize)))
-            const delta = bytes - perPartUploaded[partIndex]
-            if (delta > 0) {
-                perPartUploaded[partIndex] += delta
-                aggregatedUploaded += delta
-                updateOverallProgress()
+        await doXhrUpload(
+            `${MODAL_BASE}/jobs/${job_id}/upload/part`,
+            ctx.getAuthHeader,
+            partForm,
+            (percent: number) => {
+                const bytes = Math.max(0, Math.min(partSize, Math.round(percent * partSize)))
+                const delta = bytes - perPartUploaded[partIndex]
+                if (delta > 0) {
+                    perPartUploaded[partIndex] += delta
+                    aggregatedUploaded += delta
+                    updateOverallProgress()
+                }
             }
-        })
+        )
 
         // Ensure we account for any rounding differences at completion
         const deltaToFull = partSize - perPartUploaded[partIndex]
@@ -241,7 +249,10 @@ export async function uploadVideoFileToJob(
     await Promise.all(workers)
 
     // Step 5: COMPLETE upload (server concatenates, checksums, and spawns inference)
-    const completeRes = await ctx.authorizedFetch(`/jobs/${job_id}/upload/complete`, { method: 'POST' })
+    const completeRes = await fetch(`${MODAL_BASE}/jobs/${job_id}/upload/complete`, {
+        method: 'POST',
+        headers: { Authorization: await ctx.getAuthHeader() },
+    })
     if (!completeRes.ok) throw new Error(await completeRes.text())
     onProgress(1)
     return 'uploaded'

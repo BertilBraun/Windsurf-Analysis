@@ -68,6 +68,7 @@ export function useIngressScanner(
                 inProgressRef.current.add(identifier)
 
                 // Delegate uploading to uploader util (handles preflight + upload)
+                setLastError(null)
                 updateUpload(identifier, { status: 'uploading' })
                 const result = await uploadVideoFile(file, settings.uploadQuality, uploadCtx, percent =>
                     updateUpload(identifier, { progress: Math.round(percent * 100) })

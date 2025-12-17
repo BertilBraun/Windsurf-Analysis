@@ -15,16 +15,11 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     onGoHome,
     onGoPricing,
 }) => {
-    const { logout, email, authorizedFetch, getAuthHeader } = useAuth()
-    const { jobs, startPolling, stopPolling, refreshJobDetail, deleteJob, reportJob } = useJobs()
+    const { logout, user, authorizedFetch, getAuthHeader } = useAuth()
+    const { jobs, refreshJobDetail, deleteJob, reportJob } = useJobs()
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
     const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
     const [showSettings, setShowSettings] = React.useState<boolean>(false)
-
-    React.useEffect(() => {
-        startPolling()
-        return () => stopPolling()
-    }, [startPolling, stopPolling])
 
     // Ingress folder handle stored at the page level for the whole session
     const [dirHandle, setDirHandle] = React.useState<FileSystemDirectoryHandle | null>(null)
@@ -84,7 +79,12 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
 
     const onReport = async (id: string, type: ReportType, message: string) => {
         await reportJob(id, type, message)
-        startPolling()
+    }
+
+    let greeting = ''
+    if (user) {
+        if (user.displayName) greeting += ` — ${user.displayName}`
+        else if (user.email) greeting += ` — ${user.email.split('@')[0]}`
     }
 
     return (
@@ -93,9 +93,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                 <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3 flex items-center gap-3">
                     <LogoButton onClick={onGoHome} />
 
-                    <div className="text-sm text-slate-600">
-                        Upload, process, and review your jibes{email ? ` — ${email.split('@')[0]}` : ''}.
-                    </div>
+                    <div className="text-sm text-slate-600">Upload, process, and review your jibes{greeting}.</div>
 
                     <div className="flex-1" />
 
@@ -119,7 +117,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     dirPermission={dirPermission}
                     onPickDirectory={pickDirectory}
                     uploadCtx={uploadCtx}
-                    onUploaded={() => startPolling()}
+                    onUploaded={() => {}}
                 />
 
                 {selectedJob && (
