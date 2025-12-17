@@ -92,7 +92,7 @@ export class MP4FrameSource {
             const next = await this.dequeue()
             if (next === null) break
             yield next
-            // TODO: next.close()
+            next.close()
         }
     }
 
