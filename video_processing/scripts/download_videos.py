@@ -1,6 +1,6 @@
 import os
-from typing import Iterator
 import modal
+from typing import Iterator
 
 # download all the videos '/{id}_upright.mp4' from the volume
 volume = modal.Volume.from_name('windsurf-analysis-volume', create_if_missing=True)
