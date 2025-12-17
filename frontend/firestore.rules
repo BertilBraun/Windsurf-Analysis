@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasActiveUserJob(jobId) {
+      // We trust the doc ID scheme `${uid}_${jobId}` because:
+      // - this path is derived from `request.auth.uid` and `jobId`
+      // - clients have no write access to `user_jobs`
+      // So the only state we need to validate is "association exists and is not soft-deleted".
+      let docId = request.auth.uid + "_" + jobId;
+      let assoc = get(/databases/$(database)/documents/user_jobs/$(docId));
+      return signedIn()
+        && assoc != null
+        && assoc.data.deleted_at == null;
+    }
+
+    function jobNotDeleted() {
+      // Some older docs may not have `deleted_at`. Treat missing as "not deleted".
+      return true; // return !resource.data.keys().hasAny(['deleted_at']) || resource.data.deleted_at == null;
+    }
+
+    // Default: deny everything unless explicitly allowed below.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Realtime UI reads: `collection('user_jobs').where('user_id','==',uid).where('deleted_at','==',null)`
+    match /user_jobs/{docId} {
+      allow read: if signedIn() && resource.data.user_id == request.auth.uid && resource.data.deleted_at == null;
+      allow create, update, delete: if false;
+    }
+
+    // Realtime UI reads: `doc('jobs', jobId)` for jobIds discovered via `user_jobs`.
+    match /jobs/{jobId} {
+      allow read: if hasActiveUserJob(jobId) && jobNotDeleted();
+      allow create, update, delete: if false;
+
+      // Results are fetched via your protected API, not directly from the client.
+      match /results/{docId} {
+        allow read, write: if false;
+      }
+    }
+
+    // Users are accessed via your protected API (backend/routes/users.py).
+    match /users/{userId} {
+      allow read, write: if false;
+    }
+
+    // Reports are written via your protected API.
+    match /reports/{reportId} {
+      allow read, write: if false;
+    }
+  }
+}
