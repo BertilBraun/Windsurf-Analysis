@@ -43,14 +43,8 @@ const Ring: React.FC<{ percent: number }> = ({ percent }) => {
     )
 }
 
-export const IngressWidget: React.FC<Props> = ({
-    dirHandle,
-    dirPermission,
-    onPickDirectory,
-    uploadCtx,
-    onUploaded,
-}) => {
-    const scanner = useIngressScanner(dirHandle, uploadCtx, onUploaded)
+export const IngressWidget: React.FC<Props> = ({ dirHandle, dirPermission, onPickDirectory, uploadCtx }) => {
+    const scanner = useIngressScanner(dirHandle, uploadCtx)
     const [expanded, setExpanded] = React.useState(false)
     const [showQuotaModal, setShowQuotaModal] = React.useState(false)
 

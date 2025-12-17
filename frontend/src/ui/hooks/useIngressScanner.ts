@@ -17,7 +17,6 @@ export type IngressUploadItem = {
 export function useIngressScanner(
     dirHandle: FileSystemDirectoryHandle | null,
     uploadCtx: UploadContext | null,
-    onUploaded: () => void,
     intervalMs: number = 10000
 ) {
     const [active, setActive] = React.useState(false)
@@ -76,12 +75,10 @@ export function useIngressScanner(
                 if (result === 'skipped') {
                     await addProcessedHash(identifier)
                     removeUpload(identifier)
-                    onUploaded()
                     return
                 } else {
                     await addProcessedHash(identifier)
                     updateUpload(identifier, { progress: 100, status: 'done' })
-                    onUploaded()
                 }
             } catch (e: any) {
                 console.error('Upload failed for', relPath, e)
@@ -95,7 +92,7 @@ export function useIngressScanner(
                 setUploading(v => v - 1)
             }
         },
-        [dirHandle, uploadCtx, suspended, removeUpload, onUploaded]
+        [dirHandle, uploadCtx, suspended, removeUpload]
     )
 
     const scanOnce = React.useCallback(async () => {
