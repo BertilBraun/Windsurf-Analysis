@@ -41,7 +41,7 @@ export const SettingsModal: React.FC<{
                         <Button
                             variant="danger"
                             disabled={!uid || isDeleting}
-                            onClick={() => {
+                            onClick={async () => {
                                 if (!uid) return
                                 const ok = window.confirm(
                                     'Delete your account? This will permanently delete your user and job mappings. This cannot be undone.'
@@ -50,18 +50,15 @@ export const SettingsModal: React.FC<{
 
                                 setDeleteError(null)
                                 setIsDeleting(true)
-                                void (async () => {
-                                    try {
-                                        const res = await authorizedFetch(`/users/${uid}`, { method: 'DELETE' })
-                                        if (!res.ok) throw new Error(await res.text())
-                                        onLogout()
-                                        onClose()
-                                    } catch (e: any) {
-                                        setDeleteError(e?.message || String(e))
-                                    } finally {
-                                        setIsDeleting(false)
-                                    }
-                                })()
+                                try {
+                                    const res = await authorizedFetch(`/users/${uid}`, { method: 'DELETE' })
+                                    if (!res.ok) throw new Error(await res.text())
+                                    onLogout()
+                                    onClose()
+                                } catch (e: any) {
+                                    setDeleteError(e?.message || String(e))
+                                }
+                                setIsDeleting(false)
                             }}
                             text={isDeleting ? 'Deleting account…' : 'Delete account'}
                         />

@@ -1,16 +1,18 @@
 import React from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { useJobs } from '../hooks/useJobs'
-import { JobDetail, ReportType } from '../types'
+import { JobDetail } from '../types'
 import { JobList, getJobListOrderedJobIds, type JobListSortDir, type JobListSortKey } from '../components/JobList'
 import { IngressWidget } from '../components/IngressWidget'
-import { loadDirectoryHandle, saveDirectoryHandle } from '../utils/idb'
-import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal'
+import { loadDirectoryHandle, loadSetting, saveDirectoryHandle, saveSetting } from '../utils/idb'
 import { Button } from '../components/Button'
 import { SettingsModal } from '../components/SettingsModal'
 import { PlayerModal } from '../components/PlayerModal'
 import { LogoButton } from '../components/LogoButton'
 import { trackEvent } from '../utils/analytics'
+import { AnalyzerTutorialModal } from '../components/AnalyzerTutorialModal'
+
+const ANALYZER_TUTORIAL_SEEN_KEY = 'analyzerTutorialSeen.v1'
 
 export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => void }> = ({
     onGoHome,
@@ -19,10 +21,15 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const { logout, user, authorizedFetch, getAuthHeader } = useAuth()
     const { jobs, refreshJobDetail, deleteJob, reportJob } = useJobs()
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
-    const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
     const [showSettings, setShowSettings] = React.useState<boolean>(false)
+    const [showTutorial, setShowTutorial] = React.useState<boolean>(false)
+    const [tutorialStepIndex, setTutorialStepIndex] = React.useState<number>(0)
     const [sortKey, setSortKey] = React.useState<JobListSortKey>('date')
     const [sortDir, setSortDir] = React.useState<JobListSortDir>('desc')
+
+    // Workaround: some TS tooling instances may cache older prop typings during rapid edits.
+    // This keeps runtime behavior correct while avoiding a stale "extra props" diagnostic.
+    const TutorialModal = AnalyzerTutorialModal as React.FC<any>
 
     // Ingress folder handle stored at the page level for the whole session
     const [dirHandle, setDirHandle] = React.useState<FileSystemDirectoryHandle | null>(null)
@@ -44,6 +51,20 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         return () => {
             cancelled = true
         }
+    }, [])
+
+    // Auto-open the tutorial once for new users (no ingress folder and no jobs yet).
+    React.useEffect(() => {
+        loadSetting<boolean>(ANALYZER_TUTORIAL_SEEN_KEY).then(seen => {
+            if (seen) return
+            trackEvent('open_tutorial', { source: 'auto' })
+            setShowTutorial(true)
+        })
+    }, [])
+
+    const openTutorial = React.useCallback(async (source: 'header' | 'empty_state' | 'auto') => {
+        trackEvent('open_tutorial', { source })
+        setShowTutorial(true)
     }, [])
 
     const pickDirectory = async () => {
@@ -112,7 +133,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                 <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3 flex items-center gap-3">
                     <LogoButton onClick={onGoHome} />
 
-                    <div className="text-sm text-slate-600">Upload, process, and review your jibes{greeting}.</div>
+                    <div className="text-sm text-slate-600">Upload, process, and review your riding{greeting}.</div>
 
                     <div className="flex-1" />
 
@@ -121,10 +142,9 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                             size="sm"
                             variant="ghost"
                             onClick={() => {
-                                trackEvent('open_shortcuts')
-                                setShowShortcuts(true)
+                                openTutorial('header')
                             }}
-                            text="Shortcuts"
+                            text="Tutorial"
                         />
                         <Button
                             size="sm"
@@ -140,6 +160,35 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
             </header>
 
             <main className="mx-auto max-w-[1400px] px-4 sm:px-6 py-6 flex flex-col gap-6">
+                {!dirHandle && (
+                    <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                            <div className="flex-1">
+                                <div className="text-sm font-semibold text-slate-900">Getting started</div>
+                                <div className="mt-1 text-sm text-slate-600">
+                                    Select an ingress folder, drop MP4s into it, then open a job once it’s{' '}
+                                    <b>Succeeded</b>.
+                                </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => {
+                                        trackEvent('tutorial_select_folder_clicked')
+                                        void pickDirectory()
+                                    }}
+                                    text={dirHandle ? 'Change folder' : 'Select folder'}
+                                />
+                                <Button
+                                    variant="primary"
+                                    onClick={() => openTutorial('empty_state')}
+                                    text="Open tutorial"
+                                />
+                            </div>
+                        </div>
+                    </section>
+                )}
+
                 <JobList
                     jobs={jobs}
                     sortKey={sortKey}
@@ -191,8 +240,20 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                         deletingId={deletingId}
                     />
                 )}
-                {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
                 {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onLogout={logout} />}
+                {showTutorial && (
+                    <TutorialModal
+                        onClose={() => {
+                            trackEvent('close_tutorial')
+                            setShowTutorial(false)
+                            void saveSetting(ANALYZER_TUTORIAL_SEEN_KEY, true)
+                        }}
+                        stepIndex={tutorialStepIndex}
+                        onStepIndexChange={setTutorialStepIndex}
+                        onPickIngressFolder={() => void pickDirectory()}
+                        ingressFolderName={dirHandle?.name ?? null}
+                    />
+                )}
             </main>
 
             {/* Beta badge: bottom-left, subtle (brand) */}
