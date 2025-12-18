@@ -2,7 +2,7 @@ import React from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { useJobs } from '../hooks/useJobs'
 import { JobDetail, ReportType } from '../types'
-import { JobList } from '../components/JobList'
+import { JobList, getJobListOrderedJobIds, type JobListSortDir, type JobListSortKey } from '../components/JobList'
 import { IngressWidget } from '../components/IngressWidget'
 import { loadDirectoryHandle, saveDirectoryHandle } from '../utils/idb'
 import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal'
@@ -21,6 +21,8 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
     const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
     const [showSettings, setShowSettings] = React.useState<boolean>(false)
+    const [sortKey, setSortKey] = React.useState<JobListSortKey>('date')
+    const [sortDir, setSortDir] = React.useState<JobListSortDir>('desc')
 
     // Ingress folder handle stored at the page level for the whole session
     const [dirHandle, setDirHandle] = React.useState<FileSystemDirectoryHandle | null>(null)
@@ -70,6 +72,23 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
             setOpeningId(null)
         }
     }
+
+    const toggleSort = React.useCallback(
+        (key: JobListSortKey) => {
+            if (key === sortKey) {
+                setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+            } else {
+                setSortKey(key)
+                setSortDir(key === 'name' ? 'asc' : 'desc')
+            }
+        },
+        [sortKey]
+    )
+
+    const orderedSucceededJobIds = React.useMemo(() => {
+        const succeeded = jobs.filter(j => j.status === 'succeeded')
+        return getJobListOrderedJobIds(succeeded, sortKey, sortDir)
+    }, [jobs, sortKey, sortDir])
 
     const [deletingId, setDeletingId] = React.useState<string | null>(null)
     const onDelete = async (id: string) => {
@@ -126,7 +145,15 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     <div />
                 </div>
 
-                <JobList jobs={jobs} onOpen={onOpen} openingId={openingId} dirHandle={dirHandle} />
+                <JobList
+                    jobs={jobs}
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onToggleSort={toggleSort}
+                    onOpen={onOpen}
+                    openingId={openingId}
+                    dirHandle={dirHandle}
+                />
 
                 <IngressWidget
                     dirHandle={dirHandle}
@@ -142,27 +169,27 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                         dirHandle={dirHandle}
                         onClose={() => setSelectedJob(null)}
                         onOpenNextJob={async () => {
-                            if (!selectedJob || !jobs || jobs.length === 0) return
+                            if (!selectedJob || orderedSucceededJobIds.length === 0) return
                             const idx = Math.max(
                                 0,
-                                jobs.findIndex(j => j.id === selectedJob.id)
+                                orderedSucceededJobIds.findIndex(id => id === selectedJob.id)
                             )
-                            const nextIdx = (idx + 1) % jobs.length
-                            const target = jobs[nextIdx]
-                            if (!target) return
-                            const detail = await refreshJobDetail(target.id)
+                            const nextIdx = (idx + 1) % orderedSucceededJobIds.length
+                            const targetId = orderedSucceededJobIds[nextIdx]
+                            if (!targetId) return
+                            const detail = await refreshJobDetail(targetId)
                             setSelectedJob(detail)
                         }}
                         onOpenPrevJob={async () => {
-                            if (!selectedJob || !jobs || jobs.length === 0) return
+                            if (!selectedJob || orderedSucceededJobIds.length === 0) return
                             const idx = Math.max(
                                 0,
-                                jobs.findIndex(j => j.id === selectedJob.id)
+                                orderedSucceededJobIds.findIndex(id => id === selectedJob.id)
                             )
-                            const prevIdx = (idx - 1 + jobs.length) % jobs.length
-                            const target = jobs[prevIdx]
-                            if (!target) return
-                            const detail = await refreshJobDetail(target.id)
+                            const prevIdx = (idx - 1 + orderedSucceededJobIds.length) % orderedSucceededJobIds.length
+                            const targetId = orderedSucceededJobIds[prevIdx]
+                            if (!targetId) return
+                            const detail = await refreshJobDetail(targetId)
                             setSelectedJob(detail)
                         }}
                         onDelete={onDelete}

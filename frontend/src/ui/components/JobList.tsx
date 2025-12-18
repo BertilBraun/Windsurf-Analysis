@@ -4,43 +4,304 @@ import { AnimatedDots } from './AnimatedDots'
 import JobThumbnail from './JobThumbnail'
 import { trackEvent } from '../utils/analytics'
 
+export type JobListSortKey = 'name' | 'date'
+export type JobListSortDir = 'asc' | 'desc'
+
+type FolderNode = {
+    name: string
+    path: string
+    children: Map<string, FolderNode>
+    jobs: JobSummary[]
+    totalJobs: number
+    activeJobs: number
+}
+
+function normalizeRelativePath(path: string): string {
+    return String(path || '')
+        .replace(/^[./\\]+/, '')
+        .replace(/\\/g, '/')
+}
+
+function splitPathParts(path: string): string[] {
+    return normalizeRelativePath(path)
+        .split('/')
+        .map(p => p.trim())
+        .filter(Boolean)
+}
+
+function basename(path: string | null | undefined): string {
+    const parts = path ? splitPathParts(path) : []
+    return parts.length ? parts[parts.length - 1] : ''
+}
+
+function stripMp4(name: string): string {
+    return name.replace(/\.mp4$/i, '')
+}
+
+function sortJobs(list: JobSummary[], sortKey: JobListSortKey, sortDir: JobListSortDir): JobSummary[] {
+    const out = [...list]
+    out.sort((a, b) => {
+        let cmp = 0
+        if (sortKey === 'date') {
+            const ta = Date.parse(a.updated_at || a.created_at || '') || 0
+            const tb = Date.parse(b.updated_at || b.created_at || '') || 0
+            cmp = ta < tb ? -1 : ta > tb ? 1 : 0
+        } else if (sortKey === 'name') {
+            // Within a folder, sort by filename; fallback to full relative path / id
+            const an =
+                stripMp4(basename(a.local_relative_path)).toLowerCase() ||
+                normalizeRelativePath(a.local_relative_path || '').toLowerCase() ||
+                a.id
+            const bn =
+                stripMp4(basename(b.local_relative_path)).toLowerCase() ||
+                normalizeRelativePath(b.local_relative_path || '').toLowerCase() ||
+                b.id
+            cmp = an < bn ? -1 : an > bn ? 1 : 0
+        } else {
+            throw new Error(`Unknown sort key: ${sortKey}`)
+        }
+        return sortDir === 'asc' ? cmp : -cmp
+    })
+    return out
+}
+
+function sortedFolderNames(node: FolderNode): string[] {
+    return Array.from(node.children.keys()).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+}
+
+function buildJobTree(jobs: JobSummary[]) {
+    const root: FolderNode = {
+        name: '',
+        path: '',
+        children: new Map(),
+        jobs: [],
+        totalJobs: 0,
+        activeJobs: 0,
+    }
+    const unmappedJobs: JobSummary[] = []
+
+    const ensureChild = (parent: FolderNode, childName: string, childPath: string): FolderNode => {
+        const existing = parent.children.get(childName)
+        if (existing) return existing
+        const created: FolderNode = {
+            name: childName,
+            path: childPath,
+            children: new Map(),
+            jobs: [],
+            totalJobs: 0,
+            activeJobs: 0,
+        }
+        parent.children.set(childName, created)
+        return created
+    }
+
+    for (const job of jobs) {
+        const rel = job.local_relative_path
+        if (!rel) {
+            unmappedJobs.push(job)
+            continue
+        }
+        const parts = splitPathParts(rel)
+        if (parts.length === 0) {
+            unmappedJobs.push(job)
+            continue
+        }
+        const dirParts = parts.slice(0, Math.max(0, parts.length - 1))
+        let node = root
+        let currentPath = ''
+        for (const part of dirParts) {
+            currentPath = currentPath ? `${currentPath}/${part}` : part
+            node = ensureChild(node, part, currentPath)
+        }
+        node.jobs.push(job)
+    }
+
+    const isActive = (s: JobSummary['status']) => s !== 'succeeded' && s !== 'failed' && s !== 'canceled'
+
+    const finalize = (node: FolderNode): { total: number; active: number } => {
+        let total = node.jobs.length
+        let active = node.jobs.reduce((sum, j) => sum + (isActive(j.status) ? 1 : 0), 0)
+        for (const child of node.children.values()) {
+            const res = finalize(child)
+            total += res.total
+            active += res.active
+        }
+        node.totalJobs = total
+        node.activeJobs = active
+        return { total, active }
+    }
+    finalize(root)
+
+    // Collect all folder paths (for expand/collapse all)
+    const folderPaths: string[] = []
+    const collect = (node: FolderNode) => {
+        for (const child of node.children.values()) {
+            folderPaths.push(child.path)
+            collect(child)
+        }
+    }
+    collect(root)
+
+    return { root, folderPaths, unmappedJobs }
+}
+
+export function getJobListOrderedJobIds(
+    jobs: JobSummary[],
+    sortKey: JobListSortKey,
+    sortDir: JobListSortDir
+): string[] {
+    const { root } = buildJobTree(jobs)
+    const ordered: JobSummary[] = []
+
+    const walk = (node: FolderNode) => {
+        for (const childName of sortedFolderNames(node)) {
+            const child = node.children.get(childName)
+            if (child) walk(child)
+        }
+        for (const j of sortJobs(node.jobs, sortKey, sortDir)) ordered.push(j)
+    }
+
+    walk(root)
+    return ordered.map(j => j.id)
+}
+
 export const JobList: React.FC<{
     jobs: JobSummary[]
+    sortKey: JobListSortKey
+    sortDir: JobListSortDir
+    onToggleSort: (key: JobListSortKey) => void
     onOpen: (id: string) => void
     openingId?: string | null
     dirHandle?: FileSystemDirectoryHandle | null
-}> = ({ jobs, onOpen, openingId, dirHandle = null }) => {
-    const [sortKey, setSortKey] = React.useState<'name' | 'date'>('date')
-    const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('desc')
+}> = ({ jobs, sortKey, sortDir, onToggleSort, onOpen, openingId, dirHandle = null }) => {
+    const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set(['']))
 
-    const toggleSort = (key: 'name' | 'date') => {
-        if (key === sortKey) {
-            setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
-        } else {
-            setSortKey(key)
-            setSortDir(key === 'name' ? 'asc' : 'desc')
-        }
-    }
+    const { root, folderPaths, unmappedJobs } = React.useMemo(() => buildJobTree(jobs), [jobs])
 
-    const sortedJobs = React.useMemo(() => {
-        const list = [...jobs]
-        list.sort((a, b) => {
-            let cmp = 0
-            if (sortKey === 'date') {
-                // Compare ISO-like timestamps; fallback to string compare
-                cmp = a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
-            } else if (sortKey === 'name') {
-                // Sort by local path when available
-                const an = a.local_relative_path?.toLowerCase() ?? 'n/a'
-                const bn = b.local_relative_path?.toLowerCase() ?? 'n/a'
-                cmp = an < bn ? -1 : an > bn ? 1 : 0
-            } else {
-                throw new Error(`Unknown sort key: ${sortKey}`)
-            }
-            return sortDir === 'asc' ? cmp : -cmp
+    const toggleFolder = React.useCallback((path: string) => {
+        setExpanded(prev => {
+            const next = new Set(prev)
+            if (next.has(path)) next.delete(path)
+            else next.add(path)
+            next.add('') // root always expanded
+            return next
         })
-        return list
-    }, [jobs, sortKey, sortDir])
+    }, [])
+
+    const expandAll = React.useCallback(() => {
+        setExpanded(new Set(['', ...folderPaths]))
+    }, [folderPaths])
+
+    const collapseAll = React.useCallback(() => {
+        setExpanded(new Set(['']))
+    }, [])
+
+    const renderFolder = React.useCallback(
+        (node: FolderNode, depth: number) => {
+            const isRoot = node.path === ''
+            const isOpen = expanded.has(node.path) || isRoot
+            const childNames = sortedFolderNames(node)
+            const hasChildren = childNames.length > 0
+            const hasJobs = node.jobs.length > 0
+            const isProcessing = node.activeJobs > 0
+
+            // Hide an empty root header; everything else gets a header row.
+            const showHeader = !isRoot
+
+            return (
+                <div key={node.path || 'root'} className="flex flex-col">
+                    {showHeader && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                trackEvent('joblist_folder_toggle')
+                                toggleFolder(node.path)
+                            }}
+                            className="flex items-center gap-2 text-left py-1.5 rounded-md hover:bg-slate-50"
+                            style={{ paddingLeft: depth * 12 }}
+                            title={node.path}
+                        >
+                            <span className="w-4 text-slate-500">
+                                {hasChildren || hasJobs ? (isOpen ? '▾' : '▸') : ''}
+                            </span>
+                            <span className="font-medium text-slate-900 flex items-center gap-2">
+                                {node.name}
+                                {isProcessing && (
+                                    <span
+                                        className="inline-flex items-center gap-1 text-[11px] text-blue-700"
+                                        title={`${node.activeJobs} in progress`}
+                                    >
+                                        <span className="inline-block w-3 h-3 rounded-full border-2 border-blue-600/30 border-t-blue-600 animate-spin" />
+                                    </span>
+                                )}
+                            </span>
+                            <span className="text-xs text-slate-500">({node.totalJobs})</span>
+                        </button>
+                    )}
+
+                    {isOpen && (
+                        <>
+                            {childNames.map(childName => {
+                                const child = node.children.get(childName)!
+                                return renderFolder(child, depth + 1)
+                            })}
+
+                            {node.jobs.length > 0 && (
+                                <div
+                                    className="mt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+                                    style={{ paddingLeft: (depth + (showHeader ? 1 : 0)) * 12 }}
+                                >
+                                    {sortJobs(node.jobs, sortKey, sortDir).map(job => {
+                                        const fileName = stripMp4(basename(job.local_relative_path)) || 'n/a'
+                                        const caption = fileName
+                                        return (
+                                            <div
+                                                key={job.local_relative_path ?? job.id}
+                                                className="flex flex-col items-start"
+                                            >
+                                                <div
+                                                    className={`relative ${
+                                                        job.status === 'succeeded' ? 'cursor-pointer' : 'cursor-default'
+                                                    } ${openingId === job.id ? 'opacity-60' : ''}`}
+                                                    onClick={() => {
+                                                        if (job.status === 'succeeded' && job.local_relative_path)
+                                                            onOpen(job.id)
+                                                    }}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onKeyDown={e =>
+                                                        job.status === 'succeeded' &&
+                                                        (e.key === 'Enter' || e.key === ' ') &&
+                                                        onOpen(job.id)
+                                                    }
+                                                >
+                                                    <JobThumbnail job={job} dirHandle={dirHandle} />
+                                                    {openingId === job.id && (
+                                                        <div className="absolute inset-0 flex items-center justify-center">
+                                                            <div className="text-white text-sm bg-black/60 rounded px-2 py-1">
+                                                                Opening…
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div
+                                                    className="mt-1 max-w-48 truncate text-xs text-gray-700"
+                                                    title={caption}
+                                                >
+                                                    {caption}
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            )
+        },
+        [dirHandle, expanded, onOpen, openingId, sortDir, sortKey, toggleFolder]
+    )
 
     if (jobs.length === 0) {
         return (
@@ -54,7 +315,7 @@ export const JobList: React.FC<{
         <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
                 <div className="text-sm text-gray-600">Sort by</div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                     <button
                         className={`px-2 py-1 rounded-md text-sm border ${
                             sortKey === 'name'
@@ -81,40 +342,84 @@ export const JobList: React.FC<{
                     >
                         Date {sortKey === 'date' ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
                     </button>
+                    <div className="w-px h-6 bg-slate-200 mx-1" />
+                    <button
+                        className="px-2 py-1 rounded-md text-sm border bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200"
+                        onClick={() => {
+                            trackEvent('joblist_expand_all')
+                            expandAll()
+                        }}
+                        title="Expand all folders"
+                    >
+                        Expand all
+                    </button>
+                    <button
+                        className="px-2 py-1 rounded-md text-sm border bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200"
+                        onClick={() => {
+                            trackEvent('joblist_collapse_all')
+                            collapseAll()
+                        }}
+                        title="Collapse all folders"
+                    >
+                        Collapse all
+                    </button>
                 </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {sortedJobs.map(job => {
-                    const caption = job.local_relative_path?.replace(/\.mp4$/i, '') ?? 'n/a'
-                    return (
-                        <div key={job.local_relative_path ?? job.id} className="flex flex-col items-start">
-                            <div
-                                className={`relative ${
-                                    job.status === 'succeeded' ? 'cursor-pointer' : 'cursor-default'
-                                } ${openingId === job.id ? 'opacity-60' : ''}`}
-                                onClick={() => {
-                                    if (job.status === 'succeeded' && job.local_relative_path) onOpen(job.id)
-                                }}
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={e =>
-                                    job.status === 'succeeded' && (e.key === 'Enter' || e.key === ' ') && onOpen(job.id)
-                                }
-                            >
-                                <JobThumbnail job={job} dirHandle={dirHandle} />
-                                {openingId === job.id && (
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <div className="text-white text-sm bg-black/60 rounded px-2 py-1">Opening…</div>
+            {/* Unmapped jobs (no known local path) */}
+            {unmappedJobs.length > 0 && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                    <div className="text-xs font-semibold text-amber-900 mb-2">
+                        Unmapped jobs (no local file path mapping)
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {sortJobs(unmappedJobs, sortKey, sortDir).map(job => {
+                            const caption = stripMp4(basename(job.local_relative_path)) || 'n/a'
+                            const shaHint = job.original_checksum_sha256
+                                ? `sha:${job.original_checksum_sha256.slice(0, 12)}…`
+                                : 'sha:missing'
+                            return (
+                                <div key={job.id} className="flex flex-col items-start">
+                                    <div
+                                        className={`relative ${
+                                            job.status === 'succeeded' ? 'cursor-pointer' : 'cursor-default'
+                                        } ${openingId === job.id ? 'opacity-60' : ''}`}
+                                        onClick={() => {
+                                            if (job.status === 'succeeded' && job.local_relative_path) onOpen(job.id)
+                                        }}
+                                        role="button"
+                                        tabIndex={0}
+                                        onKeyDown={e =>
+                                            job.status === 'succeeded' &&
+                                            (e.key === 'Enter' || e.key === ' ') &&
+                                            onOpen(job.id)
+                                        }
+                                    >
+                                        <JobThumbnail job={job} dirHandle={dirHandle} />
+                                        {openingId === job.id && (
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <div className="text-white text-sm bg-black/60 rounded px-2 py-1">
+                                                    Opening…
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
-                            <div className="mt-1 max-w-[12rem] truncate text-xs text-gray-700" title={caption}>
-                                {caption}
-                            </div>
-                        </div>
-                    )
-                })}
-            </div>
+                                    <div className="mt-1 max-w-48 truncate text-xs text-gray-700" title={caption}>
+                                        {caption}
+                                    </div>
+                                    <div
+                                        className="text-[11px] text-amber-800/80"
+                                        title={job.original_checksum_sha256 || ''}
+                                    >
+                                        {shaHint}
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            )}
+
+            <div className="flex flex-col gap-1">{renderFolder(root, 0)}</div>
         </div>
     )
 }
