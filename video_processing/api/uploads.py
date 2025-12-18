@@ -146,11 +146,12 @@ async def complete_job(
         raise HTTPException(status_code=401, detail='Invalid modal shared secret')
     _reload_volume()
 
-    try:
-        os.remove(f'/data/{job_id}_upright.mp4')
-        _commit_volume()
-    except Exception as e:
-        print(f'Error removing video: {e}')
+    # TODO: Disabled for now, to be able to inspect videos if they get reported and to collect training data
+    # try:
+    #     os.remove(f'/data/{job_id}_upright.mp4')
+    #     _commit_volume()
+    # except Exception as e:
+    #     print(f'Error removing video: {e}')
 
     results = None
     if results_json:
