@@ -114,7 +114,10 @@ export async function uploadVideoFile(
 
     const { sha256 } = await computeSha256(file)
     const created = await createJobForChecksum(sha256, ctx)
-    if (created === 'skipped') return 'skipped'
+    if (created === 'skipped') {
+        trackEvent('analysis_upload_skipped', { reason: 'duplicate_or_already_processed' })
+        return 'skipped'
+    }
     const job_id = created.job_id
     trackEvent('analysis_job_created', { job_id })
 
