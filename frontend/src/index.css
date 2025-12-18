@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@config "../tailwind.config.js";
 
 /* App-wide base tweaks can live here if needed */
 
