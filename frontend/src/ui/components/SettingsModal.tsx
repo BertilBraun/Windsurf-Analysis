@@ -1,7 +1,8 @@
 import React from 'react'
 import { Modal } from './Modal'
 import { Button } from './Button'
-import { useSettings, UploadQuality } from '../hooks/useSettings'
+import { useSettings } from '../hooks/useSettings'
+import { UploadQuality } from '../types'
 import { useAuth } from '../auth/AuthProvider'
 
 export const SettingsModal: React.FC<{
@@ -16,7 +17,7 @@ export const SettingsModal: React.FC<{
     return (
         <Modal onClose={onClose} title="Settings">
             <div className="p-4 space-y-4">
-                <div>
+                {/*<div>
                     <label className="block text-sm font-medium text-slate-900 mb-1">Upload quality</label>
                     <select
                         className="w-full bg-white border border-slate-200 rounded-md p-2 text-slate-900"
@@ -31,7 +32,7 @@ export const SettingsModal: React.FC<{
                     <p className="mt-2 text-sm text-slate-600">
                         Higher quality improves detections but increases upload time and bandwidth.
                     </p>
-                </div>
+                </div>*/}
 
                 <div className="pt-2 border-t border-slate-200">
                     <div className="flex flex-col gap-2">

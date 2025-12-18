@@ -10,7 +10,6 @@ type Props = {
     dirPermission: 'granted' | 'denied' | 'prompt' | null
     onPickDirectory: () => void
     uploadCtx: UploadContext
-    onUploaded: () => void
 }
 
 function meanProgress(items: IngressUploadItem[]) {
@@ -221,8 +220,8 @@ export const IngressWidget: React.FC<Props> = ({ dirHandle, dirPermission, onPic
                         <p className="mb-1">
                             To get full and unlimited access to the analyzer, please reach out to us at
                             <br />
-                            <a className="text-brand-700 underline" href="mailto:bertil.braun.private@gmail.com">
-                                bertil.braun.private@gmail.com
+                            <a className="text-brand-700 underline" href="mailto:contact@gybelock.de">
+                                contact@gybelock.de
                             </a>
                         </p>
                     </div>

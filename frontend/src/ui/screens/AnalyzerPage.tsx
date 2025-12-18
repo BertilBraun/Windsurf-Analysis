@@ -140,11 +140,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
             </header>
 
             <main className="mx-auto max-w-[1400px] px-4 sm:px-6 py-6 flex flex-col gap-6">
-                <div className="flex items-center justify-between">
-                    <h2 className="m-0">Analyzed Videos</h2>
-                    <div />
-                </div>
-
                 <JobList
                     jobs={jobs}
                     sortKey={sortKey}
@@ -160,7 +155,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     dirPermission={dirPermission}
                     onPickDirectory={pickDirectory}
                     uploadCtx={uploadCtx}
-                    onUploaded={() => {}}
                 />
 
                 {selectedJob && (
@@ -213,7 +207,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     title="Beta — read more"
                     aria-label="Beta — read more"
                 >
-                    <span className="text-[11px] font-semibold text-brand-700 bg-red-400 text-white border border-brand-600/20 px-2 py-0.5 rounded-full">
+                    <span className="text-[11px] font-semibold text-white bg-brand-600 border border-brand-600/20 px-2 py-0.5 rounded-full">
                         Beta
                     </span>
                     <span className="text-xs text-slate-700 group-hover:text-slate-900">Read more</span>
