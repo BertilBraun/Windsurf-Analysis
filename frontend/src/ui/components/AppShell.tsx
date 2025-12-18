@@ -31,7 +31,6 @@ export const AppShellLayout: React.FC = () => {
                     <div className="flex flex-wrap gap-x-4 gap-y-2">
                         <FooterLink to="/terms" label="Terms of Use" />
                         <FooterLink to="/privacy" label="Privacy Policy" />
-                        <FooterLink to="/impressum" label="Impressum" />
                         <FooterLink to="/contact" label="Contact" />
                     </div>
                 </div>

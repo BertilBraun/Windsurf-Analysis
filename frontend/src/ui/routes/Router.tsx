@@ -6,7 +6,6 @@ import { FaqPage } from '../screens/FaqPage'
 import { AnalyzerPage } from '../screens/AnalyzerPage'
 import { PricingPage } from '../screens/PricingPage'
 import { LegalPage } from '../screens/LegalPage'
-import { ImpressumPage } from '../screens/ImpressumPage'
 import { AppShellLayout } from '../components/AppShell'
 import { SingleInstanceGuard } from '../components/SingleInstanceGuard'
 import { LoginPage } from '../screens/LoginPage'
@@ -170,7 +169,6 @@ export const Router: React.FC = () => {
                 <Route index element={<HomePage />} />
                 <Route path="pricing" element={<PricingPage />} />
                 <Route path="faq" element={<FaqPage />} />
-                <Route path="impressum" element={<ImpressumPage />} />
                 <Route path="terms" element={<LegalPage kind="terms" />} />
                 <Route path="privacy" element={<LegalPage kind="privacy" />} />
                 <Route path="contact" element={<LegalPage kind="contact" />} />
