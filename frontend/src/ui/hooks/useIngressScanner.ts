@@ -17,7 +17,7 @@ export type IngressUploadItem = {
 export function useIngressScanner(
     dirHandle: FileSystemDirectoryHandle | null,
     uploadCtx: UploadContext | null,
-    intervalMs: number = 10000
+    intervalMs: number = 2000
 ) {
     const [active, setActive] = React.useState(false)
     const [lastRunAt, setLastRunAt] = React.useState<number | null>(null)
@@ -47,9 +47,9 @@ export function useIngressScanner(
             let sha = await getShaForPath(relPath)
             if (!sha) {
                 const { sha256 } = await computeSha256(file)
+                await saveShaPathMapping(sha256, relPath)
                 sha = sha256
             }
-            await saveShaPathMapping(sha!, relPath)
 
             const identifier = sha!
             const already = await hasProcessedHash(identifier)
@@ -130,19 +130,11 @@ export function useIngressScanner(
         }
     }, [dirHandle, uploadCtx, intervalMs, scanOnce, suspended])
 
-    const resume = React.useCallback(() => {
-        setSuspended(false)
-        // kick an immediate scan
-        setTimeout(() => {
-            scanOnce()
-        }, 0)
-    }, [scanOnce])
-
     const retryFailed = React.useCallback(() => {
         failedRef.current = new Set()
         setUploads(prev => prev.map(u => (u.status === 'error' ? { ...u, status: 'queued', progress: 0 } : u)))
-        resume()
-    }, [resume])
+        setSuspended(false) // This will trigger a new scan
+    }, [scanOnce])
 
     return { active, lastRunAt, lastError, uploading, uploads, suspended, retryFailed }
 }

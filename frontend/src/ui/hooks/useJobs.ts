@@ -1,7 +1,7 @@
 import React from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { JobDetail, JobSummary, ReportType } from '../types'
-import { getPathForSha, loadSetting, saveSetting, deleteSetting } from '../utils/idb'
+import { getPathForSha, loadSetting, saveSetting, deleteSetting, subscribeShaPathMappingUpdates } from '../utils/idb'
 import { assert } from '../utils/assert'
 import { collection, doc, onSnapshot, query, where, type Unsubscribe } from 'firebase/firestore'
 import { db } from '../../firebase'
@@ -24,6 +24,35 @@ export function useJobs(): UseJobsReturn {
     const realtimeUnsubRef = React.useRef<Unsubscribe | null>(null)
     const jobUnsubsRef = React.useRef<Map<string, Unsubscribe>>(new Map())
     const jobsByIdRef = React.useRef<Map<string, JobSummary>>(new Map())
+
+    // When the ingress scanner updates the local sha->path mapping (e.g. a file was moved),
+    // update any affected jobs immediately so thumbnails don't point at stale paths.
+    React.useEffect(() => {
+        const unsub = subscribeShaPathMappingUpdates(({ sha, path }) => {
+            if (!sha || !path) return
+
+            const shaLower = sha.toLowerCase()
+            let changed = false
+            for (const [jobId, j] of jobsByIdRef.current.entries()) {
+                if (!j.original_checksum_sha256) continue
+                if (String(j.original_checksum_sha256).toLowerCase() !== shaLower) continue
+                if (j.local_relative_path === path) continue
+                jobsByIdRef.current.set(jobId, { ...j, local_relative_path: path })
+                // Also clear any cached detail so the next open recomputes local_relative_path.
+                jobDetailCacheRef.current.delete(jobId)
+                changed = true
+            }
+            if (!changed) return
+
+            const next = Array.from(jobsByIdRef.current.values()).sort((a, b) => {
+                const ta = Date.parse(a.updated_at || a.created_at || '') || 0
+                const tb = Date.parse(b.updated_at || b.created_at || '') || 0
+                return tb - ta
+            })
+            setJobs(next)
+        })
+        return () => unsub()
+    }, [])
 
     const stopRealtime = React.useCallback(() => {
         if (realtimeUnsubRef.current) {

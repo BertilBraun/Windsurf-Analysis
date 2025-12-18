@@ -1,6 +1,5 @@
 from __future__ import annotations
 import json
-import os
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
 

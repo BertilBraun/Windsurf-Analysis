@@ -226,6 +226,20 @@ export async function releaseClaimUpload(hash: string, owner: string): Promise<v
 type ShaToPathRecord = { sha: string; path: string; updatedAt: number }
 type PathToShaRecord = { path: string; sha: string; updatedAt: number }
 
+export type ShaPathMappingUpdate = {
+    sha: string
+    path: string
+    prevPath: string | null
+    prevShaForPath: string | null
+}
+
+const shaPathMappingListeners = new Set<(u: ShaPathMappingUpdate) => void>()
+
+export function subscribeShaPathMappingUpdates(cb: (u: ShaPathMappingUpdate) => void): () => void {
+    shaPathMappingListeners.add(cb)
+    return () => shaPathMappingListeners.delete(cb)
+}
+
 export async function saveShaPathMapping(sha: string, path: string): Promise<void> {
     try {
         const db = await openDb()
@@ -233,12 +247,85 @@ export async function saveShaPathMapping(sha: string, path: string): Promise<voi
             const tx = db.transaction([STORE_SHA_TO_PATH, STORE_PATH_TO_SHA], 'readwrite')
             const shaStore = tx.objectStore(STORE_SHA_TO_PATH)
             const pathStore = tx.objectStore(STORE_PATH_TO_SHA)
-            const now = Date.now()
-            const srec: ShaToPathRecord = { sha, path, updatedAt: now }
-            const prec: PathToShaRecord = { path, sha, updatedAt: now }
-            shaStore.put(srec)
-            pathStore.put(prec)
-            tx.oncomplete = () => resolve()
+            let prevPath: string | null = null
+            let prevShaForPath: string | null = null
+            let changed = false
+            let pending = 2
+
+            const maybeFinish = () => {
+                pending -= 1
+                if (pending !== 0) return
+                if (!changed) return
+
+                // Keep the two stores consistent:
+                // - If this SHA was previously mapped to a different path, remove the old path->sha entry.
+                // - If this path was previously mapped to a different SHA, remove the old sha->path entry.
+                //
+                // This prevents stale mappings when files are moved back and forth.
+                if (prevPath && prevPath !== path) {
+                    const oldPath = prevPath
+                    const oldPathGet = pathStore.get(oldPath)
+                    oldPathGet.onsuccess = () => {
+                        const existing = oldPathGet.result as PathToShaRecord | undefined
+                        if (existing?.sha === sha) pathStore.delete(oldPath)
+                    }
+                }
+                if (prevShaForPath && prevShaForPath !== sha) {
+                    const oldSha = prevShaForPath
+                    const oldShaGet = shaStore.get(oldSha)
+                    oldShaGet.onsuccess = () => {
+                        const existing = oldShaGet.result as ShaToPathRecord | undefined
+                        if (existing?.path === path) shaStore.delete(oldSha)
+                    }
+                }
+
+                const now = Date.now()
+                const srec: ShaToPathRecord = { sha, path, updatedAt: now }
+                const prec: PathToShaRecord = { path, sha, updatedAt: now }
+                shaStore.put(srec)
+                pathStore.put(prec)
+            }
+
+            const shaGet = shaStore.get(sha)
+            shaGet.onsuccess = () => {
+                prevPath = (shaGet.result as ShaToPathRecord | undefined)?.path ?? null
+                if (prevPath !== path) changed = true
+                maybeFinish()
+            }
+            shaGet.onerror = () => {
+                changed = true
+                maybeFinish()
+            }
+
+            const pathGet = pathStore.get(path)
+            pathGet.onsuccess = () => {
+                prevShaForPath = (pathGet.result as PathToShaRecord | undefined)?.sha ?? null
+                if (prevShaForPath !== sha) changed = true
+                maybeFinish()
+            }
+            pathGet.onerror = () => {
+                changed = true
+                maybeFinish()
+            }
+
+            tx.oncomplete = () => {
+                // If nothing changed, don't notify.
+                if (changed) {
+                    const update: ShaPathMappingUpdate = {
+                        sha,
+                        path,
+                        prevPath,
+                        prevShaForPath,
+                    }
+                    // Notify in-process subscribers (avoids global DOM event jank)
+                    for (const cb of shaPathMappingListeners) {
+                        try {
+                            cb(update)
+                        } catch {}
+                    }
+                }
+                resolve()
+            }
             tx.onerror = () => reject(tx.error)
         })
         db.close()
