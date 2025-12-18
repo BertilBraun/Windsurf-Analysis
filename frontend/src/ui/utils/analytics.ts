@@ -1,3 +1,5 @@
+import { requireEnv } from '../../env'
+
 declare global {
     interface Window {
         dataLayer?: unknown[]
@@ -11,12 +13,8 @@ let _measurementId: string | null = null
 let _initialized = false
 let _clickTrackingInstalled = false
 
-function getMeasurementId(): string | null {
-    const id = (import.meta.env as Record<string, string | undefined>)['VITE_GA_MEASUREMENT_ID']
-    if (!id) return null
-    const trimmed = String(id).trim()
-    if (!trimmed || trimmed === 'REPLACE_ME') return null
-    return trimmed
+function getMeasurementId(): string {
+    return requireEnv('VITE_GA_MEASUREMENT_ID')
 }
 
 function ensureGtagDefined() {
@@ -37,27 +35,25 @@ function ensureInitialized() {
 
 export function initAnalytics() {
     if (typeof window === 'undefined' || typeof document === 'undefined') return
-    const id = getMeasurementId()
-    _measurementId = id
-    if (!id) return
+    _measurementId = getMeasurementId()
     if (_initialized) return
     _initialized = true
 
     ensureGtagDefined()
 
     const existing = Array.from(document.querySelectorAll<HTMLScriptElement>('script[src]')).find(
-        s => s.src.includes('www.googletagmanager.com/gtag/js?id=') && s.src.includes(id)
+        s => s.src.includes('www.googletagmanager.com/gtag/js?id=') && s.src.includes(_measurementId!)
     )
     if (!existing) {
         const s = document.createElement('script')
         s.async = true
-        s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`
+        s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(_measurementId)}`
         document.head.appendChild(s)
     }
 
     window.gtag?.('js', new Date())
     // We'll send page views manually on router navigation.
-    window.gtag?.('config', id, { send_page_view: false })
+    window.gtag?.('config', _measurementId!, { send_page_view: false })
 }
 
 export function setUserId(userId: string | null) {
