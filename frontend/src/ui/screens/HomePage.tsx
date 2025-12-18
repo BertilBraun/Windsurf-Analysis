@@ -19,6 +19,9 @@ export const HomePage: React.FC = () => {
                             that are easy to watch, analyze, and learn from.
                         </p>
                         <p className="mt-3 text-sm sm:text-base text-slate-600 leading-6">
+                            Built for <strong>shore / beach-shot tele footage</strong> — not GoPro/action-cam POV.
+                        </p>
+                        <p className="mt-3 text-sm sm:text-base text-slate-600 leading-6">
                             From speed runs to wave riding, jumps, and gybes — GybeLock keeps the rider where your focus
                             should be.
                         </p>
@@ -87,30 +90,33 @@ export const HomePage: React.FC = () => {
                     <li>Multiple riders in the same video</li>
                     <li>Challenging conditions like spray, chop, and partial occlusions</li>
                 </ul>
+                <p className="mt-3">
+                    It’s <strong>not designed for GoPro/action-cam</strong> footage.
+                </p>
                 <p className="mt-3">You choose who to follow. GybeLock handles the motion.</p>
             </Section>
 
             <Section title="How it works">
                 <ol className="list-decimal pl-5 space-y-2">
                     <li>
-                        <strong>Add your videos</strong>
-                        <div className="text-sm text-slate-600">Upload them or drop them into a folder.</div>
-                    </li>
-                    <li>
-                        <strong>GybeLock analyzes the footage</strong>
+                        <strong>Set your ingress folder</strong>
                         <div className="text-sm text-slate-600">
-                            The camera motion is stabilized and riders are detected.
+                            Pick a folder on your computer. GybeLock monitors it for new videos.
                         </div>
                     </li>
                     <li>
-                        <strong>Select a rider</strong>
+                        <strong>Drop MP4 videos into the folder</strong>
+                        <div className="text-sm text-slate-600">New files upload automatically in the background.</div>
+                    </li>
+                    <li>
+                        <strong>GybeLock processes the footage</strong>
+                        <div className="text-sm text-slate-600">
+                            The video is oriented, stabilized, and riders are detected and tracked.
+                        </div>
+                    </li>
+                    <li>
+                        <strong>Open and review</strong>
                         <div className="text-sm text-slate-600">Click on the rider you want to focus on.</div>
-                    </li>
-                    <li>
-                        <strong>Watch the locked view</strong>
-                        <div className="text-sm text-slate-600">
-                            Smooth, centered footage — ready for analysis. No editing experience required.
-                        </div>
                     </li>
                 </ol>
             </Section>
@@ -141,38 +147,6 @@ export const HomePage: React.FC = () => {
                     </div>
                 </div>
                 <Button variant="primary" onClick={() => navigate('/analyzer')} text="Get started for free" />
-            </section>
-
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
-                <div className="flex items-start justify-between gap-4">
-                    <div>
-                        <div className="text-sm font-semibold">Make the homepage more visual</div>
-                        <div className="mt-1 text-sm text-slate-600">
-                            Add images to{' '}
-                            <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">
-                                server/frontend/public/marketing
-                            </code>{' '}
-                            using the filenames below.
-                        </div>
-                    </div>
-                </div>
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <AssetSuggestion
-                        title="Before"
-                        filename="/marketing/before.jpg"
-                        desc="One raw beach zoom frame with shake + rider near an edge."
-                    />
-                    <AssetSuggestion
-                        title="After"
-                        filename="/marketing/after.jpg"
-                        desc="Same moment after GybeLock: stabilized + rider centered."
-                    />
-                    <AssetSuggestion
-                        title="Overlay"
-                        filename="/marketing/overlay.jpg"
-                        desc="A player screenshot showing overlay/tracking to communicate “analysis”."
-                    />
-                </div>
             </section>
         </div>
     )

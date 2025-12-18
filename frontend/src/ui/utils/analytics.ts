@@ -9,9 +9,36 @@ declare global {
 
 type GtagParams = Record<string, unknown>
 
+const CONSENT_KEY = 'gybelock_analytics_consent' as const
+export type AnalyticsConsent = 'accepted' | 'declined'
+
 let _measurementId: string | null = null
 let _initialized = false
 let _clickTrackingInstalled = false
+
+export function getAnalyticsConsent(): AnalyticsConsent | null {
+    if (typeof window === 'undefined') return null
+    try {
+        const v = window.localStorage.getItem(CONSENT_KEY)
+        if (v === 'accepted' || v === 'declined') return v
+        return null
+    } catch {
+        return null
+    }
+}
+
+export function setAnalyticsConsent(consent: AnalyticsConsent) {
+    if (typeof window === 'undefined') return
+    try {
+        window.localStorage.setItem(CONSENT_KEY, consent)
+    } catch {
+        // ignore (e.g. private mode)
+    }
+}
+
+export function isAnalyticsEnabled(): boolean {
+    return getAnalyticsConsent() === 'accepted'
+}
 
 function getMeasurementId(): string {
     return requireEnv('VITE_GA_MEASUREMENT_ID')
@@ -35,6 +62,7 @@ function ensureInitialized() {
 
 export function initAnalytics() {
     if (typeof window === 'undefined' || typeof document === 'undefined') return
+    if (!isAnalyticsEnabled()) return
     _measurementId = getMeasurementId()
     if (_initialized) return
     _initialized = true
@@ -94,6 +122,7 @@ function defaultClickLabel(el: HTMLElement): string | null {
 export function installClickTracking() {
     ensureInitialized()
     if (typeof document === 'undefined') return
+    if (!isAnalyticsEnabled()) return
     if (_clickTrackingInstalled) return
     _clickTrackingInstalled = true
 

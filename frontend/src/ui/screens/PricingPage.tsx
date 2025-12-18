@@ -10,7 +10,11 @@ export const PricingPage: React.FC = () => {
             <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
                 <h1 className="mt-0">Pricing</h1>
                 <div className="mt-1 text-sm text-slate-600">
-                    GybeLock is currently in an early testing phase — simple and free while we improve quality.
+                    GybeLock is currently in an early testing phase — simple and free while we improve tracking quality.
+                </div>
+                <div className="mt-3 text-sm text-slate-600 leading-6">
+                    GybeLock is built for <strong>beach-shot / shore-shot</strong> windsurf videos (tele/zoom from
+                    land). It is <strong>not</strong> designed for GoPro/action-cam POV footage.
                 </div>
             </div>
 

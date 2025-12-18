@@ -171,6 +171,7 @@ export const Router: React.FC = () => {
                 <Route path="faq" element={<FaqPage />} />
                 <Route path="terms" element={<LegalPage kind="terms" />} />
                 <Route path="privacy" element={<LegalPage kind="privacy" />} />
+                <Route path="impressum" element={<LegalPage kind="impressum" />} />
                 <Route path="contact" element={<LegalPage kind="contact" />} />
             </Route>
 
