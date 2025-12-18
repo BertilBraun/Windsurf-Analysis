@@ -7,7 +7,7 @@ export const HomePage: React.FC = () => {
     const navigate = useNavigate()
     return (
         <div className="flex flex-col gap-10">
-            <section className="rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-6 sm:p-10">
+            <section className="rounded-2xl border border-slate-200 bg-linear-to-b from-white to-slate-50 p-6 sm:p-10">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
                     <div className="max-w-2xl">
                         <div className="text-xs font-semibold text-brand-700 mb-2">GybeLock</div>

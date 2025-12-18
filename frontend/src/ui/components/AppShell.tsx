@@ -24,8 +24,11 @@ export const AppShellLayout: React.FC = () => {
                 <Outlet />
             </main>
 
-            <footer className="border-t border-slate-200">
-                <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-6 flex flex-col sm:flex-row gap-3 sm:items-center">
+            <footer className="border-t border-slate-200 max-w-[1400px] margin-auto">
+                <div className="text-sm text-slate-500 mx-auto text-center py-6">
+                    Special thanks to Felix for all the Support and Ideas.
+                </div>
+                <div className="mx-auto px-4 sm:px-6 pb-6 flex flex-col sm:flex-row gap-3 sm:items-center mr-10">
                     <div className="text-xs text-slate-500">© {new Date().getFullYear()} GybeLock</div>
                     <div className="flex-1" />
                     <div className="flex flex-wrap gap-x-4 gap-y-2">
