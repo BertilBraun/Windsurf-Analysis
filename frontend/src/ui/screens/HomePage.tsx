@@ -1,6 +1,7 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/Button'
+import { SupportProjectSection } from '../components/SupportProjectSection'
 
 export const HomePage: React.FC = () => {
     const navigate = useNavigate()
@@ -10,10 +11,12 @@ export const HomePage: React.FC = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
                     <div className="max-w-2xl">
                         <div className="text-xs font-semibold text-brand-700 mb-2">GybeLock</div>
-                        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">See your windsurfing clearly.</h1>
+                        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+                            See your windsurfing clearly.
+                        </h1>
                         <p className="mt-3 text-sm sm:text-base text-slate-600 leading-6">
-                            <strong>GybeLock</strong> turns shaky, long-zoom beach videos into smooth, centered clips that
-                            are easy to watch, analyze, and learn from.
+                            <strong>GybeLock</strong> turns shaky, long-zoom beach videos into smooth, centered clips
+                            that are easy to watch, analyze, and learn from.
                         </p>
                         <p className="mt-3 text-sm sm:text-base text-slate-600 leading-6">
                             From speed runs to wave riding, jumps, and gybes — GybeLock keeps the rider where your focus
@@ -21,7 +24,11 @@ export const HomePage: React.FC = () => {
                         </p>
 
                         <div className="mt-5 flex flex-col sm:flex-row gap-3 sm:items-center">
-                            <Button variant="primary" onClick={() => navigate('/analyzer')} text="Get started for free" />
+                            <Button
+                                variant="primary"
+                                onClick={() => navigate('/analyzer')}
+                                text="Get started for free"
+                            />
                             <div className="text-sm text-slate-700">
                                 Analyze up to <span className="font-semibold">5 videos</span> free. No credit card.
                             </div>
@@ -123,11 +130,15 @@ export const HomePage: React.FC = () => {
                 <p className="mt-2">GybeLock removes distraction, so you can focus on technique, timing, and flow.</p>
             </Section>
 
+            <SupportProjectSection />
+
             <section className="rounded-2xl border border-brand-600/20 bg-brand-50 p-6 sm:p-8 flex flex-col sm:flex-row gap-4 sm:items-center">
                 <div className="flex-1">
                     <div className="text-xs font-semibold text-brand-700">Get started</div>
                     <div className="mt-1 text-lg font-semibold text-slate-900">5 videos are free for everyone</div>
-                    <div className="mt-1 text-sm text-slate-700">No credit card required. See the difference in minutes.</div>
+                    <div className="mt-1 text-sm text-slate-700">
+                        No credit card required. See the difference in minutes.
+                    </div>
                 </div>
                 <Button variant="primary" onClick={() => navigate('/analyzer')} text="Get started for free" />
             </section>
@@ -137,7 +148,10 @@ export const HomePage: React.FC = () => {
                     <div>
                         <div className="text-sm font-semibold">Make the homepage more visual</div>
                         <div className="mt-1 text-sm text-slate-600">
-                            Add images to <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">server/frontend/public/marketing</code>{' '}
+                            Add images to{' '}
+                            <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">
+                                server/frontend/public/marketing
+                            </code>{' '}
                             using the filenames below.
                         </div>
                     </div>
@@ -204,5 +218,3 @@ const AssetSuggestion: React.FC<{ title: string; filename: string; desc: string 
         </div>
     )
 }
-
-
