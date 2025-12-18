@@ -38,14 +38,11 @@ export const ControlsBar: React.FC<{
                 <>
                     <div className="w-px h-5 bg-gray-600 mx-1" />
                     {typeof exportProgressPct === 'number' && isExporting && (
-                        <div className="text-sm tabular-nums">{Math.max(0, Math.min(100, exportProgressPct)).toFixed(0)}%</div>
+                        <div className="text-sm tabular-nums">
+                            {Math.max(0, Math.min(100, exportProgressPct)).toFixed(0)}%
+                        </div>
                     )}
-                    <Button
-                        onClick={onExportTrack}
-                        text="Export"
-                        isPending={!!isExporting}
-                        disabled={!exportEnabled || !!isExporting}
-                    />
+                    <Button onClick={onExportTrack} text="Export" disabled={!exportEnabled || !!isExporting} />
                 </>
             )}
         </div>
