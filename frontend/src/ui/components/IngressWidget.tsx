@@ -54,7 +54,39 @@ export const IngressWidget: React.FC<Props> = ({ dirHandle, dirPermission, onPic
 
     const uploading = scanner.uploading
     const ringPercent = meanProgress(scanner.uploads)
-    const hasIssues = !dirHandle || dirPermission === 'denied' || !!scanner.lastError
+    const hasIssues = !dirHandle || dirPermission !== 'granted' || !!scanner.lastError
+
+    const issue = React.useMemo(() => {
+        if (!dirHandle) {
+            return {
+                kind: 'warning' as const,
+                title: 'No ingress folder selected',
+                message: 'Select a folder so GybeLock can monitor it and auto-upload new videos.',
+            }
+        }
+        if (dirPermission === 'denied') {
+            return {
+                kind: 'error' as const,
+                title: 'Folder permission denied',
+                message: 'Re-select the folder and make sure you grant access.',
+            }
+        }
+        if (scanner.lastError) {
+            return {
+                kind: 'error' as const,
+                title: 'Ingress error',
+                message: scanner.lastError,
+            }
+        }
+        if (dirPermission && dirPermission !== 'granted') {
+            return {
+                kind: 'warning' as const,
+                title: 'Folder permission needed',
+                message: 'Please grant permission so GybeLock can keep monitoring the folder.',
+            }
+        }
+        return null
+    }, [dirHandle, dirPermission, scanner.lastError])
 
     return (
         <>
@@ -63,8 +95,10 @@ export const IngressWidget: React.FC<Props> = ({ dirHandle, dirPermission, onPic
                     <button
                         type="button"
                         onClick={() => setExpanded(true)}
-                        className={`flex items-center gap-2 rounded-full border px-3 py-2 shadow-sm bg-white hover:bg-slate-50 transition ${
-                            hasIssues ? 'border-amber-300' : 'border-slate-200'
+                        className={`flex items-center gap-2 rounded-full border px-3 py-2 shadow-sm transition ${
+                            hasIssues
+                                ? 'border-amber-500 bg-amber-100 hover:bg-amber-200'
+                                : 'border-slate-200 bg-white hover:bg-slate-50'
                         }`}
                         title="Ingress"
                         aria-label="Open ingress uploads"
@@ -73,7 +107,13 @@ export const IngressWidget: React.FC<Props> = ({ dirHandle, dirPermission, onPic
                         <div className="flex flex-col items-start leading-tight">
                             <div className="text-xs font-semibold text-slate-900">Ingress</div>
                             <div className="text-[11px] text-slate-500">
-                                {uploading > 0 ? `Uploading ${uploading}…` : dirHandle ? 'Monitoring' : 'Select folder'}
+                                {uploading > 0
+                                    ? `Uploading ${uploading}…`
+                                    : issue?.kind === 'error'
+                                    ? 'Error — action needed'
+                                    : dirHandle
+                                    ? 'Monitoring'
+                                    : 'Select folder (required)'}
                             </div>
                         </div>
                         {uploading > 0 && (
@@ -83,7 +123,15 @@ export const IngressWidget: React.FC<Props> = ({ dirHandle, dirPermission, onPic
                         )}
                     </button>
                 ) : (
-                    <div className="w-[380px] max-w-[92vw] rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+                    <div
+                        className={`w-[380px] max-w-[92vw] rounded-2xl border bg-white shadow-xl overflow-hidden ${
+                            issue?.kind === 'error'
+                                ? 'border-red-300'
+                                : issue?.kind === 'warning'
+                                ? 'border-amber-300'
+                                : 'border-slate-200'
+                        }`}
+                    >
                         <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-3">
                             <div className="text-sm font-semibold">Ingress uploads</div>
                             <div className="flex-1" />
@@ -97,6 +145,12 @@ export const IngressWidget: React.FC<Props> = ({ dirHandle, dirPermission, onPic
                         </div>
 
                         <div className="p-4 flex flex-col gap-3">
+                            {issue && (
+                                <IssueBanner kind={issue.kind} title={issue.title}>
+                                    {issue.message}
+                                </IssueBanner>
+                            )}
+
                             <div className="text-xs text-slate-600">
                                 Select your “windsurf analysis videos” folder. GybeLock monitors it and auto-uploads new
                                 videos.
@@ -113,12 +167,16 @@ export const IngressWidget: React.FC<Props> = ({ dirHandle, dirPermission, onPic
                                             ) : null}
                                         </div>
                                     ) : (
-                                        <div className="mt-0.5 text-amber-700">No folder selected</div>
+                                        <div className="mt-0.5 font-semibold text-amber-800">No folder selected</div>
                                     )}
                                 </div>
                                 <button
                                     type="button"
-                                    className="px-3 py-2 rounded-md bg-brand-600 text-white text-sm hover:bg-brand-700 transition"
+                                    className={`px-3 py-2 rounded-md text-white text-sm transition ${
+                                        !dirHandle
+                                            ? 'bg-amber-500 hover:bg-amber-600'
+                                            : 'bg-brand-600 hover:bg-brand-700'
+                                    }`}
                                     onClick={onPickDirectory}
                                 >
                                     {dirHandle ? 'Change folder' : 'Select folder'}
@@ -189,6 +247,28 @@ const SuspendedBanner: React.FC<{ onRetryFailed: () => void }> = ({ onRetryFaile
                     Retry failed
                 </button>
             </div>
+        </div>
+    )
+}
+
+const IssueBanner: React.FC<{ kind: 'warning' | 'error'; title: string; children: React.ReactNode }> = ({
+    kind,
+    title,
+    children,
+}) => {
+    const styles =
+        kind === 'error'
+            ? 'bg-red-50 border-red-300 text-red-900'
+            : kind === 'warning'
+            ? 'bg-amber-50 border-amber-300 text-amber-900'
+            : 'bg-slate-50 border-slate-200 text-slate-900'
+
+    const titleStyles = kind === 'error' ? 'text-red-900' : 'text-amber-900'
+
+    return (
+        <div className={`p-3 border rounded-md ${styles}`} role="alert" aria-live="polite">
+            <div className={`text-xs font-semibold ${titleStyles}`}>{title}</div>
+            <div className="text-xs mt-1 opacity-90">{children}</div>
         </div>
     )
 }
