@@ -78,6 +78,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
             await deleteJob(id)
         } finally {
             setDeletingId(null)
+            setSelectedJob(null)
         }
     }
     let greeting = ''
