@@ -1,6 +1,7 @@
 import React from 'react'
 import { JobDetail, ReportType } from '../types'
 import { PlayerState, VideoProperties } from './state'
+import { Button } from '../components/Button'
 import { ControlsBar } from './ControlsBar'
 import { Timeline } from './Timeline'
 import { useZoom } from '../hooks/useZoom'
@@ -10,7 +11,7 @@ import { clamp } from '../utils/clamp'
 import { trackEvent } from '../utils/analytics'
 import { buildExportFilename, downloadExport, exportTrackMp4 } from './export'
 import { useJobVideoSource } from './useJobVideoSource'
-import { drawFrame, pickTrackAtScreenPoint } from './rendering'
+import { AnnotationStroke, drawFrame, pickTrackAtScreenPoint, screenPointToVideoNorm } from './rendering'
 
 type Props = {
     job: JobDetail
@@ -20,9 +21,25 @@ type Props = {
     onReport: (id: string, type: ReportType, message: string) => void
     onOpenNextJob?: () => void
     onOpenPrevJob?: () => void
+    drawMode: boolean
+    onToggleDrawMode: () => void
 }
 
-export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenNextJob, onOpenPrevJob }) => {
+const ANNOTATION_TIME_WINDOW_SEC = 0.1
+const DRAW_WIDTH_OPTIONS = [2, 3, 5, 8, 14, 20]
+const DRAW_COLOR_OPTIONS = ['#f97316', '#22c55e', '#3b82f6', '#ef4444', '#facc15']
+const WIDTH_PREVIEW_MIN = 8
+const WIDTH_PREVIEW_MAX = 24
+
+export const CanvasPlayer: React.FC<Props> = ({
+    job,
+    dirHandle,
+    onClose,
+    onOpenNextJob,
+    onOpenPrevJob,
+    drawMode,
+    onToggleDrawMode,
+}) => {
     const [exportError, setExportError] = React.useState<string | null>(null)
     const videoRef = React.useRef<HTMLVideoElement | null>(null)
     const containerRef = React.useRef<HTMLDivElement | null>(null)
@@ -33,6 +50,13 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
     const [hoveredTrackId, setHoveredTrackId] = React.useState<number | null>(null)
     const [isExporting, setIsExporting] = React.useState<boolean>(false)
     const [exportProgressPct, setExportProgressPct] = React.useState<number | null>(null)
+    const [drawTool, setDrawTool] = React.useState<'freehand' | 'line'>('line')
+    const [drawColor, setDrawColor] = React.useState<string>(DRAW_COLOR_OPTIONS[0])
+    const [drawWidth, setDrawWidth] = React.useState<number>(5)
+    const annotationsRef = React.useRef<AnnotationStroke[]>([])
+    const activeStrokeRef = React.useRef<AnnotationStroke | null>(null)
+    const activePointerIdRef = React.useRef<number | null>(null)
+    const [annotationsVersion, setAnnotationsVersion] = React.useState<number>(0)
 
     // Seeker (frame stepping and seeking)
     const { seekTo, stepNext, stepPrev, onNewFile } = useSeeker(videoRef, player, setPlayer)
@@ -200,6 +224,10 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'prev_video' })
                 onOpenPrevJob?.()
+            } else if (key.toLowerCase() === 'd') {
+                e.preventDefault()
+                trackEvent('shortcut_used', { action: 'toggle_draw_mode' })
+                onToggleDrawMode()
             }
         }
         window.addEventListener('keydown', onKey)
@@ -216,7 +244,58 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
         onClose,
         onOpenNextJob,
         onOpenPrevJob,
+        onToggleDrawMode,
     ])
+
+    const getVisibleAnnotations = React.useCallback((timeSec: number) => {
+        const visible = annotationsRef.current.filter(
+            stroke => Math.abs(stroke.timeSec - timeSec) <= ANNOTATION_TIME_WINDOW_SEC
+        )
+        if (activeStrokeRef.current) visible.push(activeStrokeRef.current)
+        return visible
+    }, [])
+
+    const redrawFrame = React.useCallback(
+        (timeSec?: number) => {
+            const c = canvasRef.current
+            const v = videoRef.current
+            const container = containerRef.current
+            if (!c || !v || !player || !container) return
+            if (isExporting) return
+            const drawTime = timeSec ?? player.currentTimeSec
+            drawFrame(
+                c,
+                container,
+                v,
+                player,
+                { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
+                getVisibleAnnotations(drawTime),
+                drawTime,
+                job.dominant_orientation
+            )
+        },
+        [player, isExporting, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation, getVisibleAnnotations]
+    )
+
+    React.useEffect(() => {
+        if (!drawMode) return
+        setHoveredTrackId(null)
+    }, [drawMode])
+
+    React.useEffect(() => {
+        if (!activeStrokeRef.current) return
+        activeStrokeRef.current = null
+        activePointerIdRef.current = null
+        redrawFrame(player?.currentTimeSec)
+    }, [drawTool, player?.currentTimeSec, redrawFrame])
+
+    React.useEffect(() => {
+        if (drawMode) return
+        if (!activeStrokeRef.current) return
+        activeStrokeRef.current = null
+        activePointerIdRef.current = null
+        redrawFrame(player?.currentTimeSec)
+    }, [drawMode, player?.currentTimeSec, redrawFrame])
 
     // Video frame callback -> sync currentTimeSec + draw
     React.useEffect(() => {
@@ -238,6 +317,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
                 v,
                 player,
                 { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
+                getVisibleAnnotations(nowSec),
                 nowSec,
                 job.dominant_orientation
             )
@@ -257,6 +337,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
         offset.y,
         hoveredTrackId,
         videoUrl,
+        getVisibleAnnotations,
     ])
 
     // Redraw on resize or when paused and state changes
@@ -272,6 +353,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
             v,
             player,
             { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
+            getVisibleAnnotations(player.currentTimeSec),
             undefined,
             job.dominant_orientation
         )
@@ -285,6 +367,8 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
         offset.y,
         hoveredTrackId,
         job.dominant_orientation,
+        annotationsVersion,
+        getVisibleAnnotations,
     ])
 
     // Auto-exit detailed mode if no reasonably recent detection around current time
@@ -300,6 +384,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
 
     const onWheelCanvas = React.useCallback(
         (e: React.WheelEvent<HTMLCanvasElement>) => {
+            if (drawMode) return
             if (!player || player.mode !== 'overview') return
             const container = containerRef.current
             const rect = (container ?? e.currentTarget).getBoundingClientRect()
@@ -310,11 +395,12 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
             const absY = rect.top + (py - rect.height * 0.5)
             onWheelZoom(absX, absY, e.deltaY)
         },
-        [player, onWheelZoom]
+        [drawMode, player, onWheelZoom]
     )
 
     const onMouseMove = React.useCallback(
         (e: React.MouseEvent<HTMLCanvasElement>) => {
+            if (drawMode) return
             if (!player || player.mode !== 'overview') return
             const c = canvasRef.current
             if (!c) return
@@ -338,10 +424,11 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
             )
             setHoveredTrackId(hit)
         },
-        [player, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation]
+        [drawMode, player, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation]
     )
 
     const onClick = React.useCallback(() => {
+        if (drawMode) return
         setPlayer(p => {
             if (!p) return p
             if (p.mode !== 'overview' || hoveredTrackId == null)
@@ -356,7 +443,193 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
             videoRef.current!.currentTime = t
             return p.copy({ mode: 'detailed', currentTrackId: trackId, currentTimeSec: t })
         })
-    }, [hoveredTrackId])
+    }, [drawMode, hoveredTrackId])
+
+    const getDrawPoint = React.useCallback(
+        (e: React.PointerEvent<HTMLCanvasElement>) => {
+            if (!player) return null
+            const c = canvasRef.current
+            const container = containerRef.current
+            const rect = (container ?? c)?.getBoundingClientRect()
+            if (!rect) return null
+            const px = e.clientX - rect.left
+            const py = e.clientY - rect.top
+            return screenPointToVideoNorm(
+                px,
+                py,
+                rect.width,
+                rect.height,
+                player,
+                {
+                    zoom,
+                    offsetX: offset.x,
+                    offsetY: offset.y,
+                    hoveredTrackId,
+                },
+                job.dominant_orientation
+            )
+        },
+        [player, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation]
+    )
+
+    const startLineStroke = React.useCallback(
+        (e: React.PointerEvent<HTMLCanvasElement>) => {
+            const point = getDrawPoint(e)
+            if (!point || !player) return
+            activePointerIdRef.current = e.pointerId
+            activeStrokeRef.current = {
+                id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                timeSec: player.currentTimeSec,
+                color: drawColor,
+                width: drawWidth,
+                points: [point, point],
+            }
+            redrawFrame(player.currentTimeSec)
+        },
+        [getDrawPoint, player, drawColor, drawWidth, redrawFrame]
+    )
+
+    const updateLineStroke = React.useCallback(
+        (e: React.PointerEvent<HTMLCanvasElement>) => {
+            if (activePointerIdRef.current !== e.pointerId) return
+            const stroke = activeStrokeRef.current
+            if (!stroke) return
+            const point = getDrawPoint(e)
+            if (!point) return
+            stroke.points[1] = point
+            redrawFrame(player?.currentTimeSec)
+        },
+        [getDrawPoint, player, redrawFrame]
+    )
+
+    const finalizeLineStroke = React.useCallback(
+        (e: React.PointerEvent<HTMLCanvasElement>) => {
+            if (activePointerIdRef.current !== e.pointerId) return
+            const stroke = activeStrokeRef.current
+            if (!stroke) return
+            const point = getDrawPoint(e)
+            if (point) stroke.points[1] = point
+            annotationsRef.current = [...annotationsRef.current, stroke]
+            activeStrokeRef.current = null
+            activePointerIdRef.current = null
+            setAnnotationsVersion(v => v + 1)
+            redrawFrame(player?.currentTimeSec)
+        },
+        [getDrawPoint, player, redrawFrame]
+    )
+
+    const onPointerDown = React.useCallback(
+        (e: React.PointerEvent<HTMLCanvasElement>) => {
+            if (!drawMode || isExporting) return
+            if (e.button !== 0) return
+            e.preventDefault()
+            if (drawTool === 'line') {
+                if (activeStrokeRef.current) {
+                    finalizeLineStroke(e)
+                } else {
+                    startLineStroke(e)
+                }
+                return
+            }
+            const point = getDrawPoint(e)
+            if (!point || !player) return
+            activePointerIdRef.current = e.pointerId
+            e.currentTarget.setPointerCapture(e.pointerId)
+            activeStrokeRef.current = {
+                id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                timeSec: player.currentTimeSec,
+                color: drawColor,
+                width: drawWidth,
+                points: [point],
+            }
+            redrawFrame(player.currentTimeSec)
+        },
+        [
+            drawMode,
+            isExporting,
+            drawTool,
+            getDrawPoint,
+            player,
+            drawColor,
+            drawWidth,
+            redrawFrame,
+            finalizeLineStroke,
+            startLineStroke,
+        ]
+    )
+
+    const onPointerMove = React.useCallback(
+        (e: React.PointerEvent<HTMLCanvasElement>) => {
+            if (!drawMode || isExporting) return
+            if (drawTool === 'line') {
+                if (!activeStrokeRef.current) return
+                updateLineStroke(e)
+                return
+            }
+            if (activePointerIdRef.current !== e.pointerId) return
+            const stroke = activeStrokeRef.current
+            if (!stroke) return
+            const point = getDrawPoint(e)
+            if (!point) return
+            const last = stroke.points[stroke.points.length - 1]
+            const dx = point.x - last.x
+            const dy = point.y - last.y
+            if (dx * dx + dy * dy < 1e-7) return
+            stroke.points.push(point)
+            redrawFrame(player?.currentTimeSec)
+        },
+        [drawMode, isExporting, drawTool, getDrawPoint, player, redrawFrame, updateLineStroke]
+    )
+
+    const finalizeStroke = React.useCallback(
+        (e: React.PointerEvent<HTMLCanvasElement>, canceled: boolean) => {
+            if (!drawMode) return
+            if (drawTool !== 'freehand') return
+            if (activePointerIdRef.current !== e.pointerId) return
+            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                e.currentTarget.releasePointerCapture(e.pointerId)
+            }
+            activePointerIdRef.current = null
+            const stroke = activeStrokeRef.current
+            activeStrokeRef.current = null
+            if (stroke && !canceled) {
+                annotationsRef.current = [...annotationsRef.current, stroke]
+                setAnnotationsVersion(v => v + 1)
+            }
+            redrawFrame(player?.currentTimeSec)
+        },
+        [drawMode, drawTool, player, redrawFrame]
+    )
+
+    const cancelLineStroke = React.useCallback(
+        (e: React.PointerEvent<HTMLCanvasElement>) => {
+            if (drawTool !== 'line') return
+            if (activePointerIdRef.current !== e.pointerId) return
+            if (!activeStrokeRef.current) return
+            activeStrokeRef.current = null
+            activePointerIdRef.current = null
+            redrawFrame(player?.currentTimeSec)
+        },
+        [drawTool, player, redrawFrame]
+    )
+
+    const onClearAnnotations = React.useCallback(() => {
+        if (!player) return
+        const nowSec = player.currentTimeSec
+        annotationsRef.current = annotationsRef.current.filter(
+            stroke => Math.abs(stroke.timeSec - nowSec) > ANNOTATION_TIME_WINDOW_SEC
+        )
+        activeStrokeRef.current = null
+        activePointerIdRef.current = null
+        setAnnotationsVersion(v => v + 1)
+        redrawFrame(nowSec)
+    }, [player, redrawFrame])
+
+    const hasVisibleAnnotations = React.useMemo(() => {
+        if (!player) return false
+        const nowSec = player.currentTimeSec
+        return annotationsRef.current.some(stroke => Math.abs(stroke.timeSec - nowSec) <= ANNOTATION_TIME_WINDOW_SEC)
+    }, [player?.currentTimeSec, annotationsVersion])
 
     const exportVisible = !!player && player.mode === 'detailed' && player.currentTrackId != null
     const exportEnabled = exportVisible && !isExporting
@@ -427,12 +700,106 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
                 <div ref={containerRef} className="absolute inset-0">
                     <canvas
                         ref={canvasRef}
-                        className="absolute inset-0 block"
+                        className={`absolute inset-0 block ${drawMode ? 'cursor-crosshair' : ''}`}
                         onWheel={onWheelCanvas}
                         onMouseMove={onMouseMove}
                         onMouseLeave={() => setHoveredTrackId(null)}
                         onClick={onClick}
+                        onPointerDown={onPointerDown}
+                        onPointerMove={onPointerMove}
+                        onPointerUp={e => finalizeStroke(e, false)}
+                        onPointerCancel={e => {
+                            finalizeStroke(e, true)
+                            cancelLineStroke(e)
+                        }}
                     />
+                    {drawMode && (
+                        <div className="absolute left-3 top-3 z-10 rounded-md bg-black/60 border border-gray-700 text-gray-100 text-xs px-3 py-2 space-y-3">
+                            <div>
+                                <div className="text-[11px] uppercase tracking-wide text-gray-300">Tool</div>
+                                <div className="mt-2 flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setDrawTool('freehand')}
+                                        className={`rounded-md px-2 py-1 text-xs font-medium transition ${
+                                            drawTool === 'freehand'
+                                                ? 'bg-white text-black'
+                                                : 'bg-white/10 text-gray-100 hover:bg-white/20'
+                                        }`}
+                                    >
+                                        Freehand
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setDrawTool('line')}
+                                        className={`rounded-md px-2 py-1 text-xs font-medium transition ${
+                                            drawTool === 'line'
+                                                ? 'bg-white text-black'
+                                                : 'bg-white/10 text-gray-100 hover:bg-white/20'
+                                        }`}
+                                    >
+                                        Line
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-[11px] uppercase tracking-wide text-gray-300">Width</div>
+                                <div className="mt-2 flex items-center gap-2">
+                                    {DRAW_WIDTH_OPTIONS.map((option, index) => {
+                                        const previewSize =
+                                            (index / (DRAW_WIDTH_OPTIONS.length - 1)) *
+                                                (WIDTH_PREVIEW_MAX - WIDTH_PREVIEW_MIN) +
+                                            WIDTH_PREVIEW_MIN
+                                        const buttonSize = previewSize
+                                        return (
+                                            <button
+                                                key={option}
+                                                type="button"
+                                                onClick={() => setDrawWidth(option)}
+                                                className={`flex items-center justify-center rounded-full transition ${
+                                                    drawWidth === option
+                                                        ? 'ring-2 ring-white'
+                                                        : 'ring-1 ring-white/30 hover:ring-white/70'
+                                                }`}
+                                                style={{ width: buttonSize, height: buttonSize }}
+                                                aria-label={`Line width ${option}px`}
+                                            >
+                                                <span
+                                                    className="block rounded-full bg-white"
+                                                    style={{ width: previewSize, height: previewSize }}
+                                                />
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-[11px] uppercase tracking-wide text-gray-300">Color</div>
+                                <div className="mt-2 flex items-center gap-2">
+                                    {DRAW_COLOR_OPTIONS.map(option => (
+                                        <button
+                                            key={option}
+                                            type="button"
+                                            onClick={() => setDrawColor(option)}
+                                            className={`h-6 w-6 rounded-full transition ${
+                                                drawColor === option
+                                                    ? 'ring-2 ring-white'
+                                                    : 'ring-1 ring-white/30 hover:ring-white/70'
+                                            }`}
+                                            style={{ backgroundColor: option }}
+                                            aria-label={`Line color ${option}`}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                            <Button
+                                size="sm"
+                                text="Clear frame"
+                                onClick={onClearAnnotations}
+                                disabled={!hasVisibleAnnotations}
+                            />
+                        </div>
+                    )}
                     {/* Hidden video used only for decoding frames */}
                     {videoUrl && (
                         <video

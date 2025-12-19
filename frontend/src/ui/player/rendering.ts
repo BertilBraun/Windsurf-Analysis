@@ -1,7 +1,7 @@
 import { clamp } from '../utils/clamp'
 import { MAX_SCALE, MIN_SCALE, TARGET_BBOX_HEIGHT_RATIO } from './constants'
 import { computeBaseRect } from './renderMath'
-import { getRotatedDimensions, drawRotatedToCanvas } from './rotation'
+import { drawRotatedToCanvas, getRotatedDimensions } from './rotation'
 import { PlayerState } from './state'
 
 export type OverviewView = {
@@ -13,6 +13,14 @@ export type OverviewView = {
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 export type TimedBBox = { time_percent: number; bbox: [number, number, number, number] }
+export type AnnotationPoint = { x: number; y: number }
+export type AnnotationStroke = {
+    id: string
+    timeSec: number
+    color: string
+    width: number
+    points: AnnotationPoint[]
+}
 
 let _sharedOffscreenCanvas: HTMLCanvasElement | null = null
 export function getSharedOffscreenCanvas(): HTMLCanvasElement {
@@ -105,6 +113,140 @@ export function drawDetailedCrop(
     }
 }
 
+type DetailedCropParams = {
+    s: number
+    winX1: number
+    winY1: number
+    dstX1: number
+    dstY1: number
+    dstX2: number
+    dstY2: number
+}
+
+function getDetailedCropParams(
+    outputWidth: number,
+    outputHeight: number,
+    srcWidth: number,
+    srcHeight: number,
+    det: TimedBBox
+): DetailedCropParams {
+    const [x1p, y1p, x2p, y2p] = det.bbox
+    const x1 = x1p * srcWidth
+    const y1 = y1p * srcHeight
+    const x2 = x2p * srcWidth
+    const y2 = y2p * srcHeight
+    const bboxW = Math.max(1, x2 - x1)
+    const bboxH = Math.max(1, y2 - y1)
+
+    const sHeight = (TARGET_BBOX_HEIGHT_RATIO * outputHeight) / bboxH
+    const sWidthLimit = outputWidth / bboxW
+    const s = clamp(Math.min(sHeight, sWidthLimit), MIN_SCALE, MAX_SCALE)
+
+    const cx = (x1 + x2) * 0.5
+    const cy = (y1 + y2) * 0.5
+    const cropW = outputWidth / s
+    const cropH = outputHeight / s
+    const winX1 = cx - cropW / 2
+    const winY1 = cy - cropH / 2
+    const winX2 = winX1 + cropW
+    const winY2 = winY1 + cropH
+
+    const srcX1 = Math.max(0, Math.floor(winX1))
+    const srcY1 = Math.max(0, Math.floor(winY1))
+    const srcX2 = Math.min(srcWidth, Math.ceil(winX2))
+    const srcY2 = Math.min(srcHeight, Math.ceil(winY2))
+    const dstX1 = Math.max(0, Math.floor((srcX1 - winX1) * s))
+    const dstY1 = Math.max(0, Math.floor((srcY1 - winY1) * s))
+    const dstX2 = Math.min(outputWidth, Math.ceil((srcX2 - winX1) * s))
+    const dstY2 = Math.min(outputHeight, Math.ceil((srcY2 - winY1) * s))
+
+    return { s, winX1, winY1, dstX1, dstY1, dstX2, dstY2 }
+}
+
+function drawAnnotationDot(ctx: Ctx2D, x: number, y: number, size: number, color: string) {
+    ctx.beginPath()
+    ctx.fillStyle = color
+    ctx.arc(x, y, Math.max(1, size * 0.5), 0, Math.PI * 2)
+    ctx.fill()
+}
+
+function drawAnnotationsOverview(
+    ctx: Ctx2D,
+    strokes: AnnotationStroke[],
+    vidW: number,
+    vidH: number,
+    scale: number
+) {
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    for (const stroke of strokes) {
+        if (stroke.points.length === 0) continue
+        const lineWidth = Math.max(1, stroke.width / scale)
+        if (stroke.points.length === 1) {
+            const p = stroke.points[0]
+            const x = p.x * vidW - vidW * 0.5
+            const y = p.y * vidH - vidH * 0.5
+            drawAnnotationDot(ctx, x, y, lineWidth, stroke.color)
+            continue
+        }
+        ctx.strokeStyle = stroke.color
+        ctx.lineWidth = lineWidth
+        ctx.beginPath()
+        stroke.points.forEach((p, idx) => {
+            const x = p.x * vidW - vidW * 0.5
+            const y = p.y * vidH - vidH * 0.5
+            if (idx === 0) ctx.moveTo(x, y)
+            else ctx.lineTo(x, y)
+        })
+        ctx.stroke()
+    }
+}
+
+function drawAnnotationsDetailed(
+    ctx: Ctx2D,
+    strokes: AnnotationStroke[],
+    outputWidth: number,
+    outputHeight: number,
+    vidW: number,
+    vidH: number,
+    det: TimedBBox
+) {
+    const params = getDetailedCropParams(outputWidth, outputHeight, vidW, vidH, det)
+    const dstW = params.dstX2 - params.dstX1
+    const dstH = params.dstY2 - params.dstY1
+    if (dstW <= 0 || dstH <= 0) return
+
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(params.dstX1, params.dstY1, dstW, dstH)
+    ctx.clip()
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+
+    for (const stroke of strokes) {
+        if (stroke.points.length === 0) continue
+        const lineWidth = Math.max(1, stroke.width)
+        if (stroke.points.length === 1) {
+            const p = stroke.points[0]
+            const x = (p.x * vidW - params.winX1) * params.s
+            const y = (p.y * vidH - params.winY1) * params.s
+            drawAnnotationDot(ctx, x, y, lineWidth, stroke.color)
+            continue
+        }
+        ctx.strokeStyle = stroke.color
+        ctx.lineWidth = lineWidth
+        ctx.beginPath()
+        stroke.points.forEach((p, idx) => {
+            const x = (p.x * vidW - params.winX1) * params.s
+            const y = (p.y * vidH - params.winY1) * params.s
+            if (idx === 0) ctx.moveTo(x, y)
+            else ctx.lineTo(x, y)
+        })
+        ctx.stroke()
+    }
+    ctx.restore()
+}
+
 function drawStabilizationTransforms(
     ctx: CanvasRenderingContext2D,
     player: PlayerState,
@@ -158,6 +300,7 @@ export function drawFrame(
     video: HTMLVideoElement,
     player: PlayerState,
     ov: OverviewView,
+    annotations: AnnotationStroke[] = [],
     timeOverrideSec?: number,
     dominantOrientationDeg: number = 0
 ) {
@@ -218,6 +361,9 @@ export function drawFrame(
             ctx.lineWidth = 2 / sBase
             ctx.strokeRect(Math.round(x1) + 0.5, Math.round(y1) + 0.5, Math.round(w), Math.round(h))
         }
+        if (annotations.length > 0) {
+            drawAnnotationsOverview(ctx, annotations, rotatedVideo.width, rotatedVideo.height, sBase)
+        }
         ctx.restore()
     } else if (player.mode === 'detailed' && player.currentTrackId != null) {
         const det = player.interpolateDetectionByTime(player.currentTrackId, now)
@@ -228,7 +374,64 @@ export function drawFrame(
         // Reuse shared crop-draw logic (same as export path).
         const detTimed: TimedBBox = { time_percent: det.time_percent, bbox: det.bbox }
         drawDetailedCrop(ctx, cssW, cssH, sourceCanvas, vidW, vidH, detTimed)
+        if (annotations.length > 0) {
+            drawAnnotationsDetailed(ctx, annotations, cssW, cssH, vidW, vidH, detTimed)
+        }
     }
+}
+
+export function screenPointToVideoNorm(
+    px: number,
+    py: number,
+    outW: number,
+    outH: number,
+    player: PlayerState,
+    ov: OverviewView,
+    dominantOrientationDeg: number = 0
+): AnnotationPoint | null {
+    const { width, height } = getRotatedDimensions(player.video.width, player.video.height, dominantOrientationDeg)
+    if (player.mode === 'overview') {
+        const base = computeBaseRect(outW, outH, width, height)
+        const stab = player.getStabilizationAt(player.currentTimeSec)
+
+        const z = ov.zoom
+        const cx = base.x + base.w * 0.5 + ov.offsetX
+        const cy = base.y + base.h * 0.5 + ov.offsetY
+        const sBase = (base.w / width) * z
+
+        const dx0 = px - cx
+        const dy0 = py - cy
+        const dx1 = dx0 / sBase
+        const dy1 = dy0 / sBase
+        const dx2 = dx1 - stab.dx
+        const dy2 = dy1 - stab.dy
+
+        const cos = Math.cos(-stab.da)
+        const sin = Math.sin(-stab.da)
+        const dx3 = dx2 * cos - dy2 * sin
+        const dy3 = dx2 * sin + dy2 * cos
+
+        const xNorm = (dx3 + width * 0.5) / width
+        const yNorm = (dy3 + height * 0.5) / height
+        if (xNorm < 0 || xNorm > 1 || yNorm < 0 || yNorm > 1) return null
+        return { x: xNorm, y: yNorm }
+    }
+
+    if (player.mode === 'detailed' && player.currentTrackId != null) {
+        const det = player.interpolateDetectionByTime(player.currentTrackId, player.currentTimeSec)
+        if (!det) return null
+        const detTimed: TimedBBox = { time_percent: det.time_percent, bbox: det.bbox }
+        const params = getDetailedCropParams(outW, outH, width, height, detTimed)
+        if (px < params.dstX1 || px > params.dstX2 || py < params.dstY1 || py > params.dstY2) return null
+        const vx = params.winX1 + px / params.s
+        const vy = params.winY1 + py / params.s
+        const xNorm = vx / width
+        const yNorm = vy / height
+        if (xNorm < 0 || xNorm > 1 || yNorm < 0 || yNorm > 1) return null
+        return { x: xNorm, y: yNorm }
+    }
+
+    return null
 }
 
 export function pickTrackAtScreenPoint(

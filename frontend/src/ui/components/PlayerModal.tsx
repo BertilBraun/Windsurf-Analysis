@@ -17,6 +17,15 @@ export const PlayerModal: React.FC<{
 }> = ({ job, dirHandle, onClose, onDelete, onReport, onOpenNextJob, onOpenPrevJob, deletingId }) => {
     const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
     const [showReport, setShowReport] = React.useState<boolean>(false)
+    const [drawMode, setDrawMode] = React.useState<boolean>(false)
+
+    React.useEffect(() => {
+        setDrawMode(false)
+    }, [job.id])
+
+    const toggleDrawMode = React.useCallback(() => {
+        setDrawMode(mode => !mode)
+    }, [])
 
     return (
         <>
@@ -26,6 +35,12 @@ export const PlayerModal: React.FC<{
                 title={job.local_relative_path?.replace(/\.mp4$/i, '') ?? 'n/a'}
                 additionalHeader={
                     <>
+                        <Button
+                            onClick={toggleDrawMode}
+                            title="Toggle draw mode (D)"
+                            text="Draw"
+                            variant={drawMode ? 'primary' : 'secondary'}
+                        />
                         <Button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" text="Shortcuts" />
                         <Button
                             onClick={() => setShowReport(true)}
@@ -52,6 +67,8 @@ export const PlayerModal: React.FC<{
                             onReport={onReport}
                             onOpenNextJob={onOpenNextJob}
                             onOpenPrevJob={onOpenPrevJob}
+                            drawMode={drawMode}
+                            onToggleDrawMode={toggleDrawMode}
                         />
                     </div>
                 </div>

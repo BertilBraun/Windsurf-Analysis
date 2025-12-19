@@ -16,6 +16,7 @@ export const KeyboardShortcutsModal: React.FC<{ onClose: () => void }> = ({ onCl
                     <Shortcut keys={['Ctrl', 'Arrow Right']} desc="Seek +30s" />
                     <Shortcut keys={['-']} desc="Slow down" />
                     <Shortcut keys={['+']} desc="Speed up" />
+                    <Shortcut keys={['D']} desc="Toggle draw mode" />
                     <Shortcut keys={['N']} desc="Next track" />
                     <Shortcut keys={['P']} desc="Previous track" />
                     <Shortcut keys={['Shift', 'N']} desc="Open next video" />
