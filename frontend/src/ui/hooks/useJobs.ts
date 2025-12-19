@@ -1,13 +1,22 @@
 import React from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { JobDetail, JobSummary, ReportType } from '../types'
-import { getPathForSha, loadSetting, saveSetting, deleteSetting, subscribeShaPathMappingUpdates } from '../utils/idb'
+import {
+    getPathForSha,
+    getPathsForSha,
+    loadSetting,
+    saveSetting,
+    deleteSetting,
+    subscribeShaPathMappingUpdates,
+} from '../utils/idb'
 import { assert } from '../utils/assert'
 import { collection, doc, onSnapshot, query, where, type Unsubscribe } from 'firebase/firestore'
 import { db } from '../../firebase'
 
 type UseJobsReturn = {
     jobs: JobSummary[]
+    ready: boolean
+    initialSyncComplete: boolean
     refreshJobDetail: (id: string) => Promise<JobDetail>
     deleteJob: (id: string) => Promise<void>
     reportJob: (id: string, type: ReportType, message: string) => Promise<void>
@@ -20,39 +29,57 @@ const _assertIsPercentage = (p: number) => {
 export function useJobs(): UseJobsReturn {
     const { authorizedFetch, uid } = useAuth()
     const [jobs, setJobs] = React.useState<JobSummary[]>([])
+    const [ready, setReady] = React.useState<boolean>(false)
+    const [initialSyncComplete, setInitialSyncComplete] = React.useState<boolean>(false)
+    const readyRef = React.useRef<boolean>(false)
     const jobDetailCacheRef = React.useRef<Map<string, Promise<JobDetail>>>(new Map())
     const realtimeUnsubRef = React.useRef<Unsubscribe | null>(null)
     const jobUnsubsRef = React.useRef<Map<string, Unsubscribe>>(new Map())
     const jobsByIdRef = React.useRef<Map<string, JobSummary>>(new Map())
+    const activeJobIdsRef = React.useRef<Set<string>>(new Set())
+    const hydratedJobIdsRef = React.useRef<Set<string>>(new Set())
+
+    const publishJobsFromRef = React.useCallback(() => {
+        const next = Array.from(jobsByIdRef.current.values()).sort((a, b) => {
+            const ta = Date.parse(a.updated_at || a.created_at || '') || 0
+            const tb = Date.parse(b.updated_at || b.created_at || '') || 0
+            return tb - ta
+        })
+        setJobs(next)
+    }, [])
 
     // When the ingress scanner updates the local sha->path mapping (e.g. a file was moved),
     // update any affected jobs immediately so thumbnails don't point at stale paths.
     React.useEffect(() => {
-        const unsub = subscribeShaPathMappingUpdates(({ sha, path }) => {
-            if (!sha || !path) return
-
-            const shaLower = sha.toLowerCase()
-            let changed = false
-            for (const [jobId, j] of jobsByIdRef.current.entries()) {
-                if (!j.original_checksum_sha256) continue
-                if (String(j.original_checksum_sha256).toLowerCase() !== shaLower) continue
-                if (j.local_relative_path === path) continue
-                jobsByIdRef.current.set(jobId, { ...j, local_relative_path: path })
-                // Also clear any cached detail so the next open recomputes local_relative_path.
-                jobDetailCacheRef.current.delete(jobId)
-                changed = true
-            }
-            if (!changed) return
-
-            const next = Array.from(jobsByIdRef.current.values()).sort((a, b) => {
-                const ta = Date.parse(a.updated_at || a.created_at || '') || 0
-                const tb = Date.parse(b.updated_at || b.created_at || '') || 0
-                return tb - ta
-            })
-            setJobs(next)
+        const unsub = subscribeShaPathMappingUpdates(({ sha }) => {
+            if (!sha) return
+            void (async () => {
+                const shaLower = String(sha).toLowerCase()
+                const paths = await getPathsForSha(shaLower)
+                const preferred = paths.length ? paths[0] : null
+                let changed = false
+                for (const [jobId, j] of jobsByIdRef.current.entries()) {
+                    if (!j.original_checksum_sha256) continue
+                    if (String(j.original_checksum_sha256).toLowerCase() !== shaLower) continue
+                    const keep =
+                        j.local_relative_path && paths.some(p => p === j.local_relative_path)
+                            ? j.local_relative_path
+                            : preferred
+                    const same =
+                        j.local_relative_path === keep &&
+                        JSON.stringify(j.local_relative_paths || []) === JSON.stringify(paths)
+                    if (same) continue
+                    jobsByIdRef.current.set(jobId, { ...j, local_relative_path: keep, local_relative_paths: paths })
+                    // Also clear any cached detail so the next open recomputes local_relative_path.
+                    jobDetailCacheRef.current.delete(jobId)
+                    changed = true
+                }
+                if (!changed) return
+                publishJobsFromRef()
+            })()
         })
         return () => unsub()
-    }, [])
+    }, [publishJobsFromRef])
 
     const stopRealtime = React.useCallback(() => {
         if (realtimeUnsubRef.current) {
@@ -62,12 +89,35 @@ export function useJobs(): UseJobsReturn {
         for (const unsub of jobUnsubsRef.current.values()) unsub()
         jobUnsubsRef.current.clear()
         jobsByIdRef.current.clear()
+        activeJobIdsRef.current.clear()
+        hydratedJobIdsRef.current.clear()
+    }, [])
+
+    const recomputeInitialSyncComplete = React.useCallback(() => {
+        if (!readyRef.current) {
+            setInitialSyncComplete(false)
+            return
+        }
+        const active = activeJobIdsRef.current
+        if (active.size === 0) {
+            setInitialSyncComplete(true)
+            return
+        }
+        // IMPORTANT: only count jobs as "synced" once we've hydrated them into jobsByIdRef
+        // (includes checksum + derived local paths). Otherwise ingress can start with an incomplete
+        // knownChecksums set and re-create/re-upload jobs on reload.
+        let hydratedActiveCount = 0
+        for (const id of active) if (hydratedJobIdsRef.current.has(id)) hydratedActiveCount += 1
+        setInitialSyncComplete(hydratedActiveCount >= active.size)
     }, [])
 
     // Start realtime subscriptions on mount; cleanup on unmount.
     React.useEffect(() => {
         stopRealtime()
         setJobs([])
+        setReady(false)
+        readyRef.current = false
+        setInitialSyncComplete(false)
 
         if (!uid) return
 
@@ -80,30 +130,39 @@ export function useJobs(): UseJobsReturn {
         realtimeUnsubRef.current = onSnapshot(
             userJobsQ,
             snap => {
+                setReady(true)
+                readyRef.current = true
                 const activeJobIds = new Set<string>()
                 for (const d of snap.docs) {
                     const data = d.data() as any
                     const jobId = String(data?.job_id ?? '')
                     if (jobId) activeJobIds.add(jobId)
                 }
+                activeJobIdsRef.current = activeJobIds
+                for (const existingId of Array.from(hydratedJobIdsRef.current)) {
+                    if (!activeJobIds.has(existingId)) hydratedJobIdsRef.current.delete(existingId)
+                }
 
-                // Unsubscribe removed jobs
-                for (const existingId of Array.from(jobUnsubsRef.current.keys())) {
-                    if (!activeJobIds.has(existingId)) {
-                        jobUnsubsRef.current.get(existingId)?.()
-                        jobUnsubsRef.current.delete(existingId)
-                        jobsByIdRef.current.delete(existingId)
-                        jobDetailCacheRef.current.delete(existingId)
-                        void deleteSetting(`jobDetail:${existingId}`)
-                    }
+                // Remove jobs that are no longer associated to the user (regardless of whether we still have a listener).
+                for (const existingId of Array.from(jobsByIdRef.current.keys())) {
+                    if (activeJobIds.has(existingId)) continue
+                    jobUnsubsRef.current.get(existingId)?.()
+                    jobUnsubsRef.current.delete(existingId)
+                    jobsByIdRef.current.delete(existingId)
+                    jobDetailCacheRef.current.delete(existingId)
+                    void deleteSetting(`jobDetail:${existingId}`)
                 }
 
                 // Subscribe to newly-added jobs
                 for (const jobId of activeJobIds) {
                     if (jobUnsubsRef.current.has(jobId)) continue
+                    // If we already have the job in memory (e.g. was terminal and we unsubscribed earlier),
+                    // don't re-subscribe.
+                    if (jobsByIdRef.current.has(jobId)) continue
 
                     const jobDocRef = doc(db, 'jobs', jobId)
-                    const unsub = onSnapshot(
+                    let unsub: Unsubscribe | null = null
+                    unsub = onSnapshot(
                         jobDocRef,
                         jobSnap => {
                             if (!jobSnap.exists()) return
@@ -127,18 +186,27 @@ export function useJobs(): UseJobsReturn {
                             }
 
                             void (async () => {
-                                const local_relative_path = summaryBase.original_checksum_sha256
-                                    ? await getPathForSha(summaryBase.original_checksum_sha256)
-                                    : null
-                                const summary: JobSummary = { ...summaryBase, local_relative_path }
+                                const sha = summaryBase.original_checksum_sha256
+                                const local_relative_paths = sha ? await getPathsForSha(sha) : []
+                                const local_relative_path = local_relative_paths.length ? local_relative_paths[0] : null
+                                const summary: JobSummary = {
+                                    ...summaryBase,
+                                    local_relative_path,
+                                    local_relative_paths,
+                                }
                                 jobsByIdRef.current.set(jobId, summary)
+                                hydratedJobIdsRef.current.add(jobId)
+                                publishJobsFromRef()
+                                recomputeInitialSyncComplete()
 
-                                const next = Array.from(jobsByIdRef.current.values()).sort((a, b) => {
-                                    const ta = Date.parse(a.updated_at || a.created_at || '') || 0
-                                    const tb = Date.parse(b.updated_at || b.created_at || '') || 0
-                                    return tb - ta
-                                })
-                                setJobs(next)
+                                // Optimization: stop listening once job is terminal.
+                                const s = String(summaryBase.status || '').toLowerCase()
+                                const isTerminal =
+                                    s === 'succeeded' || s === 'failed' || s === 'canceled' || s === 'cancelled'
+                                if (isTerminal && unsub) {
+                                    unsub()
+                                    jobUnsubsRef.current.delete(jobId)
+                                }
                             })()
                         },
                         err => {
@@ -147,15 +215,21 @@ export function useJobs(): UseJobsReturn {
                     )
                     jobUnsubsRef.current.set(jobId, unsub)
                 }
+
+                // If there are no active jobs, initial sync is complete immediately.
+                recomputeInitialSyncComplete()
             },
             err => {
                 console.warn('user_jobs snapshot error; falling back to one-time fetch', err)
+                setReady(true)
+                readyRef.current = true
+                setInitialSyncComplete(true)
                 stopRealtime()
             }
         )
 
         return () => stopRealtime()
-    }, [uid, stopRealtime])
+    }, [uid, stopRealtime, recomputeInitialSyncComplete])
 
     const refreshJobDetail = React.useCallback(
         async (id: string): Promise<JobDetail> => {
@@ -242,5 +316,5 @@ export function useJobs(): UseJobsReturn {
         [stopRealtime]
     )
 
-    return { jobs, refreshJobDetail, deleteJob, reportJob }
+    return { jobs, ready, initialSyncComplete, refreshJobDetail, deleteJob, reportJob }
 }

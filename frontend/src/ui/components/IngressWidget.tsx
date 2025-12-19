@@ -10,6 +10,8 @@ type Props = {
     dirPermission: 'granted' | 'denied' | 'prompt' | null
     onPickDirectory: () => void
     uploadCtx: UploadContext
+    knownChecksumsSha256?: ReadonlySet<string> | null
+    enabled?: boolean
 }
 
 function meanProgress(items: IngressUploadItem[]) {
@@ -42,8 +44,15 @@ const Ring: React.FC<{ percent: number }> = ({ percent }) => {
     )
 }
 
-export const IngressWidget: React.FC<Props> = ({ dirHandle, dirPermission, onPickDirectory, uploadCtx }) => {
-    const scanner = useIngressScanner(dirHandle, uploadCtx)
+export const IngressWidget: React.FC<Props> = ({
+    dirHandle,
+    dirPermission,
+    onPickDirectory,
+    uploadCtx,
+    knownChecksumsSha256 = null,
+    enabled = true,
+}) => {
+    const scanner = useIngressScanner(dirHandle, uploadCtx, knownChecksumsSha256, enabled)
     const [expanded, setExpanded] = React.useState(false)
     const [showQuotaModal, setShowQuotaModal] = React.useState(false)
 

@@ -1,7 +1,99 @@
 import React from 'react'
 import { JobSummary } from '../types'
 import { getFileByRelativePath } from '../utils/fsAccess'
+import { getPathsForSha, getThumbnailBlob, saveThumbnailBlob } from '../utils/idb'
 import { drawRotatedToCanvas } from '../player/rotation'
+
+const THUMB_TARGET_W = 256
+const THUMB_MIME = 'image/jpeg'
+const THUMB_QUALITY = 0.7
+
+function once(target: EventTarget, type: string, onError?: (e: any) => Error): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const cleanup = () => {
+            try {
+                target.removeEventListener(type, onOk as any)
+                if (onError) target.removeEventListener('error', onErr as any)
+            } catch {}
+        }
+        const onOk = () => {
+            cleanup()
+            resolve()
+        }
+        const onErr = (e: any) => {
+            cleanup()
+            reject(onError ? onError(e) : new Error('event_error'))
+        }
+        target.addEventListener(type, onOk as any, { once: true } as any)
+        if (onError) target.addEventListener('error', onErr as any, { once: true } as any)
+    })
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, mime: string, quality: number): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+        canvas.toBlob(
+            blob => {
+                if (!blob) reject(new Error('thumbnail_blob_null'))
+                else resolve(blob)
+            },
+            mime,
+            quality
+        )
+    })
+}
+
+async function resolveFirstExistingFile(
+    dirHandle: FileSystemDirectoryHandle,
+    candidates: string[]
+): Promise<File | null> {
+    for (const path of candidates) {
+        try {
+            return await getFileByRelativePath(dirHandle, path)
+        } catch {
+            // try next
+        }
+    }
+    return null
+}
+
+async function generateThumbnailBlobFromVideo(file: File, dominantOrientation: number): Promise<Blob> {
+    const videoUrl = URL.createObjectURL(file)
+    try {
+        const video = document.createElement('video')
+        video.muted = true
+        video.preload = 'metadata'
+        video.src = videoUrl
+
+        await once(video, 'loadedmetadata', () => new Error('video_error'))
+
+        const seekTarget = Math.min(0.1, (video.duration || 1) - 0.1)
+        try {
+            video.currentTime = seekTarget
+        } catch {}
+        await once(video, 'seeked', () => new Error('video_error'))
+
+        const oriented = document.createElement('canvas')
+        drawRotatedToCanvas(video, oriented, dominantOrientation)
+
+        const w = Math.max(1, oriented.width)
+        const h = Math.max(1, oriented.height)
+        const scale = Math.min(1, THUMB_TARGET_W / w)
+        const outW = Math.max(1, Math.floor(w * scale))
+        const outH = Math.max(1, Math.floor(h * scale))
+
+        const canvas = document.createElement('canvas')
+        canvas.width = outW
+        canvas.height = outH
+        const ctx = canvas.getContext('2d')!
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
+        ctx.drawImage(oriented, 0, 0, outW, outH)
+        const blob = await canvasToBlob(canvas, THUMB_MIME, THUMB_QUALITY)
+        return blob
+    } finally {
+        URL.revokeObjectURL(videoUrl)
+    }
+}
 
 const PlayOverlay: React.FC = () => (
     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -19,12 +111,26 @@ export const JobThumbnail: React.FC<{
 }> = ({ job, dirHandle }) => {
     const [thumbUrl, setThumbUrl] = React.useState<string | null>(null)
     const [notFound, setNotFound] = React.useState<boolean>(false)
+    const lastCacheKeyRef = React.useRef<string>('')
+
+    const cacheKey = React.useMemo(() => {
+        const shaLower = String(job.original_checksum_sha256 || '').toLowerCase()
+        const base = shaLower || `jobid:${job.id}`
+        return `${base}:ori:${Number(job.dominant_orientation || 0)}:w${THUMB_TARGET_W}:q${Math.round(
+            THUMB_QUALITY * 100
+        )}`
+    }, [job.id, job.original_checksum_sha256, job.dominant_orientation])
 
     React.useEffect(() => {
-        let revoked: string | null = null
+        let revokedThumbUrl: string | null = null
         let cancelled = false
-        setThumbUrl(null)
-        setNotFound(false)
+
+        // Only reset the UI when the thumbnail identity changes.
+        if (lastCacheKeyRef.current !== cacheKey) {
+            lastCacheKeyRef.current = cacheKey
+            setThumbUrl(null)
+            setNotFound(false)
+        }
 
         if (job.status !== 'succeeded') return
         if (!dirHandle) {
@@ -34,69 +140,61 @@ export const JobThumbnail: React.FC<{
 
         ;(async () => {
             try {
-                const path = job.local_relative_path
-                if (!path) {
+                const cached = await getThumbnailBlob(cacheKey)
+                if (cancelled) return
+
+                if (cached) {
+                    const url = URL.createObjectURL(cached)
+                    revokedThumbUrl = url
+                    setThumbUrl(url)
+                    return
+                }
+
+                const candidates: string[] = []
+                if (job.local_relative_path) candidates.push(job.local_relative_path)
+                if (job.original_checksum_sha256) {
+                    const extra = await getPathsForSha(String(job.original_checksum_sha256).toLowerCase())
+                    for (const p of extra) if (!candidates.includes(p)) candidates.push(p)
+                }
+                if (candidates.length === 0) {
                     setNotFound(true)
                     return
                 }
-                const file = await getFileByRelativePath(dirHandle, path)
+
+                const file = await resolveFirstExistingFile(dirHandle, candidates)
+                if (cancelled) return
+
                 if (!file) {
-                    if (!cancelled) setNotFound(true)
+                    setNotFound(true)
                     return
                 }
-                const url = URL.createObjectURL(file)
-                revoked = url
-                const video = document.createElement('video')
-                video.muted = true
-                video.preload = 'metadata'
-                video.src = url
 
-                const captureFrame = async () => {
-                    try {
-                        video.currentTime = Math.min(0.1, (video.duration || 1) - 0.1)
-                    } catch {}
-                }
+                const blob = await generateThumbnailBlobFromVideo(file, job.dominant_orientation)
+                if (cancelled) return
 
-                const onSeeked = () => {
-                    try {
-                        // Draw rotated frame to offscreen then scale to target size
-                        const oriented = document.createElement('canvas')
-                        drawRotatedToCanvas(video, oriented, job.dominant_orientation)
+                await saveThumbnailBlob(cacheKey, blob)
 
-                        const targetW = 256
-                        const w = Math.max(1, oriented.width)
-                        const h = Math.max(1, oriented.height)
-                        const scale = Math.min(1, targetW / w)
-                        const outW = Math.max(1, Math.floor(w * scale))
-                        const outH = Math.max(1, Math.floor(h * scale))
-
-                        const canvas = document.createElement('canvas')
-                        canvas.width = outW
-                        canvas.height = outH
-                        const ctx = canvas.getContext('2d')!
-                        ctx.imageSmoothingEnabled = true
-                        ctx.imageSmoothingQuality = 'high'
-                        ctx.drawImage(oriented, 0, 0, outW, outH)
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.7)
-                        if (!cancelled) setThumbUrl(dataUrl)
-                    } catch {
-                        if (!cancelled) setNotFound(true)
-                    }
-                }
-
-                video.addEventListener('loadedmetadata', captureFrame, { once: true })
-                video.addEventListener('seeked', onSeeked, { once: true })
-                video.addEventListener('error', () => !cancelled && setNotFound(true), { once: true })
-            } catch {
+                const url = URL.createObjectURL(blob)
+                revokedThumbUrl = url
+                setThumbUrl(url)
+            } catch (e: any) {
                 if (!cancelled) setNotFound(true)
             }
         })()
 
         return () => {
             cancelled = true
-            if (revoked) URL.revokeObjectURL(revoked)
+            if (revokedThumbUrl) URL.revokeObjectURL(revokedThumbUrl)
         }
-    }, [job.id, job.status, job.local_relative_path, job.dominant_orientation, dirHandle])
+    }, [
+        cacheKey,
+        dirHandle,
+        job.id,
+        job.status,
+        job.local_relative_path,
+        job.original_checksum_sha256,
+        job.dominant_orientation,
+    ])
 
     const boxClasses = 'relative w-48 h-28 bg-gray-200 rounded-md overflow-hidden flex items-center justify-center'
 

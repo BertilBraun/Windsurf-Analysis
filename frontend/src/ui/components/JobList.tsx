@@ -11,9 +11,14 @@ type FolderNode = {
     name: string
     path: string
     children: Map<string, FolderNode>
-    jobs: JobSummary[]
+    jobs: JobInstance[]
     totalJobs: number
     activeJobs: number
+}
+
+type JobInstance = JobSummary & {
+    // For display purposes we render one tile per local file path.
+    local_relative_path: string
 }
 
 function normalizeRelativePath(path: string): string {
@@ -38,7 +43,7 @@ function stripMp4(name: string): string {
     return name.replace(/\.mp4$/i, '')
 }
 
-function sortJobs(list: JobSummary[], sortKey: JobListSortKey, sortDir: JobListSortDir): JobSummary[] {
+function sortJobs(list: JobInstance[], sortKey: JobListSortKey, sortDir: JobListSortDir): JobInstance[] {
     const out = [...list]
     out.sort((a, b) => {
         let cmp = 0
@@ -95,25 +100,34 @@ function buildJobTree(jobs: JobSummary[]) {
         return created
     }
 
+    const expandToInstances = (job: JobSummary): JobInstance[] => {
+        const rels = job.local_relative_paths && job.local_relative_paths.length ? job.local_relative_paths : null
+        const candidates = rels?.length ? rels : job.local_relative_path ? [job.local_relative_path] : []
+        return candidates
+            .map(rel => normalizeRelativePath(rel))
+            .filter(Boolean)
+            .map(rel => ({ ...job, local_relative_path: rel }))
+    }
+
     for (const job of jobs) {
-        const rel = job.local_relative_path
-        if (!rel) {
+        const instances = expandToInstances(job)
+        if (instances.length === 0) {
             unmappedJobs.push(job)
             continue
         }
-        const parts = splitPathParts(rel)
-        if (parts.length === 0) {
-            unmappedJobs.push(job)
-            continue
+
+        for (const inst of instances) {
+            const parts = splitPathParts(inst.local_relative_path)
+            if (parts.length === 0) continue
+            const dirParts = parts.slice(0, Math.max(0, parts.length - 1))
+            let node = root
+            let currentPath = ''
+            for (const part of dirParts) {
+                currentPath = currentPath ? `${currentPath}/${part}` : part
+                node = ensureChild(node, part, currentPath)
+            }
+            node.jobs.push(inst)
         }
-        const dirParts = parts.slice(0, Math.max(0, parts.length - 1))
-        let node = root
-        let currentPath = ''
-        for (const part of dirParts) {
-            currentPath = currentPath ? `${currentPath}/${part}` : part
-            node = ensureChild(node, part, currentPath)
-        }
-        node.jobs.push(job)
     }
 
     const isActive = (s: JobSummary['status']) => s !== 'succeeded' && s !== 'failed' && s !== 'canceled'
@@ -151,7 +165,7 @@ export function getJobListOrderedJobIds(
     sortDir: JobListSortDir
 ): string[] {
     const { root } = buildJobTree(jobs)
-    const ordered: JobSummary[] = []
+    const ordered: JobInstance[] = []
 
     const walk = (node: FolderNode) => {
         for (const childName of sortedFolderNames(node)) {
@@ -162,6 +176,7 @@ export function getJobListOrderedJobIds(
     }
 
     walk(root)
+    // Note: duplicates (multiple local paths for the same job id) are represented multiple times.
     return ordered.map(j => j.id)
 }
 
@@ -170,7 +185,7 @@ export const JobList: React.FC<{
     sortKey: JobListSortKey
     sortDir: JobListSortDir
     onToggleSort: (key: JobListSortKey) => void
-    onOpen: (id: string) => void
+    onOpen: (id: string, localRelativePath?: string | null) => void
     openingId?: string | null
     dirHandle?: FileSystemDirectoryHandle | null
 }> = ({ jobs, sortKey, sortDir, onToggleSort, onOpen, openingId, dirHandle = null }) => {
@@ -256,7 +271,7 @@ export const JobList: React.FC<{
                                         const caption = fileName
                                         return (
                                             <div
-                                                key={job.local_relative_path ?? job.id}
+                                                key={`${job.id}::${job.local_relative_path ?? ''}`}
                                                 className="flex flex-col items-start"
                                             >
                                                 <div
@@ -265,14 +280,14 @@ export const JobList: React.FC<{
                                                     } ${openingId === job.id ? 'opacity-60' : ''}`}
                                                     onClick={() => {
                                                         if (job.status === 'succeeded' && job.local_relative_path)
-                                                            onOpen(job.id)
+                                                            onOpen(job.id, job.local_relative_path)
                                                     }}
                                                     role="button"
                                                     tabIndex={0}
                                                     onKeyDown={e =>
                                                         job.status === 'succeeded' &&
                                                         (e.key === 'Enter' || e.key === ' ') &&
-                                                        onOpen(job.id)
+                                                        onOpen(job.id, job.local_relative_path)
                                                     }
                                                 >
                                                     <JobThumbnail job={job} dirHandle={dirHandle} />
@@ -372,49 +387,69 @@ export const JobList: React.FC<{
                         Unmapped jobs (no local file path mapping)
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {sortJobs(unmappedJobs, sortKey, sortDir).map(job => {
-                            const caption = stripMp4(basename(job.local_relative_path)) || 'n/a'
-                            const shaHint = job.original_checksum_sha256
-                                ? `sha:${job.original_checksum_sha256.slice(0, 12)}…`
-                                : 'sha:missing'
-                            return (
-                                <div key={job.id} className="flex flex-col items-start">
-                                    <div
-                                        className={`relative ${
-                                            job.status === 'succeeded' ? 'cursor-pointer' : 'cursor-default'
-                                        } ${openingId === job.id ? 'opacity-60' : ''}`}
-                                        onClick={() => {
-                                            if (job.status === 'succeeded' && job.local_relative_path) onOpen(job.id)
-                                        }}
-                                        role="button"
-                                        tabIndex={0}
-                                        onKeyDown={e =>
-                                            job.status === 'succeeded' &&
-                                            (e.key === 'Enter' || e.key === ' ') &&
-                                            onOpen(job.id)
-                                        }
-                                    >
-                                        <JobThumbnail job={job} dirHandle={dirHandle} />
-                                        {openingId === job.id && (
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <div className="text-white text-sm bg-black/60 rounded px-2 py-1">
-                                                    Opening…
+                        {[...unmappedJobs]
+                            .sort((a, b) => {
+                                if (sortKey === 'date') {
+                                    const ta = Date.parse(a.updated_at || a.created_at || '') || 0
+                                    const tb = Date.parse(b.updated_at || b.created_at || '') || 0
+                                    return sortDir === 'asc' ? ta - tb : tb - ta
+                                }
+                                // name
+                                const an =
+                                    stripMp4(basename(a.local_relative_path)).toLowerCase() ||
+                                    normalizeRelativePath(a.local_relative_path || '').toLowerCase() ||
+                                    a.id
+                                const bn =
+                                    stripMp4(basename(b.local_relative_path)).toLowerCase() ||
+                                    normalizeRelativePath(b.local_relative_path || '').toLowerCase() ||
+                                    b.id
+                                if (an === bn) return 0
+                                return sortDir === 'asc' ? (an < bn ? -1 : 1) : an < bn ? 1 : -1
+                            })
+                            .map(job => {
+                                const caption = stripMp4(basename(job.local_relative_path)) || 'n/a'
+                                const shaHint = job.original_checksum_sha256
+                                    ? `sha:${job.original_checksum_sha256.slice(0, 12)}…`
+                                    : 'sha:missing'
+                                return (
+                                    <div key={job.id} className="flex flex-col items-start">
+                                        <div
+                                            className={`relative ${
+                                                job.status === 'succeeded' ? 'cursor-pointer' : 'cursor-default'
+                                            } ${openingId === job.id ? 'opacity-60' : ''}`}
+                                            onClick={() => {
+                                                if (job.status === 'succeeded' && job.local_relative_path)
+                                                    onOpen(job.id, job.local_relative_path)
+                                            }}
+                                            role="button"
+                                            tabIndex={0}
+                                            onKeyDown={e =>
+                                                job.status === 'succeeded' &&
+                                                (e.key === 'Enter' || e.key === ' ') &&
+                                                onOpen(job.id, job.local_relative_path)
+                                            }
+                                        >
+                                            <JobThumbnail job={job} dirHandle={dirHandle} />
+                                            {openingId === job.id && (
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    <div className="text-white text-sm bg-black/60 rounded px-2 py-1">
+                                                        Opening…
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )}
+                                            )}
+                                        </div>
+                                        <div className="mt-1 max-w-48 truncate text-xs text-gray-700" title={caption}>
+                                            {caption}
+                                        </div>
+                                        <div
+                                            className="text-[11px] text-amber-800/80"
+                                            title={job.original_checksum_sha256 || ''}
+                                        >
+                                            {shaHint}
+                                        </div>
                                     </div>
-                                    <div className="mt-1 max-w-48 truncate text-xs text-gray-700" title={caption}>
-                                        {caption}
-                                    </div>
-                                    <div
-                                        className="text-[11px] text-amber-800/80"
-                                        title={job.original_checksum_sha256 || ''}
-                                    >
-                                        {shaHint}
-                                    </div>
-                                </div>
-                            )
-                        })}
+                                )
+                            })}
                     </div>
                 </div>
             )}

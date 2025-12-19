@@ -19,7 +19,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     onGoPricing,
 }) => {
     const { logout, user, authorizedFetch, getAuthHeader } = useAuth()
-    const { jobs, refreshJobDetail, deleteJob, reportJob } = useJobs()
+    const { jobs, initialSyncComplete: jobsInitialSyncComplete, refreshJobDetail, deleteJob, reportJob } = useJobs()
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
     const [showSettings, setShowSettings] = React.useState<boolean>(false)
     const [showTutorial, setShowTutorial] = React.useState<boolean>(false)
@@ -35,6 +35,14 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const [dirHandle, setDirHandle] = React.useState<FileSystemDirectoryHandle | null>(null)
     const [dirPermission, setDirPermission] = React.useState<'granted' | 'denied' | 'prompt' | null>(null)
     const uploadCtx = React.useMemo(() => ({ authorizedFetch, getAuthHeader }), [authorizedFetch, getAuthHeader])
+    const knownChecksumsSha256 = React.useMemo(() => {
+        const s = new Set<string>()
+        for (const j of jobs) {
+            const sha = String(j.original_checksum_sha256 || '').toLowerCase()
+            if (sha) s.add(sha)
+        }
+        return s
+    }, [jobs])
 
     // Try to restore directory handle from IndexedDB on mount
     React.useEffect(() => {
@@ -84,11 +92,12 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     }
 
     const [openingId, setOpeningId] = React.useState<string | null>(null)
-    const onOpen = async (id: string) => {
+    const onOpen = async (id: string, localRelativePath?: string | null) => {
         setOpeningId(id)
         try {
             trackEvent('job_open', { job_id: id })
-            setSelectedJob(await refreshJobDetail(id))
+            const detail = await refreshJobDetail(id)
+            setSelectedJob(localRelativePath ? { ...detail, local_relative_path: localRelativePath } : detail)
         } finally {
             setOpeningId(null)
         }
@@ -204,6 +213,8 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     dirPermission={dirPermission}
                     onPickDirectory={pickDirectory}
                     uploadCtx={uploadCtx}
+                    knownChecksumsSha256={knownChecksumsSha256}
+                    enabled={jobsInitialSyncComplete}
                 />
 
                 {selectedJob && (

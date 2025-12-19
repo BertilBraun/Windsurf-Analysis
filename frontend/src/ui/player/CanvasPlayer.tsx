@@ -1,6 +1,7 @@
 import React from 'react'
 import { JobDetail, ReportType } from '../types'
 import { getFileByRelativePath } from '../utils/fsAccess'
+import { getPathsForSha } from '../utils/idb'
 import { PlayerState, VideoProperties } from './state'
 import { ControlsBar } from './ControlsBar'
 import { Timeline } from './Timeline'
@@ -56,9 +57,26 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
             return null
         }
         try {
-            const path = job.local_relative_path
-            if (!path) throw new Error('Missing local mapping for file')
-            return await getFileByRelativePath(dirHandle, path)
+            const candidates: string[] = []
+            if (job.local_relative_path) candidates.push(job.local_relative_path)
+            if (job.original_checksum_sha256) {
+                const extra = await getPathsForSha(String(job.original_checksum_sha256).toLowerCase())
+                for (const p of extra) if (!candidates.includes(p)) candidates.push(p)
+            }
+            if (candidates.length === 0) throw new Error('Missing local mapping for file')
+
+            for (const path of candidates) {
+                try {
+                    return await getFileByRelativePath(dirHandle, path)
+                } catch (e: any) {
+                    const msg = String(e?.message || '')
+                    const isMissing =
+                        e?.name === 'NotFoundError' || /not\s*found|no such file|could not be found/i.test(msg)
+                    if (isMissing) continue
+                    throw e
+                }
+            }
+            throw new Error('VIDEO FILE NOT FOUND')
         } catch (e: any) {
             const msg = String(e?.message || '')
             const isMissing = e?.name === 'NotFoundError' || /not\s*found|no such file|could not be found/i.test(msg)
@@ -70,7 +88,7 @@ export const CanvasPlayer: React.FC<Props> = ({ job, dirHandle, onClose, onOpenN
             }
             return null
         }
-    }, [dirHandle, job.local_relative_path])
+    }, [dirHandle, job.local_relative_path, job.original_checksum_sha256])
 
     React.useEffect(() => {
         trackEvent('player_open', { job_id: job.id })

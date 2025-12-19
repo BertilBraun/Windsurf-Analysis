@@ -18,6 +18,9 @@ export type JobSummary = {
     original_checksum_sha256: string
     dominant_orientation: number
     local_relative_path?: string | null
+    // One job can correspond to multiple local files (duplicate copies) with the same checksum.
+    // This list is derived from local IndexedDB sha->paths mapping.
+    local_relative_paths?: string[] | null
 }
 
 export type JobDetail = JobSummary & {
