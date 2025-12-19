@@ -121,7 +121,7 @@ def wait_for_volume_reload(video_path: str, max_attempts: int = 10, delay: float
     timeout=600,  # 10 minutes
     secrets=[modal.Secret.from_name('backend-secret')],
 )
-@modal.concurrent(max_inputs=16, target_inputs=12)
+# @modal.concurrent(max_inputs=16, target_inputs=12)
 class InferenceModel:
     @modal.enter()
     def setup(self):

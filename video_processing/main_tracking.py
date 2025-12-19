@@ -41,7 +41,7 @@ def clamp_percentage(p: float) -> float:
     scaledown_window=10,
     cpu=2.0,
 )
-@modal.concurrent(max_inputs=16, target_inputs=12)
+# @modal.concurrent(max_inputs=16, target_inputs=12)
 def embedding_extraction_and_tracking(
     job_id: str,
     dominant_orientation: int,
