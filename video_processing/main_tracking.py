@@ -39,6 +39,7 @@ def clamp_percentage(p: float) -> float:
     secrets=[modal.Secret.from_name('backend-secret')],
     volumes={'/data': shared_volume},
     scaledown_window=10,
+    timeout=600,
     cpu=2.0,
 )
 # @modal.concurrent(max_inputs=16, target_inputs=12)
