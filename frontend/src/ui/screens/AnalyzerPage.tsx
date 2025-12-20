@@ -11,6 +11,7 @@ import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { SettingsModal } from '../components/SettingsModal'
 import { PlayerModal } from '../components/PlayerModal'
 import { LogoButton } from '../components/LogoButton'
+import { Modal } from '../components/Modal'
 import { trackEvent } from '../utils/analytics'
 import { AnalyzerTutorialModal } from '../components/AnalyzerTutorialModal'
 
@@ -25,6 +26,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const { jobs, initialSyncComplete: jobsInitialSyncComplete, refreshJobDetail, deleteJob, reportJob } = useJobs()
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
     const [showSettings, setShowSettings] = React.useState<boolean>(false)
+    const [showHelp, setShowHelp] = React.useState<boolean>(false)
     const [showTutorial, setShowTutorial] = React.useState<boolean>(false)
     const [tutorialStepIndex, setTutorialStepIndex] = React.useState<number>(0)
     const [sortKey, setSortKey] = React.useState<JobListSortKey>('date')
@@ -161,6 +163,12 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                         />
                         <Button
                             size="sm"
+                            variant="ghost"
+                            onClick={() => setShowHelp(true)}
+                            text={t('screens.analyzer.actions.help')}
+                        />
+                        <Button
+                            size="sm"
                             variant="secondary"
                             onClick={() => {
                                 trackEvent('open_settings')
@@ -260,6 +268,16 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     />
                 )}
                 {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onLogout={logout} />}
+                {showHelp && (
+                    <Modal onClose={() => setShowHelp(false)} title={t('screens.analyzer.help.title')}>
+                        <div className="p-4 text-sm text-slate-700">
+                            {t('screens.analyzer.help.body')}{' '}
+                            <a className="text-brand-700 underline" href="mailto:contact@gybelock.de">
+                                contact@gybelock.de
+                            </a>
+                        </div>
+                    </Modal>
+                )}
                 {showTutorial && (
                     <TutorialModal
                         onClose={() => {

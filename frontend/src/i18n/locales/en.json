@@ -388,6 +388,7 @@
     "screens": {
         "analyzer": {
             "actions": {
+                "help": "Help",
                 "settings": "Settings",
                 "tutorial": "Tutorial"
             },
@@ -405,6 +406,10 @@
             "header": {
                 "tagline": "Upload, process, and review your riding.",
                 "taglineWithName": "Upload, process, and review your riding \u2014 {{name}}."
+            },
+            "help": {
+                "body": "Hey, if you have feedback or need help getting started or with something concrete, please contact us at",
+                "title": "Need help?"
             }
         },
         "faq": {
