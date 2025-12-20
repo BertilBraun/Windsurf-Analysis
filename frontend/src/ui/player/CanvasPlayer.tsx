@@ -229,6 +229,7 @@ export const CanvasPlayer: React.FC<Props> = ({
                 onOpenPrevJob?.()
             } else if (e.ctrlKey && key.toLowerCase() === 'z') {
                 if (!drawMode) return
+                if (player?.isPlaying) return
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'undo_draw' })
                 if (activeStrokeRef.current) {
@@ -301,6 +302,13 @@ export const CanvasPlayer: React.FC<Props> = ({
         if (!drawMode) return
         setHoveredTrackId(null)
     }, [drawMode])
+
+    React.useEffect(() => {
+        if (!drawMode) return
+        if (!player?.isPlaying) return
+        setPlayer(p => (p ? p.copy({ isPlaying: false }) : p))
+        videoRef.current?.pause()
+    }, [drawMode, player?.isPlaying])
 
     React.useEffect(() => {
         if (!activeStrokeRef.current) return
@@ -541,6 +549,7 @@ export const CanvasPlayer: React.FC<Props> = ({
     const onPointerDown = React.useCallback(
         (e: React.PointerEvent<HTMLCanvasElement>) => {
             if (!drawMode || isExporting) return
+            if (player?.isPlaying) return
             if (e.button !== 0) return
             e.preventDefault()
             if (drawTool === 'line') {
@@ -581,6 +590,7 @@ export const CanvasPlayer: React.FC<Props> = ({
     const onPointerMove = React.useCallback(
         (e: React.PointerEvent<HTMLCanvasElement>) => {
             if (!drawMode || isExporting) return
+            if (player?.isPlaying) return
             if (drawTool === 'line') {
                 if (!activeStrokeRef.current) return
                 updateLineStroke(e)
@@ -604,6 +614,7 @@ export const CanvasPlayer: React.FC<Props> = ({
     const finalizeStroke = React.useCallback(
         (e: React.PointerEvent<HTMLCanvasElement>, canceled: boolean) => {
             if (!drawMode) return
+            if (player?.isPlaying) return
             if (drawTool !== 'freehand') return
             if (activePointerIdRef.current !== e.pointerId) return
             if (e.currentTarget.hasPointerCapture(e.pointerId)) {
@@ -624,6 +635,7 @@ export const CanvasPlayer: React.FC<Props> = ({
     const cancelLineStroke = React.useCallback(
         (e: React.PointerEvent<HTMLCanvasElement>) => {
             if (drawTool !== 'line') return
+            if (player?.isPlaying) return
             if (activePointerIdRef.current !== e.pointerId) return
             if (!activeStrokeRef.current) return
             activeStrokeRef.current = null
