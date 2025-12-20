@@ -189,7 +189,8 @@ export const JobList: React.FC<{
     onOpen: (id: string, localRelativePath?: string | null) => void
     openingId?: string | null
     dirHandle?: FileSystemDirectoryHandle | null
-}> = ({ jobs, sortKey, sortDir, onToggleSort, onOpen, openingId, dirHandle = null }) => {
+    initialSyncComplete?: boolean
+}> = ({ jobs, sortKey, sortDir, onToggleSort, onOpen, openingId, dirHandle = null, initialSyncComplete = false }) => {
     const { t } = useTranslation()
     const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set(['']))
 
@@ -324,7 +325,7 @@ export const JobList: React.FC<{
     if (jobs.length === 0) {
         return (
             <div className="text-center text-gray-500">
-                {t('components.jobList.loading')}
+                {initialSyncComplete ? t('components.jobList.waiting') : t('components.jobList.loading')}
                 <AnimatedDots />
             </div>
         )

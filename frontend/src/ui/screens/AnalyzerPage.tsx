@@ -213,6 +213,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     onOpen={onOpen}
                     openingId={openingId}
                     dirHandle={dirHandle}
+                    initialSyncComplete={jobsInitialSyncComplete}
                 />
 
                 <IngressWidget

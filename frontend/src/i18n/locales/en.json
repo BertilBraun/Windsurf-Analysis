@@ -192,6 +192,7 @@
                 "openIcon": "\u25be"
             },
             "loading": "Still looking for jobs",
+            "waiting": "Waiting for videos",
             "opening": "Opening\u2026",
             "sort": {
                 "ascSymbol": "\u25b2",
