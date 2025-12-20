@@ -186,7 +186,10 @@ export function useIngressScanner(
 
     const retryFailed = React.useCallback(() => {
         failedRef.current = new Set()
-        setUploads(prev => prev.map(u => (u.status === 'error' ? { ...u, status: 'queued', progress: 0 } : u)))
+        setLastError(null)
+        setUploads(prev =>
+            prev.map(u => (u.status === 'error' ? { ...u, status: 'queued', progress: 0, error: null } : u))
+        )
         setSuspended(false) // This will trigger a new scan
     }, [scanOnce])
 
