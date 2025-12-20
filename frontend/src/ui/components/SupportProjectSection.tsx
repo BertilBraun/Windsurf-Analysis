@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 
 const PAYPAL_LINK = 'https://paypal.me/bertilbraun'
 
@@ -11,11 +12,12 @@ export type SupportProjectSectionProps = {
 }
 
 export const SupportProjectSection: React.FC<SupportProjectSectionProps> = ({ className }) => {
+    const { t } = useTranslation()
     return (
         <section className={cx('rounded-2xl border border-slate-200 bg-white p-6 sm:p-8', className)}>
-            <h2 className="mt-0">Want to support the project?</h2>
+            <h2 className="mt-0">{t('components.supportProjectSection.title')}</h2>
             <div className="text-sm text-slate-600 leading-6">
-                If GybeLock helps you, you can support its development. Any help is greatly appreciated!
+                {t('components.supportProjectSection.body')}
             </div>
             <div className="mt-4 flex flex-wrap gap-3 items-center">
                 <a
@@ -23,9 +25,9 @@ export const SupportProjectSection: React.FC<SupportProjectSectionProps> = ({ cl
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition bg-slate-900 text-white hover:bg-slate-800"
-                    title="Buy me a coffee (PayPal)"
+                    title={t('components.supportProjectSection.linkTitle')}
                 >
-                    Buy me a coffee (PayPal)
+                    {t('components.supportProjectSection.linkText')}
                 </a>
             </div>
         </section>

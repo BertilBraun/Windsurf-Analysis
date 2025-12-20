@@ -1,4 +1,5 @@
 import React from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { HomePage } from '../screens/HomePage'
@@ -14,6 +15,7 @@ import { LogoButton } from '../components/LogoButton'
 import { trackPageView } from '../utils/analytics'
 
 const AnalyzerRoute: React.FC = () => {
+    const { t } = useTranslation()
     const {
         isAuthReady,
         isAuthenticated,
@@ -39,7 +41,7 @@ const AnalyzerRoute: React.FC = () => {
                     </div>
                 </header>
                 <main className="mx-auto max-w-[1400px] px-4 sm:px-6 py-10">
-                    <div className="text-sm text-slate-600">Loading your session…</div>
+                    <div className="text-sm text-slate-600">{t('routes.analyzer.loadingSession')}</div>
                 </main>
             </div>
         )
@@ -59,8 +61,8 @@ const AnalyzerRoute: React.FC = () => {
                     <div className="max-w-md">
                         <div className="text-sm text-slate-600 mb-4">
                             {authMode === 'signup'
-                                ? 'Create an account to access the Analyzer.'
-                                : 'Log in to access the Analyzer.'}
+                                ? t('routes.analyzer.auth.signupPrompt')
+                                : t('routes.analyzer.auth.loginPrompt')}
                         </div>
                         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                             {authMode === 'signup' ? (
@@ -102,10 +104,13 @@ const AnalyzerRoute: React.FC = () => {
                 <main className="mx-auto max-w-[1400px] px-4 sm:px-6 py-10">
                     <div className="max-w-xl">
                         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <h3 className="m-0">Verify your email to continue</h3>
+                            <h3 className="m-0">{t('routes.analyzer.verify.title')}</h3>
                             <p className="text-sm text-slate-600 mt-2">
-                                The backend requires a verified email address. Please verify{' '}
-                                <b>{email ?? 'your email'}</b> (check inbox/spam), then click “I verified”.
+                                <Trans
+                                    i18nKey="routes.analyzer.verify.body"
+                                    components={{ b: <b /> }}
+                                    values={{ email: email ?? t('routes.analyzer.verify.yourEmail') }}
+                                />
                             </p>
                             <div className="flex flex-wrap gap-2 mt-4">
                                 <button
@@ -113,21 +118,21 @@ const AnalyzerRoute: React.FC = () => {
                                     onClick={() => void resendVerificationEmail()}
                                     className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                                 >
-                                    Resend verification email
+                                    {t('routes.analyzer.verify.resend')}
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => void refreshVerificationStatus()}
                                     className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm"
                                 >
-                                    I verified
+                                    {t('routes.analyzer.verify.verified')}
                                 </button>
                                 <button
                                     type="button"
                                     onClick={logout}
                                     className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                                 >
-                                    Sign out
+                                    {t('routes.analyzer.verify.signOut')}
                                 </button>
                             </div>
                         </div>

@@ -44,6 +44,7 @@ export function useIngressScanner(
 
     const timerRef = React.useRef<number | null>(null)
     const lastPruneAtRef = React.useRef<number>(0)
+    const lastPathsRef = React.useRef<Set<string> | null>(null)
 
     const syncMappingForFile = React.useCallback(async (file: File, relPath: string): Promise<string | null> => {
         // Compute or reuse sha for this path
@@ -144,7 +145,18 @@ export function useIngressScanner(
             // Prune stale mappings occasionally (prevents "ghost folders" after offline renames/moves).
             const now = Date.now()
             const PRUNE_EVERY_MS = 30_000
-            if (now - lastPruneAtRef.current > PRUNE_EVERY_MS) {
+            let hasRemovals = false
+            const lastPaths = lastPathsRef.current
+            if (lastPaths) {
+                for (const prev of lastPaths) {
+                    if (!existingPaths.has(prev)) {
+                        hasRemovals = true
+                        break
+                    }
+                }
+            }
+            lastPathsRef.current = existingPaths
+            if (hasRemovals || now - lastPruneAtRef.current > PRUNE_EVERY_MS) {
                 lastPruneAtRef.current = now
                 await pruneShaPathMappings(existingPaths)
             }

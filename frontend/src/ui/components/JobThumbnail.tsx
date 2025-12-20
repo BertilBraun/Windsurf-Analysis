@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { JobSummary } from '../types'
 import { getFileByRelativePath } from '../utils/fsAccess'
 import { getPathsForSha, getThumbnailBlob, saveThumbnailBlob } from '../utils/idb'
@@ -40,6 +41,16 @@ function canvasToBlob(canvas: HTMLCanvasElement, mime: string, quality: number):
             quality
         )
     })
+}
+
+async function hasReadPermission(dirHandle: FileSystemDirectoryHandle): Promise<boolean> {
+    const dh: any = dirHandle as any
+    if (typeof dh.queryPermission !== 'function') return true
+    try {
+        return (await dh.queryPermission({ mode: 'read' })) === 'granted'
+    } catch {
+        return false
+    }
 }
 
 async function resolveFirstExistingFile(
@@ -109,6 +120,7 @@ export const JobThumbnail: React.FC<{
     job: JobSummary
     dirHandle: FileSystemDirectoryHandle | null
 }> = ({ job, dirHandle }) => {
+    const { t } = useTranslation()
     const [thumbUrl, setThumbUrl] = React.useState<string | null>(null)
     const [notFound, setNotFound] = React.useState<boolean>(false)
     const lastCacheKeyRef = React.useRef<string>('')
@@ -133,10 +145,6 @@ export const JobThumbnail: React.FC<{
         }
 
         if (job.status !== 'succeeded') return
-        if (!dirHandle) {
-            setNotFound(true)
-            return
-        }
 
         ;(async () => {
             try {
@@ -146,9 +154,17 @@ export const JobThumbnail: React.FC<{
                 if (cached) {
                     const url = URL.createObjectURL(cached)
                     revokedThumbUrl = url
+                    setNotFound(false)
                     setThumbUrl(url)
                     return
                 }
+
+                if (!dirHandle) return
+
+                setNotFound(false)
+
+                const canRead = await hasReadPermission(dirHandle)
+                if (cancelled || !canRead) return
 
                 const candidates: string[] = []
                 if (job.local_relative_path) candidates.push(job.local_relative_path)
@@ -176,9 +192,10 @@ export const JobThumbnail: React.FC<{
 
                 const url = URL.createObjectURL(blob)
                 revokedThumbUrl = url
+                setNotFound(false)
                 setThumbUrl(url)
             } catch (e: any) {
-                if (!cancelled) setNotFound(true)
+                if (!cancelled) setNotFound(false)
             }
         })()
 
@@ -201,7 +218,9 @@ export const JobThumbnail: React.FC<{
     if (notFound) {
         return (
             <div className={boxClasses}>
-                <div className="text-red-600 font-bold text-center px-2">VIDEO FILE NOT FOUND</div>
+                <div className="text-red-600 font-bold text-center px-2">
+                    {t('components.jobThumbnail.fileNotFound')}
+                </div>
             </div>
         )
     }
@@ -226,31 +245,12 @@ export const JobThumbnail: React.FC<{
                 ? '#9ca3af'
                 : '#10b981'
 
-        const text =
-            job.status === 'canceled'
-                ? 'Canceled'
-                : job.status === 'failed'
-                ? 'Failed'
-                : job.status === 'starting'
-                ? 'Starting'
-                : job.status === 'orientation'
-                ? 'Orienting Video'
-                : job.status === 'stabilization'
-                ? 'Stabilizing Video'
-                : job.status === 'detection'
-                ? 'Detecting Surfers'
-                : job.status === 'appearance'
-                ? 'Surfer Identification'
-                : job.status === 'tracking'
-                ? 'Tracking Surfers'
-                : job.status === 'pending'
-                ? 'Pending'
-                : 'Succeeded'
+        const statusKey = `components.jobThumbnail.status.${job.status}`
 
         return (
             <div className={boxClasses}>
                 <span className="text-white rounded-md px-2 py-1 text-sm" style={{ background: color }}>
-                    {text}
+                    {t(statusKey)}
                 </span>
             </div>
         )
@@ -268,7 +268,7 @@ export const JobThumbnail: React.FC<{
                     <PlayOverlay />
                 </>
             ) : (
-                <div className="text-gray-500 text-sm">Generating thumbnail…</div>
+                <div className="text-gray-500 text-sm">{t('components.jobThumbnail.generating')}</div>
             )}
         </div>
     )

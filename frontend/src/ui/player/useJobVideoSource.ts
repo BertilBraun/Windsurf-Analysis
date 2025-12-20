@@ -3,6 +3,8 @@ import { JobDetail } from '../types'
 import { getFileByRelativePath } from '../utils/fsAccess'
 import { getPathsForSha } from '../utils/idb'
 
+export type VideoSourceError = { key: string; detail?: string }
+
 export function useJobVideoSource(params: {
     job: JobDetail
     dirHandle: FileSystemDirectoryHandle | null
@@ -10,7 +12,7 @@ export function useJobVideoSource(params: {
 }) {
     const { job, dirHandle, onFileLoaded } = params
 
-    const [error, setError] = React.useState<string | null>(null)
+    const [error, setError] = React.useState<VideoSourceError | null>(null)
     const [fileMissing, setFileMissing] = React.useState<boolean>(false)
     const [videoUrl, setVideoUrl] = React.useState<string | null>(null)
     const [sourceFile, setSourceFile] = React.useState<File | null>(null)
@@ -26,7 +28,7 @@ export function useJobVideoSource(params: {
 
         const run = async () => {
             if (!dirHandle) {
-                setError('No ingress folder selected')
+                setError({ key: 'player.canvas.errors.noIngressFolder' })
                 return
             }
 
@@ -37,7 +39,7 @@ export function useJobVideoSource(params: {
                     const extra = await getPathsForSha(String(job.original_checksum_sha256).toLowerCase())
                     for (const p of extra) if (!candidates.includes(p)) candidates.push(p)
                 }
-                if (candidates.length === 0) throw new Error('Missing local mapping for file')
+                if (candidates.length === 0) throw new Error('missing_mapping')
 
                 let file: File | null = null
                 for (const path of candidates) {
@@ -53,7 +55,7 @@ export function useJobVideoSource(params: {
                     }
                 }
 
-                if (!file) throw new Error('VIDEO FILE NOT FOUND')
+                if (!file) throw new Error('file_not_found')
                 if (cancelled) return
 
                 const url = URL.createObjectURL(file)
@@ -66,11 +68,13 @@ export function useJobVideoSource(params: {
                 const msg = String(e?.message || '')
                 const isMissing =
                     e?.name === 'NotFoundError' || /not\s*found|no such file|could not be found/i.test(msg)
-                if (isMissing) {
+                if (msg === 'missing_mapping') {
+                    setError({ key: 'player.canvas.errors.missingMapping' })
+                } else if (msg === 'file_not_found' || isMissing) {
                     setFileMissing(true)
-                    setError('VIDEO FILE NOT FOUND')
+                    setError({ key: 'player.canvas.errors.fileNotFound' })
                 } else {
-                    setError(msg || 'Failed to access file from folder')
+                    setError({ key: 'player.canvas.errors.accessFailed', detail: msg })
                 }
             }
         }

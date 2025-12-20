@@ -1,4 +1,5 @@
 import React from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthProvider'
 import { useJobs } from '../hooks/useJobs'
 import { JobDetail } from '../types'
@@ -6,6 +7,7 @@ import { JobList, getJobListOrderedJobIds, type JobListSortDir, type JobListSort
 import { IngressWidget } from '../components/IngressWidget'
 import { loadDirectoryHandle, loadSetting, saveDirectoryHandle, saveSetting } from '../utils/idb'
 import { Button } from '../components/Button'
+import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { SettingsModal } from '../components/SettingsModal'
 import { PlayerModal } from '../components/PlayerModal'
 import { LogoButton } from '../components/LogoButton'
@@ -18,6 +20,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     onGoHome,
     onGoPricing,
 }) => {
+    const { t } = useTranslation()
     const { logout, user, authorizedFetch, getAuthHeader } = useAuth()
     const { jobs, initialSyncComplete: jobsInitialSyncComplete, refreshJobDetail, deleteJob, reportJob } = useJobs()
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
@@ -130,11 +133,11 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
             setSelectedJob(null)
         }
     }
-    let greeting = ''
-    if (user) {
-        if (user.displayName) greeting += ` — ${user.displayName}`
-        else if (user.email) greeting += ` — ${user.email.split('@')[0]}`
-    }
+
+    const userLabel = user?.displayName ?? (user?.email ? user.email.split('@')[0] : '')
+    const headerText = userLabel
+        ? t('screens.analyzer.header.taglineWithName', { name: userLabel })
+        : t('screens.analyzer.header.tagline')
 
     return (
         <div className="min-h-dvh bg-white text-slate-900">
@@ -142,18 +145,19 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                 <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3 flex items-center gap-3">
                     <LogoButton onClick={onGoHome} />
 
-                    <div className="text-sm text-slate-600">Upload, process, and review your riding{greeting}.</div>
+                    <div className="text-sm text-slate-600">{headerText}</div>
 
                     <div className="flex-1" />
 
                     <div className="flex items-center gap-2">
+                        <LanguageSwitcher />
                         <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => {
                                 openTutorial('header')
                             }}
-                            text="Tutorial"
+                            text={t('screens.analyzer.actions.tutorial')}
                         />
                         <Button
                             size="sm"
@@ -162,7 +166,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                                 trackEvent('open_settings')
                                 setShowSettings(true)
                             }}
-                            text="Settings"
+                            text={t('screens.analyzer.actions.settings')}
                         />
                     </div>
                 </div>
@@ -173,10 +177,11 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                             <div className="flex-1">
-                                <div className="text-sm font-semibold text-slate-900">Getting started</div>
+                                <div className="text-sm font-semibold text-slate-900">
+                                    {t('screens.analyzer.emptyState.title')}
+                                </div>
                                 <div className="mt-1 text-sm text-slate-600">
-                                    Select an ingress folder, drop MP4s into it, then open a job once it’s{' '}
-                                    <b>Succeeded</b>.
+                                    <Trans i18nKey="screens.analyzer.emptyState.body" components={{ b: <b /> }} />
                                 </div>
                             </div>
                             <div className="flex flex-wrap gap-2">
@@ -186,12 +191,14 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                                         trackEvent('tutorial_select_folder_clicked')
                                         void pickDirectory()
                                     }}
-                                    text={dirHandle ? 'Change folder' : 'Select folder'}
+                                    text={
+                                        dirHandle ? t('common.actions.changeFolder') : t('common.actions.selectFolder')
+                                    }
                                 />
                                 <Button
                                     variant="primary"
                                     onClick={() => openTutorial('empty_state')}
-                                    text="Open tutorial"
+                                    text={t('screens.analyzer.emptyState.openTutorial')}
                                 />
                             </div>
                         </div>
@@ -276,13 +283,14 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                         onGoPricing()
                     }}
                     className="group flex items-center gap-2 rounded-full border border-brand-600/25 bg-white/90 backdrop-blur px-3 py-2 shadow-sm hover:shadow transition hover:cursor-pointer"
-                    title="Beta — read more"
-                    aria-label="Beta — read more"
+                    title={t('screens.analyzer.beta.title')}
                 >
                     <span className="text-[11px] font-semibold text-white bg-brand-600 border border-brand-600/20 px-2 py-0.5 rounded-full">
-                        Beta
+                        {t('screens.analyzer.beta.label')}
                     </span>
-                    <span className="text-xs text-slate-700 group-hover:text-slate-900">Read more</span>
+                    <span className="text-xs text-slate-700 group-hover:text-slate-900">
+                        {t('screens.analyzer.beta.action')}
+                    </span>
                 </button>
             </div>
         </div>

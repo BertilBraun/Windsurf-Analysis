@@ -1,5 +1,6 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { Trans, useTranslation } from 'react-i18next'
 import {
     getAnalyticsConsent,
     initAnalytics,
@@ -15,6 +16,7 @@ function cx(...parts: Array<string | undefined | null | false>) {
 export const AnalyticsConsentBanner: React.FC = () => {
     const [consent, setConsent] = React.useState<AnalyticsConsent | null>(null)
     const location = useLocation()
+    const { t } = useTranslation()
 
     React.useEffect(() => {
         // Read consent lazily to avoid SSR pitfalls (even though this is a SPA).
@@ -38,12 +40,15 @@ export const AnalyticsConsentBanner: React.FC = () => {
         <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 backdrop-blur">
             <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3 flex flex-col sm:flex-row gap-3 sm:items-center">
                 <div className="text-xs text-slate-700 leading-5">
-                    GybeLock would like to use <b>Google Analytics</b> to understand basic usage (page views and
-                    clicks). You can accept or decline. Details are in the{' '}
-                    <Link className="text-brand-700 underline underline-offset-4" to="/privacy">
-                        Privacy Policy
-                    </Link>
-                    .
+                    <Trans
+                        i18nKey="components.analyticsConsentBanner.message"
+                        components={{
+                            bold: <b />,
+                            privacyLink: (
+                                <Link className="text-brand-700 underline underline-offset-4" to="/privacy" />
+                            ),
+                        }}
+                    />
                 </div>
                 <div className="flex-1" />
                 <div className="flex gap-2">
@@ -55,14 +60,14 @@ export const AnalyticsConsentBanner: React.FC = () => {
                             'text-slate-800 hover:bg-slate-50'
                         )}
                     >
-                        Decline
+                        {t('components.analyticsConsentBanner.decline')}
                     </button>
                     <button
                         type="button"
                         onClick={() => choose('accepted')}
                         className={cx('rounded-lg bg-slate-900 text-white px-3 py-2 text-xs hover:bg-slate-800')}
                     >
-                        Accept
+                        {t('components.analyticsConsentBanner.accept')}
                     </button>
                 </div>
             </div>

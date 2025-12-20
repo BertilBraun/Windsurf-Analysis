@@ -1,7 +1,9 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthProvider'
 
 export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }> = ({ onSignup, onSuccess }) => {
+    const { t } = useTranslation()
     const { login, loginWithGoogle, resetPassword } = useAuth()
     const [email, setEmail] = React.useState('')
     const [password, setPassword] = React.useState('')
@@ -18,7 +20,7 @@ export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }
             await login(email, password)
             onSuccess()
         } catch (err: any) {
-            setError(String(err?.message || 'Login failed'))
+            setError(String(err?.message || t('screens.login.errors.loginFailed')))
         } finally {
             setIsSubmitting(false)
         }
@@ -26,12 +28,16 @@ export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }
 
     return (
         <div style={{ maxWidth: 420 }}>
-            <h3>Login</h3>
+            <h3>{t('screens.login.title')}</h3>
             <form onSubmit={handleSubmit}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <input placeholder="email" value={email} onChange={e => setEmail(e.target.value)} />
                     <input
-                        placeholder="password"
+                        placeholder={t('screens.login.placeholders.email')}
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                    />
+                    <input
+                        placeholder={t('screens.login.placeholders.password')}
                         type="password"
                         value={password}
                         onChange={e => setPassword(e.target.value)}
@@ -39,7 +45,7 @@ export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }
                     {info && <div style={{ color: '#0f766e', fontSize: 12 }}>{info}</div>}
                     {error && <div style={{ color: '#ef4444' }}>{error}</div>}
                     <button type="submit" disabled={!email || !password || isSubmitting}>
-                        Login
+                        {t('screens.login.actions.login')}
                     </button>
                     <button
                         type="button"
@@ -52,13 +58,13 @@ export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }
                                 await loginWithGoogle()
                                 onSuccess()
                             } catch (err: any) {
-                                setError(String(err?.message || 'Google sign-in failed'))
+                                setError(String(err?.message || t('screens.login.errors.googleFailed')))
                             } finally {
                                 setIsSubmitting(false)
                             }
                         }}
                     >
-                        Sign in with Google
+                        {t('screens.login.actions.google')}
                     </button>
                     <button
                         type="button"
@@ -69,22 +75,22 @@ export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }
                             setIsSubmitting(true)
                             try {
                                 await resetPassword(email)
-                                setInfo(`Password reset email sent to ${email.trim()}.`)
+                                setInfo(t('screens.login.info.resetSent', { email: email.trim() }))
                             } catch (err: any) {
-                                setError(String(err?.message || 'Could not send password reset email'))
+                                setError(String(err?.message || t('screens.login.errors.resetFailed')))
                             } finally {
                                 setIsSubmitting(false)
                             }
                         }}
                         style={{ fontSize: 12 }}
                     >
-                        Forgot password
+                        {t('screens.login.actions.forgot')}
                     </button>
                 </div>
             </form>
             <div style={{ marginTop: 12 }}>
                 <button onClick={onSignup} style={{ fontSize: 12 }}>
-                    Create an account
+                    {t('screens.login.actions.createAccount')}
                 </button>
             </div>
         </div>

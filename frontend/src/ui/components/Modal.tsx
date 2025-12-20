@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from './Button'
 
 export type ModalProps = {
@@ -24,6 +25,7 @@ export const Modal: React.FC<ModalProps> = ({
     headerClassName,
     hideHeader,
 }) => {
+    const { t } = useTranslation()
     const defaultContent = 'rounded-2xl border border-slate-200 bg-white shadow-xl'
     const contentClasses = contentClassName ?? defaultContent
     const contentRef = React.useRef<HTMLDivElement | null>(null)
@@ -52,7 +54,9 @@ export const Modal: React.FC<ModalProps> = ({
                         <div className="font-semibold text-slate-900">{title}</div>
                         <div className="flex-1" />
                         {additionalHeader}
-                        {onClose && <Button size="sm" variant="ghost" onClick={onClose} text="Close" />}
+                        {onClose && (
+                            <Button size="sm" variant="ghost" onClick={onClose} text={t('components.modal.close')} />
+                        )}
                     </div>
                 )}
                 {children}

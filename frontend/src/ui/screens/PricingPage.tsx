@@ -1,55 +1,47 @@
 import React from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { SupportProjectSection } from '../components/SupportProjectSection'
 
 export const PricingPage: React.FC = () => {
+    const { t } = useTranslation()
     const navigate = useNavigate()
     return (
         <div className="max-w-3xl flex flex-col gap-6">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
-                <h1 className="mt-0">Pricing</h1>
-                <div className="mt-1 text-sm text-slate-600">
-                    GybeLock is currently in an early testing phase — simple and free while we improve tracking quality.
-                </div>
+                <h1 className="mt-0">{t('screens.pricing.title')}</h1>
+                <div className="mt-1 text-sm text-slate-600">{t('screens.pricing.intro')}</div>
                 <div className="mt-3 text-sm text-slate-600 leading-6">
-                    GybeLock is built for <strong>beach-shot / shore-shot</strong> windsurf videos (tele/zoom from
-                    land). It is <strong>not</strong> designed for GoPro/action-cam POV footage.
+                    <Trans i18nKey="screens.pricing.lede" components={{ strong: <strong /> }} />
                 </div>
             </div>
 
             <section className="rounded-2xl border border-brand-600/20 bg-brand-50 p-6 sm:p-8">
-                <div className="text-xs font-semibold text-brand-700">Beta phase</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">Free to use</div>
+                <div className="text-xs font-semibold text-brand-700">{t('screens.pricing.beta.title')}</div>
+                <div className="mt-1 text-lg font-semibold text-slate-900">{t('screens.pricing.beta.headline')}</div>
                 <div className="mt-3 text-sm text-slate-700 leading-6">
-                    GybeLock is currently in an early testing phase.
-                    <div className="mt-2">During this time:</div>
+                    {t('screens.pricing.beta.intro')}
+                    <div className="mt-2">{t('screens.pricing.beta.during')}</div>
                     <ul className="mt-2 list-disc pl-5 space-y-1">
-                        <li>All features are available</li>
-                        <li>No payment is required</li>
-                        <li>No credit card needed</li>
+                        <li>{t('screens.pricing.beta.bullets.features')}</li>
+                        <li>{t('screens.pricing.beta.bullets.payment')}</li>
+                        <li>{t('screens.pricing.beta.bullets.card')}</li>
                     </ul>
-                    <div className="mt-3">
-                        We’re focusing on improving tracking quality, usability, and performance — and your feedback
-                        helps shape what comes next.
-                    </div>
+                    <div className="mt-3">{t('screens.pricing.beta.outro')}</div>
                 </div>
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
-                <h2 className="mt-0">What happens after the beta?</h2>
+                <h2 className="mt-0">{t('screens.pricing.after.title')}</h2>
                 <div className="text-sm text-slate-600 leading-6">
-                    After the testing phase (planned for <strong>March</strong>), GybeLock will move to a simple,
-                    usage-based pricing model:
+                    <Trans i18nKey="screens.pricing.after.intro" components={{ strong: <strong /> }} />
                     <ul className="mt-3 list-disc pl-5 space-y-1">
-                        <li>Pay per processed video</li>
-                        <li>No subscriptions</li>
-                        <li>No long-term commitments</li>
+                        <li>{t('screens.pricing.after.bullets.perVideo')}</li>
+                        <li>{t('screens.pricing.after.bullets.noSubscriptions')}</li>
+                        <li>{t('screens.pricing.after.bullets.noCommitments')}</li>
                     </ul>
-                    <div className="mt-3">
-                        Before introducing pricing, we’ll ask our users for feedback to make sure it feels fair and
-                        accessible.
-                    </div>
+                    <div className="mt-3">{t('screens.pricing.after.outro')}</div>
                 </div>
             </section>
 
@@ -57,12 +49,12 @@ export const PricingPage: React.FC = () => {
 
             <section className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 flex flex-col sm:flex-row gap-4 sm:items-center">
                 <div className="flex-1">
-                    <div className="mt-1 text-lg font-semibold text-slate-900">Get started for free</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-900">{t('screens.pricing.cta.title')}</div>
                     <div className="mt-1 text-sm text-slate-700">
-                        <em>(5 free videos will remain even after the beta)</em>
+                        <em>{t('screens.pricing.cta.note')}</em>
                     </div>
                 </div>
-                <Button variant="primary" onClick={() => navigate('/analyzer')} text="Get started free" />
+                <Button variant="primary" onClick={() => navigate('/analyzer')} text={t('screens.pricing.cta.button')} />
             </section>
         </div>
     )

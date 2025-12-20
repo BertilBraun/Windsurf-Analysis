@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../components/Button'
 
 export const ControlsBar: React.FC<{
@@ -26,14 +27,18 @@ export const ControlsBar: React.FC<{
     isExporting,
     exportProgressPct,
 }) => {
+    const { t } = useTranslation()
     return (
         <div className="flex items-center gap-2">
-            <Button onClick={onPlayPause} text={isPlaying ? 'Pause' : 'Play'} />
+            <Button
+                onClick={onPlayPause}
+                text={isPlaying ? t('player.controlsBar.pause') : t('player.controlsBar.play')}
+            />
             <div className="flex-1" />
-            <div className="text-sm">Zoom: {zoom.toFixed(2)}x</div>
-            <Button onClick={onSpeedDown} text="- Speed" />
-            <div className="text-sm">Speed: {speed.toFixed(2)}x</div>
-            <Button onClick={onSpeedUp} text="+ Speed" />
+            <div className="text-sm">{t('player.controlsBar.zoom', { value: zoom.toFixed(2) })}</div>
+            <Button onClick={onSpeedDown} text={t('player.controlsBar.speedDown')} />
+            <div className="text-sm">{t('player.controlsBar.speed', { value: speed.toFixed(2) })}</div>
+            <Button onClick={onSpeedUp} text={t('player.controlsBar.speedUp')} />
             {exportVisible && onExportTrack && (
                 <>
                     <div className="w-px h-5 bg-gray-600 mx-1" />
@@ -42,7 +47,11 @@ export const ControlsBar: React.FC<{
                             {Math.max(0, Math.min(100, exportProgressPct)).toFixed(0)}%
                         </div>
                     )}
-                    <Button onClick={onExportTrack} text="Export" disabled={!exportEnabled || !!isExporting} />
+                    <Button
+                        onClick={onExportTrack}
+                        text={t('player.controlsBar.export')}
+                        disabled={!exportEnabled || !!isExporting}
+                    />
                 </>
             )}
         </div>

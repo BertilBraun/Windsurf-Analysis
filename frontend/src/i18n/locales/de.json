@@ -1,0 +1,22 @@
+{
+    "components": {
+        "analyticsConsentBanner": {
+            "message": "GybeLock moechte <bold>Google Analytics</bold> verwenden, um die grundlegende Nutzung zu verstehen (Seitenaufrufe und Klicks). Du kannst akzeptieren oder ablehnen. Details stehen in der <privacyLink>Datenschutzerklaerung</privacyLink>.",
+            "decline": "Ablehnen",
+            "accept": "Akzeptieren"
+        }
+    },
+    "screens": {
+        "home": {
+            "hero": {
+                "brand": "GybeLock",
+                "cta": "Jetzt starten",
+                "freeVideos": "Analysiere bis zu <strong>{{count}} Videos</strong> kostenlos. Keine Kreditkarte.",
+                "lede1": "<strong>GybeLock</strong> wandelt schwankende, lange Zoom-Videos auf der Strand in glatte, zentrierte Clips um, die einfach zu schauen, analysieren und lernen sind.",
+                "lede2": "Gebaut f\u00fcr <strong>Strand-Shot Tele-Footage</strong> \u2014 nicht GoPro/action-cam POV.",
+                "lede3": "Von Speedruns bis Wave Riding, Spr\u00fcngen und Gybes \u2014 GybeLock h\u00e4lt den Surfer an der Stelle, an der Ihr Fokus sein sollte.",
+                "title": "Sehen Sie Ihren Windsurfen klar."
+            }
+        }
+    }
+}

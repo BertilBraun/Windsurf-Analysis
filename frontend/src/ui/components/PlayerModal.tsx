@@ -1,4 +1,5 @@
 import React from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { Modal } from './Modal'
 import { Button } from './Button'
 import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
@@ -15,6 +16,7 @@ export const PlayerModal: React.FC<{
     onOpenPrevJob?: () => void
     deletingId?: string | null
 }> = ({ job, dirHandle, onClose, onDelete, onReport, onOpenNextJob, onOpenPrevJob, deletingId }) => {
+    const { t } = useTranslation()
     const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
     const [showReport, setShowReport] = React.useState<boolean>(false)
     const [drawMode, setDrawMode] = React.useState<boolean>(false)
@@ -32,25 +34,29 @@ export const PlayerModal: React.FC<{
             <Modal
                 key={job.id}
                 onClose={onClose}
-                title={job.local_relative_path?.replace(/\.mp4$/i, '') ?? 'n/a'}
+                title={job.local_relative_path?.replace(/\.mp4$/i, '') ?? t('common.notAvailable')}
                 additionalHeader={
                     <>
                         <Button
                             onClick={toggleDrawMode}
-                            title="Toggle draw mode (D)"
-                            text="Draw"
+                            title={t('components.playerModal.actions.draw.title')}
+                            text={t('components.playerModal.actions.draw.label')}
                             variant={drawMode ? 'primary' : 'secondary'}
                         />
-                        <Button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" text="Shortcuts" />
+                        <Button
+                            onClick={() => setShowShortcuts(true)}
+                            title={t('components.playerModal.actions.shortcuts.title')}
+                            text={t('components.playerModal.actions.shortcuts.label')}
+                        />
                         <Button
                             onClick={() => setShowReport(true)}
-                            title="Report an issue with this analysis"
-                            text="Report"
+                            title={t('components.playerModal.actions.report.title')}
+                            text={t('components.playerModal.actions.report.label')}
                         />
                         <Button
                             onClick={() => onDelete(job.id)}
-                            title="Delete job"
-                            text="Delete"
+                            title={t('components.playerModal.actions.delete.title')}
+                            text={t('components.playerModal.actions.delete.label')}
                             isPending={deletingId === job.id}
                         />
                     </>
@@ -93,6 +99,7 @@ const ReportVideoModal: React.FC<{
     onClose: () => void
     onReport: (type: ReportType, message: string) => Promise<void> | void
 }> = ({ job, onClose, onReport }) => {
+    const { t } = useTranslation()
     const [type, setType] = React.useState<ReportType>('missed_detection')
     const [message, setMessage] = React.useState<string>('')
     const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false)
@@ -101,46 +108,61 @@ const ReportVideoModal: React.FC<{
     const canSubmit = !isSubmitting && message.trim().length > 0
 
     return (
-        <Modal onClose={onClose} title="Report an issue">
+        <Modal onClose={onClose} title={t('components.playerModal.report.title')}>
             <div className="p-4 space-y-4 max-w-[720px]">
                 <div className="text-sm text-slate-600">
-                    Help us improve the analysis quality for{' '}
-                    <span className="font-medium text-slate-800">{job.local_relative_path ?? job.id}</span>.
+                    <Trans
+                        i18nKey="components.playerModal.report.subtitle"
+                        components={{ strong: <span className="font-medium text-slate-800" /> }}
+                        values={{ target: job.local_relative_path ?? job.id }}
+                    />
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-slate-900 mb-1">Issue type</label>
+                    <label className="block text-sm font-medium text-slate-900 mb-1">
+                        {t('components.playerModal.report.issueType')}
+                    </label>
                     <select
                         className="w-full bg-white border border-slate-200 rounded-md p-2 text-slate-900"
                         value={type}
                         onChange={e => setType(e.target.value as ReportType)}
                         disabled={isSubmitting}
                     >
-                        <option value="missed_detection">Missed detection</option>
-                        <option value="false_association">False association</option>
-                        <option value="other">Other</option>
+                        <option value="missed_detection">
+                            {t('components.playerModal.report.issueOptions.missedDetection')}
+                        </option>
+                        <option value="false_association">
+                            {t('components.playerModal.report.issueOptions.falseAssociation')}
+                        </option>
+                        <option value="other">{t('components.playerModal.report.issueOptions.other')}</option>
                     </select>
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-slate-900 mb-1">Describe - What went wrong?</label>
+                    <label className="block text-sm font-medium text-slate-900 mb-1">
+                        {t('components.playerModal.report.descriptionLabel')}
+                    </label>
                     <textarea
                         className="w-full min-h-28 bg-white border border-slate-200 rounded-md p-2 text-slate-900"
-                        placeholder="Example: Rider missed around 00:12–00:18, or track switches riders at ~00:43."
+                        placeholder={t('components.playerModal.report.placeholder')}
                         value={message}
                         onChange={e => setMessage(e.target.value)}
                         disabled={isSubmitting}
                     />
-                    <div className="mt-2 text-xs text-slate-500">Tip: include an approximate timestamp if you can.</div>
+                    <div className="mt-2 text-xs text-slate-500">{t('components.playerModal.report.tip')}</div>
                 </div>
 
                 {error && <div className="text-sm text-red-700">{error}</div>}
 
                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-                    <Button variant="ghost" onClick={onClose} text="Cancel" disabled={isSubmitting} />
+                    <Button variant="ghost" onClick={onClose} text={t('common.cancel')} disabled={isSubmitting} />
                     <Button
                         variant="primary"
-                        text={isSubmitting ? 'Sending report…' : 'Send report'}
+                        text={
+                            isSubmitting
+                                ? t('components.playerModal.report.sending')
+                                : t('components.playerModal.report.send')
+                        }
                         disabled={!canSubmit}
                         onClick={async () => {
                             setError(null)

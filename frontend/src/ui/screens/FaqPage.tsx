@@ -1,4 +1,5 @@
 import React from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/Button'
 
@@ -12,135 +13,109 @@ const FaqItem: React.FC<{ q: string; a: React.ReactNode }> = ({ q, a }) => {
 }
 
 export const FaqPage: React.FC = () => {
+    const { t } = useTranslation()
     const navigate = useNavigate()
     return (
         <div className="flex flex-col gap-6">
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <h1>FAQ</h1>
-                    <p className="text-sm text-slate-600">
-                        What GybeLock does, what footage it supports, and common troubleshooting.
-                    </p>
+                    <h1>{t('screens.faq.title')}</h1>
+                    <p className="text-sm text-slate-600">{t('screens.faq.subtitle')}</p>
                 </div>
-                <Button variant="primary" onClick={() => navigate('/analyzer')} text="Open Analyzer" />
+                <Button variant="primary" onClick={() => navigate('/analyzer')} text={t('screens.faq.cta')} />
             </div>
 
             <div className="flex flex-col gap-3">
                 <FaqItem
-                    q="What is GybeLock supposed to do?"
+                    q={t('screens.faq.items.whatDoes.question')}
                     a={
-                        <>
-                            GybeLock helps you review <strong>beach-shot</strong> windsurf footage (shore camera, long
-                            zoom) by stabilizing the footage, detecting/tracking riders, and letting you click a rider
-                            to get a smooth, focused view for review.
-                        </>
+                        <Trans
+                            i18nKey="screens.faq.items.whatDoes.answer"
+                            components={{ strong: <strong /> }}
+                        />
                     }
                 />
                 <FaqItem
-                    q="What footage is supported?"
+                    q={t('screens.faq.items.supportedFootage.question')}
                     a={
-                        <>
-                            GybeLock is designed for <strong>shore / beach-shot</strong> videos (tele/zoom from land).{' '}
-                            <strong>MP4</strong> is recommended. GoPro/action-cam POV footage is not supported / not the
-                            intended use case.
-                        </>
+                        <Trans
+                            i18nKey="screens.faq.items.supportedFootage.answer"
+                            components={{ strong: <strong /> }}
+                        />
                     }
                 />
                 <FaqItem
-                    q="What is the ingress folder?"
+                    q={t('screens.faq.items.ingressFolder.question')}
+                    a={<Trans i18nKey="screens.faq.items.ingressFolder.answer" />} 
+                />
+                <FaqItem
+                    q={t('screens.faq.items.processedVideos.question')}
+                    a={<Trans i18nKey="screens.faq.items.processedVideos.answer" />} 
+                />
+                <FaqItem
+                    q={t('screens.faq.items.cannotOpen.question')}
                     a={
-                        <>
-                            It’s a folder on your computer that GybeLock monitors periodically. When you drop a new
-                            video in it, GybeLock will automatically upload it for processing.
-                        </>
+                        <Trans
+                            i18nKey="screens.faq.items.cannotOpen.answer"
+                            components={{ strong: <strong /> }}
+                        />
                     }
                 />
                 <FaqItem
-                    q="Where do processed videos appear?"
+                    q={t('screens.faq.items.fileNotFound.question')}
                     a={
-                        <>
-                            They appear in the Analyzer grid as soon as a job is finished. Click a tile to open the
-                            player.
-                        </>
+                        <Trans
+                            i18nKey="screens.faq.items.fileNotFound.answer"
+                            components={{ strong: <strong /> }}
+                        />
                     }
                 />
                 <FaqItem
-                    q="Why can’t I open a video yet?"
+                    q={t('screens.faq.items.movedVideo.question')}
                     a={
-                        <>
-                            Only jobs with status “succeeded” can be opened. If it’s processing, wait a moment and
-                            refresh.
-                        </>
+                        <Trans
+                            i18nKey="screens.faq.items.movedVideo.answer"
+                            components={{ strong: <strong /> }}
+                        />
                     }
                 />
                 <FaqItem
-                    q="Why does the player say “VIDEO FILE NOT FOUND”?"
+                    q={t('screens.faq.items.videoTooLong.question')}
+                    a={<Trans i18nKey="screens.faq.items.videoTooLong.answer" />} 
+                />
+                <FaqItem
+                    q={t('screens.faq.items.uploadSkipped.question')}
+                    a={<Trans i18nKey="screens.faq.items.uploadSkipped.answer" />} 
+                />
+                <FaqItem
+                    q={t('screens.faq.items.uploadsPaused.question')}
                     a={
-                        <>
-                            The player opens videos from your local ingress folder. If the file can’t be located, select
-                            the correct folder again (Ingress → <strong>Change folder</strong>) and make sure the video
-                            still exists in that folder.
-                        </>
+                        <Trans
+                            i18nKey="screens.faq.items.uploadsPaused.answer"
+                            components={{ strong: <strong /> }}
+                        />
                     }
                 />
                 <FaqItem
-                    q="I moved or renamed a video. What should I do?"
+                    q={t('screens.faq.items.formats.question')}
+                    a={<Trans i18nKey="screens.faq.items.formats.answer" />} 
+                />
+                <FaqItem
+                    q={t('screens.faq.items.shortcuts.question')}
                     a={
-                        <>
-                            If the moved/renamed file can’t be found, the player may show{' '}
-                            <strong>VIDEO FILE NOT FOUND</strong>. Put the video back into the ingress folder (or
-                            expected subfolder) and make sure the correct ingress folder is selected.
-                        </>
+                        <Trans
+                            i18nKey="screens.faq.items.shortcuts.answer"
+                            components={{ strong: <strong /> }}
+                        />
                     }
                 />
                 <FaqItem
-                    q="Why does upload say “Video too long”?"
+                    q={t('screens.faq.items.deleteAccount.question')}
                     a={
-                        <>
-                            There is a maximum supported video length. If your upload fails with “Video too long”, split
-                            the recording into shorter clips and upload those.
-                        </>
-                    }
-                />
-                <FaqItem
-                    q="Why was my upload skipped?"
-                    a={
-                        <>
-                            GybeLock deduplicates videos by checksum. If that exact video was already
-                            uploaded/processed, it may be skipped.
-                        </>
-                    }
-                />
-                <FaqItem
-                    q="Uploads are paused / stuck. What can I do?"
-                    a={
-                        <>
-                            Open <strong>Ingress</strong> and check the error message. If uploads paused after a
-                            failure, use <strong>Retry failed</strong>. If you see a quota/free-job message, you’ve hit
-                            the current limit for your account.
-                        </>
-                    }
-                />
-                <FaqItem
-                    q="What formats are supported?"
-                    a={<>MP4 is recommended. If you encounter issues, try re-exporting to H.264 MP4.</>}
-                />
-                <FaqItem
-                    q="How do I see all keyboard controls?"
-                    a={
-                        <>
-                            In the Analyzer / Player, click <strong>Shortcuts</strong> to open the keyboard shortcuts
-                            modal.
-                        </>
-                    }
-                />
-                <FaqItem
-                    q="How do I delete my account?"
-                    a={
-                        <>
-                            Open the Analyzer, click <strong>Settings</strong>, then click{' '}
-                            <strong>Delete account</strong>.
-                        </>
+                        <Trans
+                            i18nKey="screens.faq.items.deleteAccount.answer"
+                            components={{ strong: <strong /> }}
+                        />
                     }
                 />
             </div>

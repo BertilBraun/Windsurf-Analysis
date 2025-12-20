@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Modal } from './Modal'
 import { Button } from './Button'
 import { useSettings } from '../hooks/useSettings'
@@ -9,13 +10,14 @@ export const SettingsModal: React.FC<{
     onClose: () => void
     onLogout: () => void
 }> = ({ onClose, onLogout }) => {
+    const { t } = useTranslation()
     const { settings, setUploadQuality } = useSettings()
     const { uid, authorizedFetch } = useAuth()
     const [isDeleting, setIsDeleting] = React.useState(false)
     const [deleteError, setDeleteError] = React.useState<string | null>(null)
 
     return (
-        <Modal onClose={onClose} title="Settings">
+        <Modal onClose={onClose} title={t('components.settingsModal.title')}>
             <div className="p-4 space-y-4">
                 {/*<div>
                     <label className="block text-sm font-medium text-slate-900 mb-1">Upload quality</label>
@@ -36,7 +38,7 @@ export const SettingsModal: React.FC<{
 
                 <div className="pt-2 border-t border-slate-200">
                     <div className="flex flex-col gap-2">
-                        <Button variant="danger" onClick={onLogout} text="Logout" />
+                        <Button variant="danger" onClick={onLogout} text={t('components.settingsModal.logout')} />
 
                         <Button
                             variant="danger"
@@ -44,7 +46,7 @@ export const SettingsModal: React.FC<{
                             onClick={async () => {
                                 if (!uid) return
                                 const ok = window.confirm(
-                                    'Delete your account? This will permanently delete your user and job mappings. This cannot be undone.'
+                                    t('components.settingsModal.confirmDelete')
                                 )
                                 if (!ok) return
 
@@ -60,7 +62,11 @@ export const SettingsModal: React.FC<{
                                 }
                                 setIsDeleting(false)
                             }}
-                            text={isDeleting ? 'Deleting account…' : 'Delete account'}
+                            text={
+                                isDeleting
+                                    ? t('components.settingsModal.deletingAccount')
+                                    : t('components.settingsModal.deleteAccount')
+                            }
                         />
 
                         {deleteError && <div className="text-sm text-red-700">{deleteError}</div>}

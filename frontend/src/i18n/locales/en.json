@@ -1,0 +1,794 @@
+{
+    "common": {
+        "actions": {
+            "changeFolder": "Change folder",
+            "selectFolder": "Select folder"
+        },
+        "back": "Back",
+        "cancel": "Cancel",
+        "close": "Close",
+        "done": "Done",
+        "next": "Next",
+        "notAvailable": "n/a"
+    },
+    "components": {
+        "analyticsConsentBanner": {
+            "accept": "Accept",
+            "decline": "Decline",
+            "message": "GybeLock would like to use <bold>Google Analytics</bold> to understand basic usage (page views and clicks). You can accept or decline. Details are in the <privacyLink>Privacy Policy</privacyLink>."
+        },
+        "analyzerTutorialModal": {
+            "restart": "Restart",
+            "restartTitle": "Restart tutorial",
+            "stepLabel": "Step {{current}} of {{total}}",
+            "steps": {
+                "drop": {
+                    "bullets": {
+                        "copy": "Copy or move your <code>.mp4</code> files into the ingress folder (<b>subfolders are fine</b>).",
+                        "detect": "GybeLock will automatically detect new files and start uploading.",
+                        "ingress": "Open <b>Ingress</b> anytime to see upload progress and errors."
+                    },
+                    "title": "2) Drop MP4s into the folder"
+                },
+                "ingress": {
+                    "bullets": {
+                        "permission": "You will need to grant folder permission so GybeLock can keep monitoring it.",
+                        "select": "Either here or in Ingress (bottom-right), click <b>Select folder</b> and choose where you\u2019ll drop your beach-shot MP4 videos."
+                    },
+                    "current": "Current: <strong>{{name}}</strong>",
+                    "lede": "First, select a folder on your computer where you want to drop your videos. GybeLock will monitor that folder and automatically upload new MP4s you add there.",
+                    "tip": "Tip: After selecting a folder, check that it shows <b>Monitoring</b> (or uploading if you just added videos).",
+                    "title": "1) Set the ingress folder"
+                },
+                "intro": {
+                    "how": {
+                        "bullets": {
+                            "ingress": "You choose an <b>ingress folder</b> on your computer.",
+                            "thumbnails": "Processed videos then appear in <b>Analyzed Videos</b> as thumbnails you can open.",
+                            "upload": "GybeLock monitors it and <b>auto-uploads</b> new MP4s you drop in."
+                        },
+                        "title": "How it works (high level)"
+                    },
+                    "lede": "GybeLock turns shaky, long-zoom beach videos into a smooth player where you can click a rider and review a focused (cropped) track.",
+                    "note": "Designed for <b>beach-shot</b> footage (shore camera, long zoom/tele). It is <b>not</b> designed for GoPro/action-cam POV footage.",
+                    "title": "What GybeLock does (and what footage works)"
+                },
+                "open": {
+                    "bullets": {
+                        "click": "Click the tile to open the player (tiles become clickable once ready).",
+                        "thumbnail": "In <b>Analyzed Videos</b>, look for a tile that shows a <b>video thumbnail</b>."
+                    },
+                    "title": "3) Open an analyzed video",
+                    "troubleshoot": {
+                        "bullets": {
+                            "folder": "Re-check you selected the correct ingress folder",
+                            "path": "Make sure the video still exists at its expected path"
+                        },
+                        "title": "Troubleshooting: \u201cVIDEO FILE NOT FOUND\u201d"
+                    }
+                },
+                "review": {
+                    "bullets": {
+                        "click": "Click a rider to switch into a focused (cropped) view for that track.",
+                        "hover": "Move your mouse over a rider to highlight the detection.",
+                        "overview": "In the player, you start in <b>overview</b> mode.",
+                        "timeline": "Use the timeline to seek."
+                    },
+                    "title": "4) Review a track"
+                },
+                "tips": {
+                    "export": {
+                        "body": "In the player, <b>Export</b> saves the <b>currently selected track</b> as an MP4 so you can keep it and share it with others.",
+                        "title": "Export"
+                    },
+                    "report": {
+                        "body": "If you notice issues with <b>detections</b> (a rider wasn\u2019t clickable) or <b>tracking</b> (a focused track switches riders, or one rider ends up split into two tracks), please use <b>Report</b> in the player.",
+                        "note": "We\u2019re still in beta \u2014 these failure cases are invaluable for improving the service. If possible, include an approximate timestamp.",
+                        "title": "Report"
+                    },
+                    "shortcuts": {
+                        "body": "There are many shortcuts (seeking, frame stepping, track navigation, etc.) that make reviewing a session much faster. In the <b>player</b>, click <b>Shortcuts</b> to see all keyboard controls.",
+                        "button": "Show shortcuts",
+                        "title": "Shortcuts (highly recommended)"
+                    },
+                    "title": "Tips: shortcuts, export, report"
+                }
+            },
+            "title": "Analyzer Tutorial"
+        },
+        "appShell": {
+            "footer": {
+                "contact": "Contact",
+                "copyright": "\u00a9 {{year}} GybeLock",
+                "impressum": "Impressum",
+                "privacy": "Privacy Policy",
+                "specialThanks": "Special thanks to Felix for all the Support and Ideas.",
+                "terms": "Terms of Use"
+            },
+            "nav": {
+                "analyzer": "Analyzer",
+                "ariaLabel": "Primary navigation",
+                "faq": "FAQ",
+                "home": "Home",
+                "pricing": "Pricing"
+            }
+        },
+        "button": {
+            "pendingSuffix": "ing"
+        },
+        "ingressWidget": {
+            "fab": {
+                "aria": "Open ingress uploads",
+                "status": {
+                    "error": "Error \u2014 action needed",
+                    "monitoring": "Monitoring",
+                    "selectFolder": "Select folder (required)",
+                    "uploading": "Uploading {{count}}\u2026"
+                },
+                "title": "Ingress"
+            },
+            "issue": {
+                "ingressError": {
+                    "title": "Ingress error"
+                },
+                "noFolder": {
+                    "message": "Select a folder so GybeLock can monitor it and auto-upload new videos.",
+                    "title": "No ingress folder selected"
+                },
+                "permissionDenied": {
+                    "message": "Re-select the folder and make sure you grant access.",
+                    "title": "Folder permission denied"
+                },
+                "permissionNeeded": {
+                    "message": "Please grant permission so GybeLock can keep monitoring the folder.",
+                    "title": "Folder permission needed"
+                }
+            },
+            "panel": {
+                "description": "Select your \u201cwindsurf analysis videos\u201d folder. GybeLock monitors it and auto-uploads new videos.",
+                "folderLabel": "Folder",
+                "noFolder": "No folder selected",
+                "noUploads": "No uploads right now.",
+                "permissionPending": "(permission pending)",
+                "title": "Ingress uploads",
+                "uploadsTitle": "Uploads"
+            },
+            "quota": {
+                "body1": "Hey, you've gotten a sneak peek of the Windsurf Analyzer. We'd love to get in contact to hear your opinions \u2014 what you liked and what we could improve.",
+                "body2": "To get full and unlimited access to the analyzer, please reach out to us at",
+                "title": "You're out of free jobs"
+            },
+            "statusLine": {
+                "error": "Error \u2014 {{message}}",
+                "idle": "Idle",
+                "idleNoFolder": "Idle \u2014 no folder selected",
+                "justNow": "just now",
+                "label": "Current status: {{status}}",
+                "monitoring": "Monitoring \u2014 last scan {{time}}",
+                "permissionDenied": "Permission denied",
+                "uploading": "Uploading {{count}} file(s)\u2026"
+            },
+            "suspended": {
+                "message": "Uploads paused due to an error. You can retry failed uploads.",
+                "retry": "Retry failed"
+            },
+            "uploadItem": {
+                "status": {
+                    "error": "Error",
+                    "skipped": "Skipped"
+                }
+            }
+        },
+        "jobList": {
+            "actions": {
+                "collapse": "Collapse all",
+                "collapseTitle": "Collapse all folders",
+                "expand": "Expand all",
+                "expandTitle": "Expand all folders"
+            },
+            "folder": {
+                "closedIcon": "\u25b8",
+                "inProgress": "{{count}} in progress",
+                "openIcon": "\u25be"
+            },
+            "loading": "Still looking for jobs",
+            "opening": "Opening\u2026",
+            "sort": {
+                "ascSymbol": "\u25b2",
+                "date": "Date",
+                "descSymbol": "\u25bc",
+                "label": "Sort by",
+                "name": "Name",
+                "noneSymbol": "\u2195"
+            },
+            "unmapped": {
+                "sha": "sha:{{sha}}\u2026",
+                "shaMissing": "sha:missing",
+                "title": "Unmapped jobs (no local file path mapping)"
+            }
+        },
+        "jobThumbnail": {
+            "fileNotFound": "VIDEO FILE NOT FOUND",
+            "generating": "Generating thumbnail\u2026",
+            "status": {
+                "appearance": "Surfer Identification",
+                "canceled": "Canceled",
+                "detection": "Detecting Surfers",
+                "failed": "Failed",
+                "orientation": "Orienting Video",
+                "pending": "Pending",
+                "stabilization": "Stabilizing Video",
+                "starting": "Starting",
+                "succeeded": "Succeeded",
+                "tracking": "Tracking Surfers"
+            }
+        },
+        "keyboardShortcutsModal": {
+            "shortcuts": {
+                "back": "Back: exit detailed; in overview close player",
+                "nextFrame": "Next frame",
+                "nextTrack": "Next track",
+                "nextVideo": "Open next video",
+                "playPause": "Play/Pause (restart if at end)",
+                "prevFrame": "Previous frame",
+                "prevTrack": "Previous track",
+                "prevVideo": "Open previous video",
+                "seekMinus30": "Seek -30s",
+                "seekMinus5": "Seek -5s",
+                "seekPlus30": "Seek +30s",
+                "seekPlus5": "Seek +5s",
+                "slowDown": "Slow down",
+                "speedUp": "Speed up",
+                "toggleDraw": "Toggle draw mode"
+            },
+            "tip": "Tip: Use the mouse wheel to zoom in overview mode.",
+            "title": "Keyboard Shortcuts"
+        },
+        "languageSwitcher": {
+            "ariaLabel": "Language: {{language}}",
+            "menuLabel": "Choose language",
+            "options": {
+                "de": "German",
+                "en": "English",
+                "es": "Spanish",
+                "it": "Italian"
+            }
+        },
+        "logoButton": {
+            "alt": "GybeLock",
+            "ariaLabel": "GybeLock Home",
+            "title": "GybeLock"
+        },
+        "modal": {
+            "close": "Close"
+        },
+        "playerModal": {
+            "actions": {
+                "delete": {
+                    "label": "Delete",
+                    "title": "Delete job"
+                },
+                "draw": {
+                    "label": "Draw",
+                    "title": "Toggle draw mode"
+                },
+                "report": {
+                    "label": "Report",
+                    "title": "Report an issue with this analysis"
+                },
+                "shortcuts": {
+                    "label": "Shortcuts",
+                    "title": "Keyboard shortcuts"
+                }
+            },
+            "report": {
+                "descriptionLabel": "Describe - What went wrong?",
+                "issueOptions": {
+                    "falseAssociation": "False association",
+                    "missedDetection": "Missed detection",
+                    "other": "Other"
+                },
+                "issueType": "Issue type",
+                "placeholder": "Example: Rider missed around 00:12\u201300:18, or track switches riders at ~00:43.",
+                "send": "Send report",
+                "sending": "Sending report\u2026",
+                "subtitle": "Help us improve the analysis quality for <strong>{{target}}</strong>.",
+                "tip": "Tip: include an approximate timestamp if you can.",
+                "title": "Report an issue"
+            }
+        },
+        "settingsModal": {
+            "confirmDelete": "Delete your account? This will permanently delete your user and job mappings. This cannot be undone.",
+            "deleteAccount": "Delete account",
+            "deletingAccount": "Deleting account\u2026",
+            "logout": "Logout",
+            "title": "Settings"
+        },
+        "singleInstanceGuard": {
+            "body": "This app is currently open in another tab or window. Please use a single tab to avoid duplicate uploads. Close the other tab or click Retry if it was closed recently.",
+            "retry": "Retry",
+            "title": "Application already open"
+        },
+        "supportProjectSection": {
+            "body": "If GybeLock helps you, you can support its development. Any help is greatly appreciated!",
+            "linkText": "Buy me a coffee (PayPal)",
+            "linkTitle": "Buy me a coffee (PayPal)",
+            "title": "Want to support the project?"
+        }
+    },
+    "player": {
+        "canvas": {
+            "draw": {
+                "clearFrame": "Clear frame",
+                "color": "Color",
+                "colorLabel": "Color {{value}}",
+                "freehand": "Freehand",
+                "line": "Line",
+                "tool": "Tool",
+                "width": "Width",
+                "widthLabel": "Width {{value}}"
+            },
+            "errors": {
+                "accessFailed": "Failed to access file from folder",
+                "fileNotFound": "VIDEO FILE NOT FOUND",
+                "missingMapping": "Missing local mapping for file",
+                "noIngressFolder": "No ingress folder selected"
+            },
+            "export": {
+                "errorLabel": "Export: {{message}}",
+                "errors": {
+                    "failed": "Export failed",
+                    "notReady": "Not ready",
+                    "selectTrack": "Select a track",
+                    "trackNotFound": "Track not found",
+                    "trackTooShort": "Track duration too short"
+                },
+                "overlay": {
+                    "note": "Please wait \u2014 playback controls are temporarily disabled.",
+                    "starting": "Starting\u2026",
+                    "title": "Exporting track\u2026"
+                }
+            },
+            "fileNotFound": "VIDEO FILE NOT FOUND"
+        },
+        "controlsBar": {
+            "export": "Export",
+            "pause": "Pause",
+            "play": "Play",
+            "speed": "Speed: {{value}}x",
+            "speedDown": "- Speed",
+            "speedUp": "+ Speed",
+            "zoom": "Zoom: {{value}}x"
+        }
+    },
+    "routes": {
+        "analyzer": {
+            "auth": {
+                "loginPrompt": "Log in to access the Analyzer.",
+                "signupPrompt": "Create an account to access the Analyzer."
+            },
+            "loadingSession": "Loading your session\u2026",
+            "verify": {
+                "body": "The backend requires a verified email address. Please verify <b>{{email}}</b> (check inbox/spam), then click \u201cI verified\u201d.",
+                "resend": "Resend verification email",
+                "signOut": "Sign out",
+                "title": "Verify your email to continue",
+                "verified": "I verified",
+                "yourEmail": "your email"
+            }
+        }
+    },
+    "screens": {
+        "analyzer": {
+            "actions": {
+                "settings": "Settings",
+                "tutorial": "Tutorial"
+            },
+            "beta": {
+                "action": "Read more",
+                "aria": "Beta \u2014 read more",
+                "label": "Beta",
+                "title": "Beta \u2014 read more"
+            },
+            "emptyState": {
+                "body": "Select an ingress folder, drop MP4s into it, then open a job once it\u2019s <b>Succeeded</b>.",
+                "openTutorial": "Open tutorial",
+                "title": "Getting started"
+            },
+            "header": {
+                "tagline": "Upload, process, and review your riding.",
+                "taglineWithName": "Upload, process, and review your riding \u2014 {{name}}."
+            }
+        },
+        "faq": {
+            "cta": "Open Analyzer",
+            "items": {
+                "cannotOpen": {
+                    "answer": "Only jobs with status \u201csucceeded\u201d can be opened. If it\u2019s processing, wait a moment and refresh.",
+                    "question": "Why can\u2019t I open a video yet?"
+                },
+                "deleteAccount": {
+                    "answer": "Open the Analyzer, click <strong>Settings</strong>, then click <strong>Delete account</strong>.",
+                    "question": "How do I delete my account?"
+                },
+                "fileNotFound": {
+                    "answer": "The player opens videos from your local ingress folder. If the file can\u2019t be located, select the correct folder again (Ingress \u2192 <strong>Change folder</strong>) and make sure the video still exists in that folder.",
+                    "question": "Why does the player say \u201cVIDEO FILE NOT FOUND\u201d?"
+                },
+                "formats": {
+                    "answer": "MP4 is recommended. If you encounter issues, try re-exporting to H.264 MP4.",
+                    "question": "What formats are supported?"
+                },
+                "ingressFolder": {
+                    "answer": "It\u2019s a folder on your computer that GybeLock monitors periodically. When you drop a new video in it, GybeLock will automatically upload it for processing.",
+                    "question": "What is the ingress folder?"
+                },
+                "movedVideo": {
+                    "answer": "If the moved/renamed file can\u2019t be found, the player may show <strong>VIDEO FILE NOT FOUND</strong>. Put the video back into the ingress folder (or expected subfolder) and make sure the correct ingress folder is selected.",
+                    "question": "I moved or renamed a video. What should I do?"
+                },
+                "processedVideos": {
+                    "answer": "They appear in the Analyzer grid as soon as a job is finished. Click a tile to open the player.",
+                    "question": "Where do processed videos appear?"
+                },
+                "shortcuts": {
+                    "answer": "In the Analyzer / Player, click <strong>Shortcuts</strong> to open the keyboard shortcuts modal.",
+                    "question": "How do I see all keyboard controls?"
+                },
+                "supportedFootage": {
+                    "answer": "GybeLock is designed for <strong>shore / beach-shot</strong> videos (tele/zoom from land). <strong>MP4</strong> is recommended. GoPro/action-cam POV footage is not supported / not the intended use case.",
+                    "question": "What footage is supported?"
+                },
+                "uploadSkipped": {
+                    "answer": "GybeLock deduplicates videos by checksum. If that exact video was already uploaded/processed, it may be skipped.",
+                    "question": "Why was my upload skipped?"
+                },
+                "uploadsPaused": {
+                    "answer": "Open <strong>Ingress</strong> and check the error message. If uploads paused after a failure, use <strong>Retry failed</strong>. If you see a quota/free-job message, you\u2019ve hit the current limit for your account.",
+                    "question": "Uploads are paused / stuck. What can I do?"
+                },
+                "videoTooLong": {
+                    "answer": "There is a maximum supported video length. If your upload fails with \u201cVideo too long\u201d, split the recording into shorter clips and upload those.",
+                    "question": "Why does upload say \u201cVideo too long\u201d?"
+                },
+                "whatDoes": {
+                    "answer": "GybeLock helps you review <strong>beach-shot</strong> windsurf footage (shore camera, long zoom) by stabilizing the footage, detecting/tracking riders, and letting you click a rider to get a smooth, focused view for review.",
+                    "question": "What is GybeLock supposed to do?"
+                }
+            },
+            "subtitle": "What GybeLock does, what footage it supports, and common troubleshooting.",
+            "title": "FAQ"
+        },
+        "home": {
+            "built": {
+                "bullets": {
+                    "conditions": "Challenging conditions like spray, chop, and partial occlusions",
+                    "distance": "Long-distance filming from shore",
+                    "multiple": "Multiple riders in the same video"
+                },
+                "intro": "GybeLock is designed specifically for:",
+                "notDesigned": "It\u2019s <strong>not designed for GoPro/action-cam</strong> footage.",
+                "outro": "You choose who to follow. GybeLock handles the motion.",
+                "title": "Built for real windsurf footage"
+            },
+            "comparison": {
+                "afterLabel": "After (GybeLock)",
+                "beforeLabel": "Before (raw)",
+                "subtitle": "Add your screenshots to enable the comparison",
+                "title": "Before / After"
+            },
+            "ctaSection": {
+                "body": "No credit card required. See the difference in minutes.",
+                "cta": "Get started for free",
+                "headline": "5 videos are free for everyone",
+                "title": "Get started"
+            },
+            "hero": {
+                "brand": "GybeLock",
+                "cta": "Get started for free",
+                "freeVideos": "Analyze up to <strong>{{count}} videos</strong> free. No credit card.",
+                "lede1": "<strong>GybeLock</strong> turns shaky, long-zoom beach videos into smooth, centered clips that are easy to watch, analyze, and learn from.",
+                "lede2": "Built for <strong>shore / beach-shot tele footage</strong> \u2014 not GoPro/action-cam POV.",
+                "lede3": "From speed runs to wave riding, jumps, and gybes \u2014 GybeLock keeps the rider where your focus should be.",
+                "title": "See your windsurfing clearly."
+            },
+            "how": {
+                "steps": {
+                    "drop": {
+                        "body": "New files upload automatically in the background.",
+                        "title": "<strong>Drop MP4 videos into the folder</strong>"
+                    },
+                    "ingress": {
+                        "body": "Pick a folder on your computer. GybeLock monitors it for new videos.",
+                        "title": "<strong>Set your ingress folder</strong>"
+                    },
+                    "process": {
+                        "body": "The video is oriented, stabilized, and riders are detected and tracked.",
+                        "title": "<strong>GybeLock processes the footage</strong>"
+                    },
+                    "review": {
+                        "body": "Click on the rider you want to focus on.",
+                        "title": "<strong>Open and review</strong>"
+                    }
+                },
+                "title": "How it works"
+            },
+            "problem": {
+                "bullets": {
+                    "moments": "Key moments happen fast \u2014 and get lost just as fast",
+                    "riders": "Riders constantly move across the frame",
+                    "zoom": "Long zoom amplifies every small camera movement"
+                },
+                "intro": "Filming windsurfing from the beach isn\u2019t easy.",
+                "outro": "The result: footage that\u2019s hard to watch, and even harder to learn from.",
+                "title": "The problem"
+            },
+            "what": {
+                "bullets": {
+                    "centered": "<strong>Keeps them centered</strong> in the frame",
+                    "follows": "<strong>Smoothly follows</strong> fast and dynamic movements",
+                    "locksOnto": "<strong>Locks onto</strong> a selected rider",
+                    "stabilizes": "<strong>Stabilizes</strong> shaky beach footage"
+                },
+                "intro": "GybeLock automatically:",
+                "outro": "Whether you\u2019re looking at speed runs, wave riding, big conditions, jumps and landings, or technical transitions \u2014 GybeLock helps you actually <em>see</em> what\u2019s happening.",
+                "title": "What GybeLock does"
+            },
+            "who": {
+                "bullets": {
+                    "anyone": "Anyone tired of shaky zoom videos",
+                    "coaches": "Coaches reviewing sessions",
+                    "friends": "Friends filming from the beach",
+                    "windsurfers": "Windsurfers who want to understand their riding"
+                },
+                "outro": "Beginner or advanced \u2014 clear footage helps everyone improve.",
+                "title": "Who it\u2019s for"
+            },
+            "why": {
+                "intro": "Because better feedback starts with better footage.",
+                "outro": "GybeLock removes distraction, so you can focus on technique, timing, and flow.",
+                "title": "Why GybeLock"
+            }
+        },
+        "legal": {
+            "contact": {
+                "body": "For help, feedback, or data protection requests, email <emailLink>{{email}}</emailLink>."
+            },
+            "impressum": {
+                "dispute": {
+                    "body": "I am not willing or obliged to participate in dispute resolution proceedings before a consumer arbitration board.",
+                    "title": "Dispute resolution / Verbraucherstreitbeilegung"
+                },
+                "liability": {
+                    "body": "I make every effort to keep the information on this site up to date, but I do not assume liability for the correctness, completeness, or timeliness of contents. This site may contain links to external websites; I have no influence on their content and therefore cannot assume any liability for them.",
+                    "title": "Liability for contents and links (Haftung f\u00fcr Inhalte & Links)"
+                },
+                "pills": {
+                    "country": "Germany",
+                    "noCompany": "No company",
+                    "private": "Private individual"
+                },
+                "provider": {
+                    "emailLabel": "Email:",
+                    "title": "Provider information (Angaben gem\u00e4\u00df \u00a7 5 DDG)"
+                },
+                "responsible": {
+                    "title": "Responsible for content (Verantwortlich i.S.d. \u00a7 18 Abs. 2 MStV)"
+                }
+            },
+            "lastUpdated": "Last updated: {{date}}",
+            "privacy": {
+                "analytics": {
+                    "accepted": "Accepted",
+                    "currentChoice": "Current choice: {{choice}}",
+                    "declined": "Declined",
+                    "notSet": "Not set",
+                    "note": "If declined, GybeLock will not load Google Analytics scripts.",
+                    "title": "4. Analytics consent (Google Analytics)"
+                },
+                "authority": {
+                    "body": "If you believe your data is processed unlawfully, you can lodge a complaint with a supervisory authority. For Baden-W\u00fcrttemberg (Germany), see <authorityLink>LfDI Baden-W\u00fcrttemberg</authorityLink>.",
+                    "title": "9. Supervisory authority"
+                },
+                "contact": {
+                    "body": "Data protection inquiries: <emailLink>{{email}}</emailLink>",
+                    "title": "10. Contact"
+                },
+                "controller": {
+                    "emailLabel": "Email:",
+                    "title": "1. Controller (Verantwortlicher)"
+                },
+                "data": {
+                    "bullets": {
+                        "account": "<b>Account data</b>: email address, Firebase user ID (UID), email verification status.",
+                        "analytics": "<b>Usage analytics (optional)</b>: if you consent, Google Analytics collects page views and click events (e.g., \u201cui_click\u201d, \u201canalysis_upload_start\u201d).",
+                        "jobs": "<b>Job / processing data</b>: job IDs, timestamps, processing status, error messages, and the generated tracking results (e.g., tracks/segments) needed to show you analysis.",
+                        "logs": "<b>Technical logs</b>: IP address and request logs may be processed by our hosting/providers to operate and secure the Service.",
+                        "uploads": "<b>Uploaded video data (temporary)</b>: video files you upload for processing; file name, MIME type, file size; checksums (e.g., SHA-256) used for deduplication. Videos are only processed and then deleted; they are not stored long-term."
+                    },
+                    "noteIngress": "Note: GybeLock also uses a local \u201cingress folder\u201d on your device. Selecting a folder and playing a local file happens on your device; uploads only occur when you add videos and the Analyzer uploads them for processing.",
+                    "noteSettings": "The Service also stores some settings locally in your browser (e.g., your analytics consent choice).",
+                    "title": "2. What data we process"
+                },
+                "intro": "This Privacy Policy explains how <b>GybeLock</b> processes personal data when you use the Service at <serviceLink>{{serviceUrl}}</serviceLink>.",
+                "purposes": {
+                    "bullets": {
+                        "analytics": "<b>Usage analytics</b> (Google Analytics): Art. 6(1)(a) GDPR (consent). You can withdraw consent at any time (see \u201cAnalytics consent\u201d below).",
+                        "paypal": "<b>Donations link</b> (PayPal): when you click the PayPal link you leave our site; processing by PayPal is governed by PayPal\u2019s policies.",
+                        "security": "<b>Security, abuse prevention, reliability</b> (rate limiting, dedupe, debugging): Art. 6(1)(f) GDPR (legitimate interests).",
+                        "service": "<b>Provide the Service</b> (account login, uploads, processing, showing results): Art. 6(1)(b) GDPR (performance of a contract)."
+                    },
+                    "title": "3. Purposes and legal bases (GDPR Art. 6)"
+                },
+                "recipients": {
+                    "bullets": {
+                        "analytics": "<b>Google Analytics</b>: only if you consent (see above).",
+                        "cloudRun": "<b>Google Cloud Run</b>: backend API hosting (regional endpoint configured by the operator).",
+                        "firebase": "<b>Google (Firebase)</b>: authentication and database (Firebase Authentication, Firestore).",
+                        "modal": "<b>Modal</b>: GPU processing infrastructure for the analysis pipeline.",
+                        "paypal": "<b>PayPal</b>: only if you click the donation link (PayPal acts as its own controller)."
+                    },
+                    "intro": "The Service uses the following providers:",
+                    "title": "5. Recipients / service providers"
+                },
+                "retention": {
+                    "bullets": {
+                        "account": "<b>Account data</b> is kept while your account is active.",
+                        "analytics": "<b>Analytics data</b> (if enabled) is retained according to Google Analytics settings.",
+                        "tracking": "<b>Tracking results / job data</b> are stored while your account is active or until you delete the job.",
+                        "uploads": "<b>Uploaded videos</b> are processed and then deleted (no long-term storage)."
+                    },
+                    "title": "7. Retention"
+                },
+                "rights": {
+                    "body1": "Under the GDPR you may have rights of access, rectification, erasure, restriction, data portability, and objection. You can also withdraw consent (where applicable) at any time.",
+                    "body2": "You can delete your account from the Analyzer settings. For other requests, contact <emailLink>{{email}}</emailLink>.",
+                    "title": "8. Your rights"
+                },
+                "transfers": {
+                    "body": "Some providers (e.g., Google, Modal) may process data outside the EU/EEA (e.g., in the United States). Where required, transfers are based on appropriate safeguards such as Standard Contractual Clauses (SCCs) and/or adequacy decisions.",
+                    "title": "6. International transfers"
+                }
+            },
+            "terms": {
+                "intro": "These Terms of Use govern your use of <b>GybeLock</b> (the \u201cService\u201d) available at <serviceLink>{{serviceUrl}}</serviceLink>. By creating an account or using the Service, you agree to these Terms.",
+                "sections": {
+                    "acceptable": {
+                        "bullets": {
+                            "overload": "No attempts to overload or disrupt the Service (e.g., abusive automation).",
+                            "reverse": "No reverse engineering of security mechanisms or bypassing quotas/limits.",
+                            "unlawful": "No use for unlawful purposes."
+                        },
+                        "title": "5. Acceptable use"
+                    },
+                    "account": {
+                        "bullets": {
+                            "account": "You need an account (email/password or Google sign-in) to use the Analyzer.",
+                            "guardian": "If you are under 16, you may only use the Service with consent of your legal guardian.",
+                            "verify": "If you use email/password sign-up, you must verify your email address before using the backend processing features."
+                        },
+                        "title": "3. Account, eligibility"
+                    },
+                    "availability": {
+                        "body": "The Service is provided \u201cas is\u201d. I may modify, limit, or discontinue parts of the Service at any time (e.g., to improve performance, fix bugs, or manage costs).",
+                        "title": "6. Availability, changes"
+                    },
+                    "contact": {
+                        "body": "Questions about these Terms: <emailLink>{{email}}</emailLink>",
+                        "title": "10. Contact"
+                    },
+                    "content": {
+                        "bullets": {
+                            "illegal": "Do not upload illegal content or content that infringes rights of others (e.g., privacy, copyright).",
+                            "responsible": "You are responsible for the content you upload and must have the necessary rights (and permissions) to upload and process the videos.",
+                            "rights": "You keep all rights to your videos. You grant the provider a limited right to process your uploads solely for providing the Service.",
+                            "storage": "<b>Video storage</b>: uploaded videos are processed and then deleted from the server side. The Service keeps the generated tracking results so you can review them in the Analyzer."
+                        },
+                        "title": "4. Your content (uploaded videos)"
+                    },
+                    "law": {
+                        "body": "German law applies. If you are a consumer, mandatory consumer protection rules of your country of residence remain unaffected.",
+                        "title": "9. Governing law"
+                    },
+                    "liability": {
+                        "body1": "The Service is provided free of charge (donations optional). I am liable without limitation for intent and gross negligence and for damages resulting from injury to life, body, or health. In cases of slight negligence, I am only liable for breach of essential contractual obligations (cardinal duties), and liability is limited to typical, foreseeable damages.",
+                        "body2": "Mandatory statutory liability (e.g., under product liability law) remains unaffected.",
+                        "title": "7. Liability"
+                    },
+                    "termination": {
+                        "body": "You can delete your account from the Analyzer settings. Deletion impacts data as described in the <privacyLink>Privacy Policy</privacyLink>.",
+                        "title": "8. Termination, deletion"
+                    },
+                    "what": {
+                        "body1": "GybeLock is a windsurf-session review tool focused on finding and reviewing gybes/jibes (or other moments where a rider is visible) by automatically detecting and tracking surfers in your uploaded videos.",
+                        "body2": "Typical workflow: you record a session (shore / beach tele footage), drop raw MP4 files into a designated folder, GybeLock uploads and processes them, and you review the finished results by jumping between tracked rider segments.",
+                        "body3": "This is a small-scale, donation-supported project and may be offered as a beta service.",
+                        "title": "2. What GybeLock does"
+                    },
+                    "who": {
+                        "body1": "The Service is provided by <b>{{name}}</b>, {{address}} (<emailLink>{{email}}</emailLink>).",
+                        "body2": "Legal notice: see <impressumLink>Impressum</impressumLink>.",
+                        "title": "1. Who we are"
+                    }
+                }
+            },
+            "titles": {
+                "contact": "Contact",
+                "impressum": "Impressum",
+                "privacy": "Privacy Policy",
+                "terms": "Terms of Use"
+            }
+        },
+        "login": {
+            "actions": {
+                "createAccount": "Create an account",
+                "forgot": "Forgot password",
+                "google": "Sign in with Google",
+                "login": "Login"
+            },
+            "errors": {
+                "googleFailed": "Google sign-in failed",
+                "loginFailed": "Login failed",
+                "resetFailed": "Could not send password reset email"
+            },
+            "info": {
+                "resetSent": "Password reset email sent to {{email}}."
+            },
+            "placeholders": {
+                "email": "email",
+                "password": "password"
+            },
+            "title": "Login"
+        },
+        "pricing": {
+            "after": {
+                "bullets": {
+                    "noCommitments": "No long-term commitments",
+                    "noSubscriptions": "No subscriptions",
+                    "perVideo": "Pay per processed video"
+                },
+                "intro": "After the testing phase (planned for <strong>March</strong>), GybeLock will move to a simple, usage-based pricing model:",
+                "outro": "Before introducing pricing, we\u2019ll ask our users for feedback to make sure it feels fair and accessible.",
+                "title": "What happens after the beta?"
+            },
+            "beta": {
+                "bullets": {
+                    "card": "No credit card needed",
+                    "features": "All features are available",
+                    "payment": "No payment is required"
+                },
+                "during": "During this time:",
+                "headline": "Free to use",
+                "intro": "GybeLock is currently in an early testing phase.",
+                "outro": "We\u2019re focusing on improving tracking quality, usability, and performance \u2014 and your feedback helps shape what comes next.",
+                "title": "Beta phase"
+            },
+            "cta": {
+                "button": "Get started free",
+                "note": "(5 free videos will remain even after the beta)",
+                "title": "Get started for free"
+            },
+            "intro": "GybeLock is currently in an early testing phase \u2014 simple and free while we improve tracking quality.",
+            "lede": "GybeLock is built for <strong>beach-shot / shore-shot</strong> windsurf videos (tele/zoom from land). It is <strong>not</strong> designed for GoPro/action-cam POV footage.",
+            "title": "Pricing"
+        },
+        "signup": {
+            "actions": {
+                "backToLogin": "Back to login",
+                "createAccount": "Create account"
+            },
+            "errors": {
+                "failed": "Signup failed"
+            },
+            "info": {
+                "created": "Account created. Please verify your email (check inbox/spam)."
+            },
+            "placeholders": {
+                "email": "email",
+                "password": "password",
+                "repeatPassword": "repeat password"
+            },
+            "title": "Sign up"
+        }
+    }
+}

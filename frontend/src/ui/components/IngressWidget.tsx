@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useIngressScanner } from '../hooks/useIngressScanner'
 import type { IngressUploadItem, IngressUploadStatus } from '../hooks/useIngressScanner'
 import type { UploadContext } from '../utils/uploader'
@@ -52,6 +53,7 @@ export const IngressWidget: React.FC<Props> = ({
     knownChecksumsSha256 = null,
     enabled = true,
 }) => {
+    const { t } = useTranslation()
     const scanner = useIngressScanner(dirHandle, uploadCtx, knownChecksumsSha256, enabled)
     const [expanded, setExpanded] = React.useState(false)
     const [showQuotaModal, setShowQuotaModal] = React.useState(false)
@@ -68,33 +70,40 @@ export const IngressWidget: React.FC<Props> = ({
         if (!dirHandle) {
             return {
                 kind: 'warning' as const,
-                title: 'No ingress folder selected',
-                message: 'Select a folder so GybeLock can monitor it and auto-upload new videos.',
+                title: t('components.ingressWidget.issue.noFolder.title'),
+                message: t('components.ingressWidget.issue.noFolder.message'),
             }
         }
         if (dirPermission === 'denied') {
             return {
                 kind: 'error' as const,
-                title: 'Folder permission denied',
-                message: 'Re-select the folder and make sure you grant access.',
+                title: t('components.ingressWidget.issue.permissionDenied.title'),
+                message: t('components.ingressWidget.issue.permissionDenied.message'),
             }
         }
         if (scanner.lastError) {
             return {
                 kind: 'error' as const,
-                title: 'Ingress error',
+                title: t('components.ingressWidget.issue.ingressError.title'),
                 message: scanner.lastError,
             }
         }
         if (dirPermission && dirPermission !== 'granted') {
             return {
                 kind: 'warning' as const,
-                title: 'Folder permission needed',
-                message: 'Please grant permission so GybeLock can keep monitoring the folder.',
+                title: t('components.ingressWidget.issue.permissionNeeded.title'),
+                message: t('components.ingressWidget.issue.permissionNeeded.message'),
             }
         }
         return null
-    }, [dirHandle, dirPermission, scanner.lastError])
+    }, [dirHandle, dirPermission, scanner.lastError, t])
+
+    const fabStatus = React.useMemo(() => {
+        if (uploading > 0) return t('components.ingressWidget.fab.status.uploading', { count: uploading })
+        if (issue?.kind === 'error') return t('components.ingressWidget.fab.status.error')
+        if (dirHandle) return t('components.ingressWidget.fab.status.monitoring')
+        return t('components.ingressWidget.fab.status.selectFolder')
+    }, [dirHandle, issue?.kind, t, uploading])
 
     return (
         <>
@@ -108,21 +117,15 @@ export const IngressWidget: React.FC<Props> = ({
                                 ? 'border-amber-500 bg-amber-100 hover:bg-amber-200'
                                 : 'border-slate-200 bg-white hover:bg-slate-50'
                         }`}
-                        title="Ingress"
-                        aria-label="Open ingress uploads"
+                        title={t('components.ingressWidget.fab.title')}
+                        aria-label={t('components.ingressWidget.fab.aria')}
                     >
                         {uploading > 0 ? <Ring percent={ringPercent} /> : <Ring percent={0} />}
                         <div className="flex flex-col items-start leading-tight">
-                            <div className="text-xs font-semibold text-slate-900">Ingress</div>
-                            <div className="text-[11px] text-slate-500">
-                                {uploading > 0
-                                    ? `Uploading ${uploading}…`
-                                    : issue?.kind === 'error'
-                                    ? 'Error — action needed'
-                                    : dirHandle
-                                    ? 'Monitoring'
-                                    : 'Select folder (required)'}
+                            <div className="text-xs font-semibold text-slate-900">
+                                {t('components.ingressWidget.fab.title')}
                             </div>
+                            <div className="text-[11px] text-slate-500">{fabStatus}</div>
                         </div>
                         {uploading > 0 && (
                             <span className="ml-1 text-[11px] font-semibold text-brand-700 bg-brand-50 border border-brand-600/20 px-2 py-0.5 rounded-full">
@@ -141,14 +144,14 @@ export const IngressWidget: React.FC<Props> = ({
                         }`}
                     >
                         <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-3">
-                            <div className="text-sm font-semibold">Ingress uploads</div>
+                            <div className="text-sm font-semibold">{t('components.ingressWidget.panel.title')}</div>
                             <div className="flex-1" />
                             <button
                                 type="button"
                                 onClick={() => setExpanded(false)}
                                 className="text-xs text-slate-600 hover:text-slate-900 px-2 py-1 rounded-md hover:bg-slate-100"
                             >
-                                Close
+                                {t('common.close')}
                             </button>
                         </div>
 
@@ -159,23 +162,24 @@ export const IngressWidget: React.FC<Props> = ({
                                 </IssueBanner>
                             )}
 
-                            <div className="text-xs text-slate-600">
-                                Select your “windsurf analysis videos” folder. GybeLock monitors it and auto-uploads new
-                                videos.
-                            </div>
+                            <div className="text-xs text-slate-600">{t('components.ingressWidget.panel.description')}</div>
 
                             <div className="flex items-start justify-between gap-3">
                                 <div className="text-xs text-slate-700">
-                                    <div className="font-medium">Folder</div>
+                                    <div className="font-medium">{t('components.ingressWidget.panel.folderLabel')}</div>
                                     {dirHandle ? (
                                         <div className="mt-0.5">
                                             <span className="text-slate-900">{dirHandle.name}</span>{' '}
                                             {dirPermission !== 'granted' ? (
-                                                <span className="text-amber-700">(permission pending)</span>
+                                                <span className="text-amber-700">
+                                                    {t('components.ingressWidget.panel.permissionPending')}
+                                                </span>
                                             ) : null}
                                         </div>
                                     ) : (
-                                        <div className="mt-0.5 font-semibold text-amber-800">No folder selected</div>
+                                        <div className="mt-0.5 font-semibold text-amber-800">
+                                            {t('components.ingressWidget.panel.noFolder')}
+                                        </div>
                                     )}
                                 </div>
                                 <button
@@ -187,7 +191,7 @@ export const IngressWidget: React.FC<Props> = ({
                                     }`}
                                     onClick={onPickDirectory}
                                 >
-                                    {dirHandle ? 'Change folder' : 'Select folder'}
+                                    {dirHandle ? t('common.actions.changeFolder') : t('common.actions.selectFolder')}
                                 </button>
                             </div>
 
@@ -204,7 +208,9 @@ export const IngressWidget: React.FC<Props> = ({
 
                             {scanner.uploads.length > 0 ? (
                                 <div className="mt-1">
-                                    <div className="text-xs font-semibold text-slate-900 mb-2">Uploads</div>
+                                    <div className="text-xs font-semibold text-slate-900 mb-2">
+                                        {t('components.ingressWidget.panel.uploadsTitle')}
+                                    </div>
                                     <div className="flex flex-col gap-2 max-h-[40vh] overflow-auto pr-1">
                                         {scanner.uploads.map(item => (
                                             <UploadItem key={item.id} item={item} />
@@ -212,7 +218,7 @@ export const IngressWidget: React.FC<Props> = ({
                                     </div>
                                 </div>
                             ) : (
-                                <div className="text-xs text-slate-500">No uploads right now.</div>
+                                <div className="text-xs text-slate-500">{t('components.ingressWidget.panel.noUploads')}</div>
                             )}
                         </div>
                     </div>
@@ -220,14 +226,11 @@ export const IngressWidget: React.FC<Props> = ({
             </div>
 
             {showQuotaModal && (
-                <Modal onClose={() => setShowQuotaModal(false)} title="You're out of free jobs">
+                <Modal onClose={() => setShowQuotaModal(false)} title={t('components.ingressWidget.quota.title')}>
                     <div className="p-4 text-slate-900">
-                        <p className="mb-3">
-                            Hey, you've gotten a sneak peek of the Windsurf Analyzer. We'd love to get in contact to
-                            hear your opinions — what you liked and what we could improve.
-                        </p>
+                        <p className="mb-3">{t('components.ingressWidget.quota.body1')}</p>
                         <p className="mb-1">
-                            To get full and unlimited access to the analyzer, please reach out to us at
+                            {t('components.ingressWidget.quota.body2')}
                             <br />
                             <a className="text-brand-700 underline" href="mailto:contact@gybelock.de">
                                 contact@gybelock.de
@@ -241,18 +244,17 @@ export const IngressWidget: React.FC<Props> = ({
 }
 
 const SuspendedBanner: React.FC<{ onRetryFailed: () => void }> = ({ onRetryFailed }) => {
+    const { t } = useTranslation()
     return (
         <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
-            <div className="text-xs text-amber-800 mb-2">
-                Uploads paused due to an error. You can retry failed uploads.
-            </div>
+            <div className="text-xs text-amber-800 mb-2">{t('components.ingressWidget.suspended.message')}</div>
             <div className="flex gap-2">
                 <button
                     type="button"
                     className="px-3 py-2 rounded-md bg-slate-200 text-slate-800 text-sm hover:bg-slate-300 transition"
                     onClick={onRetryFailed}
                 >
-                    Retry failed
+                    {t('components.ingressWidget.suspended.retry')}
                 </button>
             </div>
         </div>
@@ -298,29 +300,42 @@ const StatusLine: React.FC<StatusLineProps> = ({
     lastRunAt,
     lastError,
 }) => {
+    const { t } = useTranslation()
     const status = React.useMemo(() => {
-        if (!dirHandle) return { text: 'Idle — no folder selected', color: '#b45309' }
-        if (dirPermission === 'denied') return { text: 'Permission denied', color: '#b91c1c' }
-        if (lastError) return { text: `Error — ${lastError}`, color: '#b91c1c' }
+        if (!dirHandle) return { text: t('components.ingressWidget.statusLine.idleNoFolder'), color: '#b45309' }
+        if (dirPermission === 'denied')
+            return { text: t('components.ingressWidget.statusLine.permissionDenied'), color: '#b91c1c' }
+        if (lastError)
+            return { text: t('components.ingressWidget.statusLine.error', { message: lastError }), color: '#b91c1c' }
         if (uploading > 0)
-            return { text: `Uploading ${uploading} file${uploading > 1 ? 's' : ''}…`, color: 'var(--brand-600)' }
-        if (active)
             return {
-                text: `Monitoring — last scan ${lastRunAt ? new Date(lastRunAt).toLocaleTimeString() : 'just now'}`,
+                text: t('components.ingressWidget.statusLine.uploading', { count: uploading }),
+                color: 'var(--brand-600)',
+            }
+        if (active) {
+            const lastScanLabel = lastRunAt
+                ? new Date(lastRunAt).toLocaleTimeString()
+                : t('components.ingressWidget.statusLine.justNow')
+            return {
+                text: t('components.ingressWidget.statusLine.monitoring', { time: lastScanLabel }),
                 color: '#059669',
             }
-        return { text: 'Idle', color: '#64748b' }
-    }, [dirHandle, dirPermission, active, uploading, lastRunAt, lastError])
+        }
+        return { text: t('components.ingressWidget.statusLine.idle'), color: '#64748b' }
+    }, [active, dirHandle, dirPermission, lastError, lastRunAt, t, uploading])
 
     return (
         <div className="flex items-center gap-2">
             <span className="inline-block w-2 h-2 rounded-full" style={{ background: status.color }} />
-            <span className="text-xs text-slate-700">Current status: {status.text}</span>
+            <span className="text-xs text-slate-700">
+                {t('components.ingressWidget.statusLine.label', { status: status.text })}
+            </span>
         </div>
     )
 }
 
 const UploadItem: React.FC<{ item: IngressUploadItem }> = ({ item }) => {
+    const { t } = useTranslation()
     const percent = clamp(item.progress, 0, 100)
     const isError = item.status === 'error'
     const isSkipped = item.status === 'skipped'
@@ -336,7 +351,11 @@ const UploadItem: React.FC<{ item: IngressUploadItem }> = ({ item }) => {
                     {item.relativePath}
                 </span>
                 <span className="text-xs text-slate-500 min-w-[36px] text-right">
-                    {isError ? 'Error' : isSkipped ? 'Skipped' : `${percent}%`}
+                    {isError
+                        ? t('components.ingressWidget.uploadItem.status.error')
+                        : isSkipped
+                        ? t('components.ingressWidget.uploadItem.status.skipped')
+                        : `${percent}%`}
                 </span>
             </div>
             <ProgressBar percent={percent} status={item.status} />

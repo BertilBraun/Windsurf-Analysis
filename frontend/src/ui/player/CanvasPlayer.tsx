@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { JobDetail, ReportType } from '../types'
 import { PlayerState, VideoProperties } from './state'
 import { Button } from '../components/Button'
@@ -40,6 +41,7 @@ export const CanvasPlayer: React.FC<Props> = ({
     drawMode,
     onToggleDrawMode,
 }) => {
+    const { t } = useTranslation()
     const [exportError, setExportError] = React.useState<string | null>(null)
     const videoRef = React.useRef<HTMLVideoElement | null>(null)
     const containerRef = React.useRef<HTMLDivElement | null>(null)
@@ -66,6 +68,7 @@ export const CanvasPlayer: React.FC<Props> = ({
         dirHandle,
         onFileLoaded: onNewFile,
     })
+    const errorText = error ? t(error.key, { message: error.detail }) : null
 
     React.useEffect(() => {
         trackEvent('player_open', { job_id: job.id })
@@ -643,11 +646,12 @@ export const CanvasPlayer: React.FC<Props> = ({
         try {
             const file = sourceFile
             const p = player
-            if (!file || !p) throw new Error('Not ready')
-            if (p.mode !== 'detailed' || p.currentTrackId == null) throw new Error('Select a track')
+            if (!file || !p) throw new Error(t('player.canvas.export.errors.notReady'))
+            if (p.mode !== 'detailed' || p.currentTrackId == null)
+                throw new Error(t('player.canvas.export.errors.selectTrack'))
 
             const track = p.tracks.find(t => t.track_id === p.currentTrackId)
-            if (!track) throw new Error('Track not found')
+            if (!track) throw new Error(t('player.canvas.export.errors.trackNotFound'))
             trackEvent('export_track_start', { job_id: job.id, track_id: track.track_id })
 
             const padSec = 0.25
@@ -656,7 +660,7 @@ export const CanvasPlayer: React.FC<Props> = ({
                 p.video.durationSeconds || Infinity,
                 track.start_time_seconds + track.duration_seconds + padSec
             )
-            if (!(endSec > startSec + 1e-3)) throw new Error('Track duration too short')
+            if (!(endSec > startSec + 1e-3)) throw new Error(t('player.canvas.export.errors.trackTooShort'))
 
             const outBlob = await exportTrackMp4({
                 file,
@@ -679,22 +683,30 @@ export const CanvasPlayer: React.FC<Props> = ({
             downloadExport(outBlob, filename)
             trackEvent('export_track_success', { job_id: job.id, track_id: track.track_id })
         } catch (e: any) {
-            setExportError(String(e?.message || e || 'Export failed'))
-            trackEvent('export_track_failed', { job_id: job.id, message: String(e?.message || e || 'Export failed') })
+            const fallback = t('player.canvas.export.errors.failed')
+            const message = String(e?.message || e || fallback)
+            setExportError(message)
+            trackEvent('export_track_failed', { job_id: job.id, message })
         } finally {
             setIsExporting(false)
             setExportProgressPct(null)
         }
-    }, [isExporting, job.dominant_orientation, job.id, job.local_relative_path, player, sourceFile])
+    }, [isExporting, job.dominant_orientation, job.id, job.local_relative_path, player, sourceFile, t])
 
     return (
         <div className="relative flex flex-col h-full">
             <div className="relative flex-1 bg-black overflow-hidden">
-                {error && <div className="absolute left-2 top-2 text-red-500 text-sm">{error}</div>}
-                {exportError && <div className="absolute left-2 top-7 text-red-400 text-sm">Export: {exportError}</div>}
+                {errorText && <div className="absolute left-2 top-2 text-red-500 text-sm">{errorText}</div>}
+                {exportError && (
+                    <div className="absolute left-2 top-7 text-red-400 text-sm">
+                        {t('player.canvas.export.errorLabel', { message: exportError })}
+                    </div>
+                )}
                 {fileMissing && (
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="text-red-500 text-3xl font-extrabold tracking-wide">VIDEO FILE NOT FOUND</div>
+                        <div className="text-red-500 text-3xl font-extrabold tracking-wide">
+                            {t('player.canvas.fileNotFound')}
+                        </div>
                     </div>
                 )}
                 <div ref={containerRef} className="absolute inset-0">
@@ -716,7 +728,9 @@ export const CanvasPlayer: React.FC<Props> = ({
                     {drawMode && (
                         <div className="absolute left-3 top-3 z-10 rounded-md bg-black/60 border border-gray-700 text-gray-100 text-xs px-3 py-2 space-y-3">
                             <div>
-                                <div className="text-[11px] uppercase tracking-wide text-gray-300">Tool</div>
+                                <div className="text-[11px] uppercase tracking-wide text-gray-300">
+                                    {t('player.canvas.draw.tool')}
+                                </div>
                                 <div className="mt-2 flex items-center gap-1">
                                     <button
                                         type="button"
@@ -727,7 +741,7 @@ export const CanvasPlayer: React.FC<Props> = ({
                                                 : 'bg-white/10 text-gray-100 hover:bg-white/20'
                                         }`}
                                     >
-                                        Freehand
+                                        {t('player.canvas.draw.freehand')}
                                     </button>
                                     <button
                                         type="button"
@@ -738,12 +752,14 @@ export const CanvasPlayer: React.FC<Props> = ({
                                                 : 'bg-white/10 text-gray-100 hover:bg-white/20'
                                         }`}
                                     >
-                                        Line
+                                        {t('player.canvas.draw.line')}
                                     </button>
                                 </div>
                             </div>
                             <div>
-                                <div className="text-[11px] uppercase tracking-wide text-gray-300">Width</div>
+                                <div className="text-[11px] uppercase tracking-wide text-gray-300">
+                                    {t('player.canvas.draw.width')}
+                                </div>
                                 <div className="mt-2 flex items-center gap-2">
                                     {DRAW_WIDTH_OPTIONS.map((option, index) => {
                                         const previewSize =
@@ -762,7 +778,7 @@ export const CanvasPlayer: React.FC<Props> = ({
                                                         : 'ring-1 ring-white/30 hover:ring-white/70'
                                                 }`}
                                                 style={{ width: buttonSize, height: buttonSize }}
-                                                aria-label={`Line width ${option}px`}
+                                                aria-label={t('player.canvas.draw.widthLabel', { value: option })}
                                             >
                                                 <span
                                                     className="block rounded-full bg-white"
@@ -774,7 +790,9 @@ export const CanvasPlayer: React.FC<Props> = ({
                                 </div>
                             </div>
                             <div>
-                                <div className="text-[11px] uppercase tracking-wide text-gray-300">Color</div>
+                                <div className="text-[11px] uppercase tracking-wide text-gray-300">
+                                    {t('player.canvas.draw.color')}
+                                </div>
                                 <div className="mt-2 flex items-center gap-2">
                                     {DRAW_COLOR_OPTIONS.map(option => (
                                         <button
@@ -787,14 +805,14 @@ export const CanvasPlayer: React.FC<Props> = ({
                                                     : 'ring-1 ring-white/30 hover:ring-white/70'
                                             }`}
                                             style={{ backgroundColor: option }}
-                                            aria-label={`Line color ${option}`}
+                                            aria-label={t('player.canvas.draw.colorLabel', { value: option })}
                                         />
                                     ))}
                                 </div>
                             </div>
                             <Button
                                 size="sm"
-                                text="Clear frame"
+                                text={t('player.canvas.draw.clearFrame')}
                                 onClick={onClearAnnotations}
                                 disabled={!hasVisibleAnnotations}
                             />
@@ -859,17 +877,15 @@ export const CanvasPlayer: React.FC<Props> = ({
                     onWheel={e => e.preventDefault()}
                 >
                     <div className="px-4 py-3 rounded-lg bg-black/60 border border-gray-700 text-gray-100 text-center">
-                        <div className="text-base font-semibold">Exporting track…</div>
+                        <div className="text-base font-semibold">{t('player.canvas.export.overlay.title')}</div>
                         {typeof exportProgressPct === 'number' ? (
                             <div className="mt-1 text-sm tabular-nums">
                                 {Math.max(0, Math.min(100, exportProgressPct)).toFixed(0)}%
                             </div>
                         ) : (
-                            <div className="mt-1 text-sm">Starting…</div>
+                            <div className="mt-1 text-sm">{t('player.canvas.export.overlay.starting')}</div>
                         )}
-                        <div className="mt-2 text-xs text-gray-300">
-                            Please wait — playback controls are temporarily disabled.
-                        </div>
+                        <div className="mt-2 text-xs text-gray-300">{t('player.canvas.export.overlay.note')}</div>
                     </div>
                 </div>
             )}

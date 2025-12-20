@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 
 const LOCK_KEY = 'windsurf:single:lock'
 const HEARTBEAT_MS = 2000
@@ -31,6 +32,7 @@ function removeLock() {
 }
 
 export const SingleInstanceGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { t } = useTranslation()
     const idRef = React.useRef<string>(`tab-${Math.random().toString(36).slice(2)}-${Date.now()}`)
     const [isDuplicate, setIsDuplicate] = React.useState(false)
     const leaderRef = React.useRef(false)
@@ -120,13 +122,12 @@ export const SingleInstanceGuard: React.FC<{ children: React.ReactNode }> = ({ c
                         boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                     }}
                 >
-                    <h2 style={{ margin: 0, marginBottom: 8 }}>Application already open</h2>
+                    <h2 style={{ margin: 0, marginBottom: 8 }}>{t('components.singleInstanceGuard.title')}</h2>
                     <p style={{ marginTop: 0, marginBottom: 12, color: '#374151', fontSize: 14 }}>
-                        This app is currently open in another tab or window. Please use a single tab to avoid duplicate
-                        uploads. Close the other tab or click Retry if it was closed recently.
+                        {t('components.singleInstanceGuard.body')}
                     </p>
                     <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={tryBecomeLeader}>Retry</button>
+                        <button onClick={tryBecomeLeader}>{t('components.singleInstanceGuard.retry')}</button>
                     </div>
                 </div>
             </div>

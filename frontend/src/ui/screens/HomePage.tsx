@@ -1,152 +1,163 @@
 import React from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { SupportProjectSection } from '../components/SupportProjectSection'
 
 export const HomePage: React.FC = () => {
+    const { t } = useTranslation()
     const navigate = useNavigate()
     return (
         <div className="flex flex-col gap-10">
             <section className="rounded-2xl border border-slate-200 bg-linear-to-b from-white to-slate-50 p-6 sm:p-10">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
                     <div className="max-w-2xl">
-                        <div className="text-xs font-semibold text-brand-700 mb-2">GybeLock</div>
+                        <div className="text-xs font-semibold text-brand-700 mb-2">
+                            {t('screens.home.hero.brand')}
+                        </div>
                         <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-                            See your windsurfing clearly.
+                            {t('screens.home.hero.title')}
                         </h1>
                         <p className="mt-3 text-sm sm:text-base text-slate-600 leading-6">
-                            <strong>GybeLock</strong> turns shaky, long-zoom beach videos into smooth, centered clips
-                            that are easy to watch, analyze, and learn from.
+                            <Trans i18nKey="screens.home.hero.lede1" components={{ strong: <strong /> }} />
                         </p>
                         <p className="mt-3 text-sm sm:text-base text-slate-600 leading-6">
-                            Built for <strong>shore / beach-shot tele footage</strong> — not GoPro/action-cam POV.
+                            <Trans i18nKey="screens.home.hero.lede2" components={{ strong: <strong /> }} />
                         </p>
                         <p className="mt-3 text-sm sm:text-base text-slate-600 leading-6">
-                            From speed runs to wave riding, jumps, and gybes — GybeLock keeps the rider where your focus
-                            should be.
+                            {t('screens.home.hero.lede3')}
                         </p>
 
                         <div className="mt-5 flex flex-col sm:flex-row gap-3 sm:items-center">
                             <Button
                                 variant="primary"
                                 onClick={() => navigate('/analyzer')}
-                                text="Get started for free"
+                                text={t('screens.home.hero.cta')}
                             />
                             <div className="text-sm text-slate-700">
-                                Analyze up to <span className="font-semibold">5 videos</span> free. No credit card.
+                                <Trans
+                                    i18nKey="screens.home.hero.freeVideos"
+                                    values={{ count: 5 }}
+                                    components={{ strong: <span className="font-semibold" /> }}
+                                />
                             </div>
                         </div>
                     </div>
 
                     <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
                         <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                            <div className="text-sm font-semibold">Before / After</div>
-                            <div className="text-xs text-slate-500">Add your screenshots to enable the comparison</div>
+                            <div className="text-sm font-semibold">{t('screens.home.comparison.title')}</div>
+                            <div className="text-xs text-slate-500">{t('screens.home.comparison.subtitle')}</div>
                         </div>
                         <div className="grid grid-cols-2">
-                            <ComparisonTile label="Before (raw)" src="/marketing/before.jpg" />
-                            <ComparisonTile label="After (GybeLock)" src="/marketing/after.jpg" />
+                            <ComparisonTile
+                                label={t('screens.home.comparison.beforeLabel')}
+                                src="/marketing/before.jpg"
+                            />
+                            <ComparisonTile
+                                label={t('screens.home.comparison.afterLabel')}
+                                src="/marketing/after.jpg"
+                            />
                         </div>
                     </div>
                 </div>
             </section>
 
-            <Section title="The problem">
-                <p>Filming windsurfing from the beach isn’t easy.</p>
+            <Section title={t('screens.home.problem.title')}>
+                <p>{t('screens.home.problem.intro')}</p>
                 <ul className="list-disc pl-5 space-y-1">
-                    <li>Long zoom amplifies every small camera movement</li>
-                    <li>Riders constantly move across the frame</li>
-                    <li>Key moments happen fast — and get lost just as fast</li>
+                    <li>{t('screens.home.problem.bullets.zoom')}</li>
+                    <li>{t('screens.home.problem.bullets.riders')}</li>
+                    <li>{t('screens.home.problem.bullets.moments')}</li>
                 </ul>
-                <p className="mt-3">The result: footage that’s hard to watch, and even harder to learn from.</p>
+                <p className="mt-3">{t('screens.home.problem.outro')}</p>
             </Section>
 
-            <Section title="What GybeLock does">
-                <p>GybeLock automatically:</p>
+            <Section title={t('screens.home.what.title')}>
+                <p>{t('screens.home.what.intro')}</p>
                 <ul className="list-disc pl-5 space-y-1">
                     <li>
-                        <strong>Stabilizes</strong> shaky beach footage
+                        <Trans i18nKey="screens.home.what.bullets.stabilizes" components={{ strong: <strong /> }} />
                     </li>
                     <li>
-                        <strong>Locks onto</strong> a selected rider
+                        <Trans i18nKey="screens.home.what.bullets.locksOnto" components={{ strong: <strong /> }} />
                     </li>
                     <li>
-                        <strong>Keeps them centered</strong> in the frame
+                        <Trans i18nKey="screens.home.what.bullets.centered" components={{ strong: <strong /> }} />
                     </li>
                     <li>
-                        <strong>Smoothly follows</strong> fast and dynamic movements
+                        <Trans i18nKey="screens.home.what.bullets.follows" components={{ strong: <strong /> }} />
                     </li>
                 </ul>
                 <div className="mt-3 text-slate-600">
-                    Whether you’re looking at speed runs, wave riding, big conditions, jumps and landings, or technical
-                    transitions — GybeLock helps you actually <em>see</em> what’s happening.
+                    <Trans i18nKey="screens.home.what.outro" components={{ em: <em /> }} />
                 </div>
             </Section>
 
-            <Section title="Built for real windsurf footage">
-                <p>GybeLock is designed specifically for:</p>
+            <Section title={t('screens.home.built.title')}>
+                <p>{t('screens.home.built.intro')}</p>
                 <ul className="list-disc pl-5 space-y-1">
-                    <li>Long-distance filming from shore</li>
-                    <li>Multiple riders in the same video</li>
-                    <li>Challenging conditions like spray, chop, and partial occlusions</li>
+                    <li>{t('screens.home.built.bullets.distance')}</li>
+                    <li>{t('screens.home.built.bullets.multiple')}</li>
+                    <li>{t('screens.home.built.bullets.conditions')}</li>
                 </ul>
                 <p className="mt-3">
-                    It’s <strong>not designed for GoPro/action-cam</strong> footage.
+                    <Trans i18nKey="screens.home.built.notDesigned" components={{ strong: <strong /> }} />
                 </p>
-                <p className="mt-3">You choose who to follow. GybeLock handles the motion.</p>
+                <p className="mt-3">{t('screens.home.built.outro')}</p>
             </Section>
 
-            <Section title="How it works">
+            <Section title={t('screens.home.how.title')}>
                 <ol className="list-decimal pl-5 space-y-2">
                     <li>
-                        <strong>Set your ingress folder</strong>
-                        <div className="text-sm text-slate-600">
-                            Pick a folder on your computer. GybeLock monitors it for new videos.
-                        </div>
+                        <Trans i18nKey="screens.home.how.steps.ingress.title" components={{ strong: <strong /> }} />
+                        <div className="text-sm text-slate-600">{t('screens.home.how.steps.ingress.body')}</div>
                     </li>
                     <li>
-                        <strong>Drop MP4 videos into the folder</strong>
-                        <div className="text-sm text-slate-600">New files upload automatically in the background.</div>
+                        <Trans i18nKey="screens.home.how.steps.drop.title" components={{ strong: <strong /> }} />
+                        <div className="text-sm text-slate-600">{t('screens.home.how.steps.drop.body')}</div>
                     </li>
                     <li>
-                        <strong>GybeLock processes the footage</strong>
-                        <div className="text-sm text-slate-600">
-                            The video is oriented, stabilized, and riders are detected and tracked.
-                        </div>
+                        <Trans i18nKey="screens.home.how.steps.process.title" components={{ strong: <strong /> }} />
+                        <div className="text-sm text-slate-600">{t('screens.home.how.steps.process.body')}</div>
                     </li>
                     <li>
-                        <strong>Open and review</strong>
-                        <div className="text-sm text-slate-600">Click on the rider you want to focus on.</div>
+                        <Trans i18nKey="screens.home.how.steps.review.title" components={{ strong: <strong /> }} />
+                        <div className="text-sm text-slate-600">{t('screens.home.how.steps.review.body')}</div>
                     </li>
                 </ol>
             </Section>
 
-            <Section title="Who it’s for">
+            <Section title={t('screens.home.who.title')}>
                 <ul className="list-disc pl-5 space-y-1">
-                    <li>Windsurfers who want to understand their riding</li>
-                    <li>Coaches reviewing sessions</li>
-                    <li>Friends filming from the beach</li>
-                    <li>Anyone tired of shaky zoom videos</li>
+                    <li>{t('screens.home.who.bullets.windsurfers')}</li>
+                    <li>{t('screens.home.who.bullets.coaches')}</li>
+                    <li>{t('screens.home.who.bullets.friends')}</li>
+                    <li>{t('screens.home.who.bullets.anyone')}</li>
                 </ul>
-                <p className="mt-3">Beginner or advanced — clear footage helps everyone improve.</p>
+                <p className="mt-3">{t('screens.home.who.outro')}</p>
             </Section>
 
-            <Section title="Why GybeLock">
-                <p>Because better feedback starts with better footage.</p>
-                <p className="mt-2">GybeLock removes distraction, so you can focus on technique, timing, and flow.</p>
+            <Section title={t('screens.home.why.title')}>
+                <p>{t('screens.home.why.intro')}</p>
+                <p className="mt-2">{t('screens.home.why.outro')}</p>
             </Section>
 
             <SupportProjectSection />
 
             <section className="rounded-2xl border border-brand-600/20 bg-brand-50 p-6 sm:p-8 flex flex-col sm:flex-row gap-4 sm:items-center">
                 <div className="flex-1">
-                    <div className="text-xs font-semibold text-brand-700">Get started</div>
-                    <div className="mt-1 text-lg font-semibold text-slate-900">5 videos are free for everyone</div>
-                    <div className="mt-1 text-sm text-slate-700">
-                        No credit card required. See the difference in minutes.
+                    <div className="text-xs font-semibold text-brand-700">{t('screens.home.ctaSection.title')}</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-900">
+                        {t('screens.home.ctaSection.headline')}
                     </div>
+                    <div className="mt-1 text-sm text-slate-700">{t('screens.home.ctaSection.body')}</div>
                 </div>
-                <Button variant="primary" onClick={() => navigate('/analyzer')} text="Get started for free" />
+                <Button
+                    variant="primary"
+                    onClick={() => navigate('/analyzer')}
+                    text={t('screens.home.ctaSection.cta')}
+                />
             </section>
         </div>
     )

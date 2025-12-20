@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { AnimatedDots } from './AnimatedDots'
 
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -21,6 +22,7 @@ export const Button: React.FC<ButtonProps> = ({
     className,
     ...props
 }) => {
+    const { t } = useTranslation()
     const variantClass =
         variant === 'primary'
             ? 'bg-brand-600 text-white hover:bg-brand-700'
@@ -45,7 +47,8 @@ export const Button: React.FC<ButtonProps> = ({
         >
             {isPending ? (
                 <span>
-                    {text}ing <AnimatedDots />
+                    {text}
+                    {t('components.button.pendingSuffix')} <AnimatedDots />
                 </span>
             ) : (
                 text
