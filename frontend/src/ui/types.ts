@@ -43,7 +43,7 @@ export type Track = {
     detections: TrackDetection[]
 }
 
-export type ReportType = 'missed_detection' | 'false_association' | 'other'
+export type ReportType = 'missed_detection' | 'false_association' | 'visual_problem' | 'other'
 
 export type UploadQuality = 'original' | 'high' | 'medium' | 'minimum'
 

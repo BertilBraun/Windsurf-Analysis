@@ -161,6 +161,9 @@ const ReportVideoModal: React.FC<{
                         <option value="false_association">
                             {t('components.playerModal.report.issueOptions.falseAssociation')}
                         </option>
+                        <option value="visual_problem">
+                            {t('components.playerModal.report.issueOptions.visualProblems')}
+                        </option>
                         <option value="other">{t('components.playerModal.report.issueOptions.other')}</option>
                     </select>
                 </div>

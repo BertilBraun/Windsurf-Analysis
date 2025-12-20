@@ -288,7 +288,8 @@
                 "issueOptions": {
                     "falseAssociation": "False association",
                     "missedDetection": "Missed detection",
-                    "other": "Other"
+                    "other": "Other",
+                    "visualProblems": "Visual problems (jittery video, skipped frames)"
                 },
                 "issueType": "Issue type",
                 "placeholder": "Example: Rider missed around 00:12\u201300:18, or track switches riders at ~00:43.",

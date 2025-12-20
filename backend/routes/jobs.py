@@ -21,7 +21,7 @@ reports_repo = ReportsRepo()
 user_repo = UserRepo()
 
 
-ReportType = Literal['missed_detection', 'false_association', 'other']
+ReportType = Literal['missed_detection', 'false_association', 'visual_problem', 'other']
 
 
 class JobCreateRequest(BaseModel):
