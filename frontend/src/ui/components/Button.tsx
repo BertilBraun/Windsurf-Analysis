@@ -39,7 +39,7 @@ export const Button: React.FC<ButtonProps> = ({
             {...props}
             disabled={!!disabled || !!isPending}
             className={cx(
-                'inline-flex items-center justify-center gap-2 rounded-md font-medium transition active:translate-y-[0.5px] disabled:opacity-60 disabled:cursor-not-allowed',
+                'inline-flex items-center justify-center gap-2 rounded-md font-medium transition active:translate-y-[0.5px] cursor-pointer enabled:hover:scale-[1.02] disabled:opacity-60 disabled:cursor-not-allowed',
                 sizeClass,
                 variantClass,
                 className
