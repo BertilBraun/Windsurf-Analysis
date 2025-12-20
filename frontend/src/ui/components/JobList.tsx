@@ -316,6 +316,7 @@ export const JobList: React.FC<{
                             )}
                         </>
                     )}
+                    {showHeader && <div className="mt-3 border-t border-slate-200" />}
                 </div>
             )
         },
