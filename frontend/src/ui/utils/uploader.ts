@@ -204,7 +204,7 @@ export async function uploadVideoFileToJob(
 
     const updateOverallProgress = () => {
         const overall = aggregatedUploaded / totalSize
-        onProgress(Math.min(0.99, overall * PERCENT_UPLOAD + PERCENT_PREPROCESS))
+        onProgress(Math.min(0.95, overall * PERCENT_UPLOAD + PERCENT_PREPROCESS))
     }
 
     // Work queue of part indices to upload
