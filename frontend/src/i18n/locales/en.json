@@ -240,7 +240,8 @@
                 "seekPlus5": "Seek +5s",
                 "slowDown": "Slow down",
                 "speedUp": "Speed up",
-                "toggleDraw": "Toggle draw mode"
+                "toggleDraw": "Toggle draw mode",
+                "undoDraw": "Undo draw"
             },
             "tip": "Tip: Use the mouse wheel to zoom in overview mode.",
             "title": "Keyboard Shortcuts"

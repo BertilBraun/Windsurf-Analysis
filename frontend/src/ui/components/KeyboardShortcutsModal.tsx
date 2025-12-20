@@ -22,6 +22,7 @@ export const KeyboardShortcutsModal: React.FC<{ onClose: () => void }> = ({ onCl
                     <Shortcut keys={['P']} desc={t('components.keyboardShortcutsModal.shortcuts.prevTrack')} />
                     <Shortcut keys={['Shift', 'N']} desc={t('components.keyboardShortcutsModal.shortcuts.nextVideo')} />
                     <Shortcut keys={['Shift', 'P']} desc={t('components.keyboardShortcutsModal.shortcuts.prevVideo')} />
+                    <Shortcut keys={['Ctrl', 'Z']} desc={t('components.keyboardShortcutsModal.shortcuts.undoDraw')} />
                     <Shortcut keys={['D']} desc={t('components.keyboardShortcutsModal.shortcuts.toggleDraw')} />
                 </div>
                 <div className="mt-4 text-sm text-slate-600">{t('components.keyboardShortcutsModal.tip')}</div>

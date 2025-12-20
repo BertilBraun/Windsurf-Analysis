@@ -227,6 +227,20 @@ export const CanvasPlayer: React.FC<Props> = ({
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'prev_video' })
                 onOpenPrevJob?.()
+            } else if (e.ctrlKey && key.toLowerCase() === 'z') {
+                if (!drawMode) return
+                e.preventDefault()
+                trackEvent('shortcut_used', { action: 'undo_draw' })
+                if (activeStrokeRef.current) {
+                    activeStrokeRef.current = null
+                    activePointerIdRef.current = null
+                    redrawFrame(player?.currentTimeSec)
+                    return
+                }
+                if (annotationsRef.current.length === 0) return
+                annotationsRef.current = annotationsRef.current.slice(0, -1)
+                setAnnotationsVersion(v => v + 1)
+                redrawFrame(player?.currentTimeSec)
             } else if (key.toLowerCase() === 'd') {
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'toggle_draw_mode' })
@@ -248,6 +262,9 @@ export const CanvasPlayer: React.FC<Props> = ({
         onOpenNextJob,
         onOpenPrevJob,
         onToggleDrawMode,
+        drawMode,
+        redrawFrame,
+        player?.currentTimeSec,
     ])
 
     const getVisibleAnnotations = React.useCallback((timeSec: number) => {
