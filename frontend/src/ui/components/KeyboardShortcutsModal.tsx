@@ -18,11 +18,11 @@ export const KeyboardShortcutsModal: React.FC<{ onClose: () => void }> = ({ onCl
                     <Shortcut keys={['Ctrl', 'Arrow Right']} desc={t('components.keyboardShortcutsModal.shortcuts.seekPlus30')} />
                     <Shortcut keys={['-']} desc={t('components.keyboardShortcutsModal.shortcuts.slowDown')} />
                     <Shortcut keys={['+']} desc={t('components.keyboardShortcutsModal.shortcuts.speedUp')} />
-                    <Shortcut keys={['D']} desc={t('components.keyboardShortcutsModal.shortcuts.toggleDraw')} />
                     <Shortcut keys={['N']} desc={t('components.keyboardShortcutsModal.shortcuts.nextTrack')} />
                     <Shortcut keys={['P']} desc={t('components.keyboardShortcutsModal.shortcuts.prevTrack')} />
                     <Shortcut keys={['Shift', 'N']} desc={t('components.keyboardShortcutsModal.shortcuts.nextVideo')} />
                     <Shortcut keys={['Shift', 'P']} desc={t('components.keyboardShortcutsModal.shortcuts.prevVideo')} />
+                    <Shortcut keys={['D']} desc={t('components.keyboardShortcutsModal.shortcuts.toggleDraw')} />
                 </div>
                 <div className="mt-4 text-sm text-slate-600">{t('components.keyboardShortcutsModal.tip')}</div>
             </div>
@@ -33,17 +33,17 @@ export const KeyboardShortcutsModal: React.FC<{ onClose: () => void }> = ({ onCl
 const Shortcut: React.FC<{ keys: string[]; desc: string }> = ({ keys, desc }) => {
     return (
         <div className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="text-sm text-slate-700">{desc}</div>
             <div className="flex flex-wrap items-center gap-1">
                 {keys.map((k, idx) => (
                     <kbd
                         key={`${k}-${idx}`}
-                        className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-mono text-slate-700"
+                        className="rounded border border-brand-300/70 bg-brand-50 px-2 py-1 text-xs font-mono text-brand-900"
                     >
                         {k}
                     </kbd>
                 ))}
             </div>
-            <div className="text-sm text-slate-700">{desc}</div>
         </div>
     )
 }
