@@ -19,6 +19,7 @@ export const PlayerModal: React.FC<{
     const { t } = useTranslation()
     const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
     const [showReport, setShowReport] = React.useState<boolean>(false)
+    const [showReportThanks, setShowReportThanks] = React.useState<boolean>(false)
     const [drawMode, setDrawMode] = React.useState<boolean>(false)
 
     React.useEffect(() => {
@@ -88,7 +89,21 @@ export const PlayerModal: React.FC<{
                     onReport={async (type, message) => {
                         await onReport(job.id, type, message)
                     }}
+                    onSubmitted={() => {
+                        setShowReport(false)
+                        setShowReportThanks(true)
+                    }}
                 />
+            )}
+            {showReportThanks && (
+                <Modal onClose={() => setShowReportThanks(false)} title={t('components.playerModal.report.thanksTitle')}>
+                    <div className="p-4 text-sm text-slate-600">
+                        {t('components.playerModal.report.thanksBody')}
+                    </div>
+                    <div className="px-4 pb-4 flex justify-end">
+                        <Button text={t('common.done')} onClick={() => setShowReportThanks(false)} />
+                    </div>
+                </Modal>
             )}
         </>
     )
@@ -98,7 +113,8 @@ const ReportVideoModal: React.FC<{
     job: JobDetail
     onClose: () => void
     onReport: (type: ReportType, message: string) => Promise<void> | void
-}> = ({ job, onClose, onReport }) => {
+    onSubmitted: () => void
+}> = ({ job, onClose, onReport, onSubmitted }) => {
     const { t } = useTranslation()
     const [type, setType] = React.useState<ReportType>('missed_detection')
     const [message, setMessage] = React.useState<string>('')
@@ -106,6 +122,17 @@ const ReportVideoModal: React.FC<{
     const [error, setError] = React.useState<string | null>(null)
 
     const canSubmit = !isSubmitting && message.trim().length > 0
+
+    if (isSubmitting) {
+        return (
+            <Modal onClose={onClose} title={t('components.playerModal.report.processingTitle')}>
+                <div className="p-6 flex flex-col items-center gap-3">
+                    <span className="inline-block w-8 h-8 rounded-full border-2 border-brand-600/30 border-t-brand-600 animate-spin" />
+                    <div className="text-sm text-slate-600">{t('components.playerModal.report.processingBody')}</div>
+                </div>
+            </Modal>
+        )
+    }
 
     return (
         <Modal onClose={onClose} title={t('components.playerModal.report.title')}>
@@ -170,7 +197,7 @@ const ReportVideoModal: React.FC<{
                             try {
                                 await onReport(type, message.trim())
                                 setMessage('')
-                                onClose()
+                                onSubmitted()
                             } catch (e: any) {
                                 setError(e?.message || String(e))
                             } finally {

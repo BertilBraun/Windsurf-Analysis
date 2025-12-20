@@ -292,9 +292,13 @@
                 },
                 "issueType": "Issue type",
                 "placeholder": "Example: Rider missed around 00:12\u201300:18, or track switches riders at ~00:43.",
+                "processingBody": "We are processing your report.",
+                "processingTitle": "Sending report\u2026",
                 "send": "Send report",
                 "sending": "Sending report\u2026",
                 "subtitle": "Help us improve the analysis quality for <strong>{{target}}</strong>.",
+                "thanksBody": "Thanks for your feedback. We will use it to improve the analyzer.",
+                "thanksTitle": "Thanks for your feedback!",
                 "tip": "Tip: include an approximate timestamp if you can.",
                 "title": "Report an issue"
             }
