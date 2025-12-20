@@ -57,10 +57,23 @@ export const IngressWidget: React.FC<Props> = ({
     const scanner = useIngressScanner(dirHandle, uploadCtx, knownChecksumsSha256, enabled)
     const [expanded, setExpanded] = React.useState(false)
     const [showQuotaModal, setShowQuotaModal] = React.useState(false)
+    const panelRef = React.useRef<HTMLDivElement | null>(null)
 
     React.useEffect(() => {
         if (scanner.lastError?.toLowerCase().includes('quota')) setShowQuotaModal(true)
     }, [scanner.lastError])
+
+    React.useEffect(() => {
+        if (!expanded) return
+        const onPointerDown = (event: MouseEvent) => {
+            const target = event.target as Node | null
+            if (!target) return
+            if (panelRef.current?.contains(target)) return
+            setExpanded(false)
+        }
+        document.addEventListener('mousedown', onPointerDown)
+        return () => document.removeEventListener('mousedown', onPointerDown)
+    }, [expanded])
 
     const uploading = scanner.uploading
     const ringPercent = meanProgress(scanner.uploads)
@@ -135,6 +148,7 @@ export const IngressWidget: React.FC<Props> = ({
                     </button>
                 ) : (
                     <div
+                        ref={panelRef}
                         className={`w-[380px] max-w-[92vw] rounded-2xl border bg-white shadow-xl overflow-hidden ${
                             issue?.kind === 'error'
                                 ? 'border-red-300'
