@@ -76,6 +76,18 @@ export const IngressWidget: React.FC<Props> = ({
         return () => document.removeEventListener('mousedown', onPointerDown)
     }, [expanded])
 
+    React.useEffect(() => {
+        if (scanner.uploading <= 0) return
+        const warning = t('components.ingressWidget.leaveWarning')
+        const onBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault()
+            event.returnValue = warning
+            return warning
+        }
+        window.addEventListener('beforeunload', onBeforeUnload)
+        return () => window.removeEventListener('beforeunload', onBeforeUnload)
+    }, [scanner.uploading, t])
+
     const uploading = scanner.uploading
     const ringPercent = meanProgress(scanner.uploads)
     const hasIssues = !dirHandle || dirPermission !== 'granted' || !!scanner.lastError
