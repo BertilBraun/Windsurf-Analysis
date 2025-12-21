@@ -119,7 +119,8 @@ const PlayOverlay: React.FC = () => (
 export const JobThumbnail: React.FC<{
     job: JobSummary
     dirHandle: FileSystemDirectoryHandle | null
-}> = ({ job, dirHandle }) => {
+    playable?: boolean
+}> = ({ job, dirHandle, playable = true }) => {
     const { t } = useTranslation()
     const [thumbUrl, setThumbUrl] = React.useState<string | null>(null)
     const [notFound, setNotFound] = React.useState<boolean>(false)
@@ -265,7 +266,7 @@ export const JobThumbnail: React.FC<{
                         alt={job.local_relative_path ?? job.original_checksum_sha256}
                         className="absolute inset-0 w-full h-full object-cover"
                     />
-                    <PlayOverlay />
+                    {playable && <PlayOverlay />}
                 </>
             ) : (
                 <div className="text-gray-500 text-sm">{t('components.jobThumbnail.generating')}</div>

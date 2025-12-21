@@ -294,7 +294,11 @@ export const JobList: React.FC<{
                                                         onOpen(job.id, job.local_relative_path)
                                                     }
                                                 >
-                                                    <JobThumbnail job={job} dirHandle={dirHandle} />
+                                                    <JobThumbnail
+                                                        job={job}
+                                                        dirHandle={dirHandle}
+                                                        playable={!!job.local_relative_path}
+                                                    />
                                                     {openingId === job.id && (
                                                         <div className="absolute inset-0 flex items-center justify-center">
                                                             <div className="text-white text-sm bg-black/60 rounded px-2 py-1">
@@ -432,7 +436,11 @@ export const JobList: React.FC<{
                                                 onOpen(job.id, job.local_relative_path)
                                             }
                                         >
-                                            <JobThumbnail job={job} dirHandle={dirHandle} />
+                                            <JobThumbnail
+                                                job={job}
+                                                dirHandle={dirHandle}
+                                                playable={!!job.local_relative_path}
+                                            />
                                             {openingId === job.id && (
                                                 <div className="absolute inset-0 flex items-center justify-center">
                                                     <div className="text-white text-sm bg-black/60 rounded px-2 py-1">
