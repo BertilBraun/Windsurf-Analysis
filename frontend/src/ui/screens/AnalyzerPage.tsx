@@ -15,30 +15,8 @@ import { Modal } from '../components/Modal'
 import { FeedbackModal } from '../components/FeedbackModal'
 import { trackEvent } from '../utils/analytics'
 import { AnalyzerTutorialModal } from '../components/AnalyzerTutorialModal'
-
-const ANALYZER_TUTORIAL_SEEN_KEY = 'analyzerTutorialSeen.v1'
-const ANALYZER_TUTORIAL_PROGRESS_KEY = 'analyzerTutorialProgress.v1'
+import { useTutorialController } from '../hooks/useTutorialController'
 const FEEDBACK_PROMPT_SEEN_KEY = 'feedbackPromptSeen.v1'
-type TutorialStepKey =
-    | 'intro'
-    | 'ingress-folder'
-    | 'drop-mp4s'
-    | 'open-video'
-    | 'review-track'
-    | 'shortcuts-export-report'
-
-const ALL_TUTORIAL_STEP_KEYS: TutorialStepKey[] = [
-    'intro',
-    'ingress-folder',
-    'drop-mp4s',
-    'open-video',
-    'review-track',
-    'shortcuts-export-report',
-]
-const ONBOARDING_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['intro', 'ingress-folder', 'drop-mp4s']
-const OPEN_VIDEO_STEP_KEYS: TutorialStepKey[] = ['open-video']
-const PLAYER_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['review-track', 'shortcuts-export-report']
-
 export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => void }> = ({
     onGoHome,
     onGoPricing,
@@ -49,11 +27,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
     const [showSettings, setShowSettings] = React.useState<boolean>(false)
     const [showHelp, setShowHelp] = React.useState<boolean>(false)
-    const [showTutorial, setShowTutorial] = React.useState<boolean>(false)
-    const [tutorialStepIndex, setTutorialStepIndex] = React.useState<number>(0)
-    const [tutorialStepKeys, setTutorialStepKeys] = React.useState<TutorialStepKey[] | null>(null)
-    const [tutorialSeenSteps, setTutorialSeenSteps] = React.useState<Set<TutorialStepKey>>(() => new Set())
-    const [tutorialProgressLoaded, setTutorialProgressLoaded] = React.useState<boolean>(false)
     const [sortKey, setSortKey] = React.useState<JobListSortKey>('date')
     const [sortDir, setSortDir] = React.useState<JobListSortDir>('desc')
     const [showFeedback, setShowFeedback] = React.useState<boolean>(false)
@@ -101,56 +74,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         })
     }, [])
 
-    React.useEffect(() => {
-        loadSetting<TutorialStepKey[] | null>(ANALYZER_TUTORIAL_PROGRESS_KEY).then(saved => {
-            const valid = Array.isArray(saved) ? saved.filter(key => ALL_TUTORIAL_STEP_KEYS.includes(key)) : []
-            setTutorialSeenSteps(prev => {
-                const merged = new Set(prev)
-                for (const key of valid) merged.add(key)
-                return merged
-            })
-            setTutorialProgressLoaded(true)
-        })
-    }, [])
-
-    const markTutorialStepsSeen = React.useCallback((keys: TutorialStepKey[]) => {
-        setTutorialSeenSteps(prev => {
-            const next = new Set(prev)
-            for (const key of keys) next.add(key)
-            void saveSetting(ANALYZER_TUTORIAL_PROGRESS_KEY, Array.from(next))
-            return next
-        })
-    }, [])
-
-    const getContextualStepKeys = React.useCallback(
-        (extraKeys: TutorialStepKey[]) => {
-            const merged = new Set(tutorialSeenSteps)
-            for (const key of extraKeys) merged.add(key)
-            return ALL_TUTORIAL_STEP_KEYS.filter(key => merged.has(key))
-        },
-        [tutorialSeenSteps]
-    )
-
-    const openTutorial = React.useCallback(
-        (source: 'header' | 'empty_state' | 'auto', stepKeys: TutorialStepKey[] | null, startAt?: TutorialStepKey) => {
-            trackEvent('open_tutorial', { source })
-            const keysToUse = stepKeys ?? ALL_TUTORIAL_STEP_KEYS
-            const startIdx = startAt ? Math.max(0, keysToUse.indexOf(startAt)) : 0
-            setTutorialStepKeys(stepKeys)
-            setTutorialStepIndex(startIdx >= 0 ? startIdx : 0)
-            setShowTutorial(true)
-            markTutorialStepsSeen(keysToUse)
-        },
-        [markTutorialStepsSeen]
-    )
-
-    // Auto-open the tutorial once for new users (no ingress folder and no jobs yet).
-    React.useEffect(() => {
-        loadSetting<boolean>(ANALYZER_TUTORIAL_SEEN_KEY).then(seen => {
-            if (seen) return
-            openTutorial('auto', ONBOARDING_TUTORIAL_STEP_KEYS, 'intro')
-        })
-    }, [openTutorial])
 
     const pickDirectory = async () => {
         try {
@@ -206,6 +129,14 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         setShowFeedback(true)
     }, [feedbackPromptSeen, jobsInitialSyncComplete, succeededJobs.length])
 
+    const { showTutorial, openTutorial, tutorialModalProps } = useTutorialController({
+        dirHandle,
+        jobsInitialSyncComplete,
+        succeededJobsCount: succeededJobs.length,
+        selectedJob,
+        onPickIngressFolder: () => void pickDirectory(),
+    })
+
     const handleFeedbackClose = React.useCallback(() => {
         setShowFeedback(false)
         setFeedbackPromptSeen(true)
@@ -227,37 +158,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const headerText = userLabel
         ? t('screens.analyzer.header.taglineWithName', { name: userLabel })
         : t('screens.analyzer.header.tagline')
-
-    const hasOpenedPlayerRef = React.useRef(false)
-
-    React.useEffect(() => {
-        if (!tutorialProgressLoaded) return
-        if (showTutorial) return
-        if (!jobsInitialSyncComplete) return
-        if (succeededJobs.length === 0) return
-        if (tutorialSeenSteps.has('open-video')) return
-        const stepKeys = getContextualStepKeys(OPEN_VIDEO_STEP_KEYS)
-        openTutorial('auto', stepKeys, 'open-video')
-    }, [
-        getContextualStepKeys,
-        jobsInitialSyncComplete,
-        openTutorial,
-        showTutorial,
-        succeededJobs.length,
-        tutorialProgressLoaded,
-        tutorialSeenSteps,
-    ])
-
-    React.useEffect(() => {
-        if (!tutorialProgressLoaded) return
-        if (showTutorial) return
-        if (!selectedJob) return
-        if (hasOpenedPlayerRef.current) return
-        hasOpenedPlayerRef.current = true
-        if (tutorialSeenSteps.has('review-track') && tutorialSeenSteps.has('shortcuts-export-report')) return
-        const stepKeys = getContextualStepKeys(PLAYER_TUTORIAL_STEP_KEYS)
-        openTutorial('auto', stepKeys, 'review-track')
-    }, [getContextualStepKeys, openTutorial, selectedJob, showTutorial, tutorialProgressLoaded, tutorialSeenSteps])
 
     return (
         <div className="min-h-dvh bg-white text-slate-900">
@@ -307,7 +207,10 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                                     {t('screens.analyzer.emptyState.title')}
                                 </div>
                                 <div className="mt-1 text-sm text-slate-600">
-                                    <Trans i18nKey="screens.analyzer.emptyState.body" components={{ b: <b /> }} />
+                                    <Trans
+                                        i18nKey="screens.analyzer.emptyState.body"
+                                        components={{ b: <b /> }}
+                                    />
                                 </div>
                             </div>
                             <div className="flex flex-wrap gap-2">
@@ -317,9 +220,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                                         trackEvent('tutorial_select_folder_clicked')
                                         void pickDirectory()
                                     }}
-                                    text={
-                                        dirHandle ? t('common.actions.changeFolder') : t('common.actions.selectFolder')
-                                    }
+                                    text={dirHandle ? t('common.actions.changeFolder') : t('common.actions.selectFolder')}
                                 />
                                 <Button
                                     variant="primary"
@@ -358,10 +259,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                         onClose={() => setSelectedJob(null)}
                         onOpenNextJob={async () => {
                             if (!selectedJob || orderedSucceededJobIds.length === 0) return
-                            const idx = Math.max(
-                                0,
-                                orderedSucceededJobIds.findIndex(id => id === selectedJob.id)
-                            )
+                            const idx = Math.max(0, orderedSucceededJobIds.findIndex(id => id === selectedJob.id))
                             const nextIdx = (idx + 1) % orderedSucceededJobIds.length
                             const targetId = orderedSucceededJobIds[nextIdx]
                             if (!targetId) return
@@ -370,10 +268,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                         }}
                         onOpenPrevJob={async () => {
                             if (!selectedJob || orderedSucceededJobIds.length === 0) return
-                            const idx = Math.max(
-                                0,
-                                orderedSucceededJobIds.findIndex(id => id === selectedJob.id)
-                            )
+                            const idx = Math.max(0, orderedSucceededJobIds.findIndex(id => id === selectedJob.id))
                             const prevIdx = (idx - 1 + orderedSucceededJobIds.length) % orderedSucceededJobIds.length
                             const targetId = orderedSucceededJobIds[prevIdx]
                             if (!targetId) return
@@ -397,21 +292,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     </Modal>
                 )}
                 {showFeedback && <FeedbackModal onClose={handleFeedbackClose} onSubmit={reportJob} />}
-                {showTutorial && (
-                    <TutorialModal
-                        onClose={() => {
-                            trackEvent('close_tutorial')
-                            setShowTutorial(false)
-                            setTutorialStepKeys(null)
-                            void saveSetting(ANALYZER_TUTORIAL_SEEN_KEY, true)
-                        }}
-                        stepIndex={tutorialStepIndex}
-                        onStepIndexChange={setTutorialStepIndex}
-                        onPickIngressFolder={() => void pickDirectory()}
-                        ingressFolderName={dirHandle?.name ?? null}
-                        stepKeys={tutorialStepKeys}
-                    />
-                )}
+                {showTutorial && <TutorialModal {...tutorialModalProps} />}
             </main>
 
             {/* Beta badge: bottom-left, subtle (brand) */}
