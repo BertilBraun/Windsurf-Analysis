@@ -14,6 +14,23 @@ export type IngressUploadItem = {
     error?: string | null
 }
 
+const AUTO_RETRY_MS = 15000
+
+function isTransientUploadError(err: any): boolean {
+    const msg = String(err?.message || err || '').toLowerCase()
+    if (!msg) return false
+    return (
+        msg.includes('network') ||
+        msg.includes('failed to fetch') ||
+        msg.includes('timeout') ||
+        msg.includes('timed out') ||
+        msg.includes('http 5') ||
+        msg.includes('502') ||
+        msg.includes('503') ||
+        msg.includes('504')
+    )
+}
+
 export function useIngressScanner(
     dirHandle: FileSystemDirectoryHandle | null,
     uploadCtx: UploadContext | null,
@@ -28,6 +45,7 @@ export function useIngressScanner(
     const [uploads, setUploads] = React.useState<IngressUploadItem[]>([])
     const inProgressRef = React.useRef<Set<string>>(new Set())
     const failedRef = React.useRef<Set<string>>(new Set())
+    const retryAfterRef = React.useRef<Map<string, number>>(new Map())
     // Avoid hammering the server for the same checksum between scans while waiting for
     // Firestore job snapshots to catch up. Keep TTL short so deletions/re-association work.
     const recentlyHandledRef = React.useRef<Map<string, number>>(new Map())
@@ -64,7 +82,6 @@ export function useIngressScanner(
         (shaLower: string) => {
             if (!uploadsEnabled) return false
             if (!uploadCtx) return false
-            if (suspended) return false
 
             // Gold standard: if a job with this checksum already exists for this user, skip.
             if (knownChecksumsSha256?.has(shaLower)) return false
@@ -74,17 +91,29 @@ export function useIngressScanner(
             const HANDLED_TTL_MS = 15_000
             if (Date.now() - lastHandledAt < HANDLED_TTL_MS) return false
 
-            if (failedRef.current.has(shaLower)) return false
+            if (failedRef.current.has(shaLower)) {
+                const retryAfter = retryAfterRef.current.get(shaLower)
+                if (!retryAfter || Date.now() < retryAfter) return false
+                failedRef.current.delete(shaLower)
+                retryAfterRef.current.delete(shaLower)
+                if (failedRef.current.size === 0) setSuspended(false)
+            }
             if (inProgressRef.current.has(shaLower)) return false
 
             return true
         },
-        [knownChecksumsSha256, suspended, uploadCtx, uploadsEnabled]
+        [knownChecksumsSha256, uploadCtx, uploadsEnabled]
     )
 
     const uploadOne = React.useCallback(
         async (shaLower: string, file: File, relPath: string) => {
-            setUploading(v => v + 1)
+            let started = false
+            const markStarted = () => {
+                if (started) return
+                started = true
+                setUploading(v => v + 1)
+                updateUpload(shaLower, { status: 'uploading' })
+            }
             setUploads(prev => {
                 if (prev.some(u => u.id === shaLower)) return prev
                 return [...prev, { id: shaLower, relativePath: relPath, progress: 0, status: 'queued', error: null }]
@@ -94,9 +123,12 @@ export function useIngressScanner(
                 inProgressRef.current.add(shaLower)
 
                 setLastError(null)
-                updateUpload(shaLower, { status: 'uploading' })
-                const result = await uploadVideoFile(file, settings.uploadQuality, uploadCtx!, percent =>
-                    updateUpload(shaLower, { progress: Math.round(percent * 100) })
+                const result = await uploadVideoFile(
+                    file,
+                    settings.uploadQuality,
+                    uploadCtx!,
+                    percent => updateUpload(shaLower, { progress: Math.round(percent * 100) }),
+                    markStarted
                 )
                 recentlyHandledRef.current.set(shaLower, Date.now())
 
@@ -107,13 +139,19 @@ export function useIngressScanner(
                 updateUpload(shaLower, { progress: 100, status: 'done' })
             } catch (e: any) {
                 console.error('Upload failed for', relPath, e)
-                setLastError(e?.message || String(e))
-                updateUpload(shaLower, { status: 'error', error: e?.message || String(e) })
+                const message = e?.message || String(e)
+                setLastError(message)
+                updateUpload(shaLower, { status: 'error', error: message })
                 failedRef.current.add(shaLower)
+                if (isTransientUploadError(e)) {
+                    retryAfterRef.current.set(shaLower, Date.now() + AUTO_RETRY_MS)
+                } else {
+                    retryAfterRef.current.delete(shaLower)
+                }
                 setSuspended(true)
             } finally {
                 inProgressRef.current.delete(shaLower)
-                setUploading(v => v - 1)
+                if (started) setUploading(v => v - 1)
             }
         },
         [removeUpload, settings.uploadQuality, updateUpload, uploadCtx]
@@ -144,7 +182,7 @@ export function useIngressScanner(
 
             // Prune stale mappings occasionally (prevents "ghost folders" after offline renames/moves).
             const now = Date.now()
-            const PRUNE_EVERY_MS = 30_000
+            const PRUNE_EVERY_MS = Math.max(2000, intervalMs)
             let hasRemovals = false
             const lastPaths = lastPathsRef.current
             if (lastPaths) {
@@ -156,7 +194,7 @@ export function useIngressScanner(
                 }
             }
             lastPathsRef.current = existingPaths
-            if (hasRemovals || now - lastPruneAtRef.current > PRUNE_EVERY_MS) {
+            if (!lastPaths || hasRemovals || now - lastPruneAtRef.current >= PRUNE_EVERY_MS) {
                 lastPruneAtRef.current = now
                 await pruneShaPathMappings(existingPaths)
             }
@@ -186,6 +224,7 @@ export function useIngressScanner(
 
     const retryFailed = React.useCallback(() => {
         failedRef.current = new Set()
+        retryAfterRef.current = new Map()
         setLastError(null)
         setUploads(prev =>
             prev.map(u => (u.status === 'error' ? { ...u, status: 'queued', progress: 0, error: null } : u))
