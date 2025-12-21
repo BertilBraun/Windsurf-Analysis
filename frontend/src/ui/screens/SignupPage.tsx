@@ -1,5 +1,6 @@
 import React from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { Button } from '../components/Button'
 
@@ -12,6 +13,8 @@ export const SignupPage: React.FC<{ onBackToLogin: () => void; onSuccess: () => 
     const [email, setEmail] = React.useState('')
     const [password, setPassword] = React.useState('')
     const [password2, setPassword2] = React.useState('')
+    const [termsAccepted, setTermsAccepted] = React.useState(false)
+    const [marketingConsent, setMarketingConsent] = React.useState(false)
     const [error, setError] = React.useState<string | null>(null)
     const [info, setInfo] = React.useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -24,7 +27,7 @@ export const SignupPage: React.FC<{ onBackToLogin: () => void; onSuccess: () => 
         setInfo(null)
         setIsSubmitting(true)
         try {
-            await signup(email, password, password2)
+            await signup(email, password, password2, { termsAccepted, marketingConsent })
             setInfo(t('screens.signup.info.created'))
             onSuccess()
         } catch (err: any) {
@@ -62,12 +65,42 @@ export const SignupPage: React.FC<{ onBackToLogin: () => void; onSuccess: () => 
                         autoComplete="new-password"
                         className={inputClassName}
                     />
+                    <label className="flex items-start gap-2 text-xs text-slate-600">
+                        <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600/30"
+                            checked={termsAccepted}
+                            onChange={e => setTermsAccepted(e.target.checked)}
+                        />
+                        <span>
+                            <Trans
+                                i18nKey="screens.signup.consents.terms"
+                                components={{
+                                    termsLink: (
+                                        <Link className="text-brand-700 underline underline-offset-2" to="/terms" />
+                                    ),
+                                    privacyLink: (
+                                        <Link className="text-brand-700 underline underline-offset-2" to="/privacy" />
+                                    ),
+                                }}
+                            />
+                        </span>
+                    </label>
+                    <label className="flex items-start gap-2 text-xs text-slate-600">
+                        <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600/30"
+                            checked={marketingConsent}
+                            onChange={e => setMarketingConsent(e.target.checked)}
+                        />
+                        <span>{t('screens.signup.consents.marketing')}</span>
+                    </label>
                     {info && <div style={{ color: '#0f766e', fontSize: 12 }}>{info}</div>}
                     {error && <div style={{ color: '#ef4444' }}>{error}</div>}
                     <Button
                         type="submit"
                         text={t('screens.signup.actions.createAccount')}
-                        disabled={!email || !password || !password2 || isSubmitting}
+                        disabled={!email || !password || !password2 || !termsAccepted || isSubmitting}
                         isPending={isSubmitting}
                     />
                 </div>

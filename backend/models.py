@@ -62,6 +62,10 @@ class UserRecord(_FirestoreModel):
     max_jobs: int
     created_at: datetime | None  # required key, value may be None
     last_active_at: datetime | None  # required key, value may be None
+    terms_accepted_at: datetime | None = None
+    privacy_accepted_at: datetime | None = None
+    marketing_consent: bool | None = None
+    marketing_consent_at: datetime | None = None
 
 
 class UserJobRecord(_FirestoreModel):

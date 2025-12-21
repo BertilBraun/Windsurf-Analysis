@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from auth.firebase_auth import User, get_current_user, get_current_user_without_email_verification
 from firebase_admin import auth as firebase_admin_auth
+from db.firestore_client import now
 from repos.user_repo import UserRepo
 from repos.user_jobs_repo import UserJobsRepo
 
@@ -12,13 +14,37 @@ user_repo = UserRepo()
 user_jobs_repo = UserJobsRepo()
 
 
+class CreateUserRequest(BaseModel):
+    terms_accepted: bool | None = None
+    marketing_consent: bool | None = None
+
+
 @router.post('/{user_id}')
-def create_user(user_id: str, user: User = Depends(get_current_user_without_email_verification)):
+def create_user(
+    user_id: str,
+    payload: CreateUserRequest | None = None,
+    user: User = Depends(get_current_user_without_email_verification),
+):
     if user.uid != user_id:
         raise HTTPException(status_code=403, detail='Forbidden')
     if user_repo.does_user_exist(user_id):
         raise HTTPException(status_code=400, detail='User already exists')
-    user_repo.create_user(user_id, user.email)
+    if payload and payload.terms_accepted is False:
+        raise HTTPException(status_code=400, detail='Terms must be accepted')
+
+    terms_accepted_at = now() if payload and payload.terms_accepted else None
+    privacy_accepted_at = terms_accepted_at
+    marketing_consent = payload.marketing_consent if payload else None
+    marketing_consent_at = now() if payload and payload.marketing_consent else None
+
+    user_repo.create_user(
+        user_id,
+        user.email,
+        terms_accepted_at=terms_accepted_at,
+        privacy_accepted_at=privacy_accepted_at,
+        marketing_consent=marketing_consent,
+        marketing_consent_at=marketing_consent_at,
+    )
     return {'ok': True}
 
 

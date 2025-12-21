@@ -24,7 +24,12 @@ type AuthContextValue = {
     uid: string | null
     email: string | null
     login: (email: string, password: string) => Promise<void>
-    signup: (email: string, password: string, password2: string) => Promise<void>
+    signup: (
+        email: string,
+        password: string,
+        password2: string,
+        consent?: { termsAccepted: boolean; marketingConsent: boolean }
+    ) => Promise<void>
     loginWithGoogle: () => Promise<void>
     resetPassword: (email: string) => Promise<void>
     logout: () => void
@@ -54,13 +59,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [])
 
     const ensureBackendUser = useCallback(
-        async (u?: User | null) => {
+        async (u?: User | null, consent?: { termsAccepted: boolean; marketingConsent: boolean }) => {
             const current = u ?? auth.currentUser
             if (!current) throw new Error('Not authenticated')
             const header = await getAuthHeader()
+            const hasConsent =
+                !!consent && (consent.termsAccepted !== undefined || consent.marketingConsent !== undefined)
+            const body = hasConsent
+                ? JSON.stringify({
+                      terms_accepted: consent.termsAccepted,
+                      marketing_consent: consent.marketingConsent,
+                  })
+                : undefined
             const res = await fetch(`${API_BASE}/users/${current.uid}`, {
                 method: 'POST',
-                headers: { Authorization: header },
+                headers: {
+                    Authorization: header,
+                    ...(body ? { 'Content-Type': 'application/json' } : {}),
+                },
+                body,
             })
             if (res.ok) return
             // Backend returns 400 if user already exists; treat as success (idempotent).
@@ -77,7 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [])
 
     const signup = useCallback(
-        async (e: string, p: string, p2: string) => {
+        async (e: string, p: string, p2: string, consent?: { termsAccepted: boolean; marketingConsent: boolean }) => {
             const email = e.trim()
             if (!email) throw new Error('Email is required.')
             if (!p) throw new Error('Password is required.')
@@ -87,7 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Send verification email for email/password signup
             await sendEmailVerification(result.user)
             // Always create the backend user record after signup
-            await ensureBackendUser(result.user)
+            await ensureBackendUser(result.user, consent)
             trackEvent('auth_signup', { method: 'password' })
         },
         [ensureBackendUser]

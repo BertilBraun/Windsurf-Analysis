@@ -10,7 +10,7 @@ const OWNER_ADDRESS_LINES = ['Im Rübländer 19', '71034 Böblingen', 'Germany']
 const OWNER_EMAIL = 'contact@gybelock.de'
 const SERVICE_URL = 'https://gybelock.de'
 
-const LAST_UPDATED = '2025-12-18'
+const LAST_UPDATED = '2025-12-21'
 
 function ExternalLink({ href, children }: { href: string; children: React.ReactNode }) {
     return (
@@ -293,6 +293,10 @@ const PrivacyContent: React.FC = () => {
                         <b>Account data</b>: email address, Firebase user ID (UID), email verification status.
                     </li>
                     <li>
+                        <b>Contact preferences</b>: your consent choice for feedback/marketing emails and the timestamp
+                        of that consent (if given).
+                    </li>
+                    <li>
                         <b>Uploaded video data (temporary)</b>: video files you upload for processing; file name, MIME
                         type, file size; checksums (e.g., SHA-256) used for deduplication. Videos are only processed and
                         then deleted; they are not stored long-term.
@@ -333,6 +337,10 @@ const PrivacyContent: React.FC = () => {
                     <li>
                         <b>Usage analytics</b> (Google Analytics): Art. 6(1)(a) GDPR (consent). You can withdraw consent
                         at any time (see “Analytics consent” below).
+                    </li>
+                    <li>
+                        <b>Feedback/marketing emails</b> (optional): Art. 6(1)(a) GDPR (consent). You can withdraw
+                        consent at any time by contacting us.
                     </li>
                     <li>
                         <b>Donations link</b> (PayPal): when you click the PayPal link you leave our site; processing by
@@ -414,6 +422,9 @@ const PrivacyContent: React.FC = () => {
                     </li>
                     <li>
                         <b>Analytics data</b> (if enabled) is retained according to Google Analytics settings.
+                    </li>
+                    <li>
+                        <b>Contact preferences</b> are kept until you withdraw consent or delete your account.
                     </li>
                 </ul>
             </Section>

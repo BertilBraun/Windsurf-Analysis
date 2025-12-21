@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from google.cloud import firestore
 
 from db.firestore_client import now, users
@@ -9,7 +11,15 @@ from fastapi import HTTPException
 
 
 class UserRepo:
-    def create_user(self, user_id: str, email: str) -> None:
+    def create_user(
+        self,
+        user_id: str,
+        email: str,
+        terms_accepted_at: datetime | None = None,
+        privacy_accepted_at: datetime | None = None,
+        marketing_consent: bool | None = None,
+        marketing_consent_at: datetime | None = None,
+    ) -> None:
         users.document(user_id).set(
             UserRecord(
                 user_id=user_id,
@@ -18,6 +28,10 @@ class UserRepo:
                 max_jobs=settings.max_jobs_per_user_default,
                 last_active_at=now(),
                 created_at=now(),
+                terms_accepted_at=terms_accepted_at,
+                privacy_accepted_at=privacy_accepted_at,
+                marketing_consent=marketing_consent,
+                marketing_consent_at=marketing_consent_at,
             ).model_dump(mode='json')
         )
 
