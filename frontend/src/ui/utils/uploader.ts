@@ -11,34 +11,38 @@ export type UploadContext = {
 const MODAL_BASE = modalUrl + '/api/v1'
 
 const MAX_PARALLEL_UPLOAD_REQUESTS = 8
-const uploadSlotWaiters: Array<() => void> = []
-let uploadRequestsInFlight = 0
+const MAX_PARALLEL_VIDEO_UPLOADS = 2
 
-function createRelease(): () => void {
-    let released = false
-    return () => {
-        if (released) return
-        released = true
-        if (uploadRequestsInFlight > 0) uploadRequestsInFlight -= 1
-        const next = uploadSlotWaiters.shift()
-        if (next) next()
-    }
-}
+function createLimiter(max: number) {
+    const waiters: Array<() => void> = []
+    let inFlight = 0
 
-async function acquireUploadSlot(): Promise<() => void> {
-    const release = createRelease()
-    if (uploadRequestsInFlight < MAX_PARALLEL_UPLOAD_REQUESTS) {
-        uploadRequestsInFlight += 1
-        return release
-    }
+    return async (): Promise<() => void> => {
+        let released = false
+        const release = () => {
+            if (released) return
+            released = true
+            if (inFlight > 0) inFlight -= 1
+            const next = waiters.shift()
+            if (next) next()
+        }
 
-    return new Promise(resolve => {
-        uploadSlotWaiters.push(() => {
-            uploadRequestsInFlight += 1
-            resolve(release)
+        if (inFlight < max) {
+            inFlight += 1
+            return release
+        }
+
+        return new Promise(resolve => {
+            waiters.push(() => {
+                inFlight += 1
+                resolve(release)
+            })
         })
-    })
+    }
 }
+
+const acquireUploadSlot = createLimiter(MAX_PARALLEL_UPLOAD_REQUESTS)
+const acquireVideoUploadSlot = createLimiter(MAX_PARALLEL_VIDEO_UPLOADS)
 
 export async function computeSha256(file: File): Promise<{ arrayBuffer: ArrayBuffer; sha256: string }> {
     const arrayBuffer = await file.arrayBuffer()
@@ -96,7 +100,8 @@ export async function uploadVideoFile(
     file: File,
     quality: UploadQuality,
     ctx: UploadContext,
-    onProgress: (percent: number) => void
+    onProgress: (percent: number) => void,
+    onStarted?: () => void
 ): Promise<'uploaded' | 'skipped'> {
     // Step 1: Create job (also acts as duplicate/quota check)
     trackEvent('analysis_upload_start', {
@@ -121,13 +126,17 @@ export async function uploadVideoFile(
     const job_id = created.job_id
     trackEvent('analysis_job_created', { job_id })
 
+    const releaseVideoSlot = await acquireVideoUploadSlot()
     try {
+        onStarted?.()
         const result = await uploadVideoFileToJob(file, quality, ctx, job_id, onProgress)
         trackEvent('analysis_upload_complete', { job_id })
         return result
     } catch (e: any) {
         trackEvent('analysis_upload_failed', { job_id, message: String(e?.message || e || 'upload failed') })
         throw e
+    } finally {
+        releaseVideoSlot()
     }
 }
 
