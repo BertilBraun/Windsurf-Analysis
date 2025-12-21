@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { Button } from './Button'
 
 const LOCK_KEY = 'windsurf:single:lock'
-const HEARTBEAT_MS = 2000
-const STALE_MS = 6000
+const HEARTBEAT_MS = 1000
+const STALE_MS = 3000
+const RECHECK_MS = 1000
 
 function getNow() {
     return Date.now()
@@ -32,6 +33,10 @@ function removeLock() {
     } catch {}
 }
 
+function isDuplicateCheck(rec: { id: string; ts: number } | null, id: string) {
+    return rec && getNow() - rec.ts < STALE_MS && rec.id !== id
+}
+
 export const SingleInstanceGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { t } = useTranslation()
     const idRef = React.useRef<string>(`tab-${Math.random().toString(36).slice(2)}-${Date.now()}`)
@@ -41,8 +46,7 @@ export const SingleInstanceGuard: React.FC<{ children: React.ReactNode }> = ({ c
 
     const tryBecomeLeader = React.useCallback(() => {
         const existing = readLock()
-        const now = getNow()
-        if (existing && now - existing.ts < STALE_MS && existing.id !== idRef.current) {
+        if (isDuplicateCheck(existing, idRef.current)) {
             setIsDuplicate(true)
             leaderRef.current = false
             return
@@ -64,12 +68,11 @@ export const SingleInstanceGuard: React.FC<{ children: React.ReactNode }> = ({ c
         const onStorage = (e: StorageEvent) => {
             if (e.key !== LOCK_KEY) return
             const rec = readLock()
-            const now = getNow()
             if (leaderRef.current) {
                 // ignore others while we lead; they shouldn't overwrite our lock within heartbeat window
                 return
             } else {
-                const active = rec && now - rec.ts < STALE_MS && rec.id !== idRef.current
+                const active = isDuplicateCheck(rec, idRef.current)
                 setIsDuplicate(!!active)
             }
         }
@@ -79,20 +82,33 @@ export const SingleInstanceGuard: React.FC<{ children: React.ReactNode }> = ({ c
         }
     }, [tryBecomeLeader])
 
+    // Recheck periodically when not leader in case the current leader disappears without cleanup.
+    React.useEffect(() => {
+        if (leaderRef.current) return
+        const intervalId = window.setInterval(() => {
+            if (!leaderRef.current) tryBecomeLeader()
+        }, RECHECK_MS)
+        return () => {
+            window.clearInterval(intervalId)
+        }
+    }, [isDuplicate, tryBecomeLeader])
+
     // Heartbeat while leader
     React.useEffect(() => {
         if (!leaderRef.current) return
         const tick = () => writeLock(idRef.current)
         tick()
         hbRef.current = window.setInterval(tick, HEARTBEAT_MS)
-        const onUnload = () => {
+        const onRelease = () => {
             if (leaderRef.current) removeLock()
         }
-        window.addEventListener('beforeunload', onUnload)
+        window.addEventListener('beforeunload', onRelease)
+        window.addEventListener('unload', onRelease)
         return () => {
             if (hbRef.current) window.clearInterval(hbRef.current)
             hbRef.current = null
-            window.removeEventListener('beforeunload', onUnload)
+            window.removeEventListener('beforeunload', onRelease)
+            window.removeEventListener('unload', onRelease)
             // If this guard unmounts (e.g. user navigates away from Analyzer), release the lock.
             if (leaderRef.current) removeLock()
         }
