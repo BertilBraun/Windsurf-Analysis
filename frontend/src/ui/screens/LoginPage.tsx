@@ -11,6 +11,8 @@ export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }
     const [error, setError] = React.useState<string | null>(null)
     const [info, setInfo] = React.useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const inputClassName =
+        'w-full rounded-md border border-slate-300 bg-white/90 px-3 py-2 text-sm shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20'
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -36,12 +38,14 @@ export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }
                         placeholder={t('screens.login.placeholders.email')}
                         value={email}
                         onChange={e => setEmail(e.target.value)}
+                        className={inputClassName}
                     />
                     <input
                         placeholder={t('screens.login.placeholders.password')}
                         type="password"
                         value={password}
                         onChange={e => setPassword(e.target.value)}
+                        className={inputClassName}
                     />
                     {info && <div style={{ color: '#0f766e', fontSize: 12 }}>{info}</div>}
                     {error && <div style={{ color: '#ef4444' }}>{error}</div>}
