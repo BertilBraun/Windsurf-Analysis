@@ -107,7 +107,14 @@ export const CanvasPlayer: React.FC<Props> = ({
         else v.pause()
     }, [isExporting, player?.isPlaying, speed])
 
-    const togglePlay = React.useCallback(() => setPlayer(p => (p ? p.copy({ isPlaying: !p.isPlaying }) : p)), [])
+    const handlePlayPause = React.useCallback(() => {
+        if (drawMode) {
+            onToggleDrawMode()
+            setPlayer(p => (p ? p.copy({ isPlaying: true }) : p))
+            return
+        }
+        setPlayer(p => (p ? p.copy({ isPlaying: !p.isPlaying }) : p))
+    }, [drawMode, onToggleDrawMode])
 
     // Helpers for track navigation
     const getSortedTracks = React.useCallback(() => {
@@ -198,7 +205,7 @@ export const CanvasPlayer: React.FC<Props> = ({
                     seekTo(0, true)
                 } else {
                     trackEvent('shortcut_used', { action: 'toggle_play' })
-                    togglePlay()
+                    handlePlayPause()
                 }
             } else if (key === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey) {
                 e.preventDefault()
@@ -282,7 +289,7 @@ export const CanvasPlayer: React.FC<Props> = ({
     }, [
         player,
         isExporting,
-        togglePlay,
+        handlePlayPause,
         stepPrev,
         stepNext,
         seekTo,
@@ -880,7 +887,7 @@ export const CanvasPlayer: React.FC<Props> = ({
                     <ControlsBar
                         onPlayPause={() => {
                             trackEvent('player_play_pause_clicked', { job_id: job.id })
-                            togglePlay()
+                            handlePlayPause()
                         }}
                         onSpeedDown={() => {
                             trackEvent('player_speed_down_clicked', { job_id: job.id })
