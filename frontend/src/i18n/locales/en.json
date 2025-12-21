@@ -154,9 +154,9 @@
                 "uploadsTitle": "Uploads"
             },
             "quota": {
-                "body1": "Hey, you've gotten a sneak peek of the Windsurf Analyzer. We'd love to get in contact to hear your opinions \u2014 what you liked and what we could improve.",
-                "body2": "To get full and unlimited access to the analyzer, please reach out to us at",
-                "title": "You're out of free jobs"
+                "body1": "Processing is free during the beta. We'd love to hear your feedback \u2014 what you liked and what we could improve.",
+                "body2": "Please reach out to us at",
+                "title": "Thanks for testing the beta"
             },
             "statusLine": {
                 "error": "Error \u2014 {{message}}",
@@ -407,6 +407,13 @@
                 "tagline": "Upload, process, and review your riding.",
                 "taglineWithName": "Upload, process, and review your riding \u2014 {{name}}."
             },
+            "feedback": {
+                "body": "Thanks for testing the beta. We'd love to hear what you think so we can improve it.",
+                "errorNoJob": "We couldn't find a processed job to attach this feedback to.",
+                "placeholder": "What did you like? What was confusing or missing?",
+                "send": "Send feedback",
+                "title": "We'd love your feedback"
+            },
             "help": {
                 "body": "Hey, if you have feedback or need help getting started or with something concrete, please contact us at",
                 "title": "Need help?"
@@ -456,7 +463,7 @@
                     "question": "Why was my upload skipped?"
                 },
                 "uploadsPaused": {
-                    "answer": "Open <strong>Ingress</strong> and check the error message. If uploads paused after a failure, use <strong>Retry failed</strong>. If you see a quota/free-job message, you\u2019ve hit the current limit for your account.",
+                    "answer": "Open <strong>Ingress</strong> and check the error message. If uploads paused after a failure, use <strong>Retry failed</strong>. If you see a beta feedback request message, please reach out to us.",
                     "question": "Uploads are paused / stuck. What can I do?"
                 },
                 "videoTooLong": {
@@ -490,15 +497,15 @@
                 "title": "Before / After"
             },
             "ctaSection": {
-                "body": "No credit card required. See the difference in minutes.",
+                "body": "Processing is free during the beta. We'd love your feedback.",
                 "cta": "Get started for free",
-                "headline": "5 videos are free for everyone",
+                "headline": "Free processing during the beta",
                 "title": "Get started"
             },
             "hero": {
                 "brand": "GybeLock",
                 "cta": "Get started for free",
-                "freeVideos": "Analyze up to <strong>{{count}} videos</strong> free. No credit card.",
+                "freeVideos": "Beta: all processing is free \u2014 we'd love your feedback.",
                 "lede1": "<strong>GybeLock</strong> turns shaky, long-zoom beach videos into smooth, centered clips that are easy to watch, analyze, and learn from.",
                 "lede2": "Built for <strong>shore / beach-shot tele footage</strong> \u2014 not GoPro/action-cam POV.",
                 "lede3": "From speed runs to wave riding, jumps, and gybes \u2014 GybeLock keeps the rider where your focus should be.",
@@ -777,7 +784,7 @@
             },
             "cta": {
                 "button": "Get started free",
-                "note": "(5 free videos will remain even after the beta)",
+                "note": "(Beta processing is free — we'd love your feedback)",
                 "title": "Get started for free"
             },
             "intro": "GybeLock is currently in an early testing phase \u2014 simple and free while we improve tracking quality.",

@@ -34,13 +34,7 @@ export const HomePage: React.FC = () => {
                                 onClick={() => navigate('/analyzer')}
                                 text={t('screens.home.hero.cta')}
                             />
-                            <div className="text-sm text-slate-700">
-                                <Trans
-                                    i18nKey="screens.home.hero.freeVideos"
-                                    values={{ count: 5 }}
-                                    components={{ strong: <span className="font-semibold" /> }}
-                                />
-                            </div>
+                            <div className="text-sm text-slate-700">{t('screens.home.hero.freeVideos')}</div>
                         </div>
                     </div>
 
