@@ -74,7 +74,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         })
     }, [])
 
-
     const pickDirectory = async () => {
         try {
             const handle = await window.showDirectoryPicker({ id: 'windsurf-ingress' })
@@ -142,17 +141,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         setFeedbackPromptSeen(true)
         void saveSetting(FEEDBACK_PROMPT_SEEN_KEY, true)
     }, [])
-
-    const [deletingId, setDeletingId] = React.useState<string | null>(null)
-    const onDelete = async (id: string) => {
-        setDeletingId(id)
-        try {
-            await deleteJob(id)
-        } finally {
-            setDeletingId(null)
-            setSelectedJob(null)
-        }
-    }
 
     const userLabel = user?.displayName ?? (user?.email ? user.email.split('@')[0] : '')
     const headerText = userLabel
@@ -237,6 +225,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     sortDir={sortDir}
                     onToggleSort={toggleSort}
                     onOpen={onOpen}
+                    onDeleteJob={deleteJob}
                     openingId={openingId}
                     dirHandle={dirHandle}
                     initialSyncComplete={jobsInitialSyncComplete}
@@ -280,9 +269,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                             const detail = await refreshJobDetail(targetId)
                             setSelectedJob(detail)
                         }}
-                        onDelete={onDelete}
                         onReport={reportJob}
-                        deletingId={deletingId}
                     />
                 )}
                 {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onLogout={logout} />}

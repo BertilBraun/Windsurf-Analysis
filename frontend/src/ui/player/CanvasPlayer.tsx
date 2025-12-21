@@ -18,7 +18,6 @@ type Props = {
     job: JobDetail
     dirHandle: FileSystemDirectoryHandle | null
     onClose: () => void
-    onDelete: (id: string) => void
     onReport: (id: string, type: ReportType, message: string) => void
     onOpenNextJob?: () => void
     onOpenPrevJob?: () => void

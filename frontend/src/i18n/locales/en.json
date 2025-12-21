@@ -204,9 +204,21 @@
                 "noneSymbol": "\u2195"
             },
             "unmapped": {
-                "sha": "sha:{{sha}}\u2026",
-                "shaMissing": "sha:missing",
-                "title": "Unmapped jobs (no local file path mapping)"
+                "title": "Unmapped jobs (no local file path mapping) {{count}} jobs",
+                "collapsedLabel": "Unmapped jobs ({{count}})",
+                "toggleTitle": "Show unmapped jobs",
+                "collapseTitle": "Hide unmapped jobs",
+                "delete": {
+                    "title": "Delete results (not the video). Click twice to confirm.",
+                    "confirmTitle": "Click again to delete results."
+                },
+                "deleteAll": {
+                    "label": "Remove all",
+                    "title": "Remove all unmapped jobs",
+                    "modalTitle": "Remove all unmapped jobs?",
+                    "modalBody": "This deletes the analysis results for {{count}} unmapped job(s). It does not delete local video files.",
+                    "confirm": "Remove all"
+                }
             }
         },
         "jobThumbnail": {

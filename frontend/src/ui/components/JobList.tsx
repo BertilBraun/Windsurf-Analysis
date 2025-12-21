@@ -4,7 +4,9 @@ import { JobSummary } from '../types'
 import { AnimatedDots } from './AnimatedDots'
 import { Button } from './Button'
 import JobThumbnail from './JobThumbnail'
+import { Modal } from './Modal'
 import { trackEvent } from '../utils/analytics'
+import trashbinSvg from '../assets/trashbin.svg'
 
 export type JobListSortKey = 'name' | 'date'
 export type JobListSortDir = 'asc' | 'desc'
@@ -45,30 +47,41 @@ function stripMp4(name: string): string {
     return name.replace(/\.mp4$/i, '')
 }
 
+type SortElement = {
+    id: string
+    updated_at?: string | null
+    created_at?: string | null
+    local_relative_path?: string | null
+}
+
+function _sortCriteria(a: SortElement, b: SortElement, sortKey: JobListSortKey): number {
+    if (sortKey === 'date') {
+        const ta = Date.parse(a.updated_at || a.created_at || '') || 0
+        const tb = Date.parse(b.updated_at || b.created_at || '') || 0
+        return ta < tb ? -1 : ta > tb ? 1 : 0
+    } else if (sortKey === 'name') {
+        const an =
+            stripMp4(basename(a.local_relative_path)).toLowerCase() ||
+            normalizeRelativePath(a.local_relative_path || '').toLowerCase() ||
+            a.id
+        const bn =
+            stripMp4(basename(b.local_relative_path)).toLowerCase() ||
+            normalizeRelativePath(b.local_relative_path || '').toLowerCase() ||
+            b.id
+        return an < bn ? -1 : an > bn ? 1 : 0
+    } else {
+        throw new Error(`Unknown sort key: ${sortKey}`)
+    }
+}
+
+function _sortCompare(a: SortElement, b: SortElement, sortKey: JobListSortKey, sortDir: JobListSortDir): number {
+    const cmp = _sortCriteria(a, b, sortKey)
+    return sortDir === 'asc' ? cmp : -cmp
+}
+
 function sortJobs(list: JobInstance[], sortKey: JobListSortKey, sortDir: JobListSortDir): JobInstance[] {
     const out = [...list]
-    out.sort((a, b) => {
-        let cmp = 0
-        if (sortKey === 'date') {
-            const ta = Date.parse(a.updated_at || a.created_at || '') || 0
-            const tb = Date.parse(b.updated_at || b.created_at || '') || 0
-            cmp = ta < tb ? -1 : ta > tb ? 1 : 0
-        } else if (sortKey === 'name') {
-            // Within a folder, sort by filename; fallback to full relative path / id
-            const an =
-                stripMp4(basename(a.local_relative_path)).toLowerCase() ||
-                normalizeRelativePath(a.local_relative_path || '').toLowerCase() ||
-                a.id
-            const bn =
-                stripMp4(basename(b.local_relative_path)).toLowerCase() ||
-                normalizeRelativePath(b.local_relative_path || '').toLowerCase() ||
-                b.id
-            cmp = an < bn ? -1 : an > bn ? 1 : 0
-        } else {
-            throw new Error(`Unknown sort key: ${sortKey}`)
-        }
-        return sortDir === 'asc' ? cmp : -cmp
-    })
+    out.sort((a, b) => _sortCompare(a, b, sortKey, sortDir))
     return out
 }
 
@@ -182,16 +195,384 @@ export function getJobListOrderedJobIds(
     return ordered.map(j => j.id)
 }
 
+const TrashIcon: React.FC<{ className?: string; tone?: 'default' | 'danger' }> = ({
+    className,
+    tone = 'default',
+}) => {
+    const filter =
+        tone === 'danger'
+            ? 'invert(21%) sepia(92%) saturate(7440%) hue-rotate(356deg) brightness(97%) contrast(117%)'
+            : 'none'
+    return <img src={trashbinSvg} alt="" className={`block h-4 w-4 ${className ?? ''}`} style={{ filter }} />
+}
+
+const SortBar: React.FC<{
+    sortKey: JobListSortKey
+    sortDir: JobListSortDir
+    onToggleSort: (key: JobListSortKey) => void
+    onExpandAll: () => void
+    onCollapseAll: () => void
+}> = ({ sortKey, sortDir, onToggleSort, onExpandAll, onCollapseAll }) => {
+    const { t } = useTranslation()
+
+    return (
+        <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">{t('components.jobList.sort.label')}</div>
+            <div className="flex gap-2 items-center">
+                <Button
+                    variant="unstyled"
+                    size="none"
+                    className={`px-2 py-1 rounded-md text-sm border ${
+                        sortKey === 'name'
+                            ? 'bg-gray-700 text-gray-100 border-gray-700'
+                            : 'bg-gray-100 text-gray-800 border-gray-300'
+                    }`}
+                    onClick={() => {
+                        trackEvent('joblist_sort', { key: 'name' })
+                        onToggleSort('name')
+                    }}
+                >
+                    {t('components.jobList.sort.name')}{' '}
+                    {sortKey === 'name'
+                        ? sortDir === 'asc'
+                            ? t('components.jobList.sort.ascSymbol')
+                            : t('components.jobList.sort.descSymbol')
+                        : t('components.jobList.sort.noneSymbol')}
+                </Button>
+                <Button
+                    variant="unstyled"
+                    size="none"
+                    className={`px-2 py-1 rounded-md text-sm border ${
+                        sortKey === 'date'
+                            ? 'bg-gray-700 text-gray-100 border-gray-700'
+                            : 'bg-gray-100 text-gray-800 border-gray-300'
+                    }`}
+                    onClick={() => {
+                        trackEvent('joblist_sort', { key: 'date' })
+                        onToggleSort('date')
+                    }}
+                >
+                    {t('components.jobList.sort.date')}{' '}
+                    {sortKey === 'date'
+                        ? sortDir === 'asc'
+                            ? t('components.jobList.sort.ascSymbol')
+                            : t('components.jobList.sort.descSymbol')
+                        : t('components.jobList.sort.noneSymbol')}
+                </Button>
+                <div className="w-px h-6 bg-slate-200 mx-1" />
+                <Button
+                    variant="unstyled"
+                    size="none"
+                    className="px-2 py-1 rounded-md text-sm border bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200"
+                    onClick={() => {
+                        trackEvent('joblist_expand_all')
+                        onExpandAll()
+                    }}
+                    title={t('components.jobList.actions.expandTitle')}
+                >
+                    {t('components.jobList.actions.expand')}
+                </Button>
+                <Button
+                    variant="unstyled"
+                    size="none"
+                    className="px-2 py-1 rounded-md text-sm border bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200"
+                    onClick={() => {
+                        trackEvent('joblist_collapse_all')
+                        onCollapseAll()
+                    }}
+                    title={t('components.jobList.actions.collapseTitle')}
+                >
+                    {t('components.jobList.actions.collapse')}
+                </Button>
+            </div>
+        </div>
+    )
+}
+
+const DeleteAllModal: React.FC<{
+    open: boolean
+    count: number
+    bulkDeleting: boolean
+    onClose: () => void
+    onConfirm: () => void
+}> = ({ open, count, bulkDeleting, onClose, onConfirm }) => {
+    const { t } = useTranslation()
+
+    if (!open) return null
+
+    return (
+        <Modal onClose={onClose} title={t('components.jobList.unmapped.deleteAll.modalTitle')}>
+            <div className="p-4 text-sm text-slate-700">
+                {t('components.jobList.unmapped.deleteAll.modalBody', { count })}
+            </div>
+            <div className="px-4 pb-4 flex items-center justify-end gap-2">
+                <Button variant="ghost" onClick={onClose} text={t('common.cancel')} />
+                <Button
+                    variant="danger"
+                    onClick={onConfirm}
+                    text={t('components.jobList.unmapped.deleteAll.confirm')}
+                    isPending={bulkDeleting}
+                />
+            </div>
+        </Modal>
+    )
+}
+
+const UnmappedJobsSection: React.FC<{
+    unmappedJobs: JobSummary[]
+    sortKey: JobListSortKey
+    sortDir: JobListSortDir
+    dirHandle: FileSystemDirectoryHandle | null
+    onDeleteJob: (id: string) => Promise<void> | void
+}> = ({ unmappedJobs, sortKey, sortDir, dirHandle, onDeleteJob }) => {
+    const { t } = useTranslation()
+    const [isOpen, setIsOpen] = React.useState<boolean>(true)
+    const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null)
+    const [deletingJobIds, setDeletingJobIds] = React.useState<Set<string>>(() => new Set())
+    const [showDeleteAllModal, setShowDeleteAllModal] = React.useState<boolean>(false)
+    const [bulkDeleting, setBulkDeleting] = React.useState<boolean>(false)
+    const pendingDeleteTimeoutRef = React.useRef<number | null>(null)
+    const prevCountRef = React.useRef<number>(unmappedJobs.length)
+
+    const sortedUnmappedJobs = React.useMemo(() => {
+        return [...unmappedJobs].sort((a, b) => _sortCompare(a, b, sortKey, sortDir))
+    }, [unmappedJobs, sortDir, sortKey])
+
+    React.useEffect(() => {
+        if (unmappedJobs.length > 0 && prevCountRef.current === 0) setIsOpen(true)
+        prevCountRef.current = unmappedJobs.length
+    }, [unmappedJobs.length])
+
+    const clearPendingDeleteTimeout = React.useCallback(() => {
+        if (pendingDeleteTimeoutRef.current) {
+            window.clearTimeout(pendingDeleteTimeoutRef.current)
+            pendingDeleteTimeoutRef.current = null
+        }
+    }, [])
+
+    const clearPendingDelete = React.useCallback(() => {
+        clearPendingDeleteTimeout()
+        setPendingDeleteId(null)
+    }, [clearPendingDeleteTimeout])
+
+    React.useEffect(() => {
+        return () => {
+            clearPendingDeleteTimeout()
+        }
+    }, [clearPendingDeleteTimeout])
+
+    const markDeleting = React.useCallback((id: string) => {
+        setDeletingJobIds(prev => {
+            const next = new Set(prev)
+            next.add(id)
+            return next
+        })
+    }, [])
+
+    const unmarkDeleting = React.useCallback((id: string) => {
+        setDeletingJobIds(prev => {
+            const next = new Set(prev)
+            next.delete(id)
+            return next
+        })
+    }, [])
+
+    const handleDeleteJob = React.useCallback(
+        async (id: string) => {
+            markDeleting(id)
+            try {
+                await onDeleteJob(id)
+                trackEvent('joblist_unmapped_delete', { job_id: id })
+            } catch (e) {
+                console.error('Failed to delete job', e)
+            } finally {
+                unmarkDeleting(id)
+            }
+        },
+        [markDeleting, onDeleteJob, unmarkDeleting]
+    )
+
+    const armPendingDelete = React.useCallback(
+        (id: string) => {
+            clearPendingDeleteTimeout()
+            setPendingDeleteId(id)
+            pendingDeleteTimeoutRef.current = window.setTimeout(() => {
+                setPendingDeleteId(prev => (prev === id ? null : prev))
+            }, 3000)
+        },
+        [clearPendingDeleteTimeout]
+    )
+
+    const handleDeleteClick = React.useCallback(
+        (id: string) => {
+            if (bulkDeleting || deletingJobIds.has(id)) return
+            if (pendingDeleteId === id) {
+                clearPendingDelete()
+                void handleDeleteJob(id)
+                return
+            }
+            armPendingDelete(id)
+        },
+        [armPendingDelete, bulkDeleting, clearPendingDelete, deletingJobIds, handleDeleteJob, pendingDeleteId]
+    )
+
+    const handleDeleteAll = React.useCallback(async () => {
+        if (bulkDeleting || unmappedJobs.length === 0) return
+        setShowDeleteAllModal(false)
+        clearPendingDelete()
+        setBulkDeleting(true)
+        setDeletingJobIds(new Set(unmappedJobs.map(job => job.id)))
+        try {
+            for (const job of unmappedJobs) {
+                await onDeleteJob(job.id)
+            }
+            trackEvent('joblist_unmapped_delete_all', { count: unmappedJobs.length })
+        } catch (e) {
+            console.error('Failed to delete all unmapped jobs', e)
+        } finally {
+            setBulkDeleting(false)
+            setDeletingJobIds(new Set())
+        }
+    }, [bulkDeleting, clearPendingDelete, unmappedJobs, onDeleteJob])
+
+    const toggleOpen = React.useCallback(() => {
+        setIsOpen(prev => {
+            const next = !prev
+            trackEvent('joblist_unmapped_toggle', { open: next })
+            return next
+        })
+    }, [])
+
+    if (unmappedJobs.length === 0) return null
+
+    if (!isOpen) {
+        return (
+            <Button
+                type="button"
+                variant="unstyled"
+                size="none"
+                onClick={toggleOpen}
+                title={t('components.jobList.unmapped.toggleTitle')}
+                className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-100 px-2 py-1 text-xs text-amber-900 hover:bg-amber-200"
+            >
+                <span className="w-4 text-amber-700">{t('components.jobList.folder.closedIcon')}</span>
+                <span>{t('components.jobList.unmapped.collapsedLabel', { count: unmappedJobs.length })}</span>
+                <div className="flex-1" />
+            </Button>
+        )
+    }
+
+    return (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+            <div className="flex items-start justify-between gap-3 mb-2">
+                <Button
+                    type="button"
+                    variant="unstyled"
+                    size="none"
+                    onClick={toggleOpen}
+                    title={t('components.jobList.unmapped.collapseTitle')}
+                    className="flex items-center gap-2 text-xs font-semibold text-amber-900"
+                >
+                    <span className="w-4 text-amber-700">{t('components.jobList.folder.openIcon')}</span>
+                    <span>{t('components.jobList.unmapped.title', { count: unmappedJobs.length })}</span>
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => {
+                        trackEvent('joblist_unmapped_delete_all_open')
+                        setShowDeleteAllModal(true)
+                    }}
+                    title={t('components.jobList.unmapped.deleteAll.title')}
+                    disabled={bulkDeleting}
+                    text={t('components.jobList.unmapped.deleteAll.label')}
+                />
+            </div>
+            <div className="mb-3 text-xs text-amber-900/90">
+                <div className="font-semibold">
+                    {t('components.analyzerTutorialModal.steps.open.troubleshoot.title')}
+                </div>
+                <ul className="mt-1 list-disc pl-5 space-y-1">
+                    <li>{t('components.analyzerTutorialModal.steps.open.troubleshoot.bullets.folder')}</li>
+                    <li>{t('components.analyzerTutorialModal.steps.open.troubleshoot.bullets.path')}</li>
+                </ul>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {sortedUnmappedJobs.map(job => {
+                    const caption = stripMp4(basename(job.local_relative_path)) || t('common.notAvailable')
+                    const isPendingDelete = pendingDeleteId === job.id
+                    const isDeleting = bulkDeleting || deletingJobIds.has(job.id)
+                    const deleteTitle = isPendingDelete
+                        ? t('components.jobList.unmapped.delete.confirmTitle')
+                        : t('components.jobList.unmapped.delete.title')
+                    return (
+                        <div key={job.id} className="flex flex-col items-start">
+                            <div className="relative">
+                                <JobThumbnail job={job} dirHandle={dirHandle} playable={!!job.local_relative_path} />
+                                <Button
+                                    type="button"
+                                    variant="unstyled"
+                                    size="none"
+                                    className={`group absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border p-0 leading-none shadow-sm transition ${
+                                        isPendingDelete
+                                            ? 'border-red-200 bg-red-50 text-red-600 hover:text-red-700'
+                                            : 'border-white/60 bg-white/90 text-black hover:text-black'
+                                    }`}
+                                    title={deleteTitle}
+                                    aria-label={deleteTitle}
+                                    disabled={isDeleting}
+                                    onClick={e => {
+                                        e.stopPropagation()
+                                        handleDeleteClick(job.id)
+                                    }}
+                                >
+                                    <TrashIcon tone={isPendingDelete ? 'danger' : 'default'} />
+                                    <span className="pointer-events-none absolute bottom-9 right-0 whitespace-nowrap rounded bg-black/80 px-2 py-1 text-[11px] text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">
+                                        {deleteTitle}
+                                    </span>
+                                </Button>
+                            </div>
+                            <div className="mt-1 max-w-48 truncate text-xs text-gray-700" title={caption}>
+                                {caption}
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+
+            <DeleteAllModal
+                open={showDeleteAllModal}
+                count={unmappedJobs.length}
+                bulkDeleting={bulkDeleting}
+                onClose={() => setShowDeleteAllModal(false)}
+                onConfirm={() => void handleDeleteAll()}
+            />
+        </div>
+    )
+}
+
 export const JobList: React.FC<{
     jobs: JobSummary[]
     sortKey: JobListSortKey
     sortDir: JobListSortDir
     onToggleSort: (key: JobListSortKey) => void
     onOpen: (id: string, localRelativePath?: string | null) => void
+    onDeleteJob: (id: string) => Promise<void> | void
     openingId?: string | null
     dirHandle?: FileSystemDirectoryHandle | null
     initialSyncComplete?: boolean
-}> = ({ jobs, sortKey, sortDir, onToggleSort, onOpen, openingId, dirHandle = null, initialSyncComplete = false }) => {
+}> = ({
+    jobs,
+    sortKey,
+    sortDir,
+    onToggleSort,
+    onOpen,
+    onDeleteJob,
+    openingId,
+    dirHandle = null,
+    initialSyncComplete = false,
+}) => {
     const { t } = useTranslation()
     const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set(['']))
 
@@ -243,7 +624,11 @@ export const JobList: React.FC<{
                             title={node.path}
                         >
                             <span className="w-4 text-slate-500">
-                                {hasChildren || hasJobs ? (isOpen ? '▾' : '▸') : ''}
+                                {hasChildren || hasJobs
+                                    ? isOpen
+                                        ? t('components.jobList.folder.openIcon')
+                                        : t('components.jobList.folder.closedIcon')
+                                    : ''}
                             </span>
                             <span className="font-medium text-slate-900 flex items-center gap-2">
                                 {node.name}
@@ -342,143 +727,21 @@ export const JobList: React.FC<{
 
     return (
         <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">{t('components.jobList.sort.label')}</div>
-                <div className="flex gap-2 items-center">
-                    <Button
-                        variant="unstyled"
-                        size="none"
-                        className={`px-2 py-1 rounded-md text-sm border ${
-                            sortKey === 'name'
-                                ? 'bg-gray-700 text-gray-100 border-gray-700'
-                                : 'bg-gray-100 text-gray-800 border-gray-300'
-                        }`}
-                        onClick={() => {
-                            trackEvent('joblist_sort', { key: 'name' })
-                            onToggleSort('name')
-                        }}
-                    >
-                        {t('components.jobList.sort.name')} {sortKey === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
-                    </Button>
-                    <Button
-                        variant="unstyled"
-                        size="none"
-                        className={`px-2 py-1 rounded-md text-sm border ${
-                            sortKey === 'date'
-                                ? 'bg-gray-700 text-gray-100 border-gray-700'
-                                : 'bg-gray-100 text-gray-800 border-gray-300'
-                        }`}
-                        onClick={() => {
-                            trackEvent('joblist_sort', { key: 'date' })
-                            onToggleSort('date')
-                        }}
-                    >
-                        {t('components.jobList.sort.date')} {sortKey === 'date' ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
-                    </Button>
-                    <div className="w-px h-6 bg-slate-200 mx-1" />
-                    <Button
-                        variant="unstyled"
-                        size="none"
-                        className="px-2 py-1 rounded-md text-sm border bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200"
-                        onClick={() => {
-                            trackEvent('joblist_expand_all')
-                            expandAll()
-                        }}
-                        title={t('components.jobList.actions.expandTitle')}
-                    >
-                        {t('components.jobList.actions.expand')}
-                    </Button>
-                    <Button
-                        variant="unstyled"
-                        size="none"
-                        className="px-2 py-1 rounded-md text-sm border bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200"
-                        onClick={() => {
-                            trackEvent('joblist_collapse_all')
-                            collapseAll()
-                        }}
-                        title={t('components.jobList.actions.collapseTitle')}
-                    >
-                        {t('components.jobList.actions.collapse')}
-                    </Button>
-                </div>
-            </div>
+            <SortBar
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onToggleSort={onToggleSort}
+                onExpandAll={expandAll}
+                onCollapseAll={collapseAll}
+            />
             {/* Unmapped jobs (no known local path) */}
-            {unmappedJobs.length > 0 && (
-                <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
-                    <div className="text-xs font-semibold text-amber-900 mb-2">
-                        {t('components.jobList.unmapped.title')}
-                    </div>
-                    <div className="mb-3 text-xs text-amber-900/90">
-                        <div className="font-semibold">
-                            {t('components.analyzerTutorialModal.steps.open.troubleshoot.title')}
-                        </div>
-                        <ul className="mt-1 list-disc pl-5 space-y-1">
-                            <li>{t('components.analyzerTutorialModal.steps.open.troubleshoot.bullets.folder')}</li>
-                            <li>{t('components.analyzerTutorialModal.steps.open.troubleshoot.bullets.path')}</li>
-                        </ul>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {[...unmappedJobs]
-                            .sort((a, b) => {
-                                if (sortKey === 'date') {
-                                    const ta = Date.parse(a.updated_at || a.created_at || '') || 0
-                                    const tb = Date.parse(b.updated_at || b.created_at || '') || 0
-                                    return sortDir === 'asc' ? ta - tb : tb - ta
-                                }
-                                // name
-                                const an =
-                                    stripMp4(basename(a.local_relative_path)).toLowerCase() ||
-                                    normalizeRelativePath(a.local_relative_path || '').toLowerCase() ||
-                                    a.id
-                                const bn =
-                                    stripMp4(basename(b.local_relative_path)).toLowerCase() ||
-                                    normalizeRelativePath(b.local_relative_path || '').toLowerCase() ||
-                                    b.id
-                                if (an === bn) return 0
-                                return sortDir === 'asc' ? (an < bn ? -1 : 1) : an < bn ? 1 : -1
-                            })
-                            .map(job => {
-                                const caption = stripMp4(basename(job.local_relative_path)) || t('common.notAvailable')
-                                return (
-                                    <div key={job.id} className="flex flex-col items-start">
-                                        <div
-                                            className={`relative ${
-                                                job.status === 'succeeded' ? 'cursor-pointer' : 'cursor-default'
-                                            } ${openingId === job.id ? 'opacity-60' : ''}`}
-                                            onClick={() => {
-                                                if (job.status === 'succeeded' && job.local_relative_path)
-                                                    onOpen(job.id, job.local_relative_path)
-                                            }}
-                                            role="button"
-                                            tabIndex={0}
-                                            onKeyDown={e =>
-                                                job.status === 'succeeded' &&
-                                                (e.key === 'Enter' || e.key === ' ') &&
-                                                onOpen(job.id, job.local_relative_path)
-                                            }
-                                        >
-                                            <JobThumbnail
-                                                job={job}
-                                                dirHandle={dirHandle}
-                                                playable={!!job.local_relative_path}
-                                            />
-                                            {openingId === job.id && (
-                                                <div className="absolute inset-0 flex items-center justify-center">
-                                                    <div className="text-white text-sm bg-black/60 rounded px-2 py-1">
-                                                        {t('components.jobList.opening')}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="mt-1 max-w-48 truncate text-xs text-gray-700" title={caption}>
-                                            {caption}
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                    </div>
-                </div>
-            )}
+            <UnmappedJobsSection
+                unmappedJobs={unmappedJobs}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                dirHandle={dirHandle}
+                onDeleteJob={onDeleteJob}
+            />
 
             <div className="flex flex-col gap-1">{renderFolder(root, 0)}</div>
         </div>

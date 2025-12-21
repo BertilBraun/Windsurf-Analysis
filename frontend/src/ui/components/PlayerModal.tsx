@@ -10,12 +10,10 @@ export const PlayerModal: React.FC<{
     job: JobDetail
     dirHandle: FileSystemDirectoryHandle | null
     onClose: () => void
-    onDelete: (id: string) => void
     onReport: (id: string, type: ReportType, message: string) => void
     onOpenNextJob?: () => void
     onOpenPrevJob?: () => void
-    deletingId?: string | null
-}> = ({ job, dirHandle, onClose, onDelete, onReport, onOpenNextJob, onOpenPrevJob, deletingId }) => {
+}> = ({ job, dirHandle, onClose, onReport, onOpenNextJob, onOpenPrevJob }) => {
     const { t } = useTranslation()
     const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
     const [showReport, setShowReport] = React.useState<boolean>(false)
@@ -54,12 +52,6 @@ export const PlayerModal: React.FC<{
                             title={t('components.playerModal.actions.report.title')}
                             text={t('components.playerModal.actions.report.label')}
                         />
-                        <Button
-                            onClick={() => onDelete(job.id)}
-                            title={t('components.playerModal.actions.delete.title')}
-                            text={t('components.playerModal.actions.delete.label')}
-                            isPending={deletingId === job.id}
-                        />
                     </>
                 }
             >
@@ -70,7 +62,6 @@ export const PlayerModal: React.FC<{
                             job={job}
                             dirHandle={dirHandle}
                             onClose={onClose}
-                            onDelete={onDelete}
                             onReport={onReport}
                             onOpenNextJob={onOpenNextJob}
                             onOpenPrevJob={onOpenPrevJob}
