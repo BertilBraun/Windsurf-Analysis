@@ -78,16 +78,16 @@
                 },
                 "tips": {
                     "export": {
-                        "body": "In the player, <b>Export</b> saves the <b>currently selected track</b> as an MP4 so you can keep it and share it with others.",
+                        "body": "<b>Export</b> saves the selected track as an MP4 to keep or share.",
                         "title": "Export"
                     },
                     "report": {
-                        "body": "If you notice issues with <b>detections</b> (a rider wasn\u2019t clickable) or <b>tracking</b> (a focused track switches riders, or one rider ends up split into two tracks), please use <b>Report</b> in the player.",
-                        "note": "We\u2019re still in beta \u2014 these failure cases are invaluable for improving the service. If possible, include an approximate timestamp.",
+                        "body": "Spot a <b>detection</b> or <b>tracking</b> issue? Use <b>Report</b> in the player.",
+                        "note": "Beta feedback helps a lot. If possible, include a rough timestamp.",
                         "title": "Report"
                     },
                     "shortcuts": {
-                        "body": "There are many shortcuts (seeking, frame stepping, track navigation, etc.) that make reviewing a session much faster. In the <b>player</b>, click <b>Shortcuts</b> to see all keyboard controls.",
+                        "body": "Keyboard shortcuts make review much faster. In the <b>player</b>, click <b>Shortcuts</b> to see them.",
                         "button": "Show shortcuts",
                         "title": "Shortcuts (highly recommended)"
                     },
