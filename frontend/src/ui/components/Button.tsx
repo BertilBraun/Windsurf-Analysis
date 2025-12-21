@@ -3,10 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { AnimatedDots } from './AnimatedDots'
 
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-    text: string
+    text?: string
+    children?: React.ReactNode
     isPending?: boolean
-    variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
-    size?: 'sm' | 'md'
+    variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'unstyled'
+    size?: 'sm' | 'md' | 'none'
 }
 
 function cx(...parts: Array<string | undefined | null | false>) {
@@ -15,6 +16,7 @@ function cx(...parts: Array<string | undefined | null | false>) {
 
 export const Button: React.FC<ButtonProps> = ({
     text,
+    children,
     isPending,
     disabled,
     variant = 'secondary',
@@ -30,9 +32,22 @@ export const Button: React.FC<ButtonProps> = ({
               ? 'bg-red-600 text-white hover:bg-red-700'
               : variant === 'ghost'
                 ? 'bg-transparent text-slate-700 hover:bg-slate-100'
-                : 'bg-slate-900 text-white hover:bg-slate-800'
+                : variant === 'unstyled'
+                  ? ''
+                  : 'bg-slate-900 text-white hover:bg-slate-800'
 
-    const sizeClass = size === 'sm' ? 'px-2.5 py-1.5 text-xs' : 'px-3 py-2 text-sm'
+    const sizeClass =
+        size === 'none' ? '' : size === 'sm' ? 'px-2.5 py-1.5 text-xs' : 'px-3 py-2 text-sm'
+
+    const content =
+        isPending && text ? (
+            <span>
+                {text}
+                {t('components.button.pendingSuffix')} <AnimatedDots />
+            </span>
+        ) : (
+            children ?? text
+        )
 
     return (
         <button
@@ -45,14 +60,7 @@ export const Button: React.FC<ButtonProps> = ({
                 className
             )}
         >
-            {isPending ? (
-                <span>
-                    {text}
-                    {t('components.button.pendingSuffix')} <AnimatedDots />
-                </span>
-            ) : (
-                text
-            )}
+            {content}
         </button>
     )
 }

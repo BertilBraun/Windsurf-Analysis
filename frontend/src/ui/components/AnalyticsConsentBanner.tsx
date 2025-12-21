@@ -8,6 +8,7 @@ import {
     setAnalyticsConsent,
     type AnalyticsConsent,
 } from '../utils/analytics'
+import { Button } from './Button'
 
 function cx(...parts: Array<string | undefined | null | false>) {
     return parts.filter(Boolean).join(' ')
@@ -52,23 +53,25 @@ export const AnalyticsConsentBanner: React.FC = () => {
                 </div>
                 <div className="flex-1" />
                 <div className="flex gap-2">
-                    <button
+                    <Button
                         type="button"
+                        variant="unstyled"
+                        size="none"
                         onClick={() => choose('declined')}
                         className={cx(
                             'rounded-lg border border-slate-200 px-3 py-2 text-xs',
                             'text-slate-800 hover:bg-slate-50'
                         )}
-                    >
-                        {t('components.analyticsConsentBanner.decline')}
-                    </button>
-                    <button
+                        text={t('components.analyticsConsentBanner.decline')}
+                    />
+                    <Button
                         type="button"
+                        variant="unstyled"
+                        size="none"
                         onClick={() => choose('accepted')}
                         className={cx('rounded-lg bg-slate-900 text-white px-3 py-2 text-xs hover:bg-slate-800')}
-                    >
-                        {t('components.analyticsConsentBanner.accept')}
-                    </button>
+                        text={t('components.analyticsConsentBanner.accept')}
+                    />
                 </div>
             </div>
         </div>

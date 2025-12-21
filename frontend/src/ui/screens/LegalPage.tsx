@@ -3,6 +3,7 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { getAnalyticsConsent, initAnalytics, installClickTracking, setAnalyticsConsent } from '../utils/analytics'
+import { Button } from '../components/Button'
 
 const OWNER_NAME = 'Bertil Braun'
 const OWNER_ADDRESS_LINES = ['Im Rübländer 19', '71034 Böblingen', 'Germany']
@@ -347,20 +348,22 @@ const PrivacyContent: React.FC = () => {
                         <b>{consent === 'accepted' ? 'Accepted' : consent === 'declined' ? 'Declined' : 'Not set'}</b>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                        <button
+                        <Button
                             type="button"
+                            variant="unstyled"
+                            size="none"
                             onClick={() => setChoice('declined')}
                             className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-800 hover:bg-slate-50"
-                        >
-                            Decline
-                        </button>
-                        <button
+                            text="Decline"
+                        />
+                        <Button
                             type="button"
+                            variant="unstyled"
+                            size="none"
                             onClick={() => setChoice('accepted')}
                             className="rounded-lg bg-slate-900 text-white px-3 py-2 text-xs hover:bg-slate-800"
-                        >
-                            Accept
-                        </button>
+                            text="Accept"
+                        />
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
                         If declined, GybeLock will not load Google Analytics scripts.

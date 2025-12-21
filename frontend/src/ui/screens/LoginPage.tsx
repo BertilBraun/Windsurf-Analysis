@@ -1,6 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthProvider'
+import { Button } from '../components/Button'
 
 export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }> = ({ onSignup, onSuccess }) => {
     const { t } = useTranslation()
@@ -44,11 +45,15 @@ export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }
                     />
                     {info && <div style={{ color: '#0f766e', fontSize: 12 }}>{info}</div>}
                     {error && <div style={{ color: '#ef4444' }}>{error}</div>}
-                    <button type="submit" disabled={!email || !password || isSubmitting}>
-                        {t('screens.login.actions.login')}
-                    </button>
-                    <button
+                    <Button
+                        type="submit"
+                        text={t('screens.login.actions.login')}
+                        disabled={!email || !password || isSubmitting}
+                        isPending={isSubmitting}
+                    />
+                    <Button
                         type="button"
+                        text={t('screens.login.actions.google')}
                         disabled={isSubmitting}
                         onClick={async () => {
                             setError(null)
@@ -63,11 +68,10 @@ export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }
                                 setIsSubmitting(false)
                             }
                         }}
-                    >
-                        {t('screens.login.actions.google')}
-                    </button>
-                    <button
+                    />
+                    <Button
                         type="button"
+                        text={t('screens.login.actions.forgot')}
                         disabled={!email || isSubmitting}
                         onClick={async () => {
                             setError(null)
@@ -83,15 +87,17 @@ export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }
                             }
                         }}
                         style={{ fontSize: 12 }}
-                    >
-                        {t('screens.login.actions.forgot')}
-                    </button>
+                    />
                 </div>
             </form>
             <div style={{ marginTop: 12 }}>
-                <button onClick={onSignup} style={{ fontSize: 12 }}>
-                    {t('screens.login.actions.createAccount')}
-                </button>
+                <Button
+                    variant="unstyled"
+                    size="none"
+                    onClick={onSignup}
+                    style={{ fontSize: 12 }}
+                    text={t('screens.login.actions.createAccount')}
+                />
             </div>
         </div>
     )

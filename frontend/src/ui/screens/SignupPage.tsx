@@ -1,6 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthProvider'
+import { Button } from '../components/Button'
 
 export const SignupPage: React.FC<{ onBackToLogin: () => void; onSuccess: () => void }> = ({
     onBackToLogin,
@@ -58,15 +59,22 @@ export const SignupPage: React.FC<{ onBackToLogin: () => void; onSuccess: () => 
                     />
                     {info && <div style={{ color: '#0f766e', fontSize: 12 }}>{info}</div>}
                     {error && <div style={{ color: '#ef4444' }}>{error}</div>}
-                    <button type="submit" disabled={!email || !password || !password2 || isSubmitting}>
-                        {t('screens.signup.actions.createAccount')}
-                    </button>
+                    <Button
+                        type="submit"
+                        text={t('screens.signup.actions.createAccount')}
+                        disabled={!email || !password || !password2 || isSubmitting}
+                        isPending={isSubmitting}
+                    />
                 </div>
             </form>
             <div style={{ marginTop: 12 }}>
-                <button onClick={onBackToLogin} style={{ fontSize: 12 }}>
-                    {t('screens.signup.actions.backToLogin')}
-                </button>
+                <Button
+                    variant="unstyled"
+                    size="none"
+                    onClick={onBackToLogin}
+                    style={{ fontSize: 12 }}
+                    text={t('screens.signup.actions.backToLogin')}
+                />
             </div>
         </div>
     )

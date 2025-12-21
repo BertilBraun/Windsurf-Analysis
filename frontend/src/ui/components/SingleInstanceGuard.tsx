@@ -1,5 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { Button } from './Button'
 
 const LOCK_KEY = 'windsurf:single:lock'
 const HEARTBEAT_MS = 2000
@@ -127,7 +128,12 @@ export const SingleInstanceGuard: React.FC<{ children: React.ReactNode }> = ({ c
                         {t('components.singleInstanceGuard.body')}
                     </p>
                     <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={tryBecomeLeader}>{t('components.singleInstanceGuard.retry')}</button>
+                        <Button
+                            variant="unstyled"
+                            size="none"
+                            onClick={tryBecomeLeader}
+                            text={t('components.singleInstanceGuard.retry')}
+                        />
                     </div>
                 </div>
             </div>

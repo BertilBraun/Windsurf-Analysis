@@ -2,6 +2,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { JobSummary } from '../types'
 import { AnimatedDots } from './AnimatedDots'
+import { Button } from './Button'
 import JobThumbnail from './JobThumbnail'
 import { trackEvent } from '../utils/analytics'
 
@@ -229,8 +230,10 @@ export const JobList: React.FC<{
             return (
                 <div key={node.path || 'root'} className="flex flex-col">
                     {showHeader && (
-                        <button
+                        <Button
                             type="button"
+                            variant="unstyled"
+                            size="none"
                             onClick={() => {
                                 trackEvent('joblist_folder_toggle')
                                 toggleFolder(node.path)
@@ -254,7 +257,8 @@ export const JobList: React.FC<{
                                 )}
                             </span>
                             <span className="text-xs text-slate-500">({node.totalJobs})</span>
-                        </button>
+                            <div className="flex-1" />
+                        </Button>
                     )}
 
                     {isOpen && (
@@ -341,7 +345,9 @@ export const JobList: React.FC<{
             <div className="flex items-center justify-between">
                 <div className="text-sm text-gray-600">{t('components.jobList.sort.label')}</div>
                 <div className="flex gap-2 items-center">
-                    <button
+                    <Button
+                        variant="unstyled"
+                        size="none"
                         className={`px-2 py-1 rounded-md text-sm border ${
                             sortKey === 'name'
                                 ? 'bg-gray-700 text-gray-100 border-gray-700'
@@ -353,8 +359,10 @@ export const JobList: React.FC<{
                         }}
                     >
                         {t('components.jobList.sort.name')} {sortKey === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        variant="unstyled"
+                        size="none"
                         className={`px-2 py-1 rounded-md text-sm border ${
                             sortKey === 'date'
                                 ? 'bg-gray-700 text-gray-100 border-gray-700'
@@ -366,9 +374,11 @@ export const JobList: React.FC<{
                         }}
                     >
                         {t('components.jobList.sort.date')} {sortKey === 'date' ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
-                    </button>
+                    </Button>
                     <div className="w-px h-6 bg-slate-200 mx-1" />
-                    <button
+                    <Button
+                        variant="unstyled"
+                        size="none"
                         className="px-2 py-1 rounded-md text-sm border bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200"
                         onClick={() => {
                             trackEvent('joblist_expand_all')
@@ -377,8 +387,10 @@ export const JobList: React.FC<{
                         title={t('components.jobList.actions.expandTitle')}
                     >
                         {t('components.jobList.actions.expand')}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        variant="unstyled"
+                        size="none"
                         className="px-2 py-1 rounded-md text-sm border bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200"
                         onClick={() => {
                             trackEvent('joblist_collapse_all')
@@ -387,7 +399,7 @@ export const JobList: React.FC<{
                         title={t('components.jobList.actions.collapseTitle')}
                     >
                         {t('components.jobList.actions.collapse')}
-                    </button>
+                    </Button>
                 </div>
             </div>
             {/* Unmapped jobs (no known local path) */}

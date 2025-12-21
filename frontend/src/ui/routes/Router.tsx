@@ -12,6 +12,7 @@ import { SingleInstanceGuard } from '../components/SingleInstanceGuard'
 import { LoginPage } from '../screens/LoginPage'
 import { SignupPage } from '../screens/SignupPage'
 import { LogoButton } from '../components/LogoButton'
+import { Button } from '../components/Button'
 import { trackPageView } from '../utils/analytics'
 
 const AnalyzerRoute: React.FC = () => {
@@ -113,27 +114,30 @@ const AnalyzerRoute: React.FC = () => {
                                 />
                             </p>
                             <div className="flex flex-wrap gap-2 mt-4">
-                                <button
+                                <Button
                                     type="button"
+                                    variant="unstyled"
+                                    size="none"
                                     onClick={() => void resendVerificationEmail()}
                                     className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                                >
-                                    {t('routes.analyzer.verify.resend')}
-                                </button>
-                                <button
+                                    text={t('routes.analyzer.verify.resend')}
+                                />
+                                <Button
                                     type="button"
+                                    variant="unstyled"
+                                    size="none"
                                     onClick={() => void refreshVerificationStatus()}
                                     className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm"
-                                >
-                                    {t('routes.analyzer.verify.verified')}
-                                </button>
-                                <button
+                                    text={t('routes.analyzer.verify.verified')}
+                                />
+                                <Button
                                     type="button"
+                                    variant="unstyled"
+                                    size="none"
                                     onClick={logout}
                                     className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                                >
-                                    {t('routes.analyzer.verify.signOut')}
-                                </button>
+                                    text={t('routes.analyzer.verify.signOut')}
+                                />
                             </div>
                         </div>
                     </div>

@@ -5,6 +5,7 @@ import type { IngressUploadItem, IngressUploadStatus } from '../hooks/useIngress
 import type { UploadContext } from '../utils/uploader'
 import { clamp } from '../utils/clamp'
 import { Modal } from './Modal'
+import { Button } from './Button'
 
 type Props = {
     dirHandle: FileSystemDirectoryHandle | null
@@ -122,8 +123,10 @@ export const IngressWidget: React.FC<Props> = ({
         <>
             <div className="fixed bottom-4 right-4 z-50">
                 {!expanded ? (
-                    <button
+                    <Button
                         type="button"
+                        variant="unstyled"
+                        size="none"
                         onClick={() => setExpanded(true)}
                         className={`flex items-center gap-2 rounded-full border px-3 py-2 shadow-sm transition ${
                             hasIssues
@@ -145,7 +148,7 @@ export const IngressWidget: React.FC<Props> = ({
                                 {uploading}
                             </span>
                         )}
-                    </button>
+                    </Button>
                 ) : (
                     <div
                         ref={panelRef}
@@ -160,13 +163,14 @@ export const IngressWidget: React.FC<Props> = ({
                         <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-3">
                             <div className="text-sm font-semibold">{t('components.ingressWidget.panel.title')}</div>
                             <div className="flex-1" />
-                            <button
+                            <Button
                                 type="button"
+                                variant="unstyled"
+                                size="none"
                                 onClick={() => setExpanded(false)}
                                 className="text-xs text-slate-600 hover:text-slate-900 px-2 py-1 rounded-md hover:bg-slate-100"
-                            >
-                                {t('common.close')}
-                            </button>
+                                text={t('common.close')}
+                            />
                         </div>
 
                         <div className="p-4 flex flex-col gap-3">
@@ -196,17 +200,18 @@ export const IngressWidget: React.FC<Props> = ({
                                         </div>
                                     )}
                                 </div>
-                                <button
+                                <Button
                                     type="button"
+                                    variant="unstyled"
+                                    size="none"
                                     className={`px-3 py-2 rounded-md text-white text-sm transition ${
                                         !dirHandle
                                             ? 'bg-amber-500 hover:bg-amber-600'
                                             : 'bg-brand-600 hover:bg-brand-700'
                                     }`}
                                     onClick={onPickDirectory}
-                                >
-                                    {dirHandle ? t('common.actions.changeFolder') : t('common.actions.selectFolder')}
-                                </button>
+                                    text={dirHandle ? t('common.actions.changeFolder') : t('common.actions.selectFolder')}
+                                />
                             </div>
 
                             <StatusLine
@@ -263,13 +268,14 @@ const SuspendedBanner: React.FC<{ onRetryFailed: () => void }> = ({ onRetryFaile
         <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
             <div className="text-xs text-amber-800 mb-2">{t('components.ingressWidget.suspended.message')}</div>
             <div className="flex gap-2">
-                <button
+                <Button
                     type="button"
+                    variant="unstyled"
+                    size="none"
                     className="px-3 py-2 rounded-md bg-slate-200 text-slate-800 text-sm hover:bg-slate-300 transition"
                     onClick={onRetryFailed}
-                >
-                    {t('components.ingressWidget.suspended.retry')}
-                </button>
+                    text={t('components.ingressWidget.suspended.retry')}
+                />
             </div>
         </div>
     )

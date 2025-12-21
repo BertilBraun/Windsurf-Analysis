@@ -4,6 +4,7 @@ import flagDe from '../assets/flags/de.svg'
 import flagEn from '../assets/flags/en.svg'
 import flagEs from '../assets/flags/es.svg'
 import flagIt from '../assets/flags/it.svg'
+import { Button } from './Button'
 
 type LanguageOption = {
     code: 'en' | 'de' | 'es' | 'it'
@@ -55,8 +56,10 @@ export const LanguageSwitcher: React.FC<{ className?: string }> = ({ className }
 
     return (
         <div ref={containerRef} className={cx('relative', className)}>
-            <button
+            <Button
                 type="button"
+                variant="unstyled"
+                size="none"
                 aria-label={t('components.languageSwitcher.ariaLabel', { language: active.name })}
                 aria-haspopup="menu"
                 aria-expanded={open}
@@ -81,7 +84,7 @@ export const LanguageSwitcher: React.FC<{ className?: string }> = ({ className }
                 >
                     <path d="M2 3.5L5 6.5L8 3.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
                 </svg>
-            </button>
+            </Button>
 
             {open && (
                 <div
@@ -92,9 +95,11 @@ export const LanguageSwitcher: React.FC<{ className?: string }> = ({ className }
                     {LANGUAGES.map(language => {
                         const isActive = language.code === activeCode
                         return (
-                            <button
+                            <Button
                                 key={language.code}
                                 type="button"
+                                variant="unstyled"
+                                size="none"
                                 role="menuitem"
                                 onClick={() => {
                                     setOpen(false)
@@ -112,7 +117,7 @@ export const LanguageSwitcher: React.FC<{ className?: string }> = ({ className }
                                     loading="lazy"
                                 />
                                 <span>{language.name}</span>
-                            </button>
+                            </Button>
                         )
                     })}
                 </div>

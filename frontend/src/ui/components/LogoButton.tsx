@@ -1,6 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { Button } from './Button'
 
 function cx(...parts: Array<string | undefined | null | false>) {
     return parts.filter(Boolean).join(' ')
@@ -58,14 +59,16 @@ export const LogoButton: React.FC<LogoButtonProps> = ({
     }
 
     return (
-        <button
+        <Button
             type={props.type ?? 'button'}
+            variant="unstyled"
+            size="none"
             onClick={props.onClick}
             className={commonClassName}
             aria-label={ariaLabel}
             title={resolvedTitle}
         >
             {img}
-        </button>
+        </Button>
     )
 }
