@@ -17,7 +17,27 @@ import { trackEvent } from '../utils/analytics'
 import { AnalyzerTutorialModal } from '../components/AnalyzerTutorialModal'
 
 const ANALYZER_TUTORIAL_SEEN_KEY = 'analyzerTutorialSeen.v1'
+const ANALYZER_TUTORIAL_PROGRESS_KEY = 'analyzerTutorialProgress.v1'
 const FEEDBACK_PROMPT_SEEN_KEY = 'feedbackPromptSeen.v1'
+type TutorialStepKey =
+    | 'intro'
+    | 'ingress-folder'
+    | 'drop-mp4s'
+    | 'open-video'
+    | 'review-track'
+    | 'shortcuts-export-report'
+
+const ALL_TUTORIAL_STEP_KEYS: TutorialStepKey[] = [
+    'intro',
+    'ingress-folder',
+    'drop-mp4s',
+    'open-video',
+    'review-track',
+    'shortcuts-export-report',
+]
+const ONBOARDING_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['intro', 'ingress-folder', 'drop-mp4s']
+const OPEN_VIDEO_STEP_KEYS: TutorialStepKey[] = ['open-video']
+const PLAYER_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['review-track', 'shortcuts-export-report']
 
 export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => void }> = ({
     onGoHome,
@@ -31,6 +51,9 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const [showHelp, setShowHelp] = React.useState<boolean>(false)
     const [showTutorial, setShowTutorial] = React.useState<boolean>(false)
     const [tutorialStepIndex, setTutorialStepIndex] = React.useState<number>(0)
+    const [tutorialStepKeys, setTutorialStepKeys] = React.useState<TutorialStepKey[] | null>(null)
+    const [tutorialSeenSteps, setTutorialSeenSteps] = React.useState<Set<TutorialStepKey>>(() => new Set())
+    const [tutorialProgressLoaded, setTutorialProgressLoaded] = React.useState<boolean>(false)
     const [sortKey, setSortKey] = React.useState<JobListSortKey>('date')
     const [sortDir, setSortDir] = React.useState<JobListSortDir>('desc')
     const [showFeedback, setShowFeedback] = React.useState<boolean>(false)
@@ -48,7 +71,9 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         const s = new Set<string>()
         for (const j of jobs) {
             const sha = String(j.original_checksum_sha256 || '').toLowerCase()
-            if (sha) s.add(sha)
+            if (!sha) continue
+            if (j.status === 'pending') continue
+            s.add(sha)
         }
         return s
     }, [jobs])
@@ -70,25 +95,62 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         }
     }, [])
 
-    // Auto-open the tutorial once for new users (no ingress folder and no jobs yet).
-    React.useEffect(() => {
-        loadSetting<boolean>(ANALYZER_TUTORIAL_SEEN_KEY).then(seen => {
-            if (seen) return
-            trackEvent('open_tutorial', { source: 'auto' })
-            setShowTutorial(true)
-        })
-    }, [])
-
     React.useEffect(() => {
         loadSetting<boolean>(FEEDBACK_PROMPT_SEEN_KEY).then(seen => {
             setFeedbackPromptSeen(!!seen)
         })
     }, [])
 
-    const openTutorial = React.useCallback(async (source: 'header' | 'empty_state' | 'auto') => {
-        trackEvent('open_tutorial', { source })
-        setShowTutorial(true)
+    React.useEffect(() => {
+        loadSetting<TutorialStepKey[] | null>(ANALYZER_TUTORIAL_PROGRESS_KEY).then(saved => {
+            const valid = Array.isArray(saved) ? saved.filter(key => ALL_TUTORIAL_STEP_KEYS.includes(key)) : []
+            setTutorialSeenSteps(prev => {
+                const merged = new Set(prev)
+                for (const key of valid) merged.add(key)
+                return merged
+            })
+            setTutorialProgressLoaded(true)
+        })
     }, [])
+
+    const markTutorialStepsSeen = React.useCallback((keys: TutorialStepKey[]) => {
+        setTutorialSeenSteps(prev => {
+            const next = new Set(prev)
+            for (const key of keys) next.add(key)
+            void saveSetting(ANALYZER_TUTORIAL_PROGRESS_KEY, Array.from(next))
+            return next
+        })
+    }, [])
+
+    const getContextualStepKeys = React.useCallback(
+        (extraKeys: TutorialStepKey[]) => {
+            const merged = new Set(tutorialSeenSteps)
+            for (const key of extraKeys) merged.add(key)
+            return ALL_TUTORIAL_STEP_KEYS.filter(key => merged.has(key))
+        },
+        [tutorialSeenSteps]
+    )
+
+    const openTutorial = React.useCallback(
+        (source: 'header' | 'empty_state' | 'auto', stepKeys: TutorialStepKey[] | null, startAt?: TutorialStepKey) => {
+            trackEvent('open_tutorial', { source })
+            const keysToUse = stepKeys ?? ALL_TUTORIAL_STEP_KEYS
+            const startIdx = startAt ? Math.max(0, keysToUse.indexOf(startAt)) : 0
+            setTutorialStepKeys(stepKeys)
+            setTutorialStepIndex(startIdx >= 0 ? startIdx : 0)
+            setShowTutorial(true)
+            markTutorialStepsSeen(keysToUse)
+        },
+        [markTutorialStepsSeen]
+    )
+
+    // Auto-open the tutorial once for new users (no ingress folder and no jobs yet).
+    React.useEffect(() => {
+        loadSetting<boolean>(ANALYZER_TUTORIAL_SEEN_KEY).then(seen => {
+            if (seen) return
+            openTutorial('auto', ONBOARDING_TUTORIAL_STEP_KEYS, 'intro')
+        })
+    }, [openTutorial])
 
     const pickDirectory = async () => {
         try {
@@ -166,6 +228,37 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         ? t('screens.analyzer.header.taglineWithName', { name: userLabel })
         : t('screens.analyzer.header.tagline')
 
+    const hasOpenedPlayerRef = React.useRef(false)
+
+    React.useEffect(() => {
+        if (!tutorialProgressLoaded) return
+        if (showTutorial) return
+        if (!jobsInitialSyncComplete) return
+        if (succeededJobs.length === 0) return
+        if (tutorialSeenSteps.has('open-video')) return
+        const stepKeys = getContextualStepKeys(OPEN_VIDEO_STEP_KEYS)
+        openTutorial('auto', stepKeys, 'open-video')
+    }, [
+        getContextualStepKeys,
+        jobsInitialSyncComplete,
+        openTutorial,
+        showTutorial,
+        succeededJobs.length,
+        tutorialProgressLoaded,
+        tutorialSeenSteps,
+    ])
+
+    React.useEffect(() => {
+        if (!tutorialProgressLoaded) return
+        if (showTutorial) return
+        if (!selectedJob) return
+        if (hasOpenedPlayerRef.current) return
+        hasOpenedPlayerRef.current = true
+        if (tutorialSeenSteps.has('review-track') && tutorialSeenSteps.has('shortcuts-export-report')) return
+        const stepKeys = getContextualStepKeys(PLAYER_TUTORIAL_STEP_KEYS)
+        openTutorial('auto', stepKeys, 'review-track')
+    }, [getContextualStepKeys, openTutorial, selectedJob, showTutorial, tutorialProgressLoaded, tutorialSeenSteps])
+
     return (
         <div className="min-h-dvh bg-white text-slate-900">
             <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
@@ -182,7 +275,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                             size="sm"
                             variant="ghost"
                             onClick={() => {
-                                openTutorial('header')
+                                openTutorial('header', null, 'intro')
                             }}
                             text={t('screens.analyzer.actions.tutorial')}
                         />
@@ -230,7 +323,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                                 />
                                 <Button
                                     variant="primary"
-                                    onClick={() => openTutorial('empty_state')}
+                                    onClick={() => openTutorial('empty_state', null, 'intro')}
                                     text={t('screens.analyzer.emptyState.openTutorial')}
                                 />
                             </div>
@@ -309,20 +402,24 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                         onClose={() => {
                             trackEvent('close_tutorial')
                             setShowTutorial(false)
+                            setTutorialStepKeys(null)
                             void saveSetting(ANALYZER_TUTORIAL_SEEN_KEY, true)
                         }}
                         stepIndex={tutorialStepIndex}
                         onStepIndexChange={setTutorialStepIndex}
                         onPickIngressFolder={() => void pickDirectory()}
                         ingressFolderName={dirHandle?.name ?? null}
+                        stepKeys={tutorialStepKeys}
                     />
                 )}
             </main>
 
             {/* Beta badge: bottom-left, subtle (brand) */}
             <div className="fixed bottom-4 left-4">
-                <button
+                <Button
                     type="button"
+                    variant="unstyled"
+                    size="none"
                     onClick={() => {
                         trackEvent('open_pricing_from_beta_badge')
                         onGoPricing()
@@ -336,7 +433,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     <span className="text-xs text-slate-700 group-hover:text-slate-900">
                         {t('screens.analyzer.beta.action')}
                     </span>
-                </button>
+                </Button>
             </div>
         </div>
     )

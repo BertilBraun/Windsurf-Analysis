@@ -408,6 +408,15 @@ export const JobList: React.FC<{
                     <div className="text-xs font-semibold text-amber-900 mb-2">
                         {t('components.jobList.unmapped.title')}
                     </div>
+                    <div className="mb-3 text-xs text-amber-900/90">
+                        <div className="font-semibold">
+                            {t('components.analyzerTutorialModal.steps.open.troubleshoot.title')}
+                        </div>
+                        <ul className="mt-1 list-disc pl-5 space-y-1">
+                            <li>{t('components.analyzerTutorialModal.steps.open.troubleshoot.bullets.folder')}</li>
+                            <li>{t('components.analyzerTutorialModal.steps.open.troubleshoot.bullets.path')}</li>
+                        </ul>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         {[...unmappedJobs]
                             .sort((a, b) => {

@@ -58,7 +58,7 @@
                         "click": "Click the tile to open the player (tiles become clickable once ready).",
                         "thumbnail": "In <b>Analyzed Videos</b>, look for a tile that shows a <b>video thumbnail</b>."
                     },
-                    "title": "3) Open an analyzed video",
+                    "title": "4) Open an analyzed video",
                     "troubleshoot": {
                         "bullets": {
                             "folder": "Re-check you selected the correct ingress folder",
@@ -74,7 +74,7 @@
                         "overview": "In the player, you start in <b>overview</b> mode.",
                         "timeline": "Use the timeline to seek."
                     },
-                    "title": "4) Review a track"
+                    "title": "5) Review a track"
                 },
                 "tips": {
                     "export": {
@@ -144,6 +144,7 @@
                     "title": "Folder permission needed"
                 }
             },
+            "leaveWarning": "Uploads are still running. If you leave now, your videos may not finish uploading.",
             "panel": {
                 "description": "Select your \u201cwindsurf analysis videos\u201d folder. GybeLock monitors it and auto-uploads new videos.",
                 "folderLabel": "Folder",

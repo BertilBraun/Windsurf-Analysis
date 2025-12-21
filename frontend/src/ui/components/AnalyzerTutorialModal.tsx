@@ -16,6 +16,7 @@ export type AnalyzerTutorialModalProps = {
     onStepIndexChange: (next: number) => void
     onPickIngressFolder: () => void
     ingressFolderName: string | null
+    stepKeys?: string[] | null
 }
 
 export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
@@ -24,6 +25,7 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     onStepIndexChange,
     onPickIngressFolder,
     ingressFolderName,
+    stepKeys,
 }) => {
     const { t } = useTranslation()
     const [showShortcuts, setShowShortcuts] = React.useState(false)
@@ -155,17 +157,6 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                             </li>
                             <li>{t('components.analyzerTutorialModal.steps.open.bullets.click')}</li>
                         </ul>
-                        <details className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                            <summary className="cursor-pointer text-sm font-semibold text-amber-900">
-                                {t('components.analyzerTutorialModal.steps.open.troubleshoot.title')}
-                            </summary>
-                            <div className="mt-2 text-sm text-amber-900/90">
-                                <ul className="list-disc pl-5 space-y-1">
-                                    <li>{t('components.analyzerTutorialModal.steps.open.troubleshoot.bullets.folder')}</li>
-                                    <li>{t('components.analyzerTutorialModal.steps.open.troubleshoot.bullets.path')}</li>
-                                </ul>
-                            </div>
-                        </details>
                     </div>
                 ),
             },
@@ -243,13 +234,20 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
         [ingressFolderName, onPickIngressFolder, t]
     )
 
+    const visibleSteps = React.useMemo(() => {
+        if (!stepKeys || stepKeys.length === 0) return steps
+        const allowed = new Set(stepKeys)
+        const filtered = steps.filter(step => allowed.has(step.key))
+        return filtered.length > 0 ? filtered : steps
+    }, [stepKeys, steps])
+
     // Step state is controlled by the parent (session-only, no persistence).
     // This lets users close/reopen the modal and continue where they left off,
     // but a page refresh will reset back to step 1.
-    const safeIdx = Math.min(Math.max(0, stepIndex || 0), steps.length - 1)
-    const step = steps[safeIdx] ?? steps[0]!
+    const safeIdx = Math.min(Math.max(0, stepIndex || 0), visibleSteps.length - 1)
+    const step = visibleSteps[safeIdx] ?? visibleSteps[0]!
     const isFirst = safeIdx === 0
-    const isLast = safeIdx === steps.length - 1
+    const isLast = safeIdx === visibleSteps.length - 1
 
     return (
         <>
@@ -262,7 +260,7 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                         <div className="text-xs text-slate-600">
                             {t('components.analyzerTutorialModal.stepLabel', {
                                 current: safeIdx + 1,
-                                total: steps.length,
+                                total: visibleSteps.length,
                             })}
                         </div>
                         <Button
@@ -293,7 +291,7 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                             <Button
                                 variant="primary"
                                 size="sm"
-                                onClick={() => onStepIndexChange(Math.min(steps.length - 1, safeIdx + 1))}
+                                onClick={() => onStepIndexChange(Math.min(visibleSteps.length - 1, safeIdx + 1))}
                                 text={t('common.next')}
                             />
                         ) : (
