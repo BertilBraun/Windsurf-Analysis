@@ -150,6 +150,36 @@ export const CanvasPlayer: React.FC<Props> = ({
         [player, getSortedTracks, goToTrack]
     )
 
+    const getVisibleAnnotations = React.useCallback((timeSec: number) => {
+        const visible = annotationsRef.current.filter(
+            stroke => Math.abs(stroke.timeSec - timeSec) <= ANNOTATION_TIME_WINDOW_SEC
+        )
+        if (activeStrokeRef.current) visible.push(activeStrokeRef.current)
+        return visible
+    }, [])
+
+    const redrawFrame = React.useCallback(
+        (timeSec?: number) => {
+            const c = canvasRef.current
+            const v = videoRef.current
+            const container = containerRef.current
+            if (!c || !v || !player || !container) return
+            if (isExporting) return
+            const drawTime = timeSec ?? player.currentTimeSec
+            drawFrame(
+                c,
+                container,
+                v,
+                player,
+                { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
+                getVisibleAnnotations(drawTime),
+                drawTime,
+                job.dominant_orientation
+            )
+        },
+        [player, isExporting, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation, getVisibleAnnotations]
+    )
+
     // Keyboard controls
     React.useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -267,36 +297,6 @@ export const CanvasPlayer: React.FC<Props> = ({
         redrawFrame,
         player?.currentTimeSec,
     ])
-
-    const getVisibleAnnotations = React.useCallback((timeSec: number) => {
-        const visible = annotationsRef.current.filter(
-            stroke => Math.abs(stroke.timeSec - timeSec) <= ANNOTATION_TIME_WINDOW_SEC
-        )
-        if (activeStrokeRef.current) visible.push(activeStrokeRef.current)
-        return visible
-    }, [])
-
-    const redrawFrame = React.useCallback(
-        (timeSec?: number) => {
-            const c = canvasRef.current
-            const v = videoRef.current
-            const container = containerRef.current
-            if (!c || !v || !player || !container) return
-            if (isExporting) return
-            const drawTime = timeSec ?? player.currentTimeSec
-            drawFrame(
-                c,
-                container,
-                v,
-                player,
-                { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
-                getVisibleAnnotations(drawTime),
-                drawTime,
-                job.dominant_orientation
-            )
-        },
-        [player, isExporting, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation, getVisibleAnnotations]
-    )
 
     React.useEffect(() => {
         if (!drawMode) return
@@ -761,28 +761,30 @@ export const CanvasPlayer: React.FC<Props> = ({
                                     {t('player.canvas.draw.tool')}
                                 </div>
                                 <div className="mt-2 flex items-center gap-1">
-                                    <button
+                                    <Button
                                         type="button"
+                                        variant="unstyled"
+                                        size="none"
                                         onClick={() => setDrawTool('freehand')}
                                         className={`rounded-md px-2 py-1 text-xs font-medium transition ${
                                             drawTool === 'freehand'
                                                 ? 'bg-white text-black'
                                                 : 'bg-white/10 text-gray-100 hover:bg-white/20'
                                         }`}
-                                    >
-                                        {t('player.canvas.draw.freehand')}
-                                    </button>
-                                    <button
+                                        text={t('player.canvas.draw.freehand')}
+                                    />
+                                    <Button
                                         type="button"
+                                        variant="unstyled"
+                                        size="none"
                                         onClick={() => setDrawTool('line')}
                                         className={`rounded-md px-2 py-1 text-xs font-medium transition ${
                                             drawTool === 'line'
                                                 ? 'bg-white text-black'
                                                 : 'bg-white/10 text-gray-100 hover:bg-white/20'
                                         }`}
-                                    >
-                                        {t('player.canvas.draw.line')}
-                                    </button>
+                                        text={t('player.canvas.draw.line')}
+                                    />
                                 </div>
                             </div>
                             <div>
@@ -797,9 +799,11 @@ export const CanvasPlayer: React.FC<Props> = ({
                                             WIDTH_PREVIEW_MIN
                                         const buttonSize = previewSize
                                         return (
-                                            <button
+                                            <Button
                                                 key={option}
                                                 type="button"
+                                                variant="unstyled"
+                                                size="none"
                                                 onClick={() => setDrawWidth(option)}
                                                 className={`flex items-center justify-center rounded-full transition ${
                                                     drawWidth === option
@@ -813,7 +817,7 @@ export const CanvasPlayer: React.FC<Props> = ({
                                                     className="block rounded-full bg-white"
                                                     style={{ width: previewSize, height: previewSize }}
                                                 />
-                                            </button>
+                                            </Button>
                                         )
                                     })}
                                 </div>
@@ -824,9 +828,11 @@ export const CanvasPlayer: React.FC<Props> = ({
                                 </div>
                                 <div className="mt-2 flex items-center gap-2">
                                     {DRAW_COLOR_OPTIONS.map(option => (
-                                        <button
+                                        <Button
                                             key={option}
                                             type="button"
+                                            variant="unstyled"
+                                            size="none"
                                             onClick={() => setDrawColor(option)}
                                             className={`h-6 w-6 rounded-full transition ${
                                                 drawColor === option
