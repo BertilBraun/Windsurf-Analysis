@@ -64,7 +64,7 @@
                             "folder": "Re-check you selected the correct ingress folder",
                             "path": "Make sure the video still exists at its expected path"
                         },
-                        "title": "Troubleshooting: \u201cVIDEO FILE NOT FOUND\u201d"
+                        "title": "Troubleshooting:"
                     }
                 },
                 "review": {
@@ -401,6 +401,7 @@
     "screens": {
         "analyzer": {
             "actions": {
+                "feedback": "Feedback",
                 "help": "Help",
                 "settings": "Settings",
                 "tutorial": "Tutorial"

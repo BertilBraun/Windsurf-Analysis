@@ -7,6 +7,14 @@
         }
     },
     "screens": {
+        "analyzer": {
+            "actions": {
+                "feedback": "Feedback",
+                "help": "Hilfe",
+                "settings": "Einstellungen",
+                "tutorial": "Tutorial"
+            }
+        },
         "home": {
             "hero": {
                 "brand": "GybeLock",

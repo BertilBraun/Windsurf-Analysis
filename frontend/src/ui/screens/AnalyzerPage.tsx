@@ -175,6 +175,15 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                         />
                         <Button
                             size="sm"
+                            variant="primary"
+                            onClick={() => {
+                                trackEvent('open_feedback')
+                                setShowFeedback(true)
+                            }}
+                            text={t('screens.analyzer.actions.feedback')}
+                        />
+                        <Button
+                            size="sm"
                             variant="secondary"
                             onClick={() => {
                                 trackEvent('open_settings')
