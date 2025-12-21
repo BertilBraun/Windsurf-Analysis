@@ -136,14 +136,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     }, [jobs, sortKey, sortDir])
 
     const succeededJobs = React.useMemo(() => jobs.filter(j => j.status === 'succeeded'), [jobs])
-    const feedbackTargetJobId = React.useMemo(() => {
-        if (succeededJobs.length === 0) return null
-        return succeededJobs.reduce((best, job) => {
-            const bestTime = Date.parse(best.updated_at || best.created_at || '') || 0
-            const jobTime = Date.parse(job.updated_at || job.created_at || '') || 0
-            return jobTime >= bestTime ? job : best
-        }).id
-    }, [succeededJobs])
 
     React.useEffect(() => {
         if (!jobsInitialSyncComplete) return
@@ -311,9 +303,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                         </div>
                     </Modal>
                 )}
-                {showFeedback && (
-                    <FeedbackModal jobId={feedbackTargetJobId} onClose={handleFeedbackClose} onSubmit={reportJob} />
-                )}
+                {showFeedback && <FeedbackModal onClose={handleFeedbackClose} onSubmit={reportJob} />}
                 {showTutorial && (
                     <TutorialModal
                         onClose={() => {

@@ -5,12 +5,11 @@ import { Button } from './Button'
 import { Modal } from './Modal'
 
 type Props = {
-    jobId: string | null
     onClose: () => void
     onSubmit: (jobId: string, type: ReportType, message: string) => Promise<void>
 }
 
-export const FeedbackModal: React.FC<Props> = ({ jobId, onClose, onSubmit }) => {
+export const FeedbackModal: React.FC<Props> = ({ onClose, onSubmit }) => {
     const { t } = useTranslation()
     const [message, setMessage] = React.useState<string>('')
     const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false)
@@ -39,13 +38,9 @@ export const FeedbackModal: React.FC<Props> = ({ jobId, onClose, onSubmit }) => 
                         isPending={isSubmitting}
                         onClick={async () => {
                             setError(null)
-                            if (!jobId) {
-                                setError(t('screens.analyzer.feedback.errorNoJob'))
-                                return
-                            }
                             setIsSubmitting(true)
                             try {
-                                await onSubmit(jobId, 'feedback', message.trim())
+                                await onSubmit('feedback_general_id', 'feedback', message.trim())
                                 setMessage('')
                                 onClose()
                             } catch (e: any) {
