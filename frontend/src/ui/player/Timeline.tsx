@@ -17,7 +17,7 @@ export const Timeline: React.FC<{
     }
 
     return (
-        <div className="relative h-7 bg-gray-200 cursor-pointer" onClick={onClick}>
+        <div className="relative h-2 bg-gray-200 cursor-pointer" onClick={onClick}>
             <div className="absolute left-0 top-0 bottom-0 bg-gray-400" style={{ width: `${percent}%` }} />
             <div
                 className="absolute top-0 bottom-0 bg-yellow-500"
