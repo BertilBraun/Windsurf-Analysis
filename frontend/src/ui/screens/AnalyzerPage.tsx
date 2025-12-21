@@ -12,10 +12,12 @@ import { SettingsModal } from '../components/SettingsModal'
 import { PlayerModal } from '../components/PlayerModal'
 import { LogoButton } from '../components/LogoButton'
 import { Modal } from '../components/Modal'
+import { FeedbackModal } from '../components/FeedbackModal'
 import { trackEvent } from '../utils/analytics'
 import { AnalyzerTutorialModal } from '../components/AnalyzerTutorialModal'
 
 const ANALYZER_TUTORIAL_SEEN_KEY = 'analyzerTutorialSeen.v1'
+const FEEDBACK_PROMPT_SEEN_KEY = 'feedbackPromptSeen.v1'
 
 export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => void }> = ({
     onGoHome,
@@ -31,6 +33,8 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const [tutorialStepIndex, setTutorialStepIndex] = React.useState<number>(0)
     const [sortKey, setSortKey] = React.useState<JobListSortKey>('date')
     const [sortDir, setSortDir] = React.useState<JobListSortDir>('desc')
+    const [showFeedback, setShowFeedback] = React.useState<boolean>(false)
+    const [feedbackPromptSeen, setFeedbackPromptSeen] = React.useState<boolean | null>(null)
 
     // Workaround: some TS tooling instances may cache older prop typings during rapid edits.
     // This keeps runtime behavior correct while avoiding a stale "extra props" diagnostic.
@@ -72,6 +76,12 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
             if (seen) return
             trackEvent('open_tutorial', { source: 'auto' })
             setShowTutorial(true)
+        })
+    }, [])
+
+    React.useEffect(() => {
+        loadSetting<boolean>(FEEDBACK_PROMPT_SEEN_KEY).then(seen => {
+            setFeedbackPromptSeen(!!seen)
         })
     }, [])
 
@@ -124,6 +134,29 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         const succeeded = jobs.filter(j => j.status === 'succeeded')
         return getJobListOrderedJobIds(succeeded, sortKey, sortDir)
     }, [jobs, sortKey, sortDir])
+
+    const succeededJobs = React.useMemo(() => jobs.filter(j => j.status === 'succeeded'), [jobs])
+    const feedbackTargetJobId = React.useMemo(() => {
+        if (succeededJobs.length === 0) return null
+        return succeededJobs.reduce((best, job) => {
+            const bestTime = Date.parse(best.updated_at || best.created_at || '') || 0
+            const jobTime = Date.parse(job.updated_at || job.created_at || '') || 0
+            return jobTime >= bestTime ? job : best
+        }).id
+    }, [succeededJobs])
+
+    React.useEffect(() => {
+        if (!jobsInitialSyncComplete) return
+        if (feedbackPromptSeen !== false) return
+        if (succeededJobs.length < 3) return
+        setShowFeedback(true)
+    }, [feedbackPromptSeen, jobsInitialSyncComplete, succeededJobs.length])
+
+    const handleFeedbackClose = React.useCallback(() => {
+        setShowFeedback(false)
+        setFeedbackPromptSeen(true)
+        void saveSetting(FEEDBACK_PROMPT_SEEN_KEY, true)
+    }, [])
 
     const [deletingId, setDeletingId] = React.useState<string | null>(null)
     const onDelete = async (id: string) => {
@@ -277,6 +310,9 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                             </a>
                         </div>
                     </Modal>
+                )}
+                {showFeedback && (
+                    <FeedbackModal jobId={feedbackTargetJobId} onClose={handleFeedbackClose} onSubmit={reportJob} />
                 )}
                 {showTutorial && (
                     <TutorialModal
