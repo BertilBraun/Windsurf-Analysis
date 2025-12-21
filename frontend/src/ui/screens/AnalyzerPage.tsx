@@ -10,8 +10,8 @@ import { Button } from '../components/Button'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { SettingsModal } from '../components/SettingsModal'
 import { PlayerModal } from '../components/PlayerModal'
+import { HelpModal } from '../components/HelpModal'
 import { LogoButton } from '../components/LogoButton'
-import { Modal } from '../components/Modal'
 import { FeedbackModal } from '../components/FeedbackModal'
 import { trackEvent } from '../utils/analytics'
 import { AnalyzerTutorialModal } from '../components/AnalyzerTutorialModal'
@@ -207,10 +207,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                                     {t('screens.analyzer.emptyState.title')}
                                 </div>
                                 <div className="mt-1 text-sm text-slate-600">
-                                    <Trans
-                                        i18nKey="screens.analyzer.emptyState.body"
-                                        components={{ b: <b /> }}
-                                    />
+                                    <Trans i18nKey="screens.analyzer.emptyState.body" components={{ b: <b /> }} />
                                 </div>
                             </div>
                             <div className="flex flex-wrap gap-2">
@@ -220,7 +217,9 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                                         trackEvent('tutorial_select_folder_clicked')
                                         void pickDirectory()
                                     }}
-                                    text={dirHandle ? t('common.actions.changeFolder') : t('common.actions.selectFolder')}
+                                    text={
+                                        dirHandle ? t('common.actions.changeFolder') : t('common.actions.selectFolder')
+                                    }
                                 />
                                 <Button
                                     variant="primary"
@@ -259,7 +258,10 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                         onClose={() => setSelectedJob(null)}
                         onOpenNextJob={async () => {
                             if (!selectedJob || orderedSucceededJobIds.length === 0) return
-                            const idx = Math.max(0, orderedSucceededJobIds.findIndex(id => id === selectedJob.id))
+                            const idx = Math.max(
+                                0,
+                                orderedSucceededJobIds.findIndex(id => id === selectedJob.id)
+                            )
                             const nextIdx = (idx + 1) % orderedSucceededJobIds.length
                             const targetId = orderedSucceededJobIds[nextIdx]
                             if (!targetId) return
@@ -268,7 +270,10 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                         }}
                         onOpenPrevJob={async () => {
                             if (!selectedJob || orderedSucceededJobIds.length === 0) return
-                            const idx = Math.max(0, orderedSucceededJobIds.findIndex(id => id === selectedJob.id))
+                            const idx = Math.max(
+                                0,
+                                orderedSucceededJobIds.findIndex(id => id === selectedJob.id)
+                            )
                             const prevIdx = (idx - 1 + orderedSucceededJobIds.length) % orderedSucceededJobIds.length
                             const targetId = orderedSucceededJobIds[prevIdx]
                             if (!targetId) return
@@ -281,16 +286,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     />
                 )}
                 {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onLogout={logout} />}
-                {showHelp && (
-                    <Modal onClose={() => setShowHelp(false)} title={t('screens.analyzer.help.title')}>
-                        <div className="p-4 text-sm text-slate-700">
-                            {t('screens.analyzer.help.body')}{' '}
-                            <a className="text-brand-700 underline" href="mailto:contact@gybelock.de">
-                                contact@gybelock.de
-                            </a>
-                        </div>
-                    </Modal>
-                )}
+                {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
                 {showFeedback && <FeedbackModal onClose={handleFeedbackClose} onSubmit={reportJob} />}
                 {showTutorial && <TutorialModal {...tutorialModalProps} />}
             </main>
