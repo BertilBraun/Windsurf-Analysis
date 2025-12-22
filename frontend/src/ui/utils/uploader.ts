@@ -10,8 +10,8 @@ export type UploadContext = {
 
 const MODAL_BASE = modalUrl + '/api/v1'
 
-const MAX_PARALLEL_UPLOAD_REQUESTS = 8
-const MAX_PARALLEL_VIDEO_UPLOADS = 2
+const MAX_PARALLEL_UPLOAD_REQUESTS = 16
+const MAX_PARALLEL_VIDEO_UPLOADS = 3
 
 function createLimiter(max: number) {
     const waiters: Array<() => void> = []
