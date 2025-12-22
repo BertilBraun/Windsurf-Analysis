@@ -135,56 +135,6 @@ export async function deleteSetting(key: string): Promise<void> {
     } catch {}
 }
 
-type InProgressRecord = { hash: string; owner: string; createdAt: number }
-
-export async function tryClaimUpload(hash: string, owner: string, maxAgeMs: number = 60 * 60 * 1000): Promise<boolean> {
-    try {
-        const db = await openDb()
-        const tx = db.transaction(STORE_INPROGRESS, 'readwrite')
-        const store = tx.objectStore(STORE_INPROGRESS)
-        const now = Date.now()
-        const rec: InProgressRecord = { hash, owner, createdAt: now }
-
-        const ok = await new Promise<boolean>(resolve => {
-            const addReq = (store as any).add(rec)
-            addReq.onsuccess = () => resolve(true)
-            addReq.onerror = () => {
-                // If exists, check staleness; if stale, replace
-                const getReq = store.get(hash)
-                getReq.onsuccess = () => {
-                    const existing = getReq.result as InProgressRecord | undefined
-                    if (existing && now - existing.createdAt > maxAgeMs) {
-                        // stale: replace ownership
-                        store.put(rec)
-                        resolve(true)
-                    } else {
-                        resolve(false)
-                    }
-                }
-                getReq.onerror = () => resolve(false)
-            }
-        })
-
-        await idbTxDone(tx).catch(() => {})
-        db.close()
-        return ok
-    } catch {
-        return false
-    }
-}
-
-export async function releaseClaimUpload(hash: string, owner: string): Promise<void> {
-    try {
-        const db = await openDb()
-        const tx = db.transaction(STORE_INPROGRESS, 'readwrite')
-        const store = tx.objectStore(STORE_INPROGRESS)
-        const existing = (await idbRequest(store.get(hash)).catch(() => null)) as InProgressRecord | null
-        if (existing && existing.owner === owner) store.delete(hash)
-        await idbTxDone(tx).catch(() => {})
-        db.close()
-    } catch {}
-}
-
 // SHA <-> Path mapping helpers
 type ShaToPathRecord = { sha: string; paths: string[]; updatedAt: number }
 type PathToShaRecord = { path: string; sha: string; updatedAt: number }
