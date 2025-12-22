@@ -30,7 +30,6 @@ const DRAW_WIDTH_OPTIONS = [2, 3, 5, 8, 14, 20]
 const DRAW_COLOR_OPTIONS = ['#f97316', '#22c55e', '#3b82f6', '#ef4444', '#facc15']
 const WIDTH_PREVIEW_MIN = 8
 const WIDTH_PREVIEW_MAX = 24
-
 export const CanvasPlayer: React.FC<Props> = ({
     job,
     dirHandle,
@@ -381,6 +380,7 @@ export const CanvasPlayer: React.FC<Props> = ({
         const container = containerRef.current
         if (!c || !v || !player || !container) return
         if (isExporting) return
+        if (v.seeking) return
         drawFrame(
             c,
             container,

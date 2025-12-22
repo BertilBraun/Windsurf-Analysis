@@ -209,6 +209,11 @@ export class PlayerState {
         const a = arr[idx - 1]
         const b = arr[idx]
         const alpha = this.interpolationAlpha(timeSec, a, b)
+        const timeDiffToA = Math.abs(timeSec - this.time(a))
+        const timeDiffToB = Math.abs(timeSec - this.time(b))
+
+        return timeDiffToB < timeDiffToA ? b : a
+
         return {
             dx: interpolate(a.dx, b.dx, alpha),
             dy: interpolate(a.dy, b.dy, alpha),
