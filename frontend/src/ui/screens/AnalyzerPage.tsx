@@ -16,13 +16,14 @@ import { FeedbackModal } from '../components/FeedbackModal'
 import { trackEvent } from '../utils/analytics'
 import { AnalyzerTutorialModal } from '../components/AnalyzerTutorialModal'
 import { useTutorialController } from '../hooks/useTutorialController'
+import { ConsentModal } from '../components/ConsentModal'
 const FEEDBACK_PROMPT_SEEN_KEY = 'feedbackPromptSeen.v1'
 export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => void }> = ({
     onGoHome,
     onGoPricing,
 }) => {
     const { t } = useTranslation()
-    const { logout, user, authorizedFetch, getAuthHeader } = useAuth()
+    const { logout, user, authorizedFetch, getAuthHeader, uid } = useAuth()
     const { jobs, initialSyncComplete: jobsInitialSyncComplete, refreshJobDetail, deleteJob, reportJob } = useJobs()
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
     const [showSettings, setShowSettings] = React.useState<boolean>(false)
@@ -31,6 +32,8 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const [sortDir, setSortDir] = React.useState<JobListSortDir>('desc')
     const [showFeedback, setShowFeedback] = React.useState<boolean>(false)
     const [feedbackPromptSeen, setFeedbackPromptSeen] = React.useState<boolean | null>(null)
+    const [consentRequired, setConsentRequired] = React.useState<boolean>(false)
+    const [consentSubmitting, setConsentSubmitting] = React.useState<boolean>(false)
 
     // Workaround: some TS tooling instances may cache older prop typings during rapid edits.
     // This keeps runtime behavior correct while avoiding a stale "extra props" diagnostic.
@@ -73,6 +76,29 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
             setFeedbackPromptSeen(!!seen)
         })
     }, [])
+
+    React.useEffect(() => {
+        if (!uid) return
+        let cancelled = false
+        ;(async () => {
+            try {
+                const res = await authorizedFetch(`/users/${uid}`)
+                if (!res.ok) return
+                const data = (await res.json()) as {
+                    terms_accepted_at?: string | null
+                    privacy_accepted_at?: string | null
+                }
+                if (cancelled) return
+                const needsConsent = !data?.terms_accepted_at || !data?.privacy_accepted_at
+                setConsentRequired(needsConsent)
+            } catch (e) {
+                console.warn('Failed to load user consent state', e)
+            }
+        })()
+        return () => {
+            cancelled = true
+        }
+    }, [authorizedFetch, uid])
 
     const pickDirectory = async () => {
         try {
@@ -285,6 +311,31 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                 {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
                 {showFeedback && <FeedbackModal onClose={handleFeedbackClose} onSubmit={reportJob} />}
                 {showTutorial && <TutorialModal {...tutorialModalProps} />}
+                {consentRequired && (
+                    <ConsentModal
+                        isSubmitting={consentSubmitting}
+                        onSubmit={async marketingConsent => {
+                            if (!uid) return
+                            setConsentSubmitting(true)
+                            try {
+                                const res = await authorizedFetch(`/users/${uid}/consent`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        terms_accepted: true,
+                                        marketing_consent: marketingConsent,
+                                    }),
+                                })
+                                if (!res.ok) throw new Error(await res.text())
+                                setConsentRequired(false)
+                            } catch (e) {
+                                console.error('Failed to update consent', e)
+                            } finally {
+                                setConsentSubmitting(false)
+                            }
+                        }}
+                    />
+                )}
             </main>
 
             {/* Beta badge: bottom-left, subtle (brand) */}

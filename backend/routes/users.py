@@ -19,6 +19,11 @@ class CreateUserRequest(BaseModel):
     marketing_consent: bool | None = None
 
 
+class UpdateConsentRequest(BaseModel):
+    terms_accepted: bool | None = None
+    marketing_consent: bool | None = None
+
+
 @router.post('/{user_id}')
 def create_user(
     user_id: str,
@@ -45,6 +50,30 @@ def create_user(
         marketing_consent=marketing_consent,
         marketing_consent_at=marketing_consent_at,
     )
+    return {'ok': True}
+
+
+@router.patch('/{user_id}/consent')
+def update_user_consent(
+    user_id: str,
+    payload: UpdateConsentRequest,
+    user: User = Depends(get_current_user_without_email_verification),
+):
+    if user.uid != user_id:
+        raise HTTPException(status_code=403, detail='Forbidden')
+    if payload.terms_accepted is False:
+        raise HTTPException(status_code=400, detail='Terms must be accepted')
+
+    fields: dict = {}
+    if payload.terms_accepted:
+        ts = now()
+        fields['terms_accepted_at'] = ts
+        fields['privacy_accepted_at'] = ts
+    if payload.marketing_consent is not None:
+        fields['marketing_consent'] = payload.marketing_consent
+        fields['marketing_consent_at'] = now() if payload.marketing_consent else None
+
+    user_repo.update_user_fields(user_id, fields)
     return {'ok': True}
 
 

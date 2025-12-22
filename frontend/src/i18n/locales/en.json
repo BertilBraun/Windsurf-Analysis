@@ -17,6 +17,13 @@
             "decline": "Decline",
             "message": "GybeLock would like to use <bold>Google Analytics</bold> to understand basic usage (page views and clicks). You can accept or decline. Details are in the <privacyLink>Privacy Policy</privacyLink>."
         },
+        "consentModal": {
+            "accept": "Continue",
+            "marketing": "You can email me product updates and feedback requests (optional).",
+            "subtitle": "Please review and accept the Terms and Privacy Policy to continue.",
+            "terms": "I agree to the <termsLink>Terms of Use</termsLink> and <privacyLink>Privacy Policy</privacyLink>.",
+            "title": "Terms and privacy"
+        },
         "analyzerTutorialModal": {
             "restart": "Restart",
             "restartTitle": "Restart tutorial",

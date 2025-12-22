@@ -52,3 +52,8 @@ class UserRepo:
 
     def increment_processed_jobs_count(self, user_id: str, delta: int = 1) -> None:
         users.document(user_id).set({'processed_jobs_count': firestore.Increment(delta)}, merge=True)
+
+    def update_user_fields(self, user_id: str, fields: dict) -> None:
+        if not fields:
+            return
+        users.document(user_id).set(fields, merge=True)

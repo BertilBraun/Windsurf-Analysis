@@ -4,6 +4,13 @@
             "message": "GybeLock moechte <bold>Google Analytics</bold> verwenden, um die grundlegende Nutzung zu verstehen (Seitenaufrufe und Klicks). Du kannst akzeptieren oder ablehnen. Details stehen in der <privacyLink>Datenschutzerklaerung</privacyLink>.",
             "decline": "Ablehnen",
             "accept": "Akzeptieren"
+        },
+        "consentModal": {
+            "accept": "Weiter",
+            "marketing": "Ihr duerft mir Produkt-Updates und Feedback-Anfragen per E-Mail senden (optional).",
+            "subtitle": "Bitte akzeptiere die Nutzungsbedingungen und die Datenschutzerklaerung, um fortzufahren.",
+            "terms": "Ich akzeptiere die <termsLink>Nutzungsbedingungen</termsLink> und die <privacyLink>Datenschutzerklaerung</privacyLink>.",
+            "title": "Nutzungsbedingungen und Datenschutz"
         }
     },
     "screens": {
