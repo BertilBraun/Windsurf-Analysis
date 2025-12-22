@@ -36,12 +36,11 @@ export function useIngressScanner(
     uploadCtx: UploadContext | null,
     knownChecksumsSha256?: ReadonlySet<string> | null,
     uploadsEnabled: boolean = true,
-    intervalMs: number = 2000
+    intervalMs: number = 5000
 ) {
     const [active, setActive] = React.useState(false)
     const [lastRunAt, setLastRunAt] = React.useState<number | null>(null)
     const [lastError, setLastError] = React.useState<string | null>(null)
-    const [uploading, setUploading] = React.useState(0)
     const [uploads, setUploads] = React.useState<IngressUploadItem[]>([])
     const inProgressRef = React.useRef<Set<string>>(new Set())
     const failedRef = React.useRef<Set<string>>(new Set())
@@ -71,7 +70,6 @@ export function useIngressScanner(
             const { sha256 } = await computeSha256(file)
             sha = sha256
         }
-        if (!sha) return null
 
         // Always persist mapping (adds duplicates + normalizes + updates timestamps)
         await saveShaPathMapping(sha, relPath)
@@ -107,13 +105,6 @@ export function useIngressScanner(
 
     const uploadOne = React.useCallback(
         async (shaLower: string, file: File, relPath: string) => {
-            let started = false
-            const markStarted = () => {
-                if (started) return
-                started = true
-                setUploading(v => v + 1)
-                updateUpload(shaLower, { status: 'uploading' })
-            }
             setUploads(prev => {
                 if (prev.some(u => u.id === shaLower)) return prev
                 return [...prev, { id: shaLower, relativePath: relPath, progress: 0, status: 'queued', error: null }]
@@ -122,14 +113,13 @@ export function useIngressScanner(
             try {
                 inProgressRef.current.add(shaLower)
 
-                setLastError(null)
-                const result = await uploadVideoFile(
+                const result = await uploadVideoFile({
                     file,
-                    settings.uploadQuality,
-                    uploadCtx!,
-                    percent => updateUpload(shaLower, { progress: Math.round(percent * 100) }),
-                    markStarted
-                )
+                    quality: settings.uploadQuality,
+                    ctx: uploadCtx!,
+                    onProgress: percent => updateUpload(shaLower, { progress: Math.round(percent * 100) }),
+                    onStarted: () => updateUpload(shaLower, { status: 'uploading' }),
+                })
                 recentlyHandledRef.current.set(shaLower, Date.now())
 
                 if (result === 'skipped') {
@@ -151,13 +141,12 @@ export function useIngressScanner(
                 setSuspended(true)
             } finally {
                 inProgressRef.current.delete(shaLower)
-                if (started) setUploading(v => v - 1)
             }
         },
         [removeUpload, settings.uploadQuality, updateUpload, uploadCtx]
     )
 
-    const scanOnce = React.useCallback(async () => {
+    const scanContinuously = React.useCallback(async () => {
         if (!dirHandle) return
 
         try {
@@ -204,23 +193,23 @@ export function useIngressScanner(
             setLastError(e?.message || String(e))
             setLastRunAt(Date.now())
         }
+        timerRef.current = window.setTimeout(scanContinuously, intervalMs)
     }, [dirHandle, shouldUpload, syncMappingForFile, uploadOne])
 
     React.useEffect(() => {
-        if (timerRef.current) window.clearInterval(timerRef.current)
+        if (timerRef.current) window.clearTimeout(timerRef.current)
         if (!dirHandle) {
             setActive(false)
             return
         }
         setActive(true)
         // immediate run, then interval
-        scanOnce()
-        timerRef.current = window.setInterval(scanOnce, intervalMs)
+        scanContinuously()
         return () => {
-            if (timerRef.current) window.clearInterval(timerRef.current)
+            if (timerRef.current) window.clearTimeout(timerRef.current)
             timerRef.current = null
         }
-    }, [dirHandle, intervalMs, scanOnce])
+    }, [dirHandle, intervalMs, scanContinuously])
 
     const retryFailed = React.useCallback(() => {
         failedRef.current = new Set()
@@ -230,7 +219,9 @@ export function useIngressScanner(
             prev.map(u => (u.status === 'error' ? { ...u, status: 'queued', progress: 0, error: null } : u))
         )
         setSuspended(false) // This will trigger a new scan
-    }, [scanOnce])
+    }, [scanContinuously])
+
+    const uploading = React.useMemo(() => uploads.filter(u => u.status === 'uploading').length, [uploads])
 
     return { active, lastRunAt, lastError, uploading, uploads, suspended, retryFailed }
 }

@@ -96,13 +96,15 @@ const MAX_CONCURRENCY = Math.min(
 const PERCENT_PREPROCESS = 0.0
 const PERCENT_UPLOAD = 1.0
 
-export async function uploadVideoFile(
-    file: File,
-    quality: UploadQuality,
-    ctx: UploadContext,
-    onProgress: (percent: number) => void,
+export async function uploadVideoFile(params: {
+    file: File
+    quality: UploadQuality
+    ctx: UploadContext
+    onProgress: (percent: number) => void
     onStarted?: () => void
-): Promise<'uploaded' | 'skipped'> {
+}): Promise<'uploaded' | 'skipped'> {
+    const { file, quality, ctx, onProgress, onStarted } = params
+
     // Step 1: Create job (also acts as duplicate/quota check)
     trackEvent('analysis_upload_start', {
         file_size_bytes: file.size,
