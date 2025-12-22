@@ -87,7 +87,7 @@ const MAX_CONCURRENCY = Math.min(
 // TODO with preprocess const PERCENT_PREPROCESS = 0.3
 // TODO with preprocess const PERCENT_UPLOAD = 0.7
 const PERCENT_PREPROCESS = 0.0
-const PERCENT_UPLOAD = 1.0
+const PERCENT_UPLOAD = 0.95
 
 export async function uploadVideoFile(params: {
     file: File
@@ -125,14 +125,16 @@ export async function uploadVideoFile(params: {
 
     try {
         onStarted?.()
-        const result = await uploadVideoFileToJob(file, quality, ctx, job_id, onProgress)
+        const result = await uploadVideoFileToJob(file, quality, ctx, job_id, (percent: number) => {
+            onProgress(percent)
+            if (percent >= PERCENT_UPLOAD) releaseVideoSlot()
+        })
         trackEvent('analysis_upload_complete', { job_id })
         return result
     } catch (e: any) {
         trackEvent('analysis_upload_failed', { job_id, message: String(e?.message || e || 'upload failed') })
-        throw e
-    } finally {
         releaseVideoSlot()
+        throw e
     }
 }
 
@@ -209,7 +211,7 @@ export async function uploadVideoFileToJob(
 
     const updateOverallProgress = () => {
         const overall = aggregatedUploaded / totalSize
-        onProgress(Math.min(0.95, overall * PERCENT_UPLOAD + PERCENT_PREPROCESS))
+        onProgress(Math.min(PERCENT_UPLOAD, overall * PERCENT_UPLOAD + PERCENT_PREPROCESS))
     }
 
     // Work queue of part indices to upload
