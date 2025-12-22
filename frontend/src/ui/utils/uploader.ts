@@ -2,6 +2,7 @@ import { modalUrl } from '../../firebase'
 import { getVideoTrack } from '../hooks/useVideoFps'
 import { UploadQuality } from '../types'
 import { trackEvent } from './analytics'
+import { computeSha256 } from './localFileIndex'
 
 export type UploadContext = {
     authorizedFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>
@@ -43,14 +44,6 @@ function createLimiter(max: number) {
 
 const acquireUploadSlot = createLimiter(MAX_PARALLEL_UPLOAD_REQUESTS)
 const acquireVideoUploadSlot = createLimiter(MAX_PARALLEL_VIDEO_UPLOADS)
-
-export async function computeSha256(file: File): Promise<{ arrayBuffer: ArrayBuffer; sha256: string }> {
-    const arrayBuffer = await file.arrayBuffer()
-    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    const sha256 = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-    return { arrayBuffer, sha256 }
-}
 
 export async function doXhrUpload(
     url: string,
@@ -102,8 +95,9 @@ export async function uploadVideoFile(params: {
     ctx: UploadContext
     onProgress: (percent: number) => void
     onStarted?: () => void
+    precomputedSha256?: string
 }): Promise<'uploaded' | 'skipped'> {
-    const { file, quality, ctx, onProgress, onStarted } = params
+    const { file, quality, ctx, onProgress, onStarted, precomputedSha256 } = params
 
     // Step 1: Create job (also acts as duplicate/quota check)
     trackEvent('analysis_upload_start', {
@@ -115,11 +109,10 @@ export async function uploadVideoFile(params: {
     // get number of frames of the video and skip if longer than MAX_FRAMES
     const video = await getVideoTrack(file)
     const frameCount = video?.FrameCount
-    console.log('frameCount pre upload for file', file.name, 'is', frameCount)
     const MAX_FRAMES = 30 * 60 * 3 // 3 minutes at 30fps
     if (!frameCount || frameCount > MAX_FRAMES) throw new Error('Video too long')
 
-    const { sha256 } = await computeSha256(file)
+    const sha256 = precomputedSha256 || (await computeSha256(file)).sha256
     const created = await createJobForChecksum(sha256, ctx)
     if (created === 'skipped') {
         trackEvent('analysis_upload_skipped', { reason: 'duplicate_or_already_processed' })
@@ -129,6 +122,7 @@ export async function uploadVideoFile(params: {
     trackEvent('analysis_job_created', { job_id })
 
     const releaseVideoSlot = await acquireVideoUploadSlot()
+
     try {
         onStarted?.()
         const result = await uploadVideoFileToJob(file, quality, ctx, job_id, onProgress)

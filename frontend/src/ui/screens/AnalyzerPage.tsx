@@ -46,7 +46,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const knownChecksumsSha256 = React.useMemo(() => {
         const s = new Set<string>()
         for (const j of jobs) {
-            const sha = String(j.original_checksum_sha256 || '').toLowerCase()
+            const sha = String(j.original_checksum_sha256 || '')
             if (!sha) continue
             if (j.status === 'pending') continue
             s.add(sha)

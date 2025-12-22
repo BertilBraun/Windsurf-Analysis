@@ -2,7 +2,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { JobSummary } from '../types'
 import { getFileByRelativePath } from '../utils/fsAccess'
-import { getPathsForSha, getThumbnailBlob, saveThumbnailBlob } from '../utils/idb'
+import { getThumbnailBlob, saveThumbnailBlob } from '../utils/idb'
 import { drawRotatedToCanvas } from '../player/rotation'
 
 const THUMB_TARGET_W = 256
@@ -127,8 +127,8 @@ export const JobThumbnail: React.FC<{
     const lastCacheKeyRef = React.useRef<string>('')
 
     const cacheKey = React.useMemo(() => {
-        const shaLower = String(job.original_checksum_sha256 || '').toLowerCase()
-        const base = shaLower || `jobid:${job.id}`
+        const sha = String(job.original_checksum_sha256 || '')
+        const base = sha || `jobid:${job.id}`
         return `${base}:ori:${Number(job.dominant_orientation || 0)}:w${THUMB_TARGET_W}:q${Math.round(
             THUMB_QUALITY * 100
         )}`
@@ -148,6 +148,7 @@ export const JobThumbnail: React.FC<{
         if (job.status !== 'succeeded') return
 
         ;(async () => {
+            if (!job.local_relative_paths) throw new Error('missing_local_paths')
             try {
                 const cached = await getThumbnailBlob(cacheKey)
                 if (cancelled) return
@@ -167,12 +168,7 @@ export const JobThumbnail: React.FC<{
                 const canRead = await hasReadPermission(dirHandle)
                 if (cancelled || !canRead) return
 
-                const candidates: string[] = []
-                if (job.local_relative_path) candidates.push(job.local_relative_path)
-                if (job.original_checksum_sha256) {
-                    const extra = await getPathsForSha(String(job.original_checksum_sha256).toLowerCase())
-                    for (const p of extra) if (!candidates.includes(p)) candidates.push(p)
-                }
+                const candidates = job.local_relative_paths
                 if (candidates.length === 0) {
                     setNotFound(true)
                     return
@@ -209,8 +205,7 @@ export const JobThumbnail: React.FC<{
         dirHandle,
         job.id,
         job.status,
-        job.local_relative_path,
-        job.original_checksum_sha256,
+        job.local_relative_paths,
         job.dominant_orientation,
     ])
 

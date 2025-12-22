@@ -1,7 +1,6 @@
 import React from 'react'
 import { JobDetail } from '../types'
 import { getFileByRelativePath } from '../utils/fsAccess'
-import { getPathsForSha } from '../utils/idb'
 
 export type VideoSourceError = { key: string; detail?: string }
 
@@ -33,12 +32,8 @@ export function useJobVideoSource(params: {
             }
 
             try {
-                const candidates: string[] = []
-                if (job.local_relative_path) candidates.push(job.local_relative_path)
-                if (job.original_checksum_sha256) {
-                    const extra = await getPathsForSha(String(job.original_checksum_sha256).toLowerCase())
-                    for (const p of extra) if (!candidates.includes(p)) candidates.push(p)
-                }
+                if (!job.local_relative_paths) throw new Error('missing_local_paths')
+                const candidates = job.local_relative_paths
                 if (candidates.length === 0) throw new Error('missing_mapping')
 
                 let file: File | null = null
@@ -68,7 +63,7 @@ export function useJobVideoSource(params: {
                 const msg = String(e?.message || '')
                 const isMissing =
                     e?.name === 'NotFoundError' || /not\s*found|no such file|could not be found/i.test(msg)
-                if (msg === 'missing_mapping') {
+                if (msg === 'missing_mapping' || msg === 'missing_local_paths') {
                     setError({ key: 'player.canvas.errors.missingMapping' })
                 } else if (msg === 'file_not_found' || isMissing) {
                     setFileMissing(true)
@@ -85,7 +80,7 @@ export function useJobVideoSource(params: {
             cancelled = true
             if (revoked) URL.revokeObjectURL(revoked)
         }
-    }, [dirHandle, job.id, job.local_relative_path, job.original_checksum_sha256, onFileLoaded])
+    }, [dirHandle, job.id, job.local_relative_paths, onFileLoaded])
 
     return { videoUrl, sourceFile, fileMissing, error }
 }

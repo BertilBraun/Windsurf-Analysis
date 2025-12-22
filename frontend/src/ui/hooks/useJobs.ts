@@ -1,17 +1,11 @@
 import React from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { JobDetail, JobSummary, ReportType } from '../types'
-import {
-    getPathForSha,
-    getPathsForSha,
-    loadSetting,
-    saveSetting,
-    deleteSetting,
-    subscribeShaPathMappingUpdates,
-} from '../utils/idb'
+import { loadLastKnownPath, loadSetting, saveSetting, deleteSetting } from '../utils/idb'
 import { assert } from '../utils/assert'
 import { collection, doc, onSnapshot, query, where, type Unsubscribe } from 'firebase/firestore'
 import { db } from '../../firebase'
+import { useLocalFileIndex } from './useLocalFileIndex'
 
 type UseJobsReturn = {
     jobs: JobSummary[]
@@ -31,6 +25,7 @@ export function useJobs(): UseJobsReturn {
     const [jobs, setJobs] = React.useState<JobSummary[]>([])
     const [ready, setReady] = React.useState<boolean>(false)
     const [initialSyncComplete, setInitialSyncComplete] = React.useState<boolean>(false)
+    const { shaToPaths } = useLocalFileIndex(null) // NOTE: automatically refreshed once the ingress scanner refreshes
     const readyRef = React.useRef<boolean>(false)
     const jobDetailCacheRef = React.useRef<Map<string, Promise<JobDetail>>>(new Map())
     const realtimeUnsubRef = React.useRef<Unsubscribe | null>(null)
@@ -38,6 +33,7 @@ export function useJobs(): UseJobsReturn {
     const jobsByIdRef = React.useRef<Map<string, JobSummary>>(new Map())
     const activeJobIdsRef = React.useRef<Set<string>>(new Set())
     const hydratedJobIdsRef = React.useRef<Set<string>>(new Set())
+    const shaToPathsRef = React.useRef<Map<string, string[]>>(new Map())
 
     const publishJobsFromRef = React.useCallback(() => {
         const next = Array.from(jobsByIdRef.current.values()).sort((a, b) => {
@@ -48,38 +44,49 @@ export function useJobs(): UseJobsReturn {
         setJobs(next)
     }, [])
 
-    // When the ingress scanner updates the local sha->path mapping (e.g. a file was moved),
-    // update any affected jobs immediately so thumbnails don't point at stale paths.
+    const getLocalPathsForSha = React.useCallback((sha: string | null | undefined): string[] => {
+        if (!sha) return []
+        const paths = shaToPathsRef.current.get(sha) ?? []
+        return paths.slice()
+    }, [])
+
+    const getLastKnownPathForSha = React.useCallback(async (sha: string | null | undefined): Promise<string | null> => {
+        if (!sha) return null
+        return await loadLastKnownPath(sha)
+    }, [])
+
+    // When the local file snapshot updates, refresh any affected jobs in a single batch.
     React.useEffect(() => {
-        const unsub = subscribeShaPathMappingUpdates(({ sha }) => {
-            if (!sha) return
-            void (async () => {
-                const shaLower = String(sha).toLowerCase()
-                const paths = await getPathsForSha(shaLower)
+        shaToPathsRef.current = shaToPaths
+
+        void (async () => {
+            let changed = false
+            for (const [jobId, job] of jobsByIdRef.current.entries()) {
+                const jobSha = job.original_checksum_sha256
+                const jobPath = job.local_relative_path
+                if (!jobSha) continue
+                const paths = getLocalPathsForSha(jobSha)
                 const preferred = paths.length ? paths[0] : null
-                let changed = false
-                for (const [jobId, j] of jobsByIdRef.current.entries()) {
-                    if (!j.original_checksum_sha256) continue
-                    if (String(j.original_checksum_sha256).toLowerCase() !== shaLower) continue
-                    const keep =
-                        j.local_relative_path && paths.some(p => p === j.local_relative_path)
-                            ? j.local_relative_path
-                            : preferred
-                    const same =
-                        j.local_relative_path === keep &&
-                        JSON.stringify(j.local_relative_paths || []) === JSON.stringify(paths)
-                    if (same) continue
-                    jobsByIdRef.current.set(jobId, { ...j, local_relative_path: keep, local_relative_paths: paths })
-                    // Also clear any cached detail so the next open recomputes local_relative_path.
-                    jobDetailCacheRef.current.delete(jobId)
-                    changed = true
-                }
-                if (!changed) return
-                publishJobsFromRef()
-            })()
-        })
-        return () => unsub()
-    }, [publishJobsFromRef])
+                const keep = jobPath && paths.some(p => p === jobPath) ? jobPath : preferred
+                const prevPaths = job.local_relative_paths || []
+                const nextLastKnown = paths.length === 0 ? await getLastKnownPathForSha(jobSha) : null
+                const same =
+                    jobPath === keep &&
+                    JSON.stringify(prevPaths) === JSON.stringify(paths) &&
+                    (job.last_known_local_path || null) === (nextLastKnown || null)
+                if (same) continue
+                jobsByIdRef.current.set(jobId, {
+                    ...job,
+                    local_relative_path: keep,
+                    local_relative_paths: paths,
+                    last_known_local_path: nextLastKnown,
+                })
+                jobDetailCacheRef.current.delete(jobId)
+                changed = true
+            }
+            if (changed) publishJobsFromRef()
+        })()
+    }, [getLastKnownPathForSha, publishJobsFromRef, shaToPaths])
 
     const stopRealtime = React.useCallback(() => {
         if (realtimeUnsubRef.current) {
@@ -187,12 +194,15 @@ export function useJobs(): UseJobsReturn {
 
                             void (async () => {
                                 const sha = summaryBase.original_checksum_sha256
-                                const local_relative_paths = sha ? await getPathsForSha(sha) : []
+                                const local_relative_paths = getLocalPathsForSha(sha)
                                 const local_relative_path = local_relative_paths.length ? local_relative_paths[0] : null
+                                const last_known_local_path =
+                                    local_relative_paths.length === 0 ? await getLastKnownPathForSha(sha) : null
                                 const summary: JobSummary = {
                                     ...summaryBase,
                                     local_relative_path,
                                     local_relative_paths,
+                                    last_known_local_path,
                                 }
                                 jobsByIdRef.current.set(jobId, summary)
                                 hydratedJobIdsRef.current.add(jobId)
@@ -242,8 +252,13 @@ export function useJobs(): UseJobsReturn {
                 // 1) Try persistent cache first
                 const persisted = await loadSetting<JobDetail>(key)
                 if (persisted) {
-                    const local_relative_path = await getPathForSha(persisted.original_checksum_sha256)
-                    return { ...persisted, local_relative_path }
+                    const local_relative_paths = getLocalPathsForSha(persisted.original_checksum_sha256)
+                    const local_relative_path = local_relative_paths.length ? local_relative_paths[0] : null
+                    const last_known_local_path =
+                        local_relative_paths.length === 0
+                            ? await getLastKnownPathForSha(persisted.original_checksum_sha256)
+                            : null
+                    return { ...persisted, local_relative_path, local_relative_paths, last_known_local_path }
                 }
 
                 // 2) Fetch from network, validate, persist, and return
@@ -271,8 +286,13 @@ export function useJobs(): UseJobsReturn {
                 // Persist the canonical server response (without derived path)
                 await saveSetting(key, data)
 
-                const local_relative_path = await getPathForSha(data.original_checksum_sha256)
-                return { ...data, local_relative_path }
+                const local_relative_paths = getLocalPathsForSha(data.original_checksum_sha256)
+                const local_relative_path = local_relative_paths.length ? local_relative_paths[0] : null
+                const last_known_local_path =
+                    local_relative_paths.length === 0
+                        ? await getLastKnownPathForSha(data.original_checksum_sha256)
+                        : null
+                return { ...data, local_relative_path, local_relative_paths, last_known_local_path }
             })()
 
             cache.set(id, fetchPromise)
@@ -285,7 +305,7 @@ export function useJobs(): UseJobsReturn {
                 throw err
             }
         },
-        [authorizedFetch]
+        [authorizedFetch, getLastKnownPathForSha, getLocalPathsForSha]
     )
 
     const deleteJob = React.useCallback(

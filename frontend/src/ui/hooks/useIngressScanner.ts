@@ -1,8 +1,8 @@
 import React from 'react'
-import { saveShaPathMapping, getShaForPath, pruneShaPathMappings } from '../utils/idb'
-import { UploadContext, uploadVideoFile, computeSha256 } from '../utils/uploader'
-import { listFilesRecursively } from '../utils/fsAccess'
+import { UploadContext, uploadVideoFile } from '../utils/uploader'
 import { useSettings } from './useSettings'
+import { useLocalFileIndex } from './useLocalFileIndex'
+import { fingerprintKey, getFingerprintSha } from '../utils/localFileIndex'
 
 export type IngressUploadStatus = 'queued' | 'uploading' | 'done' | 'error' | 'skipped'
 
@@ -60,43 +60,29 @@ export function useIngressScanner(
     }, [])
 
     const timerRef = React.useRef<number | null>(null)
-    const lastPruneAtRef = React.useRef<number>(0)
-    const lastPathsRef = React.useRef<Set<string> | null>(null)
-
-    const syncMappingForFile = React.useCallback(async (file: File, relPath: string): Promise<string | null> => {
-        // Compute or reuse sha for this path
-        let sha = await getShaForPath(relPath)
-        if (!sha) {
-            const { sha256 } = await computeSha256(file)
-            sha = sha256
-        }
-
-        // Always persist mapping (adds duplicates + normalizes + updates timestamps)
-        await saveShaPathMapping(sha, relPath)
-        return String(sha).toLowerCase()
-    }, [])
+    const { refresh, loaded, scanStatus } = useLocalFileIndex(dirHandle)
 
     const shouldUpload = React.useCallback(
-        (shaLower: string) => {
+        (sha: string) => {
             if (!uploadsEnabled) return false
             if (!uploadCtx) return false
 
             // Gold standard: if a job with this checksum already exists for this user, skip.
-            if (knownChecksumsSha256?.has(shaLower)) return false
+            if (knownChecksumsSha256?.has(sha)) return false
 
             // Short TTL cache to avoid repeated /jobs calls for the same checksum while Firestore updates.
-            const lastHandledAt = recentlyHandledRef.current.get(shaLower) ?? 0
+            const lastHandledAt = recentlyHandledRef.current.get(sha) ?? 0
             const HANDLED_TTL_MS = 15_000
             if (Date.now() - lastHandledAt < HANDLED_TTL_MS) return false
 
-            if (failedRef.current.has(shaLower)) {
-                const retryAfter = retryAfterRef.current.get(shaLower)
+            if (failedRef.current.has(sha)) {
+                const retryAfter = retryAfterRef.current.get(sha)
                 if (!retryAfter || Date.now() < retryAfter) return false
-                failedRef.current.delete(shaLower)
-                retryAfterRef.current.delete(shaLower)
+                failedRef.current.delete(sha)
+                retryAfterRef.current.delete(sha)
                 if (failedRef.current.size === 0) setSuspended(false)
             }
-            if (inProgressRef.current.has(shaLower)) return false
+            if (inProgressRef.current.has(sha)) return false
 
             return true
         },
@@ -104,43 +90,45 @@ export function useIngressScanner(
     )
 
     const uploadOne = React.useCallback(
-        async (shaLower: string, file: File, relPath: string) => {
+        async (sha: string, file: File, relPath: string) => {
             setUploads(prev => {
-                if (prev.some(u => u.id === shaLower)) return prev
-                return [...prev, { id: shaLower, relativePath: relPath, progress: 0, status: 'queued', error: null }]
+                if (prev.some(u => u.id === sha)) return prev
+                return [...prev, { id: sha, relativePath: relPath, progress: 0, status: 'queued', error: null }]
             })
 
             try {
-                inProgressRef.current.add(shaLower)
+                inProgressRef.current.add(sha)
 
                 const result = await uploadVideoFile({
                     file,
                     quality: settings.uploadQuality,
                     ctx: uploadCtx!,
-                    onProgress: percent => updateUpload(shaLower, { progress: Math.round(percent * 100) }),
-                    onStarted: () => updateUpload(shaLower, { status: 'uploading' }),
+                    onProgress: percent => updateUpload(sha, { progress: Math.round(percent * 100) }),
+                    onStarted: () => updateUpload(sha, { status: 'uploading' }),
+                    precomputedSha256: sha,
                 })
-                recentlyHandledRef.current.set(shaLower, Date.now())
+                recentlyHandledRef.current.set(sha, Date.now())
 
                 if (result === 'skipped') {
-                    removeUpload(shaLower)
+                    removeUpload(sha)
                     return
                 }
-                updateUpload(shaLower, { progress: 100, status: 'done' })
+                updateUpload(sha, { progress: 100, status: 'done' })
+                window.setTimeout(() => removeUpload(sha), 3000)
             } catch (e: any) {
                 console.error('Upload failed for', relPath, e)
                 const message = e?.message || String(e)
                 setLastError(message)
-                updateUpload(shaLower, { status: 'error', error: message })
-                failedRef.current.add(shaLower)
+                updateUpload(sha, { status: 'error', error: message })
+                failedRef.current.add(sha)
                 if (isTransientUploadError(e)) {
-                    retryAfterRef.current.set(shaLower, Date.now() + AUTO_RETRY_MS)
+                    retryAfterRef.current.set(sha, Date.now() + AUTO_RETRY_MS)
                 } else {
-                    retryAfterRef.current.delete(shaLower)
+                    retryAfterRef.current.delete(sha)
                 }
                 setSuspended(true)
             } finally {
-                inProgressRef.current.delete(shaLower)
+                inProgressRef.current.delete(sha)
             }
         },
         [removeUpload, settings.uploadQuality, updateUpload, uploadCtx]
@@ -148,44 +136,27 @@ export function useIngressScanner(
 
     const scanContinuously = React.useCallback(async () => {
         if (!dirHandle) return
+        if (!loaded) {
+            timerRef.current = window.setTimeout(scanContinuously, intervalMs)
+            return
+        }
 
         try {
-            const entries = await listFilesRecursively(dirHandle, ['.mp4'])
-            const existingPaths = new Set<string>()
-            const work: Promise<void>[] = []
-            for (const entry of entries) {
-                const file = await entry.getFile()
-                if (file.type.toLowerCase() !== 'video/mp4') continue
-                existingPaths.add(entry.relativePath)
+            const result = await refresh()
+            if (result) {
+                const { snapshot, filesByKey, newFingerprints } = result
 
-                work.push(
-                    (async () => {
-                        const shaLower = await syncMappingForFile(file, entry.relativePath)
-                        if (!shaLower) return
-                        if (!shouldUpload(shaLower)) return
-                        await uploadOne(shaLower, file, entry.relativePath)
-                    })()
-                )
-            }
-            await Promise.all(work)
-
-            // Prune stale mappings occasionally (prevents "ghost folders" after offline renames/moves).
-            const now = Date.now()
-            const PRUNE_EVERY_MS = Math.max(2000, intervalMs)
-            let hasRemovals = false
-            const lastPaths = lastPathsRef.current
-            if (lastPaths) {
-                for (const prev of lastPaths) {
-                    if (!existingPaths.has(prev)) {
-                        hasRemovals = true
-                        break
-                    }
+                const work: Promise<void>[] = []
+                for (const fp of newFingerprints) {
+                    const sha = getFingerprintSha(snapshot, fp)
+                    if (!sha) continue
+                    if (!shouldUpload(sha)) continue
+                    const file = filesByKey.get(fingerprintKey(fp))
+                    if (!file) continue
+                    work.push(uploadOne(sha, file, fp.path))
                 }
-            }
-            lastPathsRef.current = existingPaths
-            if (!lastPaths || hasRemovals || now - lastPruneAtRef.current >= PRUNE_EVERY_MS) {
-                lastPruneAtRef.current = now
-                await pruneShaPathMappings(existingPaths)
+                await Promise.all(work)
+
             }
 
             setLastRunAt(Date.now())
@@ -194,7 +165,7 @@ export function useIngressScanner(
             setLastRunAt(Date.now())
         }
         timerRef.current = window.setTimeout(scanContinuously, intervalMs)
-    }, [dirHandle, shouldUpload, syncMappingForFile, uploadOne])
+    }, [dirHandle, intervalMs, loaded, refresh, shouldUpload, uploadOne])
 
     React.useEffect(() => {
         if (timerRef.current) window.clearTimeout(timerRef.current)
@@ -221,7 +192,10 @@ export function useIngressScanner(
         setSuspended(false) // This will trigger a new scan
     }, [scanContinuously])
 
-    const uploading = React.useMemo(() => uploads.filter(u => u.status === 'uploading').length, [uploads])
+    const uploading = React.useMemo(
+        () => uploads.filter(u => u.status === 'uploading' || u.status === 'queued').length,
+        [uploads]
+    )
 
-    return { active, lastRunAt, lastError, uploading, uploads, suspended, retryFailed }
+    return { active, lastRunAt, lastError, uploading, uploads, suspended, retryFailed, scanStatus }
 }

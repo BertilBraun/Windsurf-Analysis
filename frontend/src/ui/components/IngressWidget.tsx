@@ -91,6 +91,11 @@ export const IngressWidget: React.FC<Props> = ({
     const uploading = scanner.uploading
     const ringPercent = meanProgress(scanner.uploads)
     const hasIssues = !dirHandle || dirPermission !== 'granted' || !!scanner.lastError
+    const scanStatus = scanner.scanStatus
+    const processingLabel =
+        scanStatus?.phase === 'hashing' && scanStatus.total > 0
+            ? `Processing ${scanStatus.processed}/${scanStatus.total} files...`
+            : null
 
     const issue = React.useMemo(() => {
         if (!dirHandle) {
@@ -192,7 +197,9 @@ export const IngressWidget: React.FC<Props> = ({
                                 </IssueBanner>
                             )}
 
-                            <div className="text-xs text-slate-600">{t('components.ingressWidget.panel.description')}</div>
+                            <div className="text-xs text-slate-600">
+                                {processingLabel || t('components.ingressWidget.panel.description')}
+                            </div>
 
                             <div className="flex items-start justify-between gap-3">
                                 <div className="text-xs text-slate-700">
