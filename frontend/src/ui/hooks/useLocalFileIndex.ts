@@ -1,5 +1,5 @@
 import React from 'react'
-import { listFilesRecursively } from '../utils/fsAccess'
+import { FsEntry, listFilesRecursively } from '../utils/fsAccess'
 import { loadFileSnapshot, saveFileSnapshot, saveLastKnownPaths } from '../utils/idb'
 import {
     type FileFingerprint,
@@ -33,6 +33,10 @@ function emitSnapshotUpdate(snapshot: FileSnapshot | null) {
     }
 }
 
+function now() {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now()
+}
+
 async function scanDirectory(
     dirHandle: FileSystemDirectoryHandle,
     prevSnapshot: FileSnapshot | null,
@@ -47,19 +51,18 @@ async function scanDirectory(
     const filesByKey = new Map<string, File>()
     const total = entries.length
     let processed = 0
-    let lastUpdate = 0
+    let lastUpdate = now()
 
     const maybeUpdate = () => {
-        const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
-        if (processed === total || now - lastUpdate > 150 || processed % 25 === 0) {
+        if (processed === total || now() - lastUpdate > 150 || processed % 25 === 0) {
             onProgress?.({ phase: 'hashing', total, processed })
-            lastUpdate = now
+            lastUpdate = now()
         }
     }
 
-    for (const entry of entries) {
+    const computeSha = async (entry: FsEntry) => {
         const file = await entry.getFile()
-        if (file.type && file.type.toLowerCase() !== 'video/mp4') continue
+        if (file.type && file.type.toLowerCase() !== 'video/mp4') return
         const fp: FileFingerprint = {
             path: normalizeRelativePath(entry.relativePath),
             size: file.size,
@@ -79,6 +82,8 @@ async function scanDirectory(
         maybeUpdate()
         if (processed % 25 === 0) await new Promise(resolve => window.setTimeout(resolve, 0))
     }
+
+    await Promise.all(entries.map(computeSha))
 
     const snapshot: FileSnapshot = {
         files,
