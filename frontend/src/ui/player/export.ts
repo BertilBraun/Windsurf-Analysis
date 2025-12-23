@@ -66,7 +66,7 @@ export async function exportTrackMp4(params: {
 
     const outputWidth = 1280
     const outputHeight = 720
-    const bitrate = 2_000_000
+    const bitrate = 8_000_000
 
     // Best-effort watermark; if it fails to load, we still export.
     const watermark = await getWatermarkAsset()

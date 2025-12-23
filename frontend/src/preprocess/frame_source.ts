@@ -49,7 +49,6 @@ export class MP4FrameSource {
     // simple async queue for VideoFrames
     private q: (VideoFrame | null)[] = []
     private waiters: ((v: VideoFrame | null) => void)[] = []
-
     constructor(arrayBuffer: ArrayBuffer) {
         this.buf = arrayBuffer as MP4BoxBuffer
         this.buf.fileStart = 0
@@ -91,7 +90,11 @@ export class MP4FrameSource {
         while (true) {
             const next = await this.dequeue()
             if (next === null) break
-            yield next
+            try {
+                yield next
+            } catch (e) {
+                console.error('[MP4FrameSource] frames() failed:', e)
+            }
             next.close()
         }
     }
@@ -103,6 +106,9 @@ export class MP4FrameSource {
     public close() {
         if (this.closed) return
         this.closed = true
+        try {
+            this.mp4.stop?.()
+        } catch {}
         try {
             this.decoder.close()
         } catch {}
@@ -150,7 +156,7 @@ export class MP4FrameSource {
 
         this.decoder = new VideoDecoder({
             output: (frame: VideoFrame) => {
-                // push decoded frames in order
+                // Trust decoder output order; demux timestamps already reflect PTS.
                 this.enqueue(frame)
             },
             error: (e: any) => {
@@ -167,13 +173,17 @@ export class MP4FrameSource {
             description: description,
         })
 
-        // Wire demux → decode
-        this.mp4.setExtractionOptions(this.vTrack.id, null, { nbSamples: 1 })
+        // Wire demux → decode (match reference behavior)
+        this.mp4.setExtractionOptions(this.vTrack.id)
 
         this.mp4.onSamples = (_trackId: number, _user: any, samples: any[]) => {
+            if (this.closed) return
             for (const s of samples) {
-                const tsUS = Math.round(((s.dts ?? s.cts) * 1e6) / this.timescale)
-                const durUS = s.duration ? Math.round((s.duration * 1e6) / this.timescale) : 0
+                // Use CTS for presentation order (matches reference sample).
+                const tsTicks = s.cts ?? s.dts
+                const timescale = s.timescale || this.timescale
+                const tsUS = Math.round((tsTicks * 1e6) / timescale)
+                const durUS = s.duration ? Math.round((s.duration * 1e6) / timescale) : 0
 
                 const chunk = new EncodedVideoChunk({
                     type: s.is_sync ? 'key' : 'delta',
@@ -182,6 +192,7 @@ export class MP4FrameSource {
                     data: s.data instanceof Uint8Array ? s.data : new Uint8Array(s.data),
                 })
                 try {
+                    if (this.closed) return
                     this.decoder.decode(chunk)
                 } catch (e) {
                     console.error('[MP4FrameSource] decode() failed:', e)
@@ -190,9 +201,7 @@ export class MP4FrameSource {
             this.samplesRemaining -= samples.length
             if (this.samplesRemaining <= 0) {
                 // End of stream → flush and mark done
-                this.decoder.flush().finally(() => {
-                    this.enqueue(null) // sentinel: no more frames
-                })
+                this.decoder.flush().finally(() => this.enqueue(null)) // sentinel: no more frames
             }
         }
 
