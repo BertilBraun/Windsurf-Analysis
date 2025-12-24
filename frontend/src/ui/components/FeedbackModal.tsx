@@ -7,15 +7,16 @@ import { Modal } from './Modal'
 type Props = {
     onClose: () => void
     onSubmit: (jobId: string, type: ReportType, message: string) => Promise<void>
+    jobId: string | null
 }
 
-export const FeedbackModal: React.FC<Props> = ({ onClose, onSubmit }) => {
+export const FeedbackModal: React.FC<Props> = ({ onClose, onSubmit, jobId }) => {
     const { t } = useTranslation()
     const [message, setMessage] = React.useState<string>('')
     const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false)
     const [error, setError] = React.useState<string | null>(null)
 
-    const canSubmit = !isSubmitting && message.trim().length > 0
+    const canSubmit = !isSubmitting && !!jobId && message.trim().length > 0
 
     return (
         <Modal onClose={onClose} title={t('screens.analyzer.feedback.title')}>
@@ -37,10 +38,11 @@ export const FeedbackModal: React.FC<Props> = ({ onClose, onSubmit }) => {
                         disabled={isSubmitting || !canSubmit}
                         isPending={isSubmitting}
                         onClick={async () => {
+                            if (!jobId) return
                             setError(null)
                             setIsSubmitting(true)
                             try {
-                                await onSubmit('feedback_general_id', 'feedback', message.trim())
+                                await onSubmit(jobId, 'feedback', message.trim())
                                 setMessage('')
                                 onClose()
                             } catch (e: any) {
