@@ -150,6 +150,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         if (succeededJobs.length > 0) return succeededJobs[0].id
         return jobs[0]?.id ?? null
     }, [jobs, succeededJobs])
+    const showFeedbackModal = showFeedback && !selectedJob
 
     React.useEffect(() => {
         if (!jobsInitialSyncComplete) return
@@ -313,7 +314,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                 )}
                 {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onLogout={logout} />}
                 {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-                {showFeedback && (
+                {showFeedbackModal && (
                     <FeedbackModal onClose={handleFeedbackClose} onSubmit={reportJob} jobId={feedbackJobId} />
                 )}
                 {showTutorial && <TutorialModal {...tutorialModalProps} />}
