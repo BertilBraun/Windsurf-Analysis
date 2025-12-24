@@ -13,3 +13,4 @@ yarn-error.log*
 *.tsbuildinfo
 !*.json
 package-lock.json
+!public/**

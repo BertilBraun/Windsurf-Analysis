@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from auth.firebase_auth import User, get_current_user
 from models import JobStatus
 from repos.jobs_repo import JobsRepo
-from repos.reports_repo import ReportsRepo
+from repos.reports_repo import ReportType, ReportsRepo
 from repos.user_jobs_repo import UserJobsRepo
 from repos.user_repo import UserRepo
 
@@ -19,9 +19,6 @@ jobs_repo = JobsRepo()
 user_jobs_repo = UserJobsRepo()
 reports_repo = ReportsRepo()
 user_repo = UserRepo()
-
-
-ReportType = Literal['missed_detection', 'false_association', 'visual_problem', 'feedback', 'other']
 
 
 class JobCreateRequest(BaseModel):

@@ -8,6 +8,7 @@ from config import settings
 from routes.jobs import router as jobs_router
 from routes.internal_jobs import router as internal_jobs_router
 from routes.users import router as users_router
+from routes.feedback import router as feedback_router
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger('backend')
@@ -34,6 +35,7 @@ def cors_preflight(path: str) -> Response:
 app.include_router(jobs_router)
 app.include_router(internal_jobs_router)
 app.include_router(users_router)
+app.include_router(feedback_router)
 
 
 @app.get('/')

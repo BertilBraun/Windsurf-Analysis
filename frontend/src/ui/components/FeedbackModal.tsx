@@ -1,22 +1,39 @@
-import React from 'react'
+import React, { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ReportType } from '../types'
 import { Button } from './Button'
 import { Modal } from './Modal'
+import { useAuth } from '../auth/AuthProvider'
 
 type Props = {
     onClose: () => void
-    onSubmit: (jobId: string, type: ReportType, message: string) => Promise<void>
-    jobId: string | null
 }
 
-export const FeedbackModal: React.FC<Props> = ({ onClose, onSubmit, jobId }) => {
+export const FeedbackModal: React.FC<Props> = ({ onClose }) => {
     const { t } = useTranslation()
     const [message, setMessage] = React.useState<string>('')
     const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false)
     const [error, setError] = React.useState<string | null>(null)
+    const { authorizedFetch } = useAuth()
 
-    const canSubmit = !isSubmitting && !!jobId && message.trim().length > 0
+    const canSubmit = !isSubmitting && message.trim().length > 0
+
+    const onSubmit = useCallback(async () => {
+        setError(null)
+        setIsSubmitting(true)
+        try {
+            await authorizedFetch('/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: message.trim() }),
+            })
+            setMessage('')
+            onClose()
+        } catch (e: any) {
+            setError(e?.message || String(e))
+        } finally {
+            setIsSubmitting(false)
+        }
+    }, [authorizedFetch, message, onClose])
 
     return (
         <Modal onClose={onClose} title={t('screens.analyzer.feedback.title')}>
@@ -37,20 +54,7 @@ export const FeedbackModal: React.FC<Props> = ({ onClose, onSubmit, jobId }) => 
                         text={t('screens.analyzer.feedback.send')}
                         disabled={isSubmitting || !canSubmit}
                         isPending={isSubmitting}
-                        onClick={async () => {
-                            if (!jobId) return
-                            setError(null)
-                            setIsSubmitting(true)
-                            try {
-                                await onSubmit(jobId, 'feedback', message.trim())
-                                setMessage('')
-                                onClose()
-                            } catch (e: any) {
-                                setError(e?.message || String(e))
-                            } finally {
-                                setIsSubmitting(false)
-                            }
-                        }}
+                        onClick={onSubmit}
                     />
                 </div>
             </div>

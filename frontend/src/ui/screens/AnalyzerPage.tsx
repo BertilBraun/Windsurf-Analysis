@@ -146,11 +146,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     }, [jobs, sortKey, sortDir])
 
     const succeededJobs = React.useMemo(() => jobs.filter(j => j.status === 'succeeded'), [jobs])
-    const feedbackJobId = React.useMemo(() => {
-        if (succeededJobs.length > 0) return succeededJobs[0].id
-        return jobs[0]?.id ?? null
-    }, [jobs, succeededJobs])
-    const showFeedbackModal = showFeedback && !selectedJob
 
     React.useEffect(() => {
         if (!jobsInitialSyncComplete) return
@@ -314,9 +309,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                 )}
                 {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onLogout={logout} />}
                 {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-                {showFeedbackModal && (
-                    <FeedbackModal onClose={handleFeedbackClose} onSubmit={reportJob} jobId={feedbackJobId} />
-                )}
+                {showFeedback && <FeedbackModal onClose={handleFeedbackClose} />}
                 {showTutorial && <TutorialModal {...tutorialModalProps} />}
                 {consentRequired && (
                     <ConsentModal
