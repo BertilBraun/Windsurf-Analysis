@@ -7,14 +7,16 @@ import { SupportProjectSection } from '../components/SupportProjectSection'
 export const HomePage: React.FC = () => {
     const { t } = useTranslation()
     const navigate = useNavigate()
+    const demoVideoSrc = React.useMemo(() => {
+        const videos = ['/Surfer1.mp4', '/Surfer2.mp4']
+        return videos[Math.floor(Math.random() * videos.length)]
+    }, [])
     return (
         <div className="flex flex-col gap-10">
             <section className="rounded-2xl border border-slate-200 bg-linear-to-b from-white to-slate-50 p-6 sm:p-10">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
                     <div className="max-w-2xl">
-                        <div className="text-xs font-semibold text-brand-700 mb-2">
-                            {t('screens.home.hero.brand')}
-                        </div>
+                        <div className="text-xs font-semibold text-brand-700 mb-2">{t('screens.home.hero.brand')}</div>
                         <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
                             {t('screens.home.hero.title')}
                         </h1>
@@ -43,14 +45,16 @@ export const HomePage: React.FC = () => {
                             <div className="text-sm font-semibold">{t('screens.home.comparison.title')}</div>
                             <div className="text-xs text-slate-500">{t('screens.home.comparison.subtitle')}</div>
                         </div>
-                        <div className="grid grid-cols-2">
-                            <ComparisonTile
-                                label={t('screens.home.comparison.beforeLabel')}
-                                src="/marketing/before.jpg"
-                            />
-                            <ComparisonTile
-                                label={t('screens.home.comparison.afterLabel')}
-                                src="/marketing/after.jpg"
+                        <div className="aspect-video bg-slate-900">
+                            <video
+                                key={demoVideoSrc}
+                                src={demoVideoSrc}
+                                className="w-full h-full object-cover"
+                                autoPlay
+                                loop
+                                muted
+                                playsInline
+                                controls
                             />
                         </div>
                     </div>
@@ -163,37 +167,5 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
             <h2 className="mt-0">{title}</h2>
             <div className="text-sm text-slate-600 leading-6 space-y-3">{children}</div>
         </section>
-    )
-}
-
-const ComparisonTile: React.FC<{ label: string; src: string }> = ({ label, src }) => {
-    return (
-        <div className="relative aspect-video bg-slate-100 border-r border-slate-200 last:border-r-0">
-            <img
-                src={src}
-                alt={label}
-                className="absolute inset-0 w-full h-full object-cover"
-                onError={e => {
-                    ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-                }}
-            />
-            <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-xs text-slate-500 px-3 py-1 rounded-full bg-white/80 border border-slate-200">
-                    {label}
-                </div>
-            </div>
-        </div>
-    )
-}
-
-const AssetSuggestion: React.FC<{ title: string; filename: string; desc: string }> = ({ title, filename, desc }) => {
-    return (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm font-semibold">{title}</div>
-            <div className="mt-1 text-xs text-slate-600">
-                <code className="bg-white border border-slate-200 px-1 py-0.5 rounded">{filename}</code>
-            </div>
-            <div className="mt-2 text-sm text-slate-600 leading-6">{desc}</div>
-        </div>
     )
 }
