@@ -19,5 +19,3 @@ def cleanup_folder(folder: str):
 
 
 cleanup_folder('/')
-
-volume.commit()
