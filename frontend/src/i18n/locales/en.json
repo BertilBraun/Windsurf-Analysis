@@ -341,6 +341,10 @@
             "linkText": "Buy me a coffee (PayPal)",
             "linkTitle": "Buy me a coffee (PayPal)",
             "title": "Want to support the project?"
+        },
+        "unsupportedBrowser": {
+            "body": "GybeLock needs WebCodecs and the folder picker API, which are not available in this browser. Please use a Chromium-based browser such as Chrome or Edge.",
+            "title": "Unsupported browser"
         }
     },
     "player": {

@@ -4,6 +4,7 @@ import { AuthProvider } from './auth/AuthProvider'
 import { Router } from './routes/Router'
 import { initAnalytics, installClickTracking, isAnalyticsEnabled } from './utils/analytics'
 import { AnalyticsConsentBanner } from './components/AnalyticsConsentBanner'
+import { UnsupportedBrowserBanner } from './components/UnsupportedBrowserBanner'
 
 export const App: React.FC = () => {
     const { i18n } = useTranslation()
@@ -22,6 +23,7 @@ export const App: React.FC = () => {
     return (
         <AuthProvider>
             <div style={{ fontFamily: 'Inter, system-ui, Arial', lineHeight: 1.4 }}>
+                <UnsupportedBrowserBanner />
                 <Router />
                 <AnalyticsConsentBanner />
             </div>
