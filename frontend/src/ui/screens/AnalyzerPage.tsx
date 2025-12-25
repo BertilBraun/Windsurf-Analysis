@@ -173,6 +173,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const headerText = userLabel
         ? t('screens.analyzer.header.taglineWithName', { name: userLabel })
         : t('screens.analyzer.header.tagline')
+    const shouldShowFeedback = showFeedback && !selectedJob
 
     const confirmLeaveIfUploading = React.useCallback(() => {
         if (ingressUploading <= 0) return true
@@ -317,7 +318,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                 )}
                 {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onLogout={logout} />}
                 {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-                {showFeedback && <FeedbackModal onClose={handleFeedbackClose} />}
+                {shouldShowFeedback && <FeedbackModal onClose={handleFeedbackClose} />}
                 {showTutorial && <TutorialModal {...tutorialModalProps} />}
                 {consentRequired && (
                     <ConsentModal
