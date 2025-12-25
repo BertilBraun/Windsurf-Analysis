@@ -74,15 +74,29 @@ export async function doXhrUpload(
 }
 
 const CHUNK_SIZE = 8 * 1024 * 1024 // 8 MiB per part
-const MAX_CONCURRENCY = Math.min(
-    MAX_PARALLEL_UPLOAD_REQUESTS,
-    Math.max(
-        2,
+const DEFAULT_PART_CONCURRENCY = 8
+const MIN_PART_CONCURRENCY = 2
+const MAX_PART_CONCURRENCY = 16
+
+function getPartConcurrency(): number {
+    // Allow temporary tuning without redeploys.
+    if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('uploadPartConcurrency')
+        if (raw) {
+            const parsed = Number(raw)
+            if (Number.isFinite(parsed) && parsed > 0) {
+                return Math.min(MAX_PARALLEL_UPLOAD_REQUESTS, Math.floor(parsed))
+            }
+        }
+    }
+
+    const hc =
         typeof navigator !== 'undefined' && (navigator as any).hardwareConcurrency
-            ? Math.floor((navigator as any).hardwareConcurrency / 2)
-            : 4
-    )
-)
+            ? Math.floor((navigator as any).hardwareConcurrency)
+            : 0
+    const base = hc > 0 ? Math.max(MIN_PART_CONCURRENCY, Math.min(MAX_PART_CONCURRENCY, hc)) : DEFAULT_PART_CONCURRENCY
+    return Math.min(MAX_PARALLEL_UPLOAD_REQUESTS, base)
+}
 
 // TODO with preprocess const PERCENT_PREPROCESS = 0.3
 // TODO with preprocess const PERCENT_UPLOAD = 0.7
@@ -268,7 +282,7 @@ export async function uploadVideoFileToJob(
         }
     }
 
-    const concurrency = Math.min(MAX_CONCURRENCY, Math.max(1, workIndices.length))
+    const concurrency = Math.min(getPartConcurrency(), Math.max(1, workIndices.length))
     const workers = Array.from({ length: concurrency }, () => worker())
     await Promise.all(workers)
 
