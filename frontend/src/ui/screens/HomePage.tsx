@@ -54,7 +54,6 @@ export const HomePage: React.FC = () => {
                                 loop
                                 muted
                                 playsInline
-                                controls
                             />
                         </div>
                     </div>
