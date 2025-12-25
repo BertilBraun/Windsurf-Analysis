@@ -144,7 +144,10 @@ export const IngressWidget: React.FC<Props> = ({
 
     return (
         <>
-            <div className="fixed bottom-4 right-4 z-50">
+            <div
+                className="fixed right-4 z-50"
+                style={{ bottom: 'calc(1rem + var(--analytics-consent-offset, 0px))' }}
+            >
                 {!expanded ? (
                     <Button
                         type="button"

@@ -357,7 +357,10 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
             />
 
             {/* Beta badge: bottom-left, subtle (brand) */}
-            <div className="fixed bottom-4 left-4">
+            <div
+                className="fixed left-4"
+                style={{ bottom: 'calc(1rem + var(--analytics-consent-offset, 0px))' }}
+            >
                 <Button
                     type="button"
                     variant="unstyled"
