@@ -34,6 +34,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const [feedbackPromptSeen, setFeedbackPromptSeen] = React.useState<boolean | null>(null)
     const [consentRequired, setConsentRequired] = React.useState<boolean>(false)
     const [consentSubmitting, setConsentSubmitting] = React.useState<boolean>(false)
+    const [ingressUploading, setIngressUploading] = React.useState<number>(0)
 
     // Workaround: some TS tooling instances may cache older prop typings during rapid edits.
     // This keeps runtime behavior correct while avoiding a stale "extra props" diagnostic.
@@ -173,11 +174,27 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         ? t('screens.analyzer.header.taglineWithName', { name: userLabel })
         : t('screens.analyzer.header.tagline')
 
+    const confirmLeaveIfUploading = React.useCallback(() => {
+        if (ingressUploading <= 0) return true
+        const warning = t('components.ingressWidget.leaveWarning')
+        return window.confirm(warning)
+    }, [ingressUploading, t])
+
+    const handleGoHome = React.useCallback(() => {
+        if (!confirmLeaveIfUploading()) return
+        onGoHome()
+    }, [confirmLeaveIfUploading, onGoHome])
+
+    const handleGoPricing = React.useCallback(() => {
+        if (!confirmLeaveIfUploading()) return
+        onGoPricing()
+    }, [confirmLeaveIfUploading, onGoPricing])
+
     return (
         <div className="min-h-dvh bg-white text-slate-900">
             <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
                 <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3 flex items-center gap-3">
-                    <LogoButton onClick={onGoHome} />
+                    <LogoButton onClick={handleGoHome} />
 
                     <div className="text-sm text-slate-600">{headerText}</div>
 
@@ -336,6 +353,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                 uploadCtx={uploadCtx}
                 knownChecksumsSha256={knownChecksumsSha256}
                 enabled={jobsInitialSyncComplete}
+                onUploadingChange={setIngressUploading}
             />
 
             {/* Beta badge: bottom-left, subtle (brand) */}
@@ -346,7 +364,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     size="none"
                     onClick={() => {
                         trackEvent('open_pricing_from_beta_badge')
-                        onGoPricing()
+                        handleGoPricing()
                     }}
                     className="group flex items-center gap-2 rounded-full border border-brand-600/25 bg-white/90 backdrop-blur px-3 py-2 shadow-sm hover:shadow transition hover:cursor-pointer"
                     title={t('screens.analyzer.beta.title')}

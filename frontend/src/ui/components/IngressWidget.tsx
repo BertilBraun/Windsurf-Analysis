@@ -14,6 +14,7 @@ type Props = {
     uploadCtx: UploadContext
     knownChecksumsSha256?: ReadonlySet<string> | null
     enabled?: boolean
+    onUploadingChange?: (uploading: number) => void
 }
 
 function meanProgress(items: IngressUploadItem[]) {
@@ -53,6 +54,7 @@ export const IngressWidget: React.FC<Props> = ({
     uploadCtx,
     knownChecksumsSha256 = null,
     enabled = true,
+    onUploadingChange,
 }) => {
     const { t } = useTranslation()
     const scanner = useIngressScanner(dirHandle, uploadCtx, knownChecksumsSha256, enabled)
@@ -87,6 +89,10 @@ export const IngressWidget: React.FC<Props> = ({
         window.addEventListener('beforeunload', onBeforeUnload)
         return () => window.removeEventListener('beforeunload', onBeforeUnload)
     }, [scanner.uploading, t])
+
+    React.useEffect(() => {
+        onUploadingChange?.(scanner.uploading)
+    }, [onUploadingChange, scanner.uploading])
 
     const uploading = scanner.uploading
     const ringPercent = meanProgress(scanner.uploads)
