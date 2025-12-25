@@ -41,8 +41,9 @@ export const HomePage: React.FC = () => {
                     </div>
 
                     <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-                        <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                            <div className="text-sm font-semibold">{t('screens.home.comparison.title')}</div>
+                        <div className="px-4 py-3 border-b border-slate-200 grid grid-cols-2 text-sm font-semibold text-slate-700">
+                            <div className="text-center">{t('screens.home.comparison.beforeLabel')}</div>
+                            <div className="text-center">{t('screens.home.comparison.afterLabel')}</div>
                         </div>
                         <div className="aspect-video bg-slate-900">
                             <video
