@@ -201,7 +201,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
 
                     <div className="flex-1" />
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <LanguageSwitcher />
                         <Button
                             size="sm"
@@ -320,6 +320,38 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                 {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
                 {shouldShowFeedback && <FeedbackModal onClose={handleFeedbackClose} />}
                 {showTutorial && <TutorialModal {...tutorialModalProps} />}
+
+                <IngressWidget
+                    dirHandle={dirHandle}
+                    dirPermission={dirPermission}
+                    onPickDirectory={pickDirectory}
+                    uploadCtx={uploadCtx}
+                    knownChecksumsSha256={knownChecksumsSha256}
+                    enabled={jobsInitialSyncComplete}
+                    onUploadingChange={setIngressUploading}
+                />
+
+                {/* Beta badge: bottom-left, subtle (brand) */}
+                <div className="fixed left-4" style={{ bottom: 'calc(1rem + var(--analytics-consent-offset, 0px))' }}>
+                    <Button
+                        type="button"
+                        variant="unstyled"
+                        size="none"
+                        onClick={() => {
+                            trackEvent('open_pricing_from_beta_badge')
+                            handleGoPricing()
+                        }}
+                        className="group flex items-center gap-2 rounded-full border border-brand-600/25 bg-white/90 backdrop-blur px-3 py-2 shadow-sm hover:shadow transition hover:cursor-pointer"
+                        title={t('screens.analyzer.beta.title')}
+                    >
+                        <span className="text-[11px] font-semibold text-white bg-brand-600 border border-brand-600/20 px-2 py-0.5 rounded-full">
+                            {t('screens.analyzer.beta.label')}
+                        </span>
+                        <span className="text-xs text-slate-700 group-hover:text-slate-900">
+                            {t('screens.analyzer.beta.action')}
+                        </span>
+                    </Button>
+                </div>
                 {consentRequired && (
                     <ConsentModal
                         isSubmitting={consentSubmitting}
@@ -346,41 +378,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     />
                 )}
             </main>
-
-            <IngressWidget
-                dirHandle={dirHandle}
-                dirPermission={dirPermission}
-                onPickDirectory={pickDirectory}
-                uploadCtx={uploadCtx}
-                knownChecksumsSha256={knownChecksumsSha256}
-                enabled={jobsInitialSyncComplete}
-                onUploadingChange={setIngressUploading}
-            />
-
-            {/* Beta badge: bottom-left, subtle (brand) */}
-            <div
-                className="fixed left-4"
-                style={{ bottom: 'calc(1rem + var(--analytics-consent-offset, 0px))' }}
-            >
-                <Button
-                    type="button"
-                    variant="unstyled"
-                    size="none"
-                    onClick={() => {
-                        trackEvent('open_pricing_from_beta_badge')
-                        handleGoPricing()
-                    }}
-                    className="group flex items-center gap-2 rounded-full border border-brand-600/25 bg-white/90 backdrop-blur px-3 py-2 shadow-sm hover:shadow transition hover:cursor-pointer"
-                    title={t('screens.analyzer.beta.title')}
-                >
-                    <span className="text-[11px] font-semibold text-white bg-brand-600 border border-brand-600/20 px-2 py-0.5 rounded-full">
-                        {t('screens.analyzer.beta.label')}
-                    </span>
-                    <span className="text-xs text-slate-700 group-hover:text-slate-900">
-                        {t('screens.analyzer.beta.action')}
-                    </span>
-                </Button>
-            </div>
         </div>
     )
 }

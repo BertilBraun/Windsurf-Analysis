@@ -145,8 +145,11 @@ export const IngressWidget: React.FC<Props> = ({
     return (
         <>
             <div
-                className="fixed right-4 z-50"
-                style={{ bottom: 'calc(1rem + var(--analytics-consent-offset, 0px))' }}
+                className="fixed right-4"
+                style={{
+                    bottom: 'calc(1rem + var(--analytics-consent-offset, 0px))',
+                    zIndex: 'var(--z-ingress-widget)',
+                }}
             >
                 {!expanded ? (
                     <Button
@@ -238,7 +241,9 @@ export const IngressWidget: React.FC<Props> = ({
                                             : 'bg-brand-600 hover:bg-brand-700'
                                     }`}
                                     onClick={onPickDirectory}
-                                    text={dirHandle ? t('common.actions.changeFolder') : t('common.actions.selectFolder')}
+                                    text={
+                                        dirHandle ? t('common.actions.changeFolder') : t('common.actions.selectFolder')
+                                    }
                                 />
                             </div>
 
@@ -265,7 +270,9 @@ export const IngressWidget: React.FC<Props> = ({
                                     </div>
                                 </div>
                             ) : (
-                                <div className="text-xs text-slate-500">{t('components.ingressWidget.panel.noUploads')}</div>
+                                <div className="text-xs text-slate-500">
+                                    {t('components.ingressWidget.panel.noUploads')}
+                                </div>
                             )}
                         </div>
                     </div>

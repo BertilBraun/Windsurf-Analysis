@@ -129,7 +129,10 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                             <li>
                                 <Trans
                                     i18nKey="components.analyzerTutorialModal.steps.drop.bullets.copy"
-                                    components={{ code: <code className="px-1 py-0.5 rounded bg-slate-100" />, b: <b /> }}
+                                    components={{
+                                        code: <code className="px-1 py-0.5 rounded bg-slate-100" />,
+                                        b: <b />,
+                                    }}
                                 />
                             </li>
                             <li>{t('components.analyzerTutorialModal.steps.drop.bullets.detect')}</li>
@@ -248,6 +251,13 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     const step = visibleSteps[safeIdx] ?? visibleSteps[0]!
     const isFirst = safeIdx === 0
     const isLast = safeIdx === visibleSteps.length - 1
+
+    // set global style var(z-ingress-widget) to 1000 so that the ingress widget is highlighted
+    if (step.key === 'ingress-folder') {
+        document.documentElement.style.setProperty('--z-ingress-widget', '1000')
+    } else {
+        document.documentElement.style.setProperty('--z-ingress-widget', 'auto')
+    }
 
     return (
         <>
