@@ -54,6 +54,16 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         }
         return s
     }, [jobs])
+    const pendingChecksumsSha256 = React.useMemo(() => {
+        const s = new Set<string>()
+        for (const j of jobs) {
+            const sha = String(j.original_checksum_sha256 || '')
+            if (!sha) continue
+            if (j.status !== 'pending') continue
+            s.add(sha)
+        }
+        return s
+    }, [jobs])
 
     // Try to restore directory handle from IndexedDB on mount
     React.useEffect(() => {
@@ -331,6 +341,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     onPickDirectory={pickDirectory}
                     uploadCtx={uploadCtx}
                     knownChecksumsSha256={knownChecksumsSha256}
+                    pendingChecksumsSha256={pendingChecksumsSha256}
                     enabled={jobsInitialSyncComplete}
                     onUploadingChange={setIngressUploading}
                 />

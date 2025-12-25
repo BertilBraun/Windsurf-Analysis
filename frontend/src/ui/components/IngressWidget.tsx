@@ -13,6 +13,7 @@ type Props = {
     onPickDirectory: () => void
     uploadCtx: UploadContext
     knownChecksumsSha256?: ReadonlySet<string> | null
+    pendingChecksumsSha256?: ReadonlySet<string> | null
     enabled?: boolean
     onUploadingChange?: (uploading: number) => void
 }
@@ -53,11 +54,12 @@ export const IngressWidget: React.FC<Props> = ({
     onPickDirectory,
     uploadCtx,
     knownChecksumsSha256 = null,
+    pendingChecksumsSha256 = null,
     enabled = true,
     onUploadingChange,
 }) => {
     const { t } = useTranslation()
-    const scanner = useIngressScanner(dirHandle, uploadCtx, knownChecksumsSha256, enabled)
+    const scanner = useIngressScanner(dirHandle, uploadCtx, knownChecksumsSha256, pendingChecksumsSha256, enabled)
     const [expanded, setExpanded] = React.useState(false)
     const [showQuotaModal, setShowQuotaModal] = React.useState(false)
     const panelRef = React.useRef<HTMLDivElement | null>(null)
