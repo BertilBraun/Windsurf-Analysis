@@ -43,7 +43,6 @@ export const HomePage: React.FC = () => {
                     <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
                         <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                             <div className="text-sm font-semibold">{t('screens.home.comparison.title')}</div>
-                            <div className="text-xs text-slate-500">{t('screens.home.comparison.subtitle')}</div>
                         </div>
                         <div className="aspect-video bg-slate-900">
                             <video

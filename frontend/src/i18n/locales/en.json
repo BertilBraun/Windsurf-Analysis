@@ -514,7 +514,6 @@
             "comparison": {
                 "afterLabel": "After (GybeLock)",
                 "beforeLabel": "Before (raw)",
-                "subtitle": "Add your screenshots to enable the comparison",
                 "title": "Before / After"
             },
             "ctaSection": {
