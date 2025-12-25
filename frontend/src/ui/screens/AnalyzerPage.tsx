@@ -266,15 +266,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     initialSyncComplete={jobsInitialSyncComplete}
                 />
 
-                <IngressWidget
-                    dirHandle={dirHandle}
-                    dirPermission={dirPermission}
-                    onPickDirectory={pickDirectory}
-                    uploadCtx={uploadCtx}
-                    knownChecksumsSha256={knownChecksumsSha256}
-                    enabled={jobsInitialSyncComplete}
-                />
-
                 {selectedJob && (
                     <PlayerModal
                         job={selectedJob}
@@ -337,6 +328,15 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     />
                 )}
             </main>
+
+            <IngressWidget
+                dirHandle={dirHandle}
+                dirPermission={dirPermission}
+                onPickDirectory={pickDirectory}
+                uploadCtx={uploadCtx}
+                knownChecksumsSha256={knownChecksumsSha256}
+                enabled={jobsInitialSyncComplete}
+            />
 
             {/* Beta badge: bottom-left, subtle (brand) */}
             <div className="fixed bottom-4 left-4">
