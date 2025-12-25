@@ -145,9 +145,10 @@ export const IngressWidget: React.FC<Props> = ({
     return (
         <>
             <div
-                className="fixed right-4"
+                className="fixed"
                 style={{
-                    bottom: 'calc(1rem + var(--analytics-consent-offset, 0px))',
+                    right: 'var(--analyzer-side-offset, 1rem)',
+                    bottom: 'var(--analyzer-bottom-offset, 1rem)',
                     zIndex: 'var(--z-ingress-widget)',
                 }}
             >
