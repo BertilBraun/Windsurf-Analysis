@@ -10,8 +10,8 @@ from bisect import bisect_left
 from typing import Sequence
 import numpy as np
 
-from inference.src.tracking.tracking import Tracker
-from inference.src.visualization.stabilize import Transform
+from ..tracking.tracking import Tracker
+from ..visualization.stabilize import Transform
 
 from ..settings import MIN_FRAME_PERCENTAGE
 from ..util.video_io import VideoInfo

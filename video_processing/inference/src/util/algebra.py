@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.stats import chi2
 
-from inference.src.settings import EPS
+from ..settings import EPS
 
 
 def floor(x: float) -> int:

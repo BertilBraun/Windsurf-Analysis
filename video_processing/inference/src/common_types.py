@@ -7,7 +7,7 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Iterator
 
-from inference.src.util.similarity_helpers import Embedding
+from .util.similarity_helpers import Embedding
 
 
 @dataclass(frozen=True)

@@ -37,7 +37,7 @@ from dataclasses import dataclass
 
 from typing import List, Optional
 
-from inference.src.visualization.stabilize import Transform
+from ..visualization.stabilize import Transform
 
 from ..util.video_io import VideoInfo
 from ..common_types import Track

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from PIL import Image
 from typing import List, Sequence
 
-from inference.src.util.similarity_helpers import VectorEmbedding
+from ...util.similarity_helpers import VectorEmbedding
 
 
 class ReIDViT:

@@ -7,8 +7,6 @@ from tqdm import tqdm
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 
-from inference.src.tracking.ilp_tracker import ILPTracker
-
 
 from .settings import YOLO_MODEL_PATH
 from .util.helpers import log_and_reraise
@@ -22,6 +20,7 @@ from .tracking.tracking import Tracker
 from .tracking.track_processing import TrackPostProcessing
 from .tracking.preprocessing.preprocessor import TrackPreProcessor
 from .tracking.iterative_ilp_tracker import IterativeILPTracker
+from .tracking.ilp_tracker import ILPTracker
 # from .tracking.discrete_opt_tracker import DiscreteOptTracker
 # from .tracking.greedy_tracker import GreedyTracker
 # from .tracking.oc_sort import OCSortEmbedTracker

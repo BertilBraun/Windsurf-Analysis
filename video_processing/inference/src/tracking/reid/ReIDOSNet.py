@@ -5,7 +5,7 @@ from PIL import Image
 from typing import Sequence, Union
 from pathlib import Path
 
-from inference.src.util.similarity_helpers import VectorEmbedding
+from ...util.similarity_helpers import VectorEmbedding
 
 
 class ReIDOSNet:

@@ -5,7 +5,7 @@ import numpy as np
 
 from typing import Iterable, Optional, Tuple
 
-from inference.src.common_types import BoundingBox
+from ...common_types import BoundingBox
 
 
 Image = np.ndarray

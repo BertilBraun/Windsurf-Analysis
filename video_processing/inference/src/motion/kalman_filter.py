@@ -8,9 +8,9 @@ import numpy as np
 import numpy.typing as npt
 import scipy.linalg
 
-from inference.src.motion.cmc import CMC
-from inference.src.common_types import BoundingBox, Detection, FrameIndex
-from inference.src.settings import EPS
+from .cmc import CMC
+from ..common_types import BoundingBox, Detection, FrameIndex
+from ..settings import EPS
 
 
 NDArrayF = npt.NDArray[np.float64]

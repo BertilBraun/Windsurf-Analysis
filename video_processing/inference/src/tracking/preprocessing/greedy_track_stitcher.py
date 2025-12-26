@@ -7,17 +7,17 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-from inference.src.motion.cmc import CMC
-from inference.src.util.algebra import probability_from_dist
-from inference.src.util.similarity_helpers import Embedding
-from inference.src.visualization.debug.session import DebugSession
-from inference.src.visualization.stabilize import Transform
+from ...motion.cmc import CMC
+from ...util.algebra import probability_from_dist
+from ...util.similarity_helpers import Embedding
+from ...visualization.debug.session import DebugSession
+from ...visualization.stabilize import Transform
 from ...util.video_io import VideoInfo
 from ...common_types import Detection, FrameIndex, Track, TrackId
-from inference.src.motion.kalman_filter import KFState
-from inference.src.visualization.debug import get_debug_session
-from inference.src.visualization.debug.overlays import DetectionsOverlay, KalmanOverlay
-from inference.src.visualization.debug.draw import draw_heatmap
+from ...motion.kalman_filter import KFState
+from ...visualization.debug import get_debug_session
+from ...visualization.debug.overlays import DetectionsOverlay, KalmanOverlay
+from ...visualization.debug.draw import draw_heatmap
 
 
 class _ComparisonResult(Enum):

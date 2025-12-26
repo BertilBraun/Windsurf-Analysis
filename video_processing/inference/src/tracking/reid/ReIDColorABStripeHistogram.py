@@ -6,8 +6,8 @@ from typing import List, Optional, Sequence, Tuple
 import cv2
 import numpy as np
 
-from inference.src.util.algebra import floor, ceil, l1_normalize, l2_normalize
-from inference.src.util.similarity_helpers import HellingerEmbedding
+from ...util.algebra import floor, ceil, l1_normalize, l2_normalize
+from ...util.similarity_helpers import HellingerEmbedding
 
 
 # -----------------------------

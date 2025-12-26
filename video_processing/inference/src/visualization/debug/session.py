@@ -5,8 +5,8 @@ from typing import Callable, Dict, List, Optional, Protocol
 
 import numpy as np
 
-from inference.src.visualization.debug.draw import compose_side_by_side
-from inference.src.visualization.debug.viewer import ViewerCV2, ViewerInterface
+from ...visualization.debug.draw import compose_side_by_side
+from ...visualization.debug.viewer import ViewerCV2, ViewerInterface
 
 
 class Overlay(Protocol):
@@ -82,7 +82,7 @@ class Cv2DebugSession(DebugSession):
     @staticmethod
     def from_video(video_path: Path) -> Cv2DebugSession:
         # Lazy import to avoid cv2 in hot path when disabled elsewhere
-        from inference.src.util.video_io import VideoReader  # type: ignore
+        from ...util.video_io import VideoReader  # type: ignore
 
         frames: Dict[int, np.ndarray] = {}
         with VideoReader(video_path.as_posix()) as reader:

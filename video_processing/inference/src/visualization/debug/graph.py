@@ -5,8 +5,8 @@ from typing import Callable, Dict, List
 
 import numpy as np
 
-from inference.src.motion.kalman_filter import KFState
-from inference.src.common_types import Track
+from ...motion.kalman_filter import KFState
+from ...common_types import Track
 
 
 @dataclass

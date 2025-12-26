@@ -2,7 +2,7 @@ import numpy as np
 from typing import List, Sequence
 from typing import Protocol
 
-from inference.src.util.similarity_helpers import Embedding
+from ...util.similarity_helpers import Embedding
 
 
 class ReID(Protocol):

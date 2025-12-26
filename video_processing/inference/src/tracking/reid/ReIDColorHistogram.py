@@ -1,8 +1,8 @@
 import numpy as np
 from typing import Sequence
 
-from inference.src.util.algebra import l1_normalize
-from inference.src.util.similarity_helpers import HistogramEmbedding
+from ...util.algebra import l1_normalize
+from ...util.similarity_helpers import HistogramEmbedding
 
 
 class ReIDColorHistogram:
