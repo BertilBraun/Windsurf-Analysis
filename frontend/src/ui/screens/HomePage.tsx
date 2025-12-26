@@ -8,7 +8,10 @@ export const HomePage: React.FC = () => {
     const { t } = useTranslation()
     const navigate = useNavigate()
     const demoVideoSrc = React.useMemo(() => {
-        const videos = ['/Surfer1.mp4', '/Surfer2.mp4']
+        const videos = [
+            { mp4: '/Surfer1.mp4', av1: '/Surfer1.av1.mp4' },
+            { mp4: '/Surfer2.mp4', av1: '/Surfer2.av1.mp4' },
+        ]
         return videos[Math.floor(Math.random() * videos.length)]
     }, [])
     return (
@@ -47,14 +50,16 @@ export const HomePage: React.FC = () => {
                         </div>
                         <div className="aspect-video bg-slate-900">
                             <video
-                                key={demoVideoSrc}
-                                src={demoVideoSrc}
+                                key={demoVideoSrc.mp4}
                                 className="w-full h-full object-cover"
                                 autoPlay
                                 loop
                                 muted
                                 playsInline
-                            />
+                            >
+                                <source src={demoVideoSrc.av1} type='video/mp4; codecs="av01.0.05M.08"' />
+                                <source src={demoVideoSrc.mp4} type="video/mp4" />
+                            </video>
                         </div>
                     </div>
                 </div>
