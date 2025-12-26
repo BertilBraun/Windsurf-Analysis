@@ -358,18 +358,16 @@ const PrivacyContent: React.FC = () => {
                     <div className="mt-3 flex flex-wrap gap-2">
                         <Button
                             type="button"
-                            variant="unstyled"
-                            size="none"
+                            variant="outline"
+                            size="sm"
                             onClick={() => setChoice('declined')}
-                            className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-800 hover:bg-slate-50"
                             text="Decline"
                         />
                         <Button
                             type="button"
-                            variant="unstyled"
-                            size="none"
+                            variant="primary"
+                            size="sm"
                             onClick={() => setChoice('accepted')}
-                            className="rounded-lg bg-slate-900 text-white px-3 py-2 text-xs hover:bg-slate-800"
                             text="Accept"
                         />
                     </div>

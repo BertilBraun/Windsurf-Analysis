@@ -197,10 +197,9 @@ export const IngressWidget: React.FC<Props> = ({
                             <div className="flex-1" />
                             <Button
                                 type="button"
-                                variant="unstyled"
-                                size="none"
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => setExpanded(false)}
-                                className="text-xs text-slate-600 hover:text-slate-900 px-2 py-1 rounded-md hover:bg-slate-100"
                                 text={t('common.close')}
                             />
                         </div>
@@ -236,13 +235,8 @@ export const IngressWidget: React.FC<Props> = ({
                                 </div>
                                 <Button
                                     type="button"
-                                    variant="unstyled"
-                                    size="none"
-                                    className={`px-3 py-2 rounded-md text-white text-sm transition ${
-                                        !dirHandle
-                                            ? 'bg-amber-500 hover:bg-amber-600'
-                                            : 'bg-brand-600 hover:bg-brand-700'
-                                    }`}
+                                    variant={dirHandle ? 'primary' : 'warning'}
+                                    size="md"
                                     onClick={onPickDirectory}
                                     text={
                                         dirHandle ? t('common.actions.changeFolder') : t('common.actions.selectFolder')
@@ -308,9 +302,8 @@ const SuspendedBanner: React.FC<{ onRetryFailed: () => void }> = ({ onRetryFaile
             <div className="flex gap-2">
                 <Button
                     type="button"
-                    variant="unstyled"
-                    size="none"
-                    className="px-3 py-2 rounded-md bg-slate-200 text-slate-800 text-sm hover:bg-slate-300 transition"
+                    variant="outline"
+                    size="sm"
                     onClick={onRetryFailed}
                     text={t('components.ingressWidget.suspended.retry')}
                 />

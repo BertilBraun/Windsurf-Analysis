@@ -96,10 +96,9 @@ export const LoginPage: React.FC<{ onSignup: () => void; onSuccess: () => void }
             </form>
             <div style={{ marginTop: 12 }}>
                 <Button
-                    variant="unstyled"
-                    size="none"
+                    variant="ghost"
+                    size="sm"
                     onClick={onSignup}
-                    style={{ fontSize: 12 }}
                     text={t('screens.login.actions.createAccount')}
                 />
             </div>

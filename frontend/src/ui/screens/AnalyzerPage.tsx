@@ -242,7 +242,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                         />
                         <Button
                             size="sm"
-                            variant="secondary"
+                            variant="ghost"
                             onClick={() => {
                                 trackEvent('open_settings')
                                 setShowSettings(true)

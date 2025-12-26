@@ -116,26 +116,23 @@ const AnalyzerRoute: React.FC = () => {
                             <div className="flex flex-wrap gap-2 mt-4">
                                 <Button
                                     type="button"
-                                    variant="unstyled"
-                                    size="none"
+                                    variant="outline"
+                                    size="md"
                                     onClick={() => void resendVerificationEmail()}
-                                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                                     text={t('routes.analyzer.verify.resend')}
                                 />
                                 <Button
                                     type="button"
-                                    variant="unstyled"
-                                    size="none"
+                                    variant="secondary"
+                                    size="md"
                                     onClick={() => void refreshVerificationStatus()}
-                                    className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm"
                                     text={t('routes.analyzer.verify.verified')}
                                 />
                                 <Button
                                     type="button"
-                                    variant="unstyled"
-                                    size="none"
+                                    variant="outline"
+                                    size="md"
                                     onClick={logout}
-                                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                                     text={t('routes.analyzer.verify.signOut')}
                                 />
                             </div>

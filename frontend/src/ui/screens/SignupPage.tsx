@@ -107,10 +107,9 @@ export const SignupPage: React.FC<{ onBackToLogin: () => void; onSuccess: () => 
             </form>
             <div style={{ marginTop: 12 }}>
                 <Button
-                    variant="unstyled"
-                    size="none"
+                    variant="ghost"
+                    size="sm"
                     onClick={onBackToLogin}
-                    style={{ fontSize: 12 }}
                     text={t('screens.signup.actions.backToLogin')}
                 />
             </div>

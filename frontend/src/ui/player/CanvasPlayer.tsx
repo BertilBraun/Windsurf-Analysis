@@ -769,26 +769,18 @@ export const CanvasPlayer: React.FC<Props> = ({
                                 <div className="mt-2 flex items-center gap-1">
                                     <Button
                                         type="button"
-                                        variant="unstyled"
-                                        size="none"
+                                        variant="inverse"
+                                        size="sm"
                                         onClick={() => setDrawTool('freehand')}
-                                        className={`rounded-md px-2 py-1 text-xs font-medium transition ${
-                                            drawTool === 'freehand'
-                                                ? 'bg-white text-black'
-                                                : 'bg-white/10 text-gray-100 hover:bg-white/20'
-                                        }`}
+                                        className={drawTool === 'freehand' ? 'bg-white text-black hover:bg-white' : ''}
                                         text={t('player.canvas.draw.freehand')}
                                     />
                                     <Button
                                         type="button"
-                                        variant="unstyled"
-                                        size="none"
+                                        variant="inverse"
+                                        size="sm"
                                         onClick={() => setDrawTool('line')}
-                                        className={`rounded-md px-2 py-1 text-xs font-medium transition ${
-                                            drawTool === 'line'
-                                                ? 'bg-white text-black'
-                                                : 'bg-white/10 text-gray-100 hover:bg-white/20'
-                                        }`}
+                                        className={drawTool === 'line' ? 'bg-white text-black hover:bg-white' : ''}
                                         text={t('player.canvas.draw.line')}
                                     />
                                 </div>

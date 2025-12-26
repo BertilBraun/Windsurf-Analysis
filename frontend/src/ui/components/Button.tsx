@@ -6,7 +6,7 @@ export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
     text?: string
     children?: React.ReactNode
     isPending?: boolean
-    variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'unstyled'
+    variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline' | 'warning' | 'inverse' | 'unstyled'
     size?: 'sm' | 'md' | 'none'
 }
 
@@ -28,10 +28,16 @@ export const Button: React.FC<ButtonProps> = ({
     const variantClass =
         variant === 'primary'
             ? 'bg-brand-600 text-white hover:bg-brand-700'
+            : variant === 'outline'
+              ? 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50'
+              : variant === 'warning'
+                ? 'bg-amber-500 text-white hover:bg-amber-600'
+                : variant === 'inverse'
+                  ? 'bg-white/10 text-gray-100 hover:bg-white/20'
             : variant === 'danger'
               ? 'bg-red-600 text-white hover:bg-red-700'
-              : variant === 'ghost'
-                ? 'bg-transparent text-slate-700 hover:bg-slate-100'
+            : variant === 'ghost'
+              ? 'bg-transparent text-slate-700 hover:bg-slate-100'
                 : variant === 'unstyled'
                   ? ''
                   : 'bg-slate-900 text-white hover:bg-slate-800'

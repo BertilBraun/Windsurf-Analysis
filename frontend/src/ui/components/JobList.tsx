@@ -217,13 +217,8 @@ const SortBar: React.FC<{
             <div className="text-sm text-gray-600">{t('components.jobList.sort.label')}</div>
             <div className="flex gap-2 items-center">
                 <Button
-                    variant="unstyled"
-                    size="none"
-                    className={`px-2 py-1 rounded-md text-sm border ${
-                        sortKey === 'name'
-                            ? 'bg-gray-700 text-gray-100 border-gray-700'
-                            : 'bg-gray-100 text-gray-800 border-gray-300'
-                    }`}
+                    variant={sortKey === 'name' ? 'secondary' : 'outline'}
+                    size="sm"
                     onClick={() => {
                         trackEvent('joblist_sort', { key: 'name' })
                         onToggleSort('name')
@@ -237,13 +232,8 @@ const SortBar: React.FC<{
                         : t('components.jobList.sort.noneSymbol')}
                 </Button>
                 <Button
-                    variant="unstyled"
-                    size="none"
-                    className={`px-2 py-1 rounded-md text-sm border ${
-                        sortKey === 'date'
-                            ? 'bg-gray-700 text-gray-100 border-gray-700'
-                            : 'bg-gray-100 text-gray-800 border-gray-300'
-                    }`}
+                    variant={sortKey === 'date' ? 'secondary' : 'outline'}
+                    size="sm"
                     onClick={() => {
                         trackEvent('joblist_sort', { key: 'date' })
                         onToggleSort('date')
@@ -258,9 +248,8 @@ const SortBar: React.FC<{
                 </Button>
                 <div className="w-px h-6 bg-slate-200 mx-1" />
                 <Button
-                    variant="unstyled"
-                    size="none"
-                    className="px-2 py-1 rounded-md text-sm border bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200"
+                    variant="outline"
+                    size="sm"
                     onClick={() => {
                         trackEvent('joblist_expand_all')
                         onExpandAll()
@@ -270,9 +259,8 @@ const SortBar: React.FC<{
                     {t('components.jobList.actions.expand')}
                 </Button>
                 <Button
-                    variant="unstyled"
-                    size="none"
-                    className="px-2 py-1 rounded-md text-sm border bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200"
+                    variant="outline"
+                    size="sm"
                     onClick={() => {
                         trackEvent('joblist_collapse_all')
                         onCollapseAll()
@@ -446,11 +434,11 @@ const UnmappedJobsSection: React.FC<{
         return (
             <Button
                 type="button"
-                variant="unstyled"
-                size="none"
+                variant="warning"
+                size="sm"
                 onClick={toggleOpen}
                 title={t('components.jobList.unmapped.toggleTitle')}
-                className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-100 px-2 py-1 text-xs text-amber-900 hover:bg-amber-200"
+                className="justify-start"
             >
                 <span className="w-4 text-amber-700">{t('components.jobList.folder.closedIcon')}</span>
                 <span>{t('components.jobList.unmapped.collapsedLabel', { count: unmappedJobs.length })}</span>
@@ -460,15 +448,15 @@ const UnmappedJobsSection: React.FC<{
     }
 
     return (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
             <div className="flex items-start justify-between gap-3 mb-2">
                 <Button
                     type="button"
-                    variant="unstyled"
-                    size="none"
+                    variant="ghost"
+                    size="sm"
                     onClick={toggleOpen}
                     title={t('components.jobList.unmapped.collapseTitle')}
-                    className="flex items-center gap-2 text-xs font-semibold text-amber-900"
+                    className="justify-start text-amber-900"
                 >
                     <span className="w-4 text-amber-700">{t('components.jobList.folder.openIcon')}</span>
                     <span>{t('components.jobList.unmapped.title', { count: unmappedJobs.length })}</span>
@@ -612,13 +600,13 @@ export const JobList: React.FC<{
                     {showHeader && (
                         <Button
                             type="button"
-                            variant="unstyled"
-                            size="none"
+                            variant="ghost"
+                            size="sm"
                             onClick={() => {
                                 trackEvent('joblist_folder_toggle')
                                 toggleFolder(node.path)
                             }}
-                            className="flex items-center gap-2 text-left py-1.5 rounded-md hover:bg-slate-50"
+                            className="justify-start text-left py-1.5"
                             style={{ paddingLeft: depth * 12 }}
                             title={node.path}
                         >

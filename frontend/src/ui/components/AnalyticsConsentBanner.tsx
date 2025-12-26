@@ -98,14 +98,14 @@ export const AnalyticsConsentBanner: React.FC = () => {
                     <Button
                         type="button"
                         variant="ghost"
-                        size="none"
+                        size="sm"
                         onClick={() => choose('declined')}
                         text={t('components.analyticsConsentBanner.decline')}
                     />
                     <Button
                         type="button"
                         variant="primary"
-                        size="none"
+                        size="sm"
                         onClick={() => choose('accepted')}
                         text={t('components.analyticsConsentBanner.accept')}
                     />

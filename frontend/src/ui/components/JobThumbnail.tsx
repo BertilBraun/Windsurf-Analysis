@@ -146,7 +146,6 @@ export const JobThumbnail: React.FC<{
         }
 
         if (job.status !== 'succeeded') return
-
         ;(async () => {
             if (!job.local_relative_paths) throw new Error('missing_local_paths')
             try {
@@ -200,14 +199,7 @@ export const JobThumbnail: React.FC<{
             cancelled = true
             if (revokedThumbUrl) URL.revokeObjectURL(revokedThumbUrl)
         }
-    }, [
-        cacheKey,
-        dirHandle,
-        job.id,
-        job.status,
-        job.local_relative_paths,
-        job.dominant_orientation,
-    ])
+    }, [cacheKey, dirHandle, job.id, job.status, job.local_relative_paths, job.dominant_orientation])
 
     const boxClasses = 'relative w-48 h-28 bg-gray-200 rounded-md overflow-hidden flex items-center justify-center'
 

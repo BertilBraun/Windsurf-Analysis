@@ -145,8 +145,8 @@ export const SingleInstanceGuard: React.FC<{ children: React.ReactNode }> = ({ c
                     </p>
                     <div style={{ display: 'flex', gap: 8 }}>
                         <Button
-                            variant="unstyled"
-                            size="none"
+                            variant="outline"
+                            size="sm"
                             onClick={tryBecomeLeader}
                             text={t('components.singleInstanceGuard.retry')}
                         />
