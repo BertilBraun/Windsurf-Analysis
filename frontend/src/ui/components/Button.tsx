@@ -20,7 +20,7 @@ export const Button: React.FC<ButtonProps> = ({
     isPending,
     disabled,
     variant = 'secondary',
-    size = 'md',
+    size = 'sm',
     className,
     ...props
 }) => {
@@ -29,21 +29,20 @@ export const Button: React.FC<ButtonProps> = ({
         variant === 'primary'
             ? 'bg-brand-600 text-white hover:bg-brand-700'
             : variant === 'outline'
-              ? 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50'
-              : variant === 'warning'
-                ? 'bg-amber-500 text-white hover:bg-amber-600'
-                : variant === 'inverse'
-                  ? 'bg-white/10 text-gray-100 hover:bg-white/20'
+            ? 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50'
+            : variant === 'warning'
+            ? 'bg-amber-500 text-white hover:bg-amber-600'
+            : variant === 'inverse'
+            ? 'bg-white/10 text-gray-100 hover:bg-white/20'
             : variant === 'danger'
-              ? 'bg-red-600 text-white hover:bg-red-700'
+            ? 'bg-red-600 text-white hover:bg-red-700'
             : variant === 'ghost'
-              ? 'bg-transparent text-slate-700 hover:bg-slate-100'
-                : variant === 'unstyled'
-                  ? ''
-                  : 'bg-slate-900 text-white hover:bg-slate-800'
+            ? 'bg-transparent text-slate-700 hover:bg-slate-100'
+            : variant === 'unstyled'
+            ? ''
+            : 'bg-slate-900 text-white hover:bg-slate-800'
 
-    const sizeClass =
-        size === 'none' ? '' : size === 'sm' ? 'px-2.5 py-1.5 text-xs' : 'px-3 py-2 text-sm'
+    const sizeClass = size === 'none' ? '' : size === 'sm' ? 'px-2.5 py-1.5 text-xs' : 'px-3 py-2 text-sm'
 
     const content =
         isPending && text ? (
