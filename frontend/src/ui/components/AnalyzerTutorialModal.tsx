@@ -253,7 +253,7 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     const isLast = safeIdx === visibleSteps.length - 1
 
     // set global style var(z-ingress-widget) to 1000 so that the ingress widget is highlighted
-    if (step.key === 'ingress-folder') {
+    if (step.key === 'ingress-folder' || step.key === 'drop-mp4s') {
         document.documentElement.style.setProperty('--z-ingress-widget', '1000')
     } else {
         document.documentElement.style.setProperty('--z-ingress-widget', 'auto')
