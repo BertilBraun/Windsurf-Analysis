@@ -2,6 +2,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Modal } from './Modal'
 import { Button } from './Button'
+import { LanguageSwitcher } from './LanguageSwitcher'
 import { useSettings } from '../hooks/useSettings'
 import { UploadQuality } from '../types'
 import { useAuth } from '../auth/AuthProvider'
@@ -35,6 +36,13 @@ export const SettingsModal: React.FC<{
                         Higher quality improves detections but increases upload time and bandwidth.
                     </p>
                 </div>*/}
+
+                <div>
+                    <div className="text-sm font-medium text-slate-900 mb-2">
+                        {t('components.languageSwitcher.menuLabel')}
+                    </div>
+                    <LanguageSwitcher />
+                </div>
 
                 <div className="pt-2 border-t border-slate-200">
                     <div className="flex flex-col gap-2">

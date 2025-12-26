@@ -7,7 +7,6 @@ import { JobList, getJobListOrderedJobIds, type JobListSortDir, type JobListSort
 import { IngressWidget } from '../components/IngressWidget'
 import { loadDirectoryHandle, loadSetting, saveDirectoryHandle, saveSetting } from '../utils/idb'
 import { Button } from '../components/Button'
-import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { SettingsModal } from '../components/SettingsModal'
 import { PlayerModal } from '../components/PlayerModal'
 import { HelpModal } from '../components/HelpModal'
@@ -216,7 +215,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     <div className="flex-1" />
 
                     <div className="flex items-center gap-2 flex-wrap">
-                        <LanguageSwitcher />
                         <Button
                             size="sm"
                             variant="ghost"
