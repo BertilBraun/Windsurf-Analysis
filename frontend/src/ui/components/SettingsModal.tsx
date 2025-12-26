@@ -12,7 +12,7 @@ export const SettingsModal: React.FC<{
     onLogout: () => void
 }> = ({ onClose, onLogout }) => {
     const { t } = useTranslation()
-    const { settings, setUploadQuality } = useSettings()
+    // const { settings, setUploadQuality } = useSettings()
     const { uid, authorizedFetch } = useAuth()
     const [isDeleting, setIsDeleting] = React.useState(false)
     const [deleteError, setDeleteError] = React.useState<string | null>(null)
@@ -37,7 +37,7 @@ export const SettingsModal: React.FC<{
                     </p>
                 </div>*/}
 
-                <div>
+                <div className="flex flex-row gap-2">
                     <div className="text-sm font-medium text-slate-900 mb-2">
                         {t('components.languageSwitcher.menuLabel')}
                     </div>
@@ -53,9 +53,7 @@ export const SettingsModal: React.FC<{
                             disabled={!uid || isDeleting}
                             onClick={async () => {
                                 if (!uid) return
-                                const ok = window.confirm(
-                                    t('components.settingsModal.confirmDelete')
-                                )
+                                const ok = window.confirm(t('components.settingsModal.confirmDelete'))
                                 if (!ok) return
 
                                 setDeleteError(null)
