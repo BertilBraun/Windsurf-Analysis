@@ -41,7 +41,10 @@ export const LogoButton: React.FC<LogoButtonProps> = ({
     ...props
 }) => {
     const { t } = useTranslation()
-    const commonClassName = cx('flex items-center gap-2 rounded-md px-2 py-1 border-0 hover:bg-slate-100', className)
+    const commonClassName = cx(
+        'flex items-center gap-2 rounded-md px-2 py-1 border-0 hover:bg-slate-100 shrink-0',
+        className
+    )
     const resolvedTitle = title ?? t('components.logoButton.title')
     const resolvedAlt = alt ?? t('components.logoButton.alt')
     const ariaLabel = props['aria-label'] ?? t('components.logoButton.ariaLabel')
