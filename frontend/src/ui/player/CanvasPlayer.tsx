@@ -2,7 +2,6 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { JobDetail, ReportType } from '../types'
 import { PlayerState, VideoProperties } from './state'
-import { Button } from '../components/Button'
 import { ControlsBar } from './ControlsBar'
 import { Timeline } from './Timeline'
 import { useZoom } from '../hooks/useZoom'
@@ -13,6 +12,7 @@ import { trackEvent } from '../utils/analytics'
 import { buildExportFilename, downloadExport, exportTrackMp4 } from './export'
 import { useJobVideoSource } from './useJobVideoSource'
 import { AnnotationStroke, drawFrame, pickTrackAtScreenPoint, screenPointToVideoNorm } from './rendering'
+import { DrawOverlay, DRAW_COLOR_OPTIONS, DRAW_WIDTH_OPTIONS, type DrawTool } from './DrawOverlay'
 
 type Props = {
     job: JobDetail
@@ -26,10 +26,6 @@ type Props = {
 }
 
 const ANNOTATION_TIME_WINDOW_SEC = 0.1
-const DRAW_WIDTH_OPTIONS = [2, 3, 5, 8, 14, 20]
-const DRAW_COLOR_OPTIONS = ['#f97316', '#22c55e', '#3b82f6', '#ef4444', '#facc15']
-const WIDTH_PREVIEW_MIN = 8
-const WIDTH_PREVIEW_MAX = 24
 export const CanvasPlayer: React.FC<Props> = ({
     job,
     dirHandle,
@@ -50,7 +46,7 @@ export const CanvasPlayer: React.FC<Props> = ({
     const [hoveredTrackId, setHoveredTrackId] = React.useState<number | null>(null)
     const [isExporting, setIsExporting] = React.useState<boolean>(false)
     const [exportProgressPct, setExportProgressPct] = React.useState<number | null>(null)
-    const [drawTool, setDrawTool] = React.useState<'freehand' | 'line'>('line')
+    const [drawTool, setDrawTool] = React.useState<DrawTool>('line')
     const [drawColor, setDrawColor] = React.useState<string>(DRAW_COLOR_OPTIONS[0])
     const [drawWidth, setDrawWidth] = React.useState<number>(5)
     const annotationsRef = React.useRef<AnnotationStroke[]>([])
@@ -761,95 +757,16 @@ export const CanvasPlayer: React.FC<Props> = ({
                         }}
                     />
                     {drawMode && (
-                        <div className="absolute left-3 top-3 z-10 rounded-md bg-black/60 border border-gray-700 text-gray-100 text-xs px-3 py-2 space-y-3">
-                            <div>
-                                <div className="text-[11px] uppercase tracking-wide text-gray-300">
-                                    {t('player.canvas.draw.tool')}
-                                </div>
-                                <div className="mt-2 flex items-center gap-1">
-                                    <Button
-                                        type="button"
-                                        variant="inverse"
-                                        size="sm"
-                                        onClick={() => setDrawTool('freehand')}
-                                        className={drawTool === 'freehand' ? 'bg-white text-black hover:bg-white' : ''}
-                                        text={t('player.canvas.draw.freehand')}
-                                    />
-                                    <Button
-                                        type="button"
-                                        variant="inverse"
-                                        size="sm"
-                                        onClick={() => setDrawTool('line')}
-                                        className={drawTool === 'line' ? 'bg-white text-black hover:bg-white' : ''}
-                                        text={t('player.canvas.draw.line')}
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <div className="text-[11px] uppercase tracking-wide text-gray-300">
-                                    {t('player.canvas.draw.width')}
-                                </div>
-                                <div className="mt-2 flex items-center gap-2">
-                                    {DRAW_WIDTH_OPTIONS.map((option, index) => {
-                                        const previewSize =
-                                            (index / (DRAW_WIDTH_OPTIONS.length - 1)) *
-                                                (WIDTH_PREVIEW_MAX - WIDTH_PREVIEW_MIN) +
-                                            WIDTH_PREVIEW_MIN
-                                        const buttonSize = previewSize
-                                        return (
-                                            <Button
-                                                key={option}
-                                                type="button"
-                                                variant="unstyled"
-                                                size="none"
-                                                onClick={() => setDrawWidth(option)}
-                                                className={`flex items-center justify-center rounded-full transition ${
-                                                    drawWidth === option
-                                                        ? 'ring-2 ring-white'
-                                                        : 'ring-1 ring-white/30 hover:ring-white/70'
-                                                }`}
-                                                style={{ width: buttonSize, height: buttonSize }}
-                                                aria-label={t('player.canvas.draw.widthLabel', { value: option })}
-                                            >
-                                                <span
-                                                    className="block rounded-full bg-white"
-                                                    style={{ width: previewSize, height: previewSize }}
-                                                />
-                                            </Button>
-                                        )
-                                    })}
-                                </div>
-                            </div>
-                            <div>
-                                <div className="text-[11px] uppercase tracking-wide text-gray-300">
-                                    {t('player.canvas.draw.color')}
-                                </div>
-                                <div className="mt-2 flex items-center gap-2">
-                                    {DRAW_COLOR_OPTIONS.map(option => (
-                                        <Button
-                                            key={option}
-                                            type="button"
-                                            variant="unstyled"
-                                            size="none"
-                                            onClick={() => setDrawColor(option)}
-                                            className={`h-6 w-6 rounded-full transition ${
-                                                drawColor === option
-                                                    ? 'ring-2 ring-white'
-                                                    : 'ring-1 ring-white/30 hover:ring-white/70'
-                                            }`}
-                                            style={{ backgroundColor: option }}
-                                            aria-label={t('player.canvas.draw.colorLabel', { value: option })}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                            <Button
-                                size="sm"
-                                text={t('player.canvas.draw.clearFrame')}
-                                onClick={onClearAnnotations}
-                                disabled={!hasVisibleAnnotations}
-                            />
-                        </div>
+                        <DrawOverlay
+                            drawTool={drawTool}
+                            onDrawToolChange={setDrawTool}
+                            drawWidth={drawWidth}
+                            onDrawWidthChange={setDrawWidth}
+                            drawColor={drawColor}
+                            onDrawColorChange={setDrawColor}
+                            onClearAnnotations={onClearAnnotations}
+                            hasVisibleAnnotations={hasVisibleAnnotations}
+                        />
                     )}
                     {/* Hidden video used only for decoding frames */}
                     {videoUrl && (
