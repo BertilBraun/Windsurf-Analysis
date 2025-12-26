@@ -43,7 +43,7 @@ def _commit_volume() -> None:
 
 def _verify_job_authorization(job_id: str, authorization: str | None) -> None:
     try:
-        cr.verify_job(job_id, _require_bearer(authorization), required_statuses=['pending'])
+        cr.verify_job(job_id, _require_bearer(authorization), required_statuses=['uploading'])
     except CloudRunError as e:
         raise HTTPException(status_code=e.status_code, detail=e.body)
 

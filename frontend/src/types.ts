@@ -1,5 +1,5 @@
 export type JobStatus =
-    | 'pending'
+    | 'uploading'
     | 'starting'
     | 'orientation'
     | 'stabilization'
@@ -23,4 +23,3 @@ export type JobDetail = JobSummary & {
     tracks: any[]
     stabilization_transforms: any[]
 }
-

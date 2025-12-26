@@ -170,9 +170,9 @@ export async function createJobForChecksum(
     }
     if (!createRes.ok) throw new Error(await createRes.text())
     const { job_id, status } = (await createRes.json()) as { job_id: string; status: string }
-    // If the server indicates this checksum already has a non-pending job (e.g. succeeded),
+    // If the server indicates this checksum already has a non-uploading job (e.g. succeeded),
     // treat it as a duplicate and skip uploading.
-    if (status !== 'pending') return 'skipped'
+    if (status !== 'uploading') return 'skipped'
     return { job_id }
 }
 

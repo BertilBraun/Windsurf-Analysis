@@ -185,7 +185,7 @@ export function useJobs(): UseJobsReturn {
 
                             const summaryBase: JobSummary = {
                                 id: String(j?.job_id ?? jobId),
-                                status: String(j?.status ?? 'pending') as any,
+                                status: String(j?.status ?? 'uploading') as any,
                                 created_at: toIso(j?.created_at),
                                 updated_at: toIso(j?.updated_at),
                                 original_checksum_sha256: String(j?.original_checksum_sha256 ?? ''),

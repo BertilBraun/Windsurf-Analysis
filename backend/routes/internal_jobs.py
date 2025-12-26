@@ -69,7 +69,7 @@ def verify_job(job_id: str, payload: InternalVerifyRequest, user: User = Depends
 def mark_uploaded(job_id: str, payload: InternalUploadedRequest, user: User = Depends(get_current_user)):
     _require_owned(user, job_id)
 
-    if jobs_repo.get_job(job_id).status != JobStatus.pending:
+    if jobs_repo.get_job(job_id).status != JobStatus.uploading:
         raise HTTPException(status_code=409, detail='Job not in a state that accepts uploads')
 
     jobs_repo.update_job(

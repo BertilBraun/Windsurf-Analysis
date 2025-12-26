@@ -235,7 +235,7 @@ export const JobThumbnail: React.FC<{
                 ? '#ef4444'
                 : isProcessing
                 ? '#3b82f6'
-                : job.status === 'pending'
+                : job.status === 'uploading'
                 ? '#f59e0b'
                 : job.status === 'canceled'
                 ? '#9ca3af'

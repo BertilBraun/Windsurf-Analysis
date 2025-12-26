@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class JobStatus(str, Enum):
-    pending = 'pending'
+    uploading = 'uploading'
     starting = 'starting'
     orientation = 'orientation'
     stabilization = 'stabilization'

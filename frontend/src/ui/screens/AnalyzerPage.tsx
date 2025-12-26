@@ -48,7 +48,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         for (const j of jobs) {
             const sha = String(j.original_checksum_sha256 || '')
             if (!sha) continue
-            if (j.status === 'pending') continue
+            if (j.status === 'uploading') continue
             s.add(sha)
         }
         return s
@@ -58,7 +58,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         for (const j of jobs) {
             const sha = String(j.original_checksum_sha256 || '')
             if (!sha) continue
-            if (j.status !== 'pending') continue
+            if (j.status !== 'uploading') continue
             s.add(sha)
         }
         return s

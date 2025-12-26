@@ -237,7 +237,7 @@
                 "detection": "Detecting Surfers",
                 "failed": "Failed",
                 "orientation": "Orienting Video",
-                "pending": "Pending",
+                "uploading": "Uploading",
                 "stabilization": "Stabilizing Video",
                 "starting": "Starting",
                 "succeeded": "Succeeded",

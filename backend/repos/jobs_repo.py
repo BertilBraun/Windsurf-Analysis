@@ -32,7 +32,7 @@ class JobsRepo:
             ac_storage_url='N/A',
             uploaded_at=None,
             last_accessed_at=now(),
-            status=JobStatus.pending,
+            status=JobStatus.uploading,
             created_at=now(),
             updated_at=now(),
             started_at=None,
