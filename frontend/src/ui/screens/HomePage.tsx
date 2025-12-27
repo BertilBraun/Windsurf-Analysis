@@ -181,7 +181,7 @@ const Section: React.FC<{
                     <div
                         className={[
                             'text-sm text-slate-600 leading-6 space-y-3',
-                            isImageLeft ? 'lg:pl-[calc(40%+1.5rem)]' : 'lg:pr-[calc(40%+1.5rem)]',
+                            isImageLeft ? 'lg:pl-[calc(45%+1.5rem)]' : 'lg:pr-[calc(45%+1.5rem)]',
                         ].join(' ')}
                     >
                         <h2 className="mt-0">{title}</h2>
@@ -190,7 +190,7 @@ const Section: React.FC<{
 
                     <div
                         className={[
-                            'hidden lg:block absolute top-0 bottom-0 w-[40%]',
+                            'hidden lg:block absolute top-0 bottom-0 w-[45%]',
                             isImageLeft ? 'left-0' : 'right-0',
                         ].join(' ')}
                     >
