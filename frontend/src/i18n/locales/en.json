@@ -380,15 +380,26 @@
                     "title": "Exporting track\u2026"
                 }
             },
+            "canvasExport": {
+                "errorLabel": "Export: {{message}}",
+                "errors": {
+                    "captureStreamUnsupported": "Canvas capture is not supported in this browser",
+                    "failed": "Export failed",
+                    "mediaRecorderUnsupported": "Video recording is not supported in this browser",
+                    "notReady": "Not ready"
+                }
+            },
             "fileNotFound": "VIDEO FILE NOT FOUND"
         },
         "controlsBar": {
             "export": "Export",
             "pause": "Pause",
             "play": "Play",
+            "startExport": "Start export",
             "speed": "Speed: {{value}}x",
             "speedDown": "- Speed",
             "speedUp": "+ Speed",
+            "stopExport": "Stop export",
             "zoom": "Zoom: {{value}}x"
         }
     },
@@ -528,33 +539,48 @@
             },
             "hero": {
                 "brand": "GybeLock",
-                "cta": "Get started for free",
+                "cta": "Get started",
                 "freeVideos": "Beta: all processing is free \u2014 we'd love your feedback.",
-                "lede1": "<strong>GybeLock</strong> turns shaky, long-zoom beach videos into smooth, centered clips that are easy to watch, analyze, and learn from.",
-                "lede2": "Built for <strong>shore / beach-shot tele footage</strong> \u2014 not GoPro/action-cam POV.",
-                "lede3": "From speed runs to wave riding, jumps, and gybes \u2014 GybeLock keeps the rider where your focus should be.",
-                "title": "See your windsurfing clearly."
+                "disclaimer": "Windsurfing only. Best with shore-shot/long-zoom footage. No GoPro/POV.",
+                "lede1": "<strong>GybeLock</strong> turns shaky beach-shot clips into a smooth, centered view of each rider \u2014 so timing and body position are easy to see.",
+                "lede2": "You do the coaching. We remove the distraction.",
+                "lede3": "From speed runs to wave riding, jumps, and gybes \u2014 GybeLock keeps the rider centered.",
+                "title": "Make every session easy to review."
+            },
+            "images": {
+                "builtAlt": "Race lineup on the water",
+                "problemAlt": "Camera filming from the beach",
+                "whatAlt": "Windsurfer mid-jump",
+                "whoAlt": "Windsurf clinic session"
             },
             "how": {
+                "stepLabel": "Step {{n}}",
                 "steps": {
                     "drop": {
-                        "body": "New files upload automatically in the background.",
+                        "body": "New files are automatically uploaded for processing in the background.",
                         "title": "<strong>Drop MP4 videos into the folder</strong>"
                     },
                     "ingress": {
-                        "body": "Pick a folder on your computer. GybeLock monitors it for new videos.",
-                        "title": "<strong>Set your ingress folder</strong>"
+                        "body": "Choose a folder on your computer. GybeLock watches it for new videos.",
+                        "title": "<strong>Pick a watch folder</strong>"
                     },
                     "process": {
-                        "body": "The video is oriented, stabilized, and riders are detected and tracked.",
-                        "title": "<strong>GybeLock processes the footage</strong>"
+                        "body": "Give it a few minutes. Your videos will be ready to review.",
+                        "title": "<strong>Let GybeLock work its magic</strong>"
                     },
                     "review": {
-                        "body": "Click on the rider you want to focus on.",
+                        "body": "Open a video and pick the rider you want to follow.",
                         "title": "<strong>Open and review</strong>"
                     }
                 },
+                "tip": "Tip: After your session, drop all your videos at once. Let GybeLock process them for a few minutes, then start reviewing \u2014 no need to wait for each one.",
                 "title": "How it works"
+            },
+            "analyzerPreview": {
+                "alt": "Screenshot of the Analyzer page with many processed videos listed",
+                "body": "This is what your Analyzer looks like after you\u2019ve dropped a few videos \u2014 a list of sessions you can open and review.",
+                "note": "New here? An empty list is normal at first \u2014 it fills up as your videos finish.",
+                "title": "What you\u2019ll see"
             },
             "problem": {
                 "bullets": {

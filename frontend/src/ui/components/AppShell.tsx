@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { LogoButton } from './LogoButton'
+import { PAYPAL_LINK } from './SupportProjectSection'
 
 export const AppShellLayout: React.FC = () => {
     const { t } = useTranslation()
@@ -30,7 +31,7 @@ export const AppShellLayout: React.FC = () => {
                 <Outlet />
             </main>
 
-            <footer className="border-t border-slate-200 max-w-[1400px] margin-auto">
+            <footer className="border-t border-slate-200 max-w-[1400px] mx-auto">
                 <div className="text-sm text-slate-500 mx-auto text-center py-6">
                     {t('components.appShell.footer.specialThanks')}
                 </div>
@@ -40,6 +41,7 @@ export const AppShellLayout: React.FC = () => {
                     </div>
                     <div className="flex-1" />
                     <div className="flex flex-wrap gap-x-4 gap-y-2">
+                        <FooterLink to={PAYPAL_LINK} label={t('components.supportProjectSection.linkText')} />
                         <FooterLink to="/terms" label={t('components.appShell.footer.terms')} />
                         <FooterLink to="/privacy" label={t('components.appShell.footer.privacy')} />
                         <FooterLink to="/impressum" label={t('components.appShell.footer.impressum')} />

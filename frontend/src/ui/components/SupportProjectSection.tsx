@@ -1,7 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 
-const PAYPAL_LINK = 'https://paypal.me/bertilbraun'
+export const PAYPAL_LINK = 'https://paypal.me/bertilbraun'
 
 function cx(...parts: Array<string | undefined | null | false>) {
     return parts.filter(Boolean).join(' ')
@@ -16,9 +16,7 @@ export const SupportProjectSection: React.FC<SupportProjectSectionProps> = ({ cl
     return (
         <section className={cx('rounded-2xl border border-slate-200 bg-white p-6 sm:p-8', className)}>
             <h2 className="mt-0">{t('components.supportProjectSection.title')}</h2>
-            <div className="text-sm text-slate-600 leading-6">
-                {t('components.supportProjectSection.body')}
-            </div>
+            <div className="text-sm text-slate-600 leading-6">{t('components.supportProjectSection.body')}</div>
             <div className="mt-4 flex flex-wrap gap-3 items-center">
                 <a
                     href={PAYPAL_LINK}

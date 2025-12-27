@@ -1,8 +1,8 @@
 import React from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { Button } from '../components/Button'
 import { SupportProjectSection } from '../components/SupportProjectSection'
+import { GetStartedSection } from '../components/GetStartedSection'
 
 export const PricingPage: React.FC = () => {
     const { t } = useTranslation()
@@ -47,15 +47,7 @@ export const PricingPage: React.FC = () => {
 
             <SupportProjectSection />
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 flex flex-col sm:flex-row gap-4 sm:items-center">
-                <div className="flex-1">
-                    <div className="mt-1 text-lg font-semibold text-slate-900">{t('screens.pricing.cta.title')}</div>
-                    <div className="mt-1 text-sm text-slate-700">
-                        <em>{t('screens.pricing.cta.note')}</em>
-                    </div>
-                </div>
-                <Button variant="primary" onClick={() => navigate('/analyzer')} text={t('screens.pricing.cta.button')} />
-            </section>
+            <GetStartedSection />
         </div>
     )
 }
