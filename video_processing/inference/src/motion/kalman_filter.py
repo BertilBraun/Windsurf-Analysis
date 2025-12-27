@@ -292,6 +292,7 @@ class _KalmanFilter:
         m, P = mean, cov
         for f in range(from_frame, to_frame):  # hop f = from_frame .. to_frame-1
             m, P = self.predict(m, P, missed_frames=1)
+            # Apply camera motion delta for transition f -> f+1 (prev->curr).
             m, P = cmc.apply_forward(m, P, f)
 
         return m, P

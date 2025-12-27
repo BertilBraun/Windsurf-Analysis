@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from collections.abc import Mapping, Sequence
 from typing import NamedTuple
 
 from vidstab import VidStab
@@ -41,7 +42,12 @@ def stabilize_video(input_video: str | os.PathLike, output_video: str | os.PathL
 
 
 @cache_to_file('gmc_transforms')
-def compute_stabilization_transforms_gmc(input_video: str | os.PathLike, downscale: int = 2) -> list[Transform]:
+def compute_stabilization_transforms_gmc(
+    input_video: str | os.PathLike,
+    *,
+    bboxes_by_frame: Mapping[int, Sequence[Sequence[int]]] | None = None,
+    downscale: int = 2,
+) -> list[Transform]:
     """
     Compute per-frame camera motion deltas using the GMC method,
     and return dx, dy, da for each frame relative to the previous frame.
@@ -51,16 +57,64 @@ def compute_stabilization_transforms_gmc(input_video: str | os.PathLike, downsca
 
     with VideoReader(input_video) as reader:
         for f, frame in reader.read_frames():
-            H_delta = gmc.apply(frame)
-            # Extract rigid delta parameters from H (prev -> curr)
-            R00, tx = float(H_delta[0, 0]), float(H_delta[0, 2])
-            R10, ty = float(H_delta[1, 0]), float(H_delta[1, 2])
-            da = float(np.arctan2(R10, R00))
-            dx = float(tx)
-            dy = float(ty)
-            transforms.append(Transform(dx, dy, da, int(f)))
+            excluded_bboxes = None
+            if bboxes_by_frame is not None:
+                excluded_bboxes = bboxes_by_frame.get(int(f), ())
+
+            transform = gmc_transform_from_frame(
+                gmc,
+                frame_idx=int(f),
+                frame=frame,
+                excluded_bboxes=excluded_bboxes,
+            )
+            if transform is not None:
+                transforms.append(transform)
 
     return transforms
+
+
+def gmc_transform_from_frame(
+    gmc: GMC,
+    *,
+    frame_idx: int,
+    frame: np.ndarray,
+    excluded_bboxes: Sequence[Sequence[int]] | None = None,
+) -> Transform | None:
+    mask = None
+    if excluded_bboxes:
+        mask = build_keypoint_mask(frame_shape=frame.shape, excluded_bboxes=excluded_bboxes)
+
+    H_delta = gmc.apply(frame, mask=mask)
+
+    if int(frame_idx) == 0:
+        return None
+
+    # Extract rigid delta parameters from H (prev -> curr)
+    R00, tx = float(H_delta[0, 0]), float(H_delta[0, 2])
+    R10, ty = float(H_delta[1, 0]), float(H_delta[1, 2])
+    return Transform(
+        dx=float(tx),
+        dy=float(ty),
+        da=float(np.arctan2(R10, R00)),
+        frame_idx=int(frame_idx),
+    )
+
+
+def build_keypoint_mask(
+    *,
+    frame_shape: tuple[int, int, int] | tuple[int, int],
+    excluded_bboxes: Sequence[Sequence[int]],
+) -> np.ndarray:
+    height, width = int(frame_shape[0]), int(frame_shape[1])
+    mask = np.full((height, width), 255, dtype=np.uint8)
+
+    for bbox in excluded_bboxes:
+        if len(bbox) != 4:
+            raise ValueError(f'Invalid bbox: {bbox}')
+        x1, y1, x2, y2 = (int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))
+        mask[y1:y2, x1:x2] = 0
+
+    return mask
 
 
 def vidstab_like_transforms(transforms: list[Transform], smoothing_window: int = 30) -> list[Transform]:
@@ -82,7 +136,11 @@ def vidstab_like_transforms(transforms: list[Transform], smoothing_window: int =
 
     # VidStab formula
     stab = raw + (traj_s - traj)  # shape (N,3)
-    return [Transform(dx=float(dx), dy=float(dy), da=float(da), frame_idx=i) for i, (dx, dy, da) in enumerate(stab)]
+    frame_idxs = [t.frame_idx for t in transforms]
+    return [
+        Transform(dx=float(dx), dy=float(dy), da=float(da), frame_idx=int(frame_idx))
+        for frame_idx, (dx, dy, da) in zip(frame_idxs, stab)
+    ]
 
 
 def _bfill_rolling_mean(arr: np.ndarray, n: int = 30) -> np.ndarray:
