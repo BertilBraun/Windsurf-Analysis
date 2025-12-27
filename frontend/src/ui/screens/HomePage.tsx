@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { SupportProjectSection } from '../components/SupportProjectSection'
 import { GetStartedSection } from '../components/GetStartedSection'
+import { Heading, Text, TextStack, TextStrong } from '../components/Typography'
 
 export const HomePage: React.FC = () => {
     const { t } = useTranslation()
@@ -22,21 +23,16 @@ export const HomePage: React.FC = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.3fr)] gap-6 items-center">
                     <div className="max-w-md">
                         {/*<div className="text-xs font-semibold text-brand-700 mb-2">{t('screens.home.hero.brand')}</div>*/}
-                        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-                            {t('screens.home.hero.title')}
-                        </h1>
-                        <br />
-                        <p className="mt-3 text-sm sm:text-base text-slate-600 leading-6">
-                            <Trans i18nKey="screens.home.hero.lede1" components={{ strong: <strong /> }} />
-                        </p>
-                        <p className="mt-3 text-sm sm:text-base text-slate-600 leading-6">
-                            <Trans i18nKey="screens.home.hero.lede2" components={{ strong: <strong /> }} />
-                        </p>
-                        <p className="mt-3 text-sm sm:text-base text-slate-600 leading-6">
-                            {t('screens.home.hero.lede3')}
-                        </p>
-
-                        <br />
+                        <Heading level={1}>{t('screens.home.hero.title')}</Heading>
+                        <TextStack className="mt-4">
+                            <p>
+                                <Trans i18nKey="screens.home.hero.lede1" components={{ strong: <TextStrong /> }} />
+                            </p>
+                            <p>
+                                <Trans i18nKey="screens.home.hero.lede2" components={{ strong: <TextStrong /> }} />
+                            </p>
+                            <p>{t('screens.home.hero.lede3')}</p>
+                        </TextStack>
 
                         <div className="mt-5 flex flex-col sm:flex-row gap-3 sm:items-center">
                             <Button
@@ -44,9 +40,13 @@ export const HomePage: React.FC = () => {
                                 onClick={() => navigate('/analyzer')}
                                 text={t('screens.home.hero.cta')}
                             />
-                            <div className="text-sm text-slate-700">{t('screens.home.hero.freeVideos')}</div>
+                            <Text as="div" variant="support">
+                                {t('screens.home.hero.freeVideos')}
+                            </Text>
                         </div>
-                        <div className="mt-2 text-xs text-slate-500">{t('screens.home.hero.disclaimer')}</div>
+                        <Text as="div" variant="muted" className="mt-2">
+                            {t('screens.home.hero.disclaimer')}
+                        </Text>
                     </div>
 
                     <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
@@ -83,7 +83,9 @@ export const HomePage: React.FC = () => {
                     <li>{t('screens.home.problem.bullets.riders')}</li>
                     <li>{t('screens.home.problem.bullets.moments')}</li>
                 </ul>
-                <p className="mt-3">{t('screens.home.problem.outro')}</p>
+                <Text as="p" variant="support">
+                    {t('screens.home.problem.outro')}
+                </Text>
             </Section>
 
             <Section
@@ -95,21 +97,33 @@ export const HomePage: React.FC = () => {
                 <p>{t('screens.home.what.intro')}</p>
                 <ul className="list-disc pl-5 space-y-1">
                     <li>
-                        <Trans i18nKey="screens.home.what.bullets.stabilizes" components={{ strong: <strong /> }} />
+                        <Trans
+                            i18nKey="screens.home.what.bullets.stabilizes"
+                            components={{ strong: <TextStrong /> }}
+                        />
                     </li>
                     <li>
-                        <Trans i18nKey="screens.home.what.bullets.locksOnto" components={{ strong: <strong /> }} />
+                        <Trans
+                            i18nKey="screens.home.what.bullets.locksOnto"
+                            components={{ strong: <TextStrong /> }}
+                        />
                     </li>
                     <li>
-                        <Trans i18nKey="screens.home.what.bullets.centered" components={{ strong: <strong /> }} />
+                        <Trans
+                            i18nKey="screens.home.what.bullets.centered"
+                            components={{ strong: <TextStrong /> }}
+                        />
                     </li>
                     <li>
-                        <Trans i18nKey="screens.home.what.bullets.follows" components={{ strong: <strong /> }} />
+                        <Trans
+                            i18nKey="screens.home.what.bullets.follows"
+                            components={{ strong: <TextStrong /> }}
+                        />
                     </li>
                 </ul>
-                <div className="mt-3 text-slate-600">
+                <Text as="p" variant="support">
                     <Trans i18nKey="screens.home.what.outro" components={{ em: <em /> }} />
-                </div>
+                </Text>
             </Section>
 
             <Section
@@ -124,18 +138,22 @@ export const HomePage: React.FC = () => {
                     <li>{t('screens.home.built.bullets.multiple')}</li>
                     <li>{t('screens.home.built.bullets.conditions')}</li>
                 </ul>
-                <p className="mt-3">
-                    <Trans i18nKey="screens.home.built.notDesigned" components={{ strong: <strong /> }} />
+                <p>
+                    <Trans i18nKey="screens.home.built.notDesigned" components={{ strong: <TextStrong /> }} />
                 </p>
-                <p className="mt-3">{t('screens.home.built.outro')}</p>
+                <Text as="p" variant="support">
+                    {t('screens.home.built.outro')}
+                </Text>
             </Section>
 
             <Section title={t('screens.home.how.title')}>
                 <HowStepStrip stepKey={howStepKey} onStepKeyChange={setHowStepKey} />
                 <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-sm text-slate-700">{t(`screens.home.how.steps.${howStepKey}.body`)}</div>
+                    <Text as="div">{t(`screens.home.how.steps.${howStepKey}.body`)}</Text>
                 </div>
-                <div className="mt-3 text-xs text-slate-500">{t('screens.home.how.tip')}</div>
+                <Text as="div" variant="muted" className="mt-3">
+                    {t('screens.home.how.tip')}
+                </Text>
             </Section>
 
             <Section
@@ -150,12 +168,16 @@ export const HomePage: React.FC = () => {
                     <li>{t('screens.home.who.bullets.friends')}</li>
                     <li>{t('screens.home.who.bullets.anyone')}</li>
                 </ul>
-                <p className="mt-3">{t('screens.home.who.outro')}</p>
+                <Text as="p" variant="support">
+                    {t('screens.home.who.outro')}
+                </Text>
             </Section>
 
             <Section title={t('screens.home.why.title')}>
                 <p>{t('screens.home.why.intro')}</p>
-                <p className="mt-2">{t('screens.home.why.outro')}</p>
+                <Text as="p" variant="support">
+                    {t('screens.home.why.outro')}
+                </Text>
             </Section>
 
             <GetStartedSection />
@@ -178,14 +200,9 @@ const Section: React.FC<{
         <section className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
             {hasImage ? (
                 <div className="relative">
-                    <div
-                        className={[
-                            'text-sm text-slate-600 leading-6 space-y-3',
-                            isImageLeft ? 'lg:pl-[calc(45%+1.5rem)]' : 'lg:pr-[calc(45%+1.5rem)]',
-                        ].join(' ')}
-                    >
-                        <h2 className="mt-0">{title}</h2>
-                        {children}
+                    <div className={isImageLeft ? 'lg:pl-[calc(45%+1.5rem)]' : 'lg:pr-[calc(45%+1.5rem)]'}>
+                        <Heading level={2}>{title}</Heading>
+                        <TextStack>{children}</TextStack>
                     </div>
 
                     <div
@@ -215,8 +232,8 @@ const Section: React.FC<{
                 </div>
             ) : (
                 <>
-                    <h2 className="mt-0">{title}</h2>
-                    <div className="text-sm text-slate-600 leading-6 space-y-3">{children}</div>
+                    <Heading level={2}>{title}</Heading>
+                    <TextStack>{children}</TextStack>
                 </>
             )}
         </section>
@@ -231,19 +248,19 @@ const HowStepStrip: React.FC<{
     const steps = [
         {
             key: 'ingress',
-            label: <Trans i18nKey="screens.home.how.steps.ingress.title" components={{ strong: <strong /> }} />,
+            label: <Trans i18nKey="screens.home.how.steps.ingress.title" components={{ strong: <TextStrong /> }} />,
         },
         {
             key: 'drop',
-            label: <Trans i18nKey="screens.home.how.steps.drop.title" components={{ strong: <strong /> }} />,
+            label: <Trans i18nKey="screens.home.how.steps.drop.title" components={{ strong: <TextStrong /> }} />,
         },
         {
             key: 'process',
-            label: <Trans i18nKey="screens.home.how.steps.process.title" components={{ strong: <strong /> }} />,
+            label: <Trans i18nKey="screens.home.how.steps.process.title" components={{ strong: <TextStrong /> }} />,
         },
         {
             key: 'review',
-            label: <Trans i18nKey="screens.home.how.steps.review.title" components={{ strong: <strong /> }} />,
+            label: <Trans i18nKey="screens.home.how.steps.review.title" components={{ strong: <TextStrong /> }} />,
         },
     ] as const
 

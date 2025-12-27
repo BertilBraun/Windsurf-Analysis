@@ -51,9 +51,7 @@ export function useIngressScanner(
     const recentlyHandledRef = React.useRef<Map<string, number>>(new Map())
     // Track files that are still being copied so we only upload once they settle.
     const pendingStableRef = React.useRef<Set<string>>(new Set())
-    const stabilityRef = React.useRef<Map<string, { size: number; mtimeMs: number; stableCount: number }>>(
-        new Map()
-    )
+    const stabilityRef = React.useRef<Map<string, { size: number; mtimeMs: number; stableCount: number }>>(new Map())
     const pendingHandledRef = React.useRef<Set<string>>(new Set())
     const pendingChecksumsRef = React.useRef<ReadonlySet<string> | null>(null)
     const [suspended, setSuspended] = React.useState(false)
@@ -168,7 +166,7 @@ export function useIngressScanner(
             if (result) {
                 const { snapshot, filesByKey, newFingerprints } = result
                 const stabilityByPath = new Map<string, boolean>()
-                const REQUIRED_STABLE_SCANS = 3
+                const REQUIRED_STABLE_SCANS = 2
 
                 const updateStability = (fp: FileFingerprint) => {
                     const prev = stabilityRef.current.get(fp.path)
@@ -248,7 +246,6 @@ export function useIngressScanner(
                     }
                 }
                 await Promise.all(work)
-
             }
 
             setLastRunAt(Date.now())

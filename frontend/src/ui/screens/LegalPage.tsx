@@ -4,6 +4,7 @@ import React from 'react'
 import { Link } from 'react-router-dom'
 import { getAnalyticsConsent, initAnalytics, installClickTracking, setAnalyticsConsent } from '../utils/analytics'
 import { Button } from '../components/Button'
+import { Heading, Text, TextStack } from '../components/Typography'
 
 const OWNER_NAME = 'Bertil Braun'
 const OWNER_ADDRESS_LINES = ['Im Rübländer 19', '71034 Böblingen', 'Germany']
@@ -22,9 +23,9 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <section className="space-y-3">
-            <h2 className="mt-8 mb-0">{title}</h2>
-            <div className="text-sm text-slate-600 leading-6 space-y-3">{children}</div>
+        <section className="space-y-3 pt-8">
+            <Heading level={2}>{title}</Heading>
+            <TextStack>{children}</TextStack>
         </section>
     )
 }
@@ -49,10 +50,12 @@ export const LegalPage: React.FC<{ kind: 'terms' | 'privacy' | 'impressum' | 'co
 
     return (
         <div className="max-w-3xl">
-            <h1 className="mb-2">{title}</h1>
-            <div className="text-xs text-slate-500 mb-6">
+            <Heading level={1} className="mb-2">
+                {title}
+            </Heading>
+            <Text as="div" variant="muted" className="mb-6">
                 Last updated: <span className="font-medium text-slate-700">{LAST_UPDATED}</span>
-            </div>
+            </Text>
 
             {kind === 'contact' && <ContactContent />}
 
@@ -67,21 +70,21 @@ export const LegalPage: React.FC<{ kind: 'terms' | 'privacy' | 'impressum' | 'co
 
 const ContactContent: React.FC = () => {
     return (
-        <div className="text-sm text-slate-600 leading-6 space-y-3">
+        <TextStack>
             <p>
                 For help, feedback, or data protection requests, email{' '}
                 <a className="text-brand-700 underline underline-offset-4" href={`mailto:${OWNER_EMAIL}`}>
                     {OWNER_EMAIL}
                 </a>
             </p>
-        </div>
+        </TextStack>
     )
 }
 
 const ImpressumContent: React.FC = () => {
     return (
-        <div className="text-sm text-slate-600 leading-6 space-y-6">
-            <p className="text-slate-700">
+        <TextStack className="space-y-6">
+            <p>
                 <Pill>Germany</Pill> <Pill>Private individual</Pill> <Pill>No company</Pill>
             </p>
 
@@ -121,14 +124,14 @@ const ImpressumContent: React.FC = () => {
                     for them.
                 </p>
             </Section>
-        </div>
+        </TextStack>
     )
 }
 
 const TermsContent: React.FC = () => {
     return (
-        <div className="text-sm text-slate-600 leading-6 space-y-6">
-            <p className="text-slate-700">
+        <TextStack className="space-y-6">
+            <p>
                 These Terms of Use govern your use of <b>GybeLock</b> (the “Service”) available at{' '}
                 <ExternalLink href={SERVICE_URL}>{SERVICE_URL.replace(/^https?:\/\//, '')}</ExternalLink>. By creating
                 an account or using the Service, you agree to these Terms.
@@ -247,7 +250,7 @@ const TermsContent: React.FC = () => {
                     </a>
                 </p>
             </Section>
-        </div>
+        </TextStack>
     )
 }
 
@@ -268,8 +271,8 @@ const PrivacyContent: React.FC = () => {
     }
 
     return (
-        <div className="text-sm text-slate-600 leading-6 space-y-6">
-            <p className="text-slate-700">
+        <TextStack className="space-y-6">
+            <p>
                 This Privacy Policy explains how <b>GybeLock</b> processes personal data when you use the Service at{' '}
                 <ExternalLink href={SERVICE_URL}>{SERVICE_URL.replace(/^https?:\/\//, '')}</ExternalLink>.
             </p>
@@ -460,6 +463,6 @@ const PrivacyContent: React.FC = () => {
                     </a>
                 </p>
             </Section>
-        </div>
+        </TextStack>
     )
 }

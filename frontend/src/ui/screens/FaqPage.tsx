@@ -2,12 +2,19 @@ import React from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/Button'
+import { Heading, Text, TextStrong } from '../components/Typography'
 
 const FaqItem: React.FC<{ q: string; a: React.ReactNode }> = ({ q, a }) => {
     return (
         <details className="rounded-xl border border-slate-200 bg-white p-4">
-            <summary className="cursor-pointer text-sm font-semibold text-slate-900">{q}</summary>
-            <div className="mt-2 text-sm text-slate-600 leading-6">{a}</div>
+            <summary className="cursor-pointer">
+                <Text as="span" weight="semibold">
+                    {q}
+                </Text>
+            </summary>
+            <Text as="div" className="mt-2">
+                {a}
+            </Text>
         </details>
     )
 }
@@ -19,8 +26,10 @@ export const FaqPage: React.FC = () => {
         <div className="flex flex-col gap-6">
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <h1>{t('screens.faq.title')}</h1>
-                    <p className="text-sm text-slate-600">{t('screens.faq.subtitle')}</p>
+                    <Heading level={1}>{t('screens.faq.title')}</Heading>
+                    <Text as="p" variant="muted" className="mt-1">
+                        {t('screens.faq.subtitle')}
+                    </Text>
                 </div>
                 <Button variant="primary" onClick={() => navigate('/analyzer')} text={t('screens.faq.cta')} />
             </div>
@@ -31,7 +40,7 @@ export const FaqPage: React.FC = () => {
                     a={
                         <Trans
                             i18nKey="screens.faq.items.whatDoes.answer"
-                            components={{ strong: <strong /> }}
+                            components={{ strong: <TextStrong /> }}
                         />
                     }
                 />
@@ -40,7 +49,7 @@ export const FaqPage: React.FC = () => {
                     a={
                         <Trans
                             i18nKey="screens.faq.items.supportedFootage.answer"
-                            components={{ strong: <strong /> }}
+                            components={{ strong: <TextStrong /> }}
                         />
                     }
                 />
@@ -57,7 +66,7 @@ export const FaqPage: React.FC = () => {
                     a={
                         <Trans
                             i18nKey="screens.faq.items.cannotOpen.answer"
-                            components={{ strong: <strong /> }}
+                            components={{ strong: <TextStrong /> }}
                         />
                     }
                 />
@@ -66,7 +75,7 @@ export const FaqPage: React.FC = () => {
                     a={
                         <Trans
                             i18nKey="screens.faq.items.fileNotFound.answer"
-                            components={{ strong: <strong /> }}
+                            components={{ strong: <TextStrong /> }}
                         />
                     }
                 />
@@ -75,7 +84,7 @@ export const FaqPage: React.FC = () => {
                     a={
                         <Trans
                             i18nKey="screens.faq.items.movedVideo.answer"
-                            components={{ strong: <strong /> }}
+                            components={{ strong: <TextStrong /> }}
                         />
                     }
                 />
@@ -92,7 +101,7 @@ export const FaqPage: React.FC = () => {
                     a={
                         <Trans
                             i18nKey="screens.faq.items.uploadsPaused.answer"
-                            components={{ strong: <strong /> }}
+                            components={{ strong: <TextStrong /> }}
                         />
                     }
                 />
@@ -105,7 +114,7 @@ export const FaqPage: React.FC = () => {
                     a={
                         <Trans
                             i18nKey="screens.faq.items.shortcuts.answer"
-                            components={{ strong: <strong /> }}
+                            components={{ strong: <TextStrong /> }}
                         />
                     }
                 />
@@ -114,7 +123,7 @@ export const FaqPage: React.FC = () => {
                     a={
                         <Trans
                             i18nKey="screens.faq.items.deleteAccount.answer"
-                            components={{ strong: <strong /> }}
+                            components={{ strong: <TextStrong /> }}
                         />
                     }
                 />
