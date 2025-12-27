@@ -136,12 +136,11 @@ class InferenceModel:
         return self.processors[yolo_model]
 
     @modal.method()
-    def inference_after_stabilization(
+    def inference_after_orientation(
         self,
         job_id: str,
         yolo_model: str,
         dominant_orientation: int,
-        transforms: list[dict],
     ):
         with report_job_failure_on_exception(job_id):
             video_path = f'/data/{job_id}_upright.mp4'
@@ -158,7 +157,6 @@ class InferenceModel:
             TrackingFn.spawn(
                 job_id=str(job_id),
                 dominant_orientation=dominant_orientation,
-                transforms=transforms,
                 raw_detections=[
                     {
                         'bbox': [d.bbox.x1, d.bbox.y1, d.bbox.x2, d.bbox.y2],

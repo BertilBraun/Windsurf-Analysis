@@ -124,9 +124,9 @@ async def upload_complete(job_id: str, authorization: str | None = Header(defaul
     except CloudRunError as e:
         raise HTTPException(status_code=e.status_code, detail=e.body)
 
-    # Kick off existing Modal pipeline (keeps compute on Modal)
-    StabilizationModel = modal.Cls.from_name('windsurf-analysis', 'StabilizationModel')
-    StabilizationModel().stabilize_and_enqueue.spawn(job_id=str(job_id), yolo_model=meta.yolo_model)
+    # Kick off Modal pipeline (keeps compute on Modal)
+    OrientationModel = modal.Cls.from_name('windsurf-analysis', 'OrientationModel')
+    OrientationModel().orient_and_enqueue.spawn(job_id=str(job_id), yolo_model=meta.yolo_model)
 
     return {'ok': True}
 
