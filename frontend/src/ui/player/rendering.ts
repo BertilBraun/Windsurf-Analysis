@@ -16,7 +16,7 @@ export type TimedBBox = { time_percent: number; bbox: [number, number, number, n
 export type AnnotationPoint = { x: number; y: number }
 export type AnnotationStroke = {
     id: string
-    timeSec: number
+    frameIndex: number
     color: string
     width: number
     points: AnnotationPoint[]
@@ -250,7 +250,7 @@ function drawAnnotationsDetailed(
 function drawStabilizationTransforms(
     ctx: CanvasRenderingContext2D,
     player: PlayerState,
-    now: number,
+    nowFrameIndex: number,
     sBase: number,
     cx: number,
     cy: number
@@ -258,15 +258,14 @@ function drawStabilizationTransforms(
     // Debug: draw stabilization trail (last ~30 samples) anchored at center (relative to current)
     try {
         const N = 30
-        const dt = 1 / 30 // seconds per sample
         const sScale = sBase
         const pts: Array<{ x: number; y: number }> = []
-        const siNow = player.getStabilizationAt(now)
+        const siNow = player.getStabilizationAtFrame(nowFrameIndex)
         const vx0 = sScale * siNow.dx
         const vy0 = sScale * siNow.dy
         for (let i = 0; i < N; i++) {
-            const t = Math.max(0, now - i * dt)
-            const si = player.getStabilizationAt(t)
+            const tFrame = Math.max(0, nowFrameIndex - i)
+            const si = player.getStabilizationAtFrame(tFrame)
             const vx = sScale * si.dx
             const vy = sScale * si.dy
             const px = cx + (vx - vx0) - 300
@@ -302,7 +301,7 @@ export function drawFrame(
     player: PlayerState,
     ov: OverviewView,
     annotations: AnnotationStroke[] = [],
-    timeOverrideSec?: number,
+    frameIndex: number,
     dominantOrientationDeg: number = 0
 ) {
     const rect = containerEl.getBoundingClientRect()
@@ -317,8 +316,8 @@ export function drawFrame(
     const offscreen = getSharedOffscreenCanvas()
     const rotatedVideo = drawRotatedToCanvas(source, offscreen, dominantOrientationDeg, sourceSize)
 
-    // Current time for stabilization lookup
-    const now = timeOverrideSec ?? player.currentTimeSec
+    // Current frame for stabilization/detection lookup
+    const nowFrame = frameIndex
     const sourceCanvas: HTMLCanvasElement = offscreen
 
     if (player.mode === 'overview') {
@@ -327,7 +326,7 @@ export function drawFrame(
         const cx = base.x + base.w * 0.5 + ov.offsetX
         const cy = base.y + base.h * 0.5 + ov.offsetY
         const sBase = (base.w / rotatedVideo.width) * z
-        const stab = player.getStabilizationAt(now)
+        const stab = player.getStabilizationAtFrame(nowFrame)
 
         ctx.save()
         ctx.translate(cx, cy)
@@ -340,7 +339,7 @@ export function drawFrame(
         ctx.drawImage(offscreen, -rotatedVideo.width * 0.5, -rotatedVideo.height * 0.5)
 
         if (false) {
-            drawStabilizationTransforms(ctx, player, now, sBase, cx, cy)
+            drawStabilizationTransforms(ctx, player, nowFrame, sBase, cx, cy)
         }
 
         // Draw detections under same transform
@@ -348,7 +347,7 @@ export function drawFrame(
             const isHovered = ov.hoveredTrackId === t.track_id
             if (!isHovered) continue
 
-            const det = player.interpolateDetectionByTime(t.track_id, now)
+            const det = player.getDetectionAtFrame(t.track_id, nowFrame)
             if (!det) continue
             const [x1p, y1p, x2p, y2p] = det.bbox
             const x1 = x1p * rotatedVideo.width - rotatedVideo.width * 0.5
@@ -365,7 +364,7 @@ export function drawFrame(
         }
         ctx.restore()
     } else if (player.mode === 'detailed' && player.currentTrackId != null) {
-        const det = player.interpolateDetectionByTime(player.currentTrackId, now)
+        const det = player.getDetectionAtFrame(player.currentTrackId, nowFrame)
         if (!det) return
 
         const vidW = rotatedVideo.width
@@ -385,13 +384,14 @@ export function screenPointToVideoNorm(
     outW: number,
     outH: number,
     player: PlayerState,
+    frameIndex: number,
     ov: OverviewView,
     dominantOrientationDeg: number = 0
 ): AnnotationPoint | null {
     const { width, height } = getRotatedDimensions(player.video.width, player.video.height, dominantOrientationDeg)
     if (player.mode === 'overview') {
         const base = computeBaseRect(outW, outH, width, height)
-        const stab = player.getStabilizationAt(player.currentTimeSec)
+        const stab = player.getStabilizationAtFrame(frameIndex)
 
         const z = ov.zoom
         const cx = base.x + base.w * 0.5 + ov.offsetX
@@ -417,7 +417,7 @@ export function screenPointToVideoNorm(
     }
 
     if (player.mode === 'detailed' && player.currentTrackId != null) {
-        const det = player.interpolateDetectionByTime(player.currentTrackId, player.currentTimeSec)
+        const det = player.getDetectionAtFrame(player.currentTrackId, frameIndex)
         if (!det) return null
         const detTimed: TimedBBox = { time_percent: det.time_percent, bbox: det.bbox }
         const params = getDetailedCropParams(outW, outH, width, height, detTimed)
@@ -439,12 +439,13 @@ export function pickTrackAtScreenPoint(
     outW: number,
     outH: number,
     player: PlayerState,
+    frameIndex: number,
     ov: OverviewView,
     dominantOrientationDeg: number = 0
 ): number | null {
     const { width, height } = getRotatedDimensions(player.video.width, player.video.height, dominantOrientationDeg)
     const base = computeBaseRect(outW, outH, width, height)
-    const stab = player.getStabilizationAt(player.currentTimeSec)
+    const stab = player.getStabilizationAtFrame(frameIndex)
 
     const z = ov.zoom
     const cx = base.x + base.w * 0.5 + ov.offsetX
@@ -476,7 +477,7 @@ export function pickTrackAtScreenPoint(
     const yNorm = (dy3 + height * 0.5) / height
 
     for (const t of player.tracks) {
-        const det = player.interpolateDetectionByTime(t.track_id, player.currentTimeSec)
+        const det = player.getDetectionAtFrame(t.track_id, frameIndex)
         if (!det) continue
         const [x1p, y1p, x2p, y2p] = det.bbox
 

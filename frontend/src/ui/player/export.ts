@@ -71,7 +71,9 @@ export async function exportTrackMp4(params: {
     // Best-effort watermark; if it fails to load, we still export.
     const watermark = await getWatermarkAsset()
 
+    let frameIndex = -1
     const onFrame = async (frame: VideoFrame, ctx: Ctx2D) => {
+        frameIndex++
         const tSec = (frame.timestamp || 0) / 1_000_000
 
         if (tSec + 1e-6 < startSec) return false
@@ -80,7 +82,7 @@ export async function exportTrackMp4(params: {
         const rotCanvas = getSharedOffscreenCanvas()
         const rotated = drawRotatedToCanvas(frame, rotCanvas, dominantOrientationDeg)
 
-        const det0 = player.interpolateDetectionByTime(trackId, tSec)
+        const det0 = player.getDetectionAtFrame(trackId, frameIndex)
         const det: TimedBBox | null = det0 ? { time_percent: det0.time_percent, bbox: det0.bbox } : null
         drawDetailedCrop(ctx, outputWidth, outputHeight, rotCanvas, rotated.width, rotated.height, det)
         drawWatermark(ctx, outputWidth, outputHeight, watermark)

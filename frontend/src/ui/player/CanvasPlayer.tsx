@@ -25,7 +25,6 @@ type Props = {
     onToggleDrawMode: () => void
 }
 
-const ANNOTATION_TIME_WINDOW_SEC = 0.1
 export const CanvasPlayer: React.FC<Props> = ({
     job,
     dirHandle,
@@ -54,18 +53,11 @@ export const CanvasPlayer: React.FC<Props> = ({
     const activePointerIdRef = React.useRef<number | null>(null)
     const [annotationsVersion, setAnnotationsVersion] = React.useState<number>(0)
 
-    const playerRef = React.useRef<PlayerState | null>(null)
-    React.useEffect(() => {
-        playerRef.current = player
-    }, [player])
-
     const lastFrameRef = React.useRef<null | {
         frameCanvas: WebCodexFrame['frameCanvas']
         width: number
         height: number
-        timeSeconds: number
         frameIndex: number
-        percent: number
     }>(null)
 
     const { sourceFile, fileMissing, error } = useJobVideoSource({
@@ -86,48 +78,40 @@ export const CanvasPlayer: React.FC<Props> = ({
                 frameCanvas: frame.frameCanvas,
                 width: frameW,
                 height: frameH,
-                timeSeconds: frame.timeSeconds,
                 frameIndex: frame.frameIndex,
-                percent: frame.percent,
             }
 
             const c = canvasRef.current
             const container = containerRef.current
-            const p = playerRef.current
-            if (!c || !container || !p) return
+            if (!c || !container || !player) return
 
             drawFrame(
                 c,
                 container,
                 frame.frameCanvas,
                 { width: frameW, height: frameH },
-                p,
+                player,
                 { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
-                getVisibleAnnotations(frame.timeSeconds),
-                frame.timeSeconds,
+                getVisibleAnnotations(frame.frameIndex),
+                frame.frameIndex,
                 job.dominant_orientation
             )
-
-            setPlayer(prev => (prev ? prev.copy({ currentTimeSec: frame.timeSeconds }) : prev))
         },
-        [isExporting, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation]
+        [isExporting, player, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation]
     )
 
     const webPlayer = useWebCodexPlayer({ render: renderDecodedFrame, playbackRate: speed })
 
-    console.log('Num Frames', webPlayer.frameCount)
-    console.log('Num Stabilization Transforms:', job.stabilization_transforms.length)
-
-    const seekTo = React.useCallback(
-        (timeSec: number, play: boolean) => {
+    const seekToFrame = React.useCallback(
+        (frameIndex: number, play: boolean) => {
             if (!webPlayer.ready) return
-            const duration = playerRef.current?.video.durationSeconds ?? webPlayer.durationSeconds
-            const clampedTime =
-                duration && Number.isFinite(duration) ? clamp(timeSec, 0, duration) : Math.max(0, timeSec)
-            setPlayer(prev => (prev ? prev.copy({ currentTimeSec: clampedTime, isPlaying: play }) : prev))
-            void webPlayer.seekTimeSeconds(clampedTime, play)
+            const n = webPlayer.frameCount
+            if (n <= 0) return
+            const idx = clamp(frameIndex, 0, n - 1)
+            setPlayer(prev => (prev ? prev.copy({ isPlaying: play }) : prev))
+            void webPlayer.seekFrame(idx, play)
         },
-        [webPlayer.ready, webPlayer.durationSeconds]
+        [webPlayer.ready, webPlayer.frameCount, webPlayer.seekFrame]
     )
 
     React.useEffect(() => {
@@ -164,14 +148,14 @@ export const CanvasPlayer: React.FC<Props> = ({
             const videoProps: VideoProperties = {
                 width: webPlayer.width,
                 height: webPlayer.height,
-                durationSeconds: webPlayer.durationSeconds,
+                frameCount: webPlayer.frameCount,
             }
             setPlayer(PlayerState.from(job, videoProps))
         } catch (e: any) {
             setPlayer(null)
             setPlayerInitError(String(e?.message ?? e ?? 'Failed to initialize player state'))
         }
-    }, [job, webPlayer.ready, webPlayer.width, webPlayer.height, webPlayer.durationSeconds])
+    }, [job, webPlayer.ready, webPlayer.width, webPlayer.height, webPlayer.frameCount])
 
     React.useEffect(() => {
         if (!player) return
@@ -191,9 +175,7 @@ export const CanvasPlayer: React.FC<Props> = ({
         if (webPlayer.playing || webPlayer.loading || webPlayer.seeking) return
 
         const atEndByFrame = webPlayer.frameCount > 0 && webPlayer.currentFrameIndex >= webPlayer.frameCount - 1
-        const atEndByTime =
-            webPlayer.durationSeconds > 0 && webPlayer.currentTimeSeconds >= webPlayer.durationSeconds - 1e-3
-        if (!atEndByFrame && !atEndByTime) return
+        if (!atEndByFrame) return
 
         setPlayer(p => (p ? p.copy({ isPlaying: false }) : p))
     }, [
@@ -204,8 +186,6 @@ export const CanvasPlayer: React.FC<Props> = ({
         webPlayer.seeking,
         webPlayer.currentFrameIndex,
         webPlayer.frameCount,
-        webPlayer.currentTimeSeconds,
-        webPlayer.durationSeconds,
     ])
 
     const handlePlayPause = React.useCallback(() => {
@@ -219,11 +199,9 @@ export const CanvasPlayer: React.FC<Props> = ({
             const nextIsPlaying = !p.isPlaying
             if (nextIsPlaying && webPlayer.ready) {
                 const atEndByFrame = webPlayer.frameCount > 0 && webPlayer.currentFrameIndex >= webPlayer.frameCount - 1
-                const atEndByTime =
-                    webPlayer.durationSeconds > 0 && webPlayer.currentTimeSeconds >= webPlayer.durationSeconds - 1e-3
-                if (atEndByFrame || atEndByTime) {
-                    seekTo(0, true)
-                    return p.copy({ isPlaying: true, currentTimeSec: 0 })
+                if (atEndByFrame) {
+                    seekToFrame(0, true)
+                    return p.copy({ isPlaying: true })
                 }
             }
             return p.copy({ isPlaying: nextIsPlaying })
@@ -234,23 +212,26 @@ export const CanvasPlayer: React.FC<Props> = ({
         webPlayer.ready,
         webPlayer.frameCount,
         webPlayer.currentFrameIndex,
-        webPlayer.currentTimeSeconds,
-        webPlayer.durationSeconds,
-        seekTo,
+        seekToFrame,
     ])
 
     // Helpers for track navigation
     const getSortedTracks = React.useCallback(() => {
-        return [...(player?.tracks ?? [])].sort((a, b) => a.start_time_seconds - b.start_time_seconds)
+        return [...(player?.tracks ?? [])].sort((a, b) => a.start_percent - b.start_percent)
     }, [player?.tracks])
 
     const goToTrack = React.useCallback(
-        (trackId: number, startTimeSec: number) => {
+        (trackId: number) => {
+            if (!player) return
+            const n = player.video.frameCount
+            const track = player.tracks.find(t => t.track_id === trackId)
+            if (!track || n <= 0) return
+            const startFrame = clamp(Math.round(track.start_percent * (n - 1)), 0, n - 1)
+            const play = !!player.isPlaying
             setPlayer(p => (p ? p.copy({ mode: 'detailed', currentTrackId: trackId }) : p))
-            const play = !!player?.isPlaying
-            seekTo(startTimeSec, play)
+            seekToFrame(startFrame, play)
         },
-        [player?.isPlaying, seekTo]
+        [player, seekToFrame]
     )
 
     const goToAdjacentTrack = React.useCallback(
@@ -258,57 +239,67 @@ export const CanvasPlayer: React.FC<Props> = ({
             if (!player) return
             const tracks = getSortedTracks()
             if (tracks.length === 0) return
-            const currentTime = player.currentTimeSec
+            const currentFrame = webPlayer.currentFrameIndex
+            const n = player.video.frameCount
             if (player.mode === 'detailed' && player.currentTrackId != null) {
                 const idx = tracks.findIndex(t => t.track_id === player.currentTrackId)
                 if (idx < 0) return
                 const nextIdx = (idx + (forward ? 1 : -1) + tracks.length) % tracks.length
                 const t = tracks[nextIdx]
-                goToTrack(t.track_id, t.start_time_seconds)
+                goToTrack(t.track_id)
             } else {
                 if (forward) {
-                    const t = tracks.find(t => t.start_time_seconds > currentTime) ?? tracks[0]
-                    goToTrack(t.track_id, t.start_time_seconds)
-                } else {
                     const t =
-                        [...tracks].reverse().find(t => t.start_time_seconds < currentTime) ?? tracks[tracks.length - 1]
-                    goToTrack(t.track_id, t.start_time_seconds)
+                        tracks.find(t0 => Math.round(t0.start_percent * Math.max(0, n - 1)) > currentFrame) ?? tracks[0]
+                    goToTrack(t.track_id)
+                } else {
+                    const t = [...tracks]
+                        .reverse()
+                        .find(t0 => Math.round(t0.start_percent * Math.max(0, n - 1)) < currentFrame)
+                    goToTrack((t ?? tracks[tracks.length - 1]).track_id)
                 }
             }
         },
         [player, getSortedTracks, goToTrack]
     )
 
-    const getVisibleAnnotations = React.useCallback((timeSec: number) => {
-        const visible = annotationsRef.current.filter(
-            stroke => Math.abs(stroke.timeSec - timeSec) <= ANNOTATION_TIME_WINDOW_SEC
-        )
+    const getVisibleAnnotations = React.useCallback((frameIndex: number) => {
+        const visible = annotationsRef.current.filter(stroke => stroke.frameIndex === frameIndex)
         if (activeStrokeRef.current) visible.push(activeStrokeRef.current)
         return visible
     }, [])
 
     const redrawFrame = React.useCallback(
-        (timeSec?: number) => {
+        (frameIndex?: number) => {
             const c = canvasRef.current
             const container = containerRef.current
-            const p = playerRef.current
             const f = lastFrameRef.current
-            if (!c || !container || !p || !f) return
+            if (!c || !container || !player || !f) return
             if (isExporting) return
-            const drawTime = timeSec ?? p.currentTimeSec
+            const drawFrameIndex = frameIndex ?? lastFrameRef.current?.frameIndex ?? webPlayer.currentFrameIndex
             drawFrame(
                 c,
                 container,
                 f.frameCanvas,
                 { width: f.width, height: f.height },
-                p,
+                player,
                 { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
-                getVisibleAnnotations(drawTime),
-                drawTime,
+                getVisibleAnnotations(drawFrameIndex),
+                drawFrameIndex,
                 job.dominant_orientation
             )
         },
-        [player, isExporting, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation, getVisibleAnnotations]
+        [
+            player,
+            isExporting,
+            zoom,
+            offset.x,
+            offset.y,
+            hoveredTrackId,
+            job.dominant_orientation,
+            getVisibleAnnotations,
+            webPlayer.currentFrameIndex,
+        ]
     )
 
     // Keyboard controls
@@ -324,9 +315,9 @@ export const CanvasPlayer: React.FC<Props> = ({
             const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
             if (key === ' ') {
                 e.preventDefault()
-                if (webPlayer.ready && webPlayer.currentTimeSeconds >= webPlayer.durationSeconds - 0.05) {
+                if (webPlayer.ready && webPlayer.frameCount > 0 && webPlayer.currentFrameIndex >= webPlayer.frameCount - 1) {
                     trackEvent('shortcut_used', { action: 'restart_play' })
-                    seekTo(0, true)
+                    seekToFrame(0, true)
                 } else {
                     trackEvent('shortcut_used', { action: 'toggle_play' })
                     handlePlayPause()
@@ -342,19 +333,19 @@ export const CanvasPlayer: React.FC<Props> = ({
             } else if (e.ctrlKey && key === 'ArrowLeft') {
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'seek_minus_30s' })
-                seekTo(player.currentTimeSec - 30, true)
+                seekToFrame(webPlayer.currentFrameIndex - 900, true)
             } else if (e.ctrlKey && key === 'ArrowRight') {
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'seek_plus_30s' })
-                seekTo(player.currentTimeSec + 30, true)
+                seekToFrame(webPlayer.currentFrameIndex + 900, true)
             } else if (e.shiftKey && key === 'ArrowLeft') {
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'seek_minus_5s' })
-                seekTo(player.currentTimeSec - 5, true)
+                seekToFrame(webPlayer.currentFrameIndex - 150, true)
             } else if (e.shiftKey && key === 'ArrowRight') {
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'seek_plus_5s' })
-                seekTo(player.currentTimeSec + 5, true)
+                seekToFrame(webPlayer.currentFrameIndex + 150, true)
             } else if (key === '-') {
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'speed_down' })
@@ -395,13 +386,13 @@ export const CanvasPlayer: React.FC<Props> = ({
                 if (activeStrokeRef.current) {
                     activeStrokeRef.current = null
                     activePointerIdRef.current = null
-                    redrawFrame(player?.currentTimeSec)
+                    redrawFrame()
                     return
                 }
                 if (annotationsRef.current.length === 0) return
                 annotationsRef.current = annotationsRef.current.slice(0, -1)
                 setAnnotationsVersion(v => v + 1)
-                redrawFrame(player?.currentTimeSec)
+                redrawFrame()
             } else if (key.toLowerCase() === 'd') {
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'toggle_draw_mode' })
@@ -414,7 +405,7 @@ export const CanvasPlayer: React.FC<Props> = ({
         player,
         isExporting,
         handlePlayPause,
-        seekTo,
+        seekToFrame,
         bumpSpeed,
         goToAdjacentTrack,
         onClose,
@@ -423,7 +414,6 @@ export const CanvasPlayer: React.FC<Props> = ({
         onToggleDrawMode,
         drawMode,
         redrawFrame,
-        player?.currentTimeSec,
     ])
 
     React.useEffect(() => {
@@ -442,16 +432,16 @@ export const CanvasPlayer: React.FC<Props> = ({
         if (!activeStrokeRef.current) return
         activeStrokeRef.current = null
         activePointerIdRef.current = null
-        redrawFrame(player?.currentTimeSec)
-    }, [drawTool, player?.currentTimeSec, redrawFrame])
+        redrawFrame()
+    }, [drawTool, redrawFrame])
 
     React.useEffect(() => {
         if (drawMode) return
         if (!activeStrokeRef.current) return
         activeStrokeRef.current = null
         activePointerIdRef.current = null
-        redrawFrame(player?.currentTimeSec)
-    }, [drawMode, player?.currentTimeSec, redrawFrame])
+        redrawFrame()
+    }, [drawMode, redrawFrame])
 
     // Redraw when paused and state changes (hover, zoom, annotations, etc).
     React.useEffect(() => {
@@ -460,7 +450,6 @@ export const CanvasPlayer: React.FC<Props> = ({
         redrawFrame()
     }, [
         isExporting,
-        player?.currentTimeSec,
         player?.mode,
         player?.currentTrackId,
         hoveredTrackId,
@@ -469,14 +458,14 @@ export const CanvasPlayer: React.FC<Props> = ({
         redrawFrame,
     ])
 
-    // Auto-exit detailed mode if no reasonably recent detection around current time
+    // Auto-exit detailed mode if the track isn't active at the current frame.
     React.useEffect(() => {
         if (isExporting) return
         if (!player || player.mode !== 'detailed' || player.currentTrackId == null) return
-        if (!player.hasDetectionAfter(player.currentTrackId, player.currentTimeSec)) {
+        if (!player.isTrackActiveAtFrame(player.currentTrackId, webPlayer.currentFrameIndex)) {
             setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
         }
-    }, [isExporting, player?.currentTimeSec, player?.mode, player?.currentTrackId])
+    }, [isExporting, webPlayer.currentFrameIndex, player?.mode, player?.currentTrackId])
 
     // bumpSpeed is provided by usePlaybackSpeed
 
@@ -512,6 +501,7 @@ export const CanvasPlayer: React.FC<Props> = ({
                 rect.width,
                 rect.height,
                 player,
+                webPlayer.currentFrameIndex,
                 {
                     zoom,
                     offsetX: offset.x,
@@ -522,12 +512,12 @@ export const CanvasPlayer: React.FC<Props> = ({
             )
             setHoveredTrackId(hit)
         },
-        [drawMode, player, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation]
+        [drawMode, player, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation, webPlayer.currentFrameIndex]
     )
 
     const onClick = React.useCallback(() => {
         if (drawMode) return
-        const p0 = playerRef.current
+        const p0 = player
         if (!p0 || hoveredTrackId == null || p0.mode !== 'overview') {
             setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
             return
@@ -535,16 +525,16 @@ export const CanvasPlayer: React.FC<Props> = ({
 
         const trackId = hoveredTrackId
         trackEvent('surfer_clicked', { track_id: trackId })
-        const detection = p0.interpolateDetectionByTime(trackId, p0.currentTimeSec)
-        if (!detection) {
+        const range = p0.getTrackFrameRange(trackId)
+        if (!range) {
             setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
             return
         }
 
-        const t = detection.time_percent * p0.video.durationSeconds
-        setPlayer(p => (p ? p.copy({ mode: 'detailed', currentTrackId: trackId, currentTimeSec: t }) : p))
-        seekTo(t, p0.isPlaying)
-    }, [drawMode, hoveredTrackId, seekTo])
+        const startFrame = range.startFrameIndex
+        setPlayer(p => (p ? p.copy({ mode: 'detailed', currentTrackId: trackId }) : p))
+        seekToFrame(startFrame, p0.isPlaying)
+    }, [drawMode, player, hoveredTrackId, seekToFrame])
 
     const getDrawPoint = React.useCallback(
         (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -561,6 +551,7 @@ export const CanvasPlayer: React.FC<Props> = ({
                 rect.width,
                 rect.height,
                 player,
+                webPlayer.currentFrameIndex,
                 {
                     zoom,
                     offsetX: offset.x,
@@ -570,7 +561,7 @@ export const CanvasPlayer: React.FC<Props> = ({
                 job.dominant_orientation
             )
         },
-        [player, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation]
+        [player, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation, webPlayer.currentFrameIndex]
     )
 
     const startLineStroke = React.useCallback(
@@ -580,14 +571,14 @@ export const CanvasPlayer: React.FC<Props> = ({
             activePointerIdRef.current = e.pointerId
             activeStrokeRef.current = {
                 id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                timeSec: player.currentTimeSec,
+                frameIndex: webPlayer.currentFrameIndex,
                 color: drawColor,
                 width: drawWidth,
                 points: [point, point],
             }
-            redrawFrame(player.currentTimeSec)
+            redrawFrame(webPlayer.currentFrameIndex)
         },
-        [getDrawPoint, player, drawColor, drawWidth, redrawFrame]
+        [getDrawPoint, player, drawColor, drawWidth, redrawFrame, webPlayer.currentFrameIndex]
     )
 
     const updateLineStroke = React.useCallback(
@@ -598,7 +589,7 @@ export const CanvasPlayer: React.FC<Props> = ({
             const point = getDrawPoint(e)
             if (!point) return
             stroke.points[1] = point
-            redrawFrame(player?.currentTimeSec)
+            redrawFrame()
         },
         [getDrawPoint, player, redrawFrame]
     )
@@ -614,7 +605,7 @@ export const CanvasPlayer: React.FC<Props> = ({
             activeStrokeRef.current = null
             activePointerIdRef.current = null
             setAnnotationsVersion(v => v + 1)
-            redrawFrame(player?.currentTimeSec)
+            redrawFrame()
         },
         [getDrawPoint, player, redrawFrame]
     )
@@ -639,12 +630,12 @@ export const CanvasPlayer: React.FC<Props> = ({
             e.currentTarget.setPointerCapture(e.pointerId)
             activeStrokeRef.current = {
                 id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                timeSec: player.currentTimeSec,
+                frameIndex: webPlayer.currentFrameIndex,
                 color: drawColor,
                 width: drawWidth,
                 points: [point],
             }
-            redrawFrame(player.currentTimeSec)
+            redrawFrame(webPlayer.currentFrameIndex)
         },
         [
             drawMode,
@@ -657,6 +648,7 @@ export const CanvasPlayer: React.FC<Props> = ({
             redrawFrame,
             finalizeLineStroke,
             startLineStroke,
+            webPlayer.currentFrameIndex,
         ]
     )
 
@@ -679,7 +671,7 @@ export const CanvasPlayer: React.FC<Props> = ({
             const dy = point.y - last.y
             if (dx * dx + dy * dy < 1e-7) return
             stroke.points.push(point)
-            redrawFrame(player?.currentTimeSec)
+            redrawFrame()
         },
         [drawMode, isExporting, drawTool, getDrawPoint, player, redrawFrame, updateLineStroke]
     )
@@ -700,7 +692,7 @@ export const CanvasPlayer: React.FC<Props> = ({
                 annotationsRef.current = [...annotationsRef.current, stroke]
                 setAnnotationsVersion(v => v + 1)
             }
-            redrawFrame(player?.currentTimeSec)
+            redrawFrame()
         },
         [drawMode, drawTool, player, redrawFrame]
     )
@@ -713,28 +705,26 @@ export const CanvasPlayer: React.FC<Props> = ({
             if (!activeStrokeRef.current) return
             activeStrokeRef.current = null
             activePointerIdRef.current = null
-            redrawFrame(player?.currentTimeSec)
+            redrawFrame()
         },
         [drawTool, player, redrawFrame]
     )
 
     const onClearAnnotations = React.useCallback(() => {
         if (!player) return
-        const nowSec = player.currentTimeSec
-        annotationsRef.current = annotationsRef.current.filter(
-            stroke => Math.abs(stroke.timeSec - nowSec) > ANNOTATION_TIME_WINDOW_SEC
-        )
+        const nowFrame = webPlayer.currentFrameIndex
+        annotationsRef.current = annotationsRef.current.filter(stroke => stroke.frameIndex !== nowFrame)
         activeStrokeRef.current = null
         activePointerIdRef.current = null
         setAnnotationsVersion(v => v + 1)
-        redrawFrame(nowSec)
-    }, [player, redrawFrame])
+        redrawFrame(nowFrame)
+    }, [player, redrawFrame, webPlayer.currentFrameIndex])
 
     const hasVisibleAnnotations = React.useMemo(() => {
         if (!player) return false
-        const nowSec = player.currentTimeSec
-        return annotationsRef.current.some(stroke => Math.abs(stroke.timeSec - nowSec) <= ANNOTATION_TIME_WINDOW_SEC)
-    }, [player?.currentTimeSec, annotationsVersion])
+        const nowFrame = webPlayer.currentFrameIndex
+        return annotationsRef.current.some(stroke => stroke.frameIndex === nowFrame)
+    }, [webPlayer.currentFrameIndex, annotationsVersion])
 
     const exportVisible = !!player && player.mode === 'detailed' && player.currentTrackId != null
     const exportEnabled = exportVisible && !isExporting
@@ -758,10 +748,7 @@ export const CanvasPlayer: React.FC<Props> = ({
 
             const padSec = 0.25
             const startSec = Math.max(0, track.start_time_seconds - padSec)
-            const endSec = Math.min(
-                p.video.durationSeconds || Infinity,
-                track.start_time_seconds + track.duration_seconds + padSec
-            )
+            const endSec = track.start_time_seconds + track.duration_seconds + padSec
             if (!(endSec > startSec + 1e-3)) throw new Error(t('player.canvas.export.errors.trackTooShort'))
 
             const outBlob = await exportTrackMp4({
@@ -859,9 +846,8 @@ export const CanvasPlayer: React.FC<Props> = ({
                 <div className="px-3 py-2 bg-black/60 border-t border-gray-700">
                     <div className="mb-2">
                         <Timeline
-                            onSeekTime={t => seekTo(t, false)}
-                            percent01={webPlayer.currentPercent}
-                            duration={webPlayer.durationSeconds}
+                            onSeekPercent={p => seekToFrame(Math.round(p * Math.max(0, webPlayer.frameCount - 1)), false)}
+                            currentProgressPercent={webPlayer.currentPercent}
                         />
                     </div>
                     <ControlsBar

@@ -1,12 +1,10 @@
 import React from 'react'
 import { ALL_FORMATS, BlobSource, CanvasSink, EncodedPacketSink, Input, type WrappedCanvas } from 'mediabunny'
+import { clamp } from '../utils/clamp'
 
 export type WebCodexFrame = {
     frameIndex: number
-    timeSeconds: number
     percent: number
-    timestampSeconds: number
-    durationSeconds: number
     width: number
     height: number
     frameCanvas: HTMLCanvasElement | OffscreenCanvas
@@ -20,9 +18,7 @@ export type WebCodexPlayerApi = {
     error?: string
 
     frameCount: number
-    durationSeconds: number
     currentFrameIndex: number
-    currentTimeSeconds: number
     currentPercent: number
 
     width: number
@@ -36,26 +32,9 @@ export type WebCodexPlayerApi = {
     togglePlay: () => void
 
     seekPercent: (p: number, playAfter?: boolean) => Promise<void>
-    seekTimeSeconds: (t: number, playAfter?: boolean) => Promise<void>
     seekFrame: (i: number, playAfter?: boolean) => Promise<void>
 
     stepFrames: (delta: number) => Promise<void>
-    stepSeconds: (delta: number) => Promise<void>
-}
-
-function clamp(x: number, lo: number, hi: number) {
-    return Math.max(lo, Math.min(hi, x))
-}
-
-function lowerBound(arr: number[], x: number) {
-    let lo = 0,
-        hi = arr.length
-    while (lo < hi) {
-        const mid = (lo + hi) >> 1
-        if (arr[mid] < x) lo = mid + 1
-        else hi = mid
-    }
-    return lo
 }
 
 function sleep(ms: number) {
@@ -77,9 +56,7 @@ export function useWebCodexPlayer(params: {
     const [error, setError] = React.useState<string | undefined>(undefined)
 
     const [frameCount, setFrameCount] = React.useState(0)
-    const [durationSeconds, setDurationSeconds] = React.useState(0)
     const [currentFrameIndex, setCurrentFrameIndex] = React.useState(0)
-    const [currentTimeSeconds, setCurrentTimeSeconds] = React.useState(0)
     const [currentPercent, setCurrentPercent] = React.useState(0)
 
     const [width, setWidth] = React.useState(0)
@@ -97,14 +74,10 @@ export function useWebCodexPlayer(params: {
 
     const frameCountRef = React.useRef(0)
     const currentFrameRef = React.useRef(0)
-    const currentTimeRef = React.useRef(0)
 
     React.useEffect(() => {
         currentFrameRef.current = currentFrameIndex
     }, [currentFrameIndex])
-    React.useEffect(() => {
-        currentTimeRef.current = currentTimeSeconds
-    }, [currentTimeSeconds])
 
     const inputRef = React.useRef<Input | null>(null)
     const videoTrackRef = React.useRef<any | null>(null)
@@ -137,9 +110,7 @@ export function useWebCodexPlayer(params: {
 
         frameCountRef.current = 0
         setFrameCount(0)
-        setDurationSeconds(0)
         setCurrentFrameIndex(0)
-        setCurrentTimeSeconds(0)
         setCurrentPercent(0)
         setWidth(0)
         setHeight(0)
@@ -192,38 +163,19 @@ export function useWebCodexPlayer(params: {
 
     const drawFrameInternal = React.useCallback(
         (idx: number, wc: WrappedCanvas) => {
-            const pts = ptsRef.current[idx]
-            const firstPts = firstPtsRef.current
-            const end = lastEndRef.current
-            const dur = durRef.current[idx]
-            const denom = Math.max(1e-9, end - firstPts)
-
-            const tRel = pts - firstPts
-            // Drive the playhead from the start PTS so the first frame is exactly 0%.
-            // Special-case the end so the last presented frame reaches 100%.
-            const pStart = clamp((pts - firstPts) / denom, 0, 1)
             const n = frameCountRef.current
-            const ptsEnd = pts + (dur ?? 0)
-            const isAtEnd = (n > 0 && idx >= n - 1) || ptsEnd >= end - 1e-9
-            const p = isAtEnd ? 1 : pStart
-
+            const p = n > 1 ? clamp(idx / (n - 1), 0, 1) : 0
             currentFrameRef.current = idx
-            currentTimeRef.current = tRel
-
             const sz = sizeRef.current
             render({
                 frameIndex: idx,
-                timeSeconds: tRel,
                 percent: p,
-                timestampSeconds: pts,
-                durationSeconds: dur,
                 width: sz.width,
                 height: sz.height,
                 frameCanvas: wc.canvas,
             })
 
             setCurrentFrameIndex(idx)
-            setCurrentTimeSeconds(tRel)
             setCurrentPercent(p)
         },
         [render]
@@ -395,23 +347,9 @@ export function useWebCodexPlayer(params: {
     const seekPercent = React.useCallback(
         async (p: number, playAfter?: boolean) => {
             if (!readyRef.current) return
-            const pts = ptsRef.current
-            const first = firstPtsRef.current
-            const end = lastEndRef.current
-            const targetPts = first + clamp(p, 0, 1) * (end - first)
-            const idx = clamp(lowerBound(pts, targetPts), 0, frameCountRef.current - 1)
-            await seekFrame(idx, playAfter)
-        },
-        [seekFrame]
-    )
-
-    const seekTimeSeconds = React.useCallback(
-        async (t: number, playAfter?: boolean) => {
-            if (!readyRef.current) return
-            const first = firstPtsRef.current
-            const end = lastEndRef.current
-            const targetPts = clamp(first + t, first, end)
-            const idx = clamp(lowerBound(ptsRef.current, targetPts), 0, frameCountRef.current - 1)
+            const n = frameCountRef.current
+            if (n <= 0) return
+            const idx = clamp(Math.round(clamp(p, 0, 1) * (n - 1)), 0, n - 1)
             await seekFrame(idx, playAfter)
         },
         [seekFrame]
@@ -425,16 +363,6 @@ export function useWebCodexPlayer(params: {
             await seekFrame(currentFrameRef.current + delta, false)
         },
         [seekFrame]
-    )
-
-    const stepSeconds = React.useCallback(
-        async (delta: number) => {
-            if (!readyRef.current) return
-            playingRef.current = false
-            setPlaying(false)
-            await seekTimeSeconds(currentTimeRef.current + delta, false)
-        },
-        [seekTimeSeconds]
     )
 
     const load = React.useCallback(
@@ -489,8 +417,6 @@ export function useWebCodexPlayer(params: {
 
                 const firstPts = pts[0]
                 const lastEnd = Math.max(...packets.map(p => p.ts + p.dur))
-                const timelineDuration = Math.max(0, lastEnd - firstPts)
-
                 ptsRef.current = pts
                 durRef.current = dur
                 isKeyRef.current = isKey
@@ -499,7 +425,6 @@ export function useWebCodexPlayer(params: {
 
                 frameCountRef.current = pts.length
                 setFrameCount(pts.length)
-                setDurationSeconds(timelineDuration)
 
                 const stats = await videoTrack.computePacketStats(100)
                 const fpsApprox = stats.averagePacketRate || 30
@@ -541,9 +466,7 @@ export function useWebCodexPlayer(params: {
         playing,
         error,
         frameCount,
-        durationSeconds,
         currentFrameIndex,
-        currentTimeSeconds,
         currentPercent,
         width,
         height,
@@ -553,9 +476,7 @@ export function useWebCodexPlayer(params: {
         pause,
         togglePlay,
         seekPercent,
-        seekTimeSeconds,
         seekFrame,
         stepFrames,
-        stepSeconds,
     }
 }

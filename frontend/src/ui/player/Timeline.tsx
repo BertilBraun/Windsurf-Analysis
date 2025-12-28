@@ -1,13 +1,13 @@
 import React from 'react'
 import { assert } from '../utils/assert'
+import { clamp } from '../utils/clamp'
 
 export const Timeline: React.FC<{
-    onSeekTime: (timeSec: number) => void
-    percent01: number
-    duration: number
-}> = ({ onSeekTime, percent01, duration }) => {
-    assert(0 <= percent01 && percent01 <= 1, 'percent01 must be between 0 and 1')
-    const percent = Math.max(0, Math.min(100, percent01 * 100))
+    onSeekPercent: (currentProgressPercent: number) => void
+    currentProgressPercent: number
+}> = ({ onSeekPercent, currentProgressPercent }) => {
+    assert(0 <= currentProgressPercent && currentProgressPercent <= 1, 'currentProgressPercent must be between 0 and 1')
+    const percent = currentProgressPercent * 100
 
     const isDraggingRef = React.useRef(false)
     const activePointerIdRef = React.useRef<number | null>(null)
@@ -20,10 +20,10 @@ export const Timeline: React.FC<{
             const rect = el.getBoundingClientRect()
             const px = Math.max(0, Math.min(rect.width, clientX - rect.left))
             const p = rect.width > 0 ? px / rect.width : 0
-            const t = Math.max(0, Math.min(duration, p * duration))
-            onSeekTime(t)
+            const currentProgressPercent = clamp(p, 0, 1)
+            onSeekPercent(currentProgressPercent)
         },
-        [duration, onSeekTime]
+        [onSeekPercent]
     )
 
     const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
