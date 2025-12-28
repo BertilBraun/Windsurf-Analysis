@@ -297,7 +297,8 @@ function drawStabilizationTransforms(
 export function drawFrame(
     canvas: HTMLCanvasElement,
     containerEl: HTMLElement,
-    video: HTMLVideoElement,
+    source: CanvasImageSource,
+    sourceSize: { width: number; height: number },
     player: PlayerState,
     ov: OverviewView,
     annotations: AnnotationStroke[] = [],
@@ -312,11 +313,9 @@ export function drawFrame(
     ctx.fillStyle = '#000'
     ctx.fillRect(0, 0, cssW, cssH)
 
-    if (!video.videoWidth || !video.videoHeight) return
-
     // Prepare source draw surface with orientation applied (reuse a single offscreen canvas)
     const offscreen = getSharedOffscreenCanvas()
-    const rotatedVideo = drawRotatedToCanvas(video, offscreen, dominantOrientationDeg)
+    const rotatedVideo = drawRotatedToCanvas(source, offscreen, dominantOrientationDeg, sourceSize)
 
     // Current time for stabilization lookup
     const now = timeOverrideSec ?? player.currentTimeSec

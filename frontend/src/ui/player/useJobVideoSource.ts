@@ -13,14 +13,11 @@ export function useJobVideoSource(params: {
 
     const [error, setError] = React.useState<VideoSourceError | null>(null)
     const [fileMissing, setFileMissing] = React.useState<boolean>(false)
-    const [videoUrl, setVideoUrl] = React.useState<string | null>(null)
     const [sourceFile, setSourceFile] = React.useState<File | null>(null)
 
     React.useEffect(() => {
-        let revoked: string | null = null
         let cancelled = false
 
-        setVideoUrl(null)
         setSourceFile(null)
         setError(null)
         setFileMissing(false)
@@ -53,9 +50,6 @@ export function useJobVideoSource(params: {
                 if (!file) throw new Error('file_not_found')
                 if (cancelled) return
 
-                const url = URL.createObjectURL(file)
-                revoked = url
-                setVideoUrl(url)
                 setSourceFile(file)
                 onFileLoaded?.(file)
             } catch (e: any) {
@@ -78,9 +72,8 @@ export function useJobVideoSource(params: {
 
         return () => {
             cancelled = true
-            if (revoked) URL.revokeObjectURL(revoked)
         }
     }, [dirHandle, job.id, job.local_relative_paths, onFileLoaded])
 
-    return { videoUrl, sourceFile, fileMissing, error }
+    return { sourceFile, fileMissing, error }
 }

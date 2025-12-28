@@ -6,13 +6,13 @@ import { ControlsBar } from './ControlsBar'
 import { Timeline } from './Timeline'
 import { useZoom } from '../hooks/useZoom'
 import { usePlaybackSpeed } from '../hooks/usePlaybackSpeed'
-import { useSeeker } from '../hooks/useSeeker'
 import { clamp } from '../utils/clamp'
 import { trackEvent } from '../utils/analytics'
 import { buildExportFilename, downloadExport, exportTrackMp4 } from './export'
 import { useJobVideoSource } from './useJobVideoSource'
 import { AnnotationStroke, drawFrame, pickTrackAtScreenPoint, screenPointToVideoNorm } from './rendering'
 import { DrawOverlay, DRAW_COLOR_OPTIONS, DRAW_WIDTH_OPTIONS, type DrawTool } from './DrawOverlay'
+import { useWebCodexPlayer, type WebCodexFrame } from './useWebCodexPlayer'
 
 type Props = {
     job: JobDetail
@@ -37,7 +37,7 @@ export const CanvasPlayer: React.FC<Props> = ({
 }) => {
     const { t } = useTranslation()
     const [exportError, setExportError] = React.useState<string | null>(null)
-    const videoRef = React.useRef<HTMLVideoElement | null>(null)
+    const [playerInitError, setPlayerInitError] = React.useState<string | null>(null)
     const containerRef = React.useRef<HTMLDivElement | null>(null)
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null)
     const [player, setPlayer] = React.useState<PlayerState | null>(null)
@@ -54,53 +54,159 @@ export const CanvasPlayer: React.FC<Props> = ({
     const activePointerIdRef = React.useRef<number | null>(null)
     const [annotationsVersion, setAnnotationsVersion] = React.useState<number>(0)
 
-    // Seeker (frame stepping and seeking)
-    const { seekTo, stepNext, stepPrev, onNewFile } = useSeeker(videoRef, player, setPlayer)
+    const playerRef = React.useRef<PlayerState | null>(null)
+    React.useEffect(() => {
+        playerRef.current = player
+    }, [player])
 
-    const { videoUrl, sourceFile, fileMissing, error } = useJobVideoSource({
+    const lastFrameRef = React.useRef<null | {
+        frameCanvas: WebCodexFrame['frameCanvas']
+        width: number
+        height: number
+        timeSeconds: number
+        frameIndex: number
+        percent: number
+    }>(null)
+
+    const { sourceFile, fileMissing, error } = useJobVideoSource({
         job,
         dirHandle,
-        onFileLoaded: onNewFile,
     })
     const errorText = error ? t(error.key, { message: error.detail }) : null
+
+    const renderDecodedFrame = React.useCallback(
+        (frame: WebCodexFrame) => {
+            if (isExporting) return
+            const fallbackW = (frame.frameCanvas as any)?.width ?? 0
+            const fallbackH = (frame.frameCanvas as any)?.height ?? 0
+            const frameW = frame.width || fallbackW
+            const frameH = frame.height || fallbackH
+            if (!frameW || !frameH) return
+            lastFrameRef.current = {
+                frameCanvas: frame.frameCanvas,
+                width: frameW,
+                height: frameH,
+                timeSeconds: frame.timeSeconds,
+                frameIndex: frame.frameIndex,
+                percent: frame.percent,
+            }
+
+            const c = canvasRef.current
+            const container = containerRef.current
+            const p = playerRef.current
+            if (!c || !container || !p) return
+
+            drawFrame(
+                c,
+                container,
+                frame.frameCanvas,
+                { width: frameW, height: frameH },
+                p,
+                { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
+                getVisibleAnnotations(frame.timeSeconds),
+                frame.timeSeconds,
+                job.dominant_orientation
+            )
+
+            setPlayer(prev => (prev ? prev.copy({ currentTimeSec: frame.timeSeconds }) : prev))
+        },
+        [isExporting, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation]
+    )
+
+    const webPlayer = useWebCodexPlayer({ render: renderDecodedFrame, playbackRate: speed })
+
+    console.log('Num Frames', webPlayer.frameCount)
+    console.log('Num Stabilization Transforms:', job.stabilization_transforms.length)
+
+    const seekTo = React.useCallback(
+        (timeSec: number, play: boolean) => {
+            if (!webPlayer.ready) return
+            const duration = playerRef.current?.video.durationSeconds ?? webPlayer.durationSeconds
+            const clampedTime =
+                duration && Number.isFinite(duration) ? clamp(timeSec, 0, duration) : Math.max(0, timeSec)
+            setPlayer(prev => (prev ? prev.copy({ currentTimeSec: clampedTime, isPlaying: play }) : prev))
+            void webPlayer.seekTimeSeconds(clampedTime, play)
+        },
+        [webPlayer.ready, webPlayer.durationSeconds]
+    )
 
     React.useEffect(() => {
         trackEvent('player_open', { job_id: job.id })
         setExportError(null)
+        setPlayerInitError(null)
         setIsExporting(false)
         setExportProgressPct(null)
+        annotationsRef.current = []
+        activeStrokeRef.current = null
+        activePointerIdRef.current = null
+        setAnnotationsVersion(v => v + 1)
     }, [job.id])
 
-    // Initialize PlayerState on loadedmetadata
     React.useEffect(() => {
-        const v = videoRef.current
-        if (!v) return
-        const onLoadedMetadata = () => {
+        let cancelled = false
+        const run = async () => {
+            setPlayer(null)
+            lastFrameRef.current = null
+            await webPlayer.dispose()
+            if (cancelled) return
+            if (!sourceFile) return
+            await webPlayer.load(sourceFile)
+        }
+        void run()
+        return () => {
+            cancelled = true
+        }
+    }, [sourceFile])
+
+    React.useEffect(() => {
+        if (!webPlayer.ready) return
+        try {
             const videoProps: VideoProperties = {
-                width: v.videoWidth,
-                height: v.videoHeight,
-                durationSeconds: v.duration,
+                width: webPlayer.width,
+                height: webPlayer.height,
+                durationSeconds: webPlayer.durationSeconds,
             }
             setPlayer(PlayerState.from(job, videoProps))
-            // Ensure autoplay starts as soon as metadata is ready
-            v.muted = true
-            v.play()
+        } catch (e: any) {
+            setPlayer(null)
+            setPlayerInitError(String(e?.message ?? e ?? 'Failed to initialize player state'))
         }
-        v.addEventListener('loadedmetadata', onLoadedMetadata)
-        return () => v.removeEventListener('loadedmetadata', onLoadedMetadata)
-    }, [videoUrl, job])
+    }, [job, webPlayer.ready, webPlayer.width, webPlayer.height, webPlayer.durationSeconds])
 
-    // Control playback state and speed
     React.useEffect(() => {
-        const v = videoRef.current
-        if (!v || !player) return
-        // During export we temporarily take over playback rate + play/pause.
-        if (isExporting) return
-        v.defaultPlaybackRate = speed
-        v.playbackRate = speed
-        if (player.isPlaying) v.play().catch(() => {})
-        else v.pause()
-    }, [isExporting, player?.isPlaying, speed])
+        if (!player) return
+        if (!webPlayer.ready) return
+        if (isExporting) {
+            webPlayer.pause()
+            return
+        }
+        if (player.isPlaying) webPlayer.play()
+        else webPlayer.pause()
+    }, [isExporting, player?.isPlaying, webPlayer.ready])
+
+    // Reflect playback ending back into UI state, but don't "auto-pause" due to transient play-loop state.
+    React.useEffect(() => {
+        if (!player?.isPlaying) return
+        if (!webPlayer.ready) return
+        if (webPlayer.playing || webPlayer.loading || webPlayer.seeking) return
+
+        const atEndByFrame = webPlayer.frameCount > 0 && webPlayer.currentFrameIndex >= webPlayer.frameCount - 1
+        const atEndByTime =
+            webPlayer.durationSeconds > 0 && webPlayer.currentTimeSeconds >= webPlayer.durationSeconds - 1e-3
+        if (!atEndByFrame && !atEndByTime) return
+
+        setPlayer(p => (p ? p.copy({ isPlaying: false }) : p))
+    }, [
+        player?.isPlaying,
+        webPlayer.ready,
+        webPlayer.playing,
+        webPlayer.loading,
+        webPlayer.seeking,
+        webPlayer.currentFrameIndex,
+        webPlayer.frameCount,
+        webPlayer.currentTimeSeconds,
+        webPlayer.durationSeconds,
+    ])
 
     const handlePlayPause = React.useCallback(() => {
         if (drawMode) {
@@ -108,8 +214,30 @@ export const CanvasPlayer: React.FC<Props> = ({
             setPlayer(p => (p ? p.copy({ isPlaying: true }) : p))
             return
         }
-        setPlayer(p => (p ? p.copy({ isPlaying: !p.isPlaying }) : p))
-    }, [drawMode, onToggleDrawMode])
+        setPlayer(p => {
+            if (!p) return p
+            const nextIsPlaying = !p.isPlaying
+            if (nextIsPlaying && webPlayer.ready) {
+                const atEndByFrame = webPlayer.frameCount > 0 && webPlayer.currentFrameIndex >= webPlayer.frameCount - 1
+                const atEndByTime =
+                    webPlayer.durationSeconds > 0 && webPlayer.currentTimeSeconds >= webPlayer.durationSeconds - 1e-3
+                if (atEndByFrame || atEndByTime) {
+                    seekTo(0, true)
+                    return p.copy({ isPlaying: true, currentTimeSec: 0 })
+                }
+            }
+            return p.copy({ isPlaying: nextIsPlaying })
+        })
+    }, [
+        drawMode,
+        onToggleDrawMode,
+        webPlayer.ready,
+        webPlayer.frameCount,
+        webPlayer.currentFrameIndex,
+        webPlayer.currentTimeSeconds,
+        webPlayer.durationSeconds,
+        seekTo,
+    ])
 
     // Helpers for track navigation
     const getSortedTracks = React.useCallback(() => {
@@ -162,16 +290,18 @@ export const CanvasPlayer: React.FC<Props> = ({
     const redrawFrame = React.useCallback(
         (timeSec?: number) => {
             const c = canvasRef.current
-            const v = videoRef.current
             const container = containerRef.current
-            if (!c || !v || !player || !container) return
+            const p = playerRef.current
+            const f = lastFrameRef.current
+            if (!c || !container || !p || !f) return
             if (isExporting) return
-            const drawTime = timeSec ?? player.currentTimeSec
+            const drawTime = timeSec ?? p.currentTimeSec
             drawFrame(
                 c,
                 container,
-                v,
-                player,
+                f.frameCanvas,
+                { width: f.width, height: f.height },
+                p,
                 { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
                 getVisibleAnnotations(drawTime),
                 drawTime,
@@ -194,8 +324,7 @@ export const CanvasPlayer: React.FC<Props> = ({
             const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
             if (key === ' ') {
                 e.preventDefault()
-                const v = videoRef.current
-                if (v && v.duration && v.currentTime >= v.duration - 0.05) {
+                if (webPlayer.ready && webPlayer.currentTimeSeconds >= webPlayer.durationSeconds - 0.05) {
                     trackEvent('shortcut_used', { action: 'restart_play' })
                     seekTo(0, true)
                 } else {
@@ -205,11 +334,11 @@ export const CanvasPlayer: React.FC<Props> = ({
             } else if (key === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey) {
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'step_prev_frame' })
-                stepPrev()
+                void webPlayer.stepFrames(-1)
             } else if (key === 'ArrowRight' && !e.ctrlKey && !e.shiftKey) {
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'step_next_frame' })
-                stepNext()
+                void webPlayer.stepFrames(1)
             } else if (e.ctrlKey && key === 'ArrowLeft') {
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'seek_minus_30s' })
@@ -285,8 +414,6 @@ export const CanvasPlayer: React.FC<Props> = ({
         player,
         isExporting,
         handlePlayPause,
-        stepPrev,
-        stepNext,
         seekTo,
         bumpSpeed,
         goToAdjacentTrack,
@@ -308,7 +435,7 @@ export const CanvasPlayer: React.FC<Props> = ({
         if (!drawMode) return
         if (!player?.isPlaying) return
         setPlayer(p => (p ? p.copy({ isPlaying: false }) : p))
-        videoRef.current?.pause()
+        webPlayer.pause()
     }, [drawMode, player?.isPlaying])
 
     React.useEffect(() => {
@@ -326,79 +453,20 @@ export const CanvasPlayer: React.FC<Props> = ({
         redrawFrame(player?.currentTimeSec)
     }, [drawMode, player?.currentTimeSec, redrawFrame])
 
-    // Video frame callback -> sync currentTimeSec + draw
+    // Redraw when paused and state changes (hover, zoom, annotations, etc).
     React.useEffect(() => {
-        const v = videoRef.current
-        const c = canvasRef.current
-        const container = containerRef.current
-        if (!v || !c || !player || !container) return
-        // During export we drive the decoder timeline ourselves; avoid mutating player state while exporting.
+        if (!player) return
         if (isExporting) return
-
-        let vfId: number | null = null
-        const onFrame = (_: number, meta: VideoFrameCallbackMetadata) => {
-            const nowSec = meta.mediaTime
-            setPlayer(prev => (prev ? prev.copy({ currentTimeSec: nowSec }) : prev))
-            // Draw the current frame immediately for smooth playback
-            drawFrame(
-                c,
-                container,
-                v,
-                player,
-                { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
-                getVisibleAnnotations(nowSec),
-                nowSec,
-                job.dominant_orientation
-            )
-            vfId = v.requestVideoFrameCallback(onFrame)
-        }
-        vfId = v.requestVideoFrameCallback(onFrame)
-        return () => {
-            if (vfId) v.cancelVideoFrameCallback(vfId)
-        }
-    }, [
-        isExporting,
-        player?.isPlaying,
-        player?.mode,
-        player?.currentTrackId,
-        zoom,
-        offset.x,
-        offset.y,
-        hoveredTrackId,
-        videoUrl,
-        getVisibleAnnotations,
-    ])
-
-    // Redraw on resize or when paused and state changes
-    React.useEffect(() => {
-        const c = canvasRef.current
-        const v = videoRef.current
-        const container = containerRef.current
-        if (!c || !v || !player || !container) return
-        if (isExporting) return
-        if (v.seeking) return
-        drawFrame(
-            c,
-            container,
-            v,
-            player,
-            { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
-            getVisibleAnnotations(player.currentTimeSec),
-            undefined,
-            job.dominant_orientation
-        )
+        redrawFrame()
     }, [
         isExporting,
         player?.currentTimeSec,
         player?.mode,
         player?.currentTrackId,
-        zoom,
-        offset.x,
-        offset.y,
         hoveredTrackId,
         job.dominant_orientation,
         annotationsVersion,
-        getVisibleAnnotations,
+        redrawFrame,
     ])
 
     // Auto-exit detailed mode if no reasonably recent detection around current time
@@ -459,21 +527,24 @@ export const CanvasPlayer: React.FC<Props> = ({
 
     const onClick = React.useCallback(() => {
         if (drawMode) return
-        setPlayer(p => {
-            if (!p) return p
-            if (p.mode !== 'overview' || hoveredTrackId == null)
-                return p.copy({ mode: 'overview', currentTrackId: null })
+        const p0 = playerRef.current
+        if (!p0 || hoveredTrackId == null || p0.mode !== 'overview') {
+            setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
+            return
+        }
 
-            const trackId = hoveredTrackId
-            trackEvent('surfer_clicked', { track_id: trackId })
-            const detection = p.interpolateDetectionByTime(trackId, p.currentTimeSec)
-            if (!detection) return p.copy({ mode: 'overview', currentTrackId: null })
+        const trackId = hoveredTrackId
+        trackEvent('surfer_clicked', { track_id: trackId })
+        const detection = p0.interpolateDetectionByTime(trackId, p0.currentTimeSec)
+        if (!detection) {
+            setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
+            return
+        }
 
-            const t = detection.time_percent * p.video.durationSeconds
-            videoRef.current!.currentTime = t
-            return p.copy({ mode: 'detailed', currentTrackId: trackId, currentTimeSec: t })
-        })
-    }, [drawMode, hoveredTrackId])
+        const t = detection.time_percent * p0.video.durationSeconds
+        setPlayer(p => (p ? p.copy({ mode: 'detailed', currentTrackId: trackId, currentTimeSec: t }) : p))
+        seekTo(t, p0.isPlaying)
+    }, [drawMode, hoveredTrackId, seekTo])
 
     const getDrawPoint = React.useCallback(
         (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -728,9 +799,22 @@ export const CanvasPlayer: React.FC<Props> = ({
         <div className="relative flex flex-col h-full">
             <div className="relative flex-1 bg-black overflow-hidden">
                 {errorText && <div className="absolute left-2 top-2 text-red-500 text-sm">{errorText}</div>}
+                {webPlayer.error && (
+                    <div className="absolute left-2 top-7 right-2 text-red-400 text-xs whitespace-pre-wrap break-words">
+                        {webPlayer.error}
+                    </div>
+                )}
+                {playerInitError && <div className="absolute left-2 top-7 text-red-400 text-sm">{playerInitError}</div>}
                 {exportError && (
                     <div className="absolute left-2 top-7 text-red-400 text-sm">
                         {t('player.canvas.export.errorLabel', { message: exportError })}
+                    </div>
+                )}
+                {!fileMissing && !errorText && !webPlayer.error && (webPlayer.loading || !webPlayer.ready) && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="text-gray-200/80 text-sm font-mono">
+                            {webPlayer.loading ? 'decoding…' : 'idle'}
+                        </div>
                     </div>
                 )}
                 {fileMissing && (
@@ -768,30 +852,17 @@ export const CanvasPlayer: React.FC<Props> = ({
                             hasVisibleAnnotations={hasVisibleAnnotations}
                         />
                     )}
-                    {/* Hidden video used only for decoding frames */}
-                    {videoUrl && (
-                        <video
-                            ref={videoRef}
-                            key={videoUrl}
-                            src={videoUrl}
-                            playsInline
-                            muted={true}
-                            autoPlay={true}
-                            preload="metadata"
-                            style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }}
-                            onEnded={() => {
-                                setPlayer(p => (p ? p.copy({ isPlaying: false }) : p))
-                                videoRef.current?.pause()
-                            }}
-                        />
-                    )}
                 </div>
             </div>
 
             {player && (
                 <div className="px-3 py-2 bg-black/60 border-t border-gray-700">
                     <div className="mb-2">
-                        <Timeline state={player} onSeekTime={t => seekTo(t, false)} />
+                        <Timeline
+                            onSeekTime={t => seekTo(t, false)}
+                            percent01={webPlayer.currentPercent}
+                            duration={webPlayer.durationSeconds}
+                        />
                     </div>
                     <ControlsBar
                         onPlayPause={() => {
