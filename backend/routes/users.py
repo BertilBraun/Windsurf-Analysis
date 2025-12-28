@@ -33,7 +33,7 @@ def create_user(
     if user.uid != user_id:
         raise HTTPException(status_code=403, detail='Forbidden')
     if user_repo.does_user_exist(user_id):
-        raise HTTPException(status_code=400, detail='User already exists')
+        return {'ok': True, 'detail': 'User already exists'}
     if payload and payload.terms_accepted is False:
         raise HTTPException(status_code=400, detail='Terms must be accepted')
 

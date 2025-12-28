@@ -22,7 +22,7 @@ class JobsRepo:
         return None
 
     def create_job(self, original_checksum_sha256: str) -> JobRecord:
-        job_id = str(uuid.uuid4())
+        job_id = original_checksum_sha256
         job_record = JobRecord(
             job_id=job_id,
             original_checksum_sha256=original_checksum_sha256,

@@ -114,6 +114,10 @@ def embedding_extraction_and_tracking(
             smoothing_window = min(20, props.total_frames - 1)
             stabilized_transforms = vidstab_like_transforms(parsed_transforms, smoothing_window)
 
+        # Frontend convenience: emit an explicit identity transform for frame 0.
+        # The rest are prev->curr deltas anchored at their `frame_idx` (e.g. 0->1 has frame_idx==1).
+        stabilized_transforms_for_output = [Transform(dx=0.0, dy=0.0, da=0.0, frame_idx=0), *stabilized_transforms]
+
         # Convert transforms payload into result with time_percent
         stabilization_transforms = [
             {
@@ -124,7 +128,7 @@ def embedding_extraction_and_tracking(
                 'dy': t.dy,
                 'da': t.da,
             }
-            for t in stabilized_transforms
+            for t in stabilized_transforms_for_output
         ]
 
         results = {
