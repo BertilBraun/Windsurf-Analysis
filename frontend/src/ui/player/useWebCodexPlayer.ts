@@ -48,6 +48,10 @@ export function useWebCodexPlayer(params: {
     playbackRate?: number
 }): WebCodexPlayerApi {
     const { render, behindSeconds = 0.5, aheadSeconds = 0.5, playbackRate = 1.0 } = params
+    const renderRef = React.useRef(render)
+    React.useEffect(() => {
+        renderRef.current = render
+    }, [render])
 
     const [loading, setLoading] = React.useState(false)
     const [seeking, setSeeking] = React.useState(false)
@@ -167,7 +171,7 @@ export function useWebCodexPlayer(params: {
             const p = n > 1 ? clamp(idx / (n - 1), 0, 1) : 0
             currentFrameRef.current = idx
             const sz = sizeRef.current
-            render({
+            renderRef.current({
                 frameIndex: idx,
                 percent: p,
                 width: sz.width,
@@ -178,7 +182,7 @@ export function useWebCodexPlayer(params: {
             setCurrentFrameIndex(idx)
             setCurrentPercent(p)
         },
-        [render]
+        []
     )
 
     const prevKeyframeIndex = React.useCallback((idx: number) => {

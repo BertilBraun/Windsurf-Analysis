@@ -40,7 +40,8 @@ export const CanvasPlayer: React.FC<Props> = ({
     const containerRef = React.useRef<HTMLDivElement | null>(null)
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null)
     const [player, setPlayer] = React.useState<PlayerState | null>(null)
-    const { zoom, offset, onWheelZoom } = useZoom(containerRef)
+    const { zoom, offset, onWheelZoom } = useZoom(containerRef, { minZoom: 0.5, maxZoom: 4 })
+    const [detailedZoom, setDetailedZoom] = React.useState<number>(1)
     const { speed, bumpSpeed } = usePlaybackSpeed(1.0)
     const [hoveredTrackId, setHoveredTrackId] = React.useState<number | null>(null)
     const [isExporting, setIsExporting] = React.useState<boolean>(false)
@@ -91,13 +92,13 @@ export const CanvasPlayer: React.FC<Props> = ({
                 frame.frameCanvas,
                 { width: frameW, height: frameH },
                 player,
-                { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
+                { zoom, detailedZoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
                 getVisibleAnnotations(frame.frameIndex),
                 frame.frameIndex,
                 job.dominant_orientation
             )
         },
-        [isExporting, player, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation]
+        [isExporting, player, zoom, detailedZoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation]
     )
 
     const webPlayer = useWebCodexPlayer({ render: renderDecodedFrame, playbackRate: speed })
@@ -120,11 +121,22 @@ export const CanvasPlayer: React.FC<Props> = ({
         setPlayerInitError(null)
         setIsExporting(false)
         setExportProgressPct(null)
+        setDetailedZoom(1)
         annotationsRef.current = []
         activeStrokeRef.current = null
         activePointerIdRef.current = null
         setAnnotationsVersion(v => v + 1)
     }, [job.id])
+
+    const lastModeRef = React.useRef<PlayerState['mode'] | null>(null)
+    React.useEffect(() => {
+        const prev = lastModeRef.current
+        const next = player?.mode ?? null
+        if (prev === 'detailed' && next !== 'detailed') {
+            setDetailedZoom(1)
+        }
+        lastModeRef.current = next
+    }, [player?.mode])
 
     React.useEffect(() => {
         let cancelled = false
@@ -164,9 +176,10 @@ export const CanvasPlayer: React.FC<Props> = ({
             webPlayer.pause()
             return
         }
+        if (webPlayer.seeking) return
         if (player.isPlaying) webPlayer.play()
         else webPlayer.pause()
-    }, [isExporting, player?.isPlaying, webPlayer.ready])
+    }, [isExporting, player?.isPlaying, webPlayer.ready, webPlayer.seeking])
 
     // Reflect playback ending back into UI state, but don't "auto-pause" due to transient play-loop state.
     React.useEffect(() => {
@@ -276,14 +289,14 @@ export const CanvasPlayer: React.FC<Props> = ({
             const f = lastFrameRef.current
             if (!c || !container || !player || !f) return
             if (isExporting) return
-            const drawFrameIndex = frameIndex ?? lastFrameRef.current?.frameIndex ?? webPlayer.currentFrameIndex
+            const drawFrameIndex = frameIndex ?? lastFrameRef.current?.frameIndex ?? 0
             drawFrame(
                 c,
                 container,
                 f.frameCanvas,
                 { width: f.width, height: f.height },
                 player,
-                { zoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
+                { zoom, detailedZoom, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
                 getVisibleAnnotations(drawFrameIndex),
                 drawFrameIndex,
                 job.dominant_orientation
@@ -293,12 +306,12 @@ export const CanvasPlayer: React.FC<Props> = ({
             player,
             isExporting,
             zoom,
+            detailedZoom,
             offset.x,
             offset.y,
             hoveredTrackId,
             job.dominant_orientation,
             getVisibleAnnotations,
-            webPlayer.currentFrameIndex,
         ]
     )
 
@@ -447,15 +460,20 @@ export const CanvasPlayer: React.FC<Props> = ({
     React.useEffect(() => {
         if (!player) return
         if (isExporting) return
+        if (player.isPlaying || webPlayer.playing || webPlayer.seeking || webPlayer.loading) return
         redrawFrame()
     }, [
         isExporting,
         player?.mode,
         player?.currentTrackId,
+        player?.isPlaying,
         hoveredTrackId,
         job.dominant_orientation,
         annotationsVersion,
         redrawFrame,
+        webPlayer.playing,
+        webPlayer.seeking,
+        webPlayer.loading,
     ])
 
     // Auto-exit detailed mode if the track isn't active at the current frame.
@@ -472,7 +490,18 @@ export const CanvasPlayer: React.FC<Props> = ({
     const onWheelCanvas = React.useCallback(
         (e: React.WheelEvent<HTMLCanvasElement>) => {
             if (drawMode) return
-            if (!player || player.mode !== 'overview') return
+            if (!player) return
+            e.preventDefault()
+
+            if (player.mode === 'detailed') {
+                setDetailedZoom(z => {
+                    const factor = 1 + (e.deltaY < 0 ? 0.1 : -0.1)
+                    return clamp(z * factor, 0.5, 2.0)
+                })
+                return
+            }
+
+            if (player.mode !== 'overview') return
             const container = containerRef.current
             const rect = (container ?? e.currentTarget).getBoundingClientRect()
             const px = e.clientX - rect.left
@@ -531,10 +560,8 @@ export const CanvasPlayer: React.FC<Props> = ({
             return
         }
 
-        const startFrame = range.startFrameIndex
         setPlayer(p => (p ? p.copy({ mode: 'detailed', currentTrackId: trackId }) : p))
-        seekToFrame(startFrame, p0.isPlaying)
-    }, [drawMode, player, hoveredTrackId, seekToFrame])
+    }, [drawMode, player, hoveredTrackId])
 
     const getDrawPoint = React.useCallback(
         (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -865,7 +892,7 @@ export const CanvasPlayer: React.FC<Props> = ({
                         }}
                         isPlaying={player.isPlaying}
                         speed={speed}
-                        zoom={zoom}
+                        zoom={player.mode === 'detailed' ? detailedZoom : zoom}
                         onExportTrack={onExportTrack}
                         exportVisible={exportVisible}
                         exportEnabled={exportEnabled}

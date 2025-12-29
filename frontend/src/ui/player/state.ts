@@ -1,4 +1,5 @@
 import { JobDetail, Track, TrackDetection, StabilizationTransform } from '../types'
+import { NEAREST_DETECTION_MAX_DELTA_FRAMES } from './constants'
 
 export type VideoProperties = {
     width: number
@@ -83,6 +84,33 @@ export class PlayerState {
         if (!arr || arr.length === 0) return null
         const idx = clampInt(frameIndex, 0, arr.length - 1)
         return arr[idx] ?? null
+    }
+
+    getDetectionAtFrameOrNearest(
+        trackId: number,
+        frameIndex: number,
+        maxDeltaFrames: number = NEAREST_DETECTION_MAX_DELTA_FRAMES
+    ): TrackDetection | null {
+        const arr = this.detectionsByTrackId.get(trackId)
+        if (!arr || arr.length === 0) return null
+        const idx = clampInt(frameIndex, 0, arr.length - 1)
+        const det0 = arr[idx] ?? null
+        if (det0) return det0
+
+        const maxD = Math.max(0, maxDeltaFrames | 0)
+        for (let d = 1; d <= maxD; d++) {
+            const lo = idx - d
+            if (lo >= 0) {
+                const detLo = arr[lo] ?? null
+                if (detLo) return detLo
+            }
+            const hi = idx + d
+            if (hi < arr.length) {
+                const detHi = arr[hi] ?? null
+                if (detHi) return detHi
+            }
+        }
+        return null
     }
 
     getTrackFrameRange(trackId: number): { startFrameIndex: number; endFrameIndex: number } | null {

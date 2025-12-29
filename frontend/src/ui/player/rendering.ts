@@ -6,6 +6,7 @@ import { PlayerState } from './state'
 
 export type OverviewView = {
     zoom: number
+    detailedZoom?: number
     offsetX: number
     offsetY: number
     hoveredTrackId: number | null
@@ -60,7 +61,8 @@ export function drawDetailedCrop(
     srcCanvas: CanvasImageSource,
     srcWidth: number,
     srcHeight: number,
-    det: TimedBBox | null
+    det: TimedBBox | null,
+    zoomMul: number = 1
 ) {
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.fillStyle = '#000'
@@ -81,7 +83,8 @@ export function drawDetailedCrop(
 
     const sHeight = (TARGET_BBOX_HEIGHT_RATIO * outputHeight) / bboxH
     const sWidthLimit = outputWidth / bboxW
-    const s = clamp(Math.min(sHeight, sWidthLimit), MIN_SCALE, MAX_SCALE)
+    const sBase = clamp(Math.min(sHeight, sWidthLimit), MIN_SCALE, MAX_SCALE)
+    const s = clamp(sBase * Math.max(1e-6, zoomMul), MIN_SCALE, MAX_SCALE)
 
     const cx = (x1 + x2) * 0.5
     const cy = (y1 + y2) * 0.5
@@ -128,7 +131,8 @@ function getDetailedCropParams(
     outputHeight: number,
     srcWidth: number,
     srcHeight: number,
-    det: TimedBBox
+    det: TimedBBox,
+    zoomMul: number = 1
 ): DetailedCropParams {
     const [x1p, y1p, x2p, y2p] = det.bbox
     const x1 = x1p * srcWidth
@@ -140,7 +144,8 @@ function getDetailedCropParams(
 
     const sHeight = (TARGET_BBOX_HEIGHT_RATIO * outputHeight) / bboxH
     const sWidthLimit = outputWidth / bboxW
-    const s = clamp(Math.min(sHeight, sWidthLimit), MIN_SCALE, MAX_SCALE)
+    const sBase = clamp(Math.min(sHeight, sWidthLimit), MIN_SCALE, MAX_SCALE)
+    const s = clamp(sBase * Math.max(1e-6, zoomMul), MIN_SCALE, MAX_SCALE)
 
     const cx = (x1 + x2) * 0.5
     const cy = (y1 + y2) * 0.5
@@ -209,9 +214,10 @@ function drawAnnotationsDetailed(
     outputHeight: number,
     vidW: number,
     vidH: number,
-    det: TimedBBox
+    det: TimedBBox,
+    zoomMul: number = 1
 ) {
-    const params = getDetailedCropParams(outputWidth, outputHeight, vidW, vidH, det)
+    const params = getDetailedCropParams(outputWidth, outputHeight, vidW, vidH, det, zoomMul)
     const dstW = params.dstX2 - params.dstX1
     const dstH = params.dstY2 - params.dstY1
     if (dstW <= 0 || dstH <= 0) return
@@ -364,16 +370,16 @@ export function drawFrame(
         }
         ctx.restore()
     } else if (player.mode === 'detailed' && player.currentTrackId != null) {
-        const det = player.getDetectionAtFrame(player.currentTrackId, nowFrame)
-        if (!det) return
+        const det = player.getDetectionAtFrameOrNearest(player.currentTrackId, nowFrame)
 
         const vidW = rotatedVideo.width
         const vidH = rotatedVideo.height
         // Reuse shared crop-draw logic (same as export path).
-        const detTimed: TimedBBox = { time_percent: det.time_percent, bbox: det.bbox }
-        drawDetailedCrop(ctx, cssW, cssH, sourceCanvas, vidW, vidH, detTimed)
-        if (annotations.length > 0) {
-            drawAnnotationsDetailed(ctx, annotations, cssW, cssH, vidW, vidH, detTimed)
+        const zMul = ov.detailedZoom ?? 1
+        const detTimed: TimedBBox | null = det ? { time_percent: det.time_percent, bbox: det.bbox } : null
+        drawDetailedCrop(ctx, cssW, cssH, sourceCanvas, vidW, vidH, detTimed, zMul)
+        if (detTimed && annotations.length > 0) {
+            drawAnnotationsDetailed(ctx, annotations, cssW, cssH, vidW, vidH, detTimed, zMul)
         }
     }
 }
@@ -417,10 +423,10 @@ export function screenPointToVideoNorm(
     }
 
     if (player.mode === 'detailed' && player.currentTrackId != null) {
-        const det = player.getDetectionAtFrame(player.currentTrackId, frameIndex)
+        const det = player.getDetectionAtFrameOrNearest(player.currentTrackId, frameIndex)
         if (!det) return null
         const detTimed: TimedBBox = { time_percent: det.time_percent, bbox: det.bbox }
-        const params = getDetailedCropParams(outW, outH, width, height, detTimed)
+        const params = getDetailedCropParams(outW, outH, width, height, detTimed, ov.detailedZoom ?? 1)
         if (px < params.dstX1 || px > params.dstX2 || py < params.dstY1 || py > params.dstY2) return null
         const vx = params.winX1 + px / params.s
         const vy = params.winY1 + py / params.s
