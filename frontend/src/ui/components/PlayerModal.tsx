@@ -3,7 +3,7 @@ import { Trans, useTranslation } from 'react-i18next'
 import { Modal } from './Modal'
 import { Button } from './Button'
 import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
-import { CanvasPlayer } from '../player/CanvasPlayer'
+import { Player } from '../player/Player'
 import { JobDetail, ReportType } from '../types'
 
 export const PlayerModal: React.FC<{
@@ -57,7 +57,7 @@ export const PlayerModal: React.FC<{
             >
                 <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
                     <div className="w-full h-full overflow-hidden">
-                        <CanvasPlayer
+                        <Player
                             key={job.id}
                             job={job}
                             dirHandle={dirHandle}
@@ -87,10 +87,11 @@ export const PlayerModal: React.FC<{
                 />
             )}
             {showReportThanks && (
-                <Modal onClose={() => setShowReportThanks(false)} title={t('components.playerModal.report.thanksTitle')}>
-                    <div className="p-4 text-sm text-slate-600">
-                        {t('components.playerModal.report.thanksBody')}
-                    </div>
+                <Modal
+                    onClose={() => setShowReportThanks(false)}
+                    title={t('components.playerModal.report.thanksTitle')}
+                >
+                    <div className="p-4 text-sm text-slate-600">{t('components.playerModal.report.thanksBody')}</div>
                     <div className="px-4 pb-4 flex justify-end">
                         <Button text={t('common.done')} onClick={() => setShowReportThanks(false)} />
                     </div>

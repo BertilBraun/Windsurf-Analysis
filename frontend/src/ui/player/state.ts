@@ -1,125 +1,92 @@
 import { JobDetail, Track, TrackDetection, StabilizationTransform } from '../types'
-import { NEAREST_DETECTION_MAX_DELTA_FRAMES } from './constants'
-
-export type VideoProperties = {
-    width: number
-    height: number
-    frameCount: number
-}
+import { assert } from '../utils/assert'
 
 export type PlayerMode = 'overview' | 'detailed'
 
 type PlayerStateInit = {
     mode: PlayerMode
     currentTrackId: number | null
-    isPlaying: boolean
-    video: VideoProperties
+    frameCount: number
     tracks: Track[]
     stabilizationByFrame: Array<{ dx: number; dy: number; da: number }>
-    detectionsByTrackId: Map<number, Array<TrackDetection | null>>
 }
 
 export class PlayerState {
     mode: PlayerMode
     currentTrackId: number | null
-    isPlaying: boolean
-    video: VideoProperties
+    frameCount: number
     tracks: Track[]
 
     private stabilizationByFrame: Array<{ dx: number; dy: number; da: number }>
-    private detectionsByTrackId: Map<number, Array<TrackDetection | null>>
 
     constructor(params: PlayerStateInit) {
         this.mode = params.mode
         this.currentTrackId = params.currentTrackId
-        this.isPlaying = params.isPlaying
-        this.video = params.video
+        this.frameCount = params.frameCount
         this.tracks = params.tracks
         this.stabilizationByFrame = params.stabilizationByFrame
-        this.detectionsByTrackId = params.detectionsByTrackId
     }
 
     copy(patch: Partial<PlayerStateInit>): PlayerState {
         const hasCurrentTrackId = Object.prototype.hasOwnProperty.call(patch, 'currentTrackId')
-        const hasIsPlaying = Object.prototype.hasOwnProperty.call(patch, 'isPlaying')
         return new PlayerState({
             mode: patch.mode ?? this.mode,
             currentTrackId: hasCurrentTrackId ? patch.currentTrackId! : this.currentTrackId,
-            isPlaying: hasIsPlaying ? patch.isPlaying! : this.isPlaying,
-            video: patch.video ?? this.video,
+            frameCount: patch.frameCount ?? this.frameCount,
             tracks: patch.tracks ?? this.tracks,
             stabilizationByFrame: patch.stabilizationByFrame ?? this.stabilizationByFrame,
-            detectionsByTrackId: patch.detectionsByTrackId ?? this.detectionsByTrackId,
         })
     }
 
-    static from(job: JobDetail, video: VideoProperties): PlayerState {
-        const frameCount = Math.max(0, video.frameCount | 0)
+    static from(job: JobDetail, frameCount: number): PlayerState {
+        assert(frameCount > 0, 'Invalid frame count')
 
-        const tracks = job.tracks.map(t => ({
-            ...t,
-            detections: [...(t.detections ?? [])].sort((a, b) => a.time_percent - b.time_percent),
+        const tracks = job.tracks.map(track => ({
+            ...track,
+            detections: [...track.detections].sort((a, b) => a.time_percent - b.time_percent),
         }))
 
         return new PlayerState({
             mode: 'overview',
             currentTrackId: null,
-            isPlaying: true,
-            video,
+            frameCount,
             tracks,
-            stabilizationByFrame: materializeStabilization(job.stabilization_transforms ?? [], frameCount),
-            detectionsByTrackId: materializeDetectionsByTrackId(tracks, frameCount),
+            stabilizationByFrame: materializeStabilization(job.stabilization_transforms, frameCount),
         })
     }
 
     getStabilizationAtFrame(frameIndex: number): { dx: number; dy: number; da: number } {
-        const n = this.video.frameCount
-        if (n <= 0) return { dx: 0, dy: 0, da: 0 }
-        const idx = clampInt(frameIndex, 0, n - 1)
-        return this.stabilizationByFrame[idx] ?? { dx: 0, dy: 0, da: 0 }
+        assert(frameIndex >= 0 && frameIndex < this.frameCount, 'Invalid frame index')
+        return this.stabilizationByFrame[frameIndex]
     }
 
     getDetectionAtFrame(trackId: number, frameIndex: number): TrackDetection | null {
-        const arr = this.detectionsByTrackId.get(trackId)
-        if (!arr || arr.length === 0) return null
-        const idx = clampInt(frameIndex, 0, arr.length - 1)
-        return arr[idx] ?? null
-    }
-
-    getDetectionAtFrameOrNearest(
-        trackId: number,
-        frameIndex: number,
-        maxDeltaFrames: number = NEAREST_DETECTION_MAX_DELTA_FRAMES
-    ): TrackDetection | null {
-        const arr = this.detectionsByTrackId.get(trackId)
-        if (!arr || arr.length === 0) return null
-        const idx = clampInt(frameIndex, 0, arr.length - 1)
-        const det0 = arr[idx] ?? null
-        if (det0) return det0
-
-        const maxD = Math.max(0, maxDeltaFrames | 0)
-        for (let d = 1; d <= maxD; d++) {
-            const lo = idx - d
-            if (lo >= 0) {
-                const detLo = arr[lo] ?? null
-                if (detLo) return detLo
-            }
-            const hi = idx + d
-            if (hi < arr.length) {
-                const detHi = arr[hi] ?? null
-                if (detHi) return detHi
-            }
+        assert(frameIndex >= 0 && frameIndex < this.frameCount, 'Invalid frame index')
+        const track = this.getTrackById(trackId)
+        const detections = track.detections
+        // Binary search for the detection at the frame index where math.round(detection.time_percent * (this.frameCount - 1)) equals frameIndex
+        let lo = 0
+        let hi = detections.length - 1
+        while (lo <= hi) {
+            const mid = Math.floor((lo + hi) / 2)
+            const midFrameIndex = Math.round(detections[mid]!.time_percent * this.frameCount)
+            if (midFrameIndex === frameIndex) return detections[mid]
+            if (midFrameIndex < frameIndex) lo = mid + 1
+            else hi = mid - 1
         }
         return null
     }
 
-    getTrackFrameRange(trackId: number): { startFrameIndex: number; endFrameIndex: number } | null {
-        const t = this.tracks.find(t0 => t0.track_id === trackId)
-        if (!t) return null
-        const n = this.video.frameCount
-        if (n <= 0) return null
-        const startFrameIndex = clampInt(Math.round(t.start_percent * (n - 1)), 0, n - 1)
-        const endFrameIndex = clampInt(Math.round(t.end_percent * (n - 1)), 0, n - 1)
+    getDetectionAtFrameRequired(trackId: number, frameIndex: number): TrackDetection {
+        const det = this.getDetectionAtFrame(trackId, frameIndex)
+        if (!det) throw new Error(`Missing detection for track ${trackId} at frame ${frameIndex}.`)
+        return det
+    }
+
+    getTrackFrameRange(trackId: number): { startFrameIndex: number; endFrameIndex: number } {
+        const track = this.getTrackById(trackId)
+        const startFrameIndex = clampInt(Math.round(track.start_percent * this.frameCount), 0, this.frameCount - 1)
+        const endFrameIndex = clampInt(Math.round(track.end_percent * this.frameCount), 0, this.frameCount - 1)
         return { startFrameIndex, endFrameIndex }
     }
 
@@ -127,6 +94,12 @@ export class PlayerState {
         const r = this.getTrackFrameRange(trackId)
         if (!r) return false
         return frameIndex >= r.startFrameIndex && frameIndex <= r.endFrameIndex
+    }
+
+    getTrackById(trackId: number): Track {
+        const track = this.tracks.find(track => track.track_id === trackId)
+        assert(track !== undefined, 'Track not found for id ${trackId}')
+        return track!
     }
 }
 
@@ -150,36 +123,13 @@ function materializeStabilization(
 
     const out: Array<{ dx: number; dy: number; da: number } | null> = new Array(frameCount).fill(null)
     for (const t of sorted) {
-        const idx = clampInt(Math.round(t.time_percent * (frameCount - 1)), 0, frameCount - 1)
+        const idx = clampInt(Math.round(t.time_percent * frameCount), 0, frameCount - 1)
         out[idx] = { dx: t.dx, dy: t.dy, da: t.da }
     }
 
-    let last: { dx: number; dy: number; da: number } = out[0] ?? { dx: 0, dy: 0, da: 0 }
-    for (let i = 0; i < frameCount; i++) {
-        if (out[i]) last = out[i]!
-        else out[i] = last
+    for (const t of out) {
+        assert(t !== null, 'Missing stabilization!!!')
     }
+
     return out as Array<{ dx: number; dy: number; da: number }>
-}
-
-function materializeDetectionsByTrackId(tracks: Track[], frameCount: number): Map<number, Array<TrackDetection | null>> {
-    const out = new Map<number, Array<TrackDetection | null>>()
-    if (frameCount <= 0) return out
-
-    for (const t of tracks) {
-        const dets = t.detections ?? []
-        const arr: Array<TrackDetection | null> = new Array(frameCount).fill(null)
-
-        if (dets.length === frameCount) {
-            for (let i = 0; i < frameCount; i++) arr[i] = dets[i] ?? null
-        } else {
-            for (const d of dets) {
-                const idx = clampInt(Math.round(d.time_percent * (frameCount - 1)), 0, frameCount - 1)
-                arr[idx] = d
-            }
-        }
-
-        out.set(t.track_id, arr)
-    }
-    return out
 }

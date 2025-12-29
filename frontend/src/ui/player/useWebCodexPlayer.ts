@@ -15,11 +15,13 @@ export type WebCodexPlayerApi = {
     loading: boolean
     seeking: boolean
     playing: boolean
+    ended: boolean
     error?: string
 
     frameCount: number
     currentFrameIndex: number
     currentPercent: number
+    currentFrameCanvas: HTMLCanvasElement | OffscreenCanvas | null
 
     width: number
     height: number
@@ -42,16 +44,11 @@ function sleep(ms: number) {
 }
 
 export function useWebCodexPlayer(params: {
-    render: (frame: WebCodexFrame) => void
     behindSeconds?: number
     aheadSeconds?: number
     playbackRate?: number
 }): WebCodexPlayerApi {
-    const { render, behindSeconds = 0.5, aheadSeconds = 0.5, playbackRate = 1.0 } = params
-    const renderRef = React.useRef(render)
-    React.useEffect(() => {
-        renderRef.current = render
-    }, [render])
+    const { behindSeconds = 0.5, aheadSeconds = 0.5, playbackRate = 1.0 } = params
 
     const [loading, setLoading] = React.useState(false)
     const [seeking, setSeeking] = React.useState(false)
@@ -62,6 +59,7 @@ export function useWebCodexPlayer(params: {
     const [frameCount, setFrameCount] = React.useState(0)
     const [currentFrameIndex, setCurrentFrameIndex] = React.useState(0)
     const [currentPercent, setCurrentPercent] = React.useState(0)
+    const [currentFrameCanvas, setCurrentFrameCanvas] = React.useState<HTMLCanvasElement | OffscreenCanvas | null>(null)
 
     const [width, setWidth] = React.useState(0)
     const [height, setHeight] = React.useState(0)
@@ -116,6 +114,7 @@ export function useWebCodexPlayer(params: {
         setFrameCount(0)
         setCurrentFrameIndex(0)
         setCurrentPercent(0)
+        setCurrentFrameCanvas(null)
         setWidth(0)
         setHeight(0)
         sizeRef.current = { width: 0, height: 0 }
@@ -165,25 +164,15 @@ export function useWebCodexPlayer(params: {
         }
     }, [])
 
-    const drawFrameInternal = React.useCallback(
-        (idx: number, wc: WrappedCanvas) => {
-            const n = frameCountRef.current
-            const p = n > 1 ? clamp(idx / (n - 1), 0, 1) : 0
-            currentFrameRef.current = idx
-            const sz = sizeRef.current
-            renderRef.current({
-                frameIndex: idx,
-                percent: p,
-                width: sz.width,
-                height: sz.height,
-                frameCanvas: wc.canvas,
-            })
+    const drawFrameInternal = React.useCallback((idx: number, wc: WrappedCanvas) => {
+        const n = frameCountRef.current
+        const p = n > 1 ? clamp(idx / (n - 1), 0, 1) : 0
+        currentFrameRef.current = idx
+        setCurrentFrameCanvas(wc.canvas)
 
-            setCurrentFrameIndex(idx)
-            setCurrentPercent(p)
-        },
-        []
-    )
+        setCurrentFrameIndex(idx)
+        setCurrentPercent(p)
+    }, [])
 
     const prevKeyframeIndex = React.useCallback((idx: number) => {
         const isKey = isKeyRef.current
@@ -463,15 +452,22 @@ export function useWebCodexPlayer(params: {
         }
     }, [dispose])
 
+    const ended = React.useMemo(
+        () => frameCount > 0 && currentFrameIndex >= frameCount - 1,
+        [frameCount, currentFrameIndex]
+    )
+
     return {
         ready,
         loading,
         seeking,
         playing,
+        ended,
         error,
         frameCount,
         currentFrameIndex,
         currentPercent,
+        currentFrameCanvas,
         width,
         height,
         load,

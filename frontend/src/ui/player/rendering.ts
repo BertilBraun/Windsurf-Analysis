@@ -370,7 +370,7 @@ export function drawFrame(
         }
         ctx.restore()
     } else if (player.mode === 'detailed' && player.currentTrackId != null) {
-        const det = player.getDetectionAtFrameOrNearest(player.currentTrackId, nowFrame)
+        const det = player.getDetectionAtFrameRequired(player.currentTrackId, nowFrame)
 
         const vidW = rotatedVideo.width
         const vidH = rotatedVideo.height
@@ -390,11 +390,13 @@ export function screenPointToVideoNorm(
     outW: number,
     outH: number,
     player: PlayerState,
+    videoWidth: number,
+    videoHeight: number,
     frameIndex: number,
     ov: OverviewView,
     dominantOrientationDeg: number = 0
 ): AnnotationPoint | null {
-    const { width, height } = getRotatedDimensions(player.video.width, player.video.height, dominantOrientationDeg)
+    const { width, height } = getRotatedDimensions(videoWidth, videoHeight, dominantOrientationDeg)
     if (player.mode === 'overview') {
         const base = computeBaseRect(outW, outH, width, height)
         const stab = player.getStabilizationAtFrame(frameIndex)
@@ -423,8 +425,7 @@ export function screenPointToVideoNorm(
     }
 
     if (player.mode === 'detailed' && player.currentTrackId != null) {
-        const det = player.getDetectionAtFrameOrNearest(player.currentTrackId, frameIndex)
-        if (!det) return null
+        const det = player.getDetectionAtFrameRequired(player.currentTrackId, frameIndex)
         const detTimed: TimedBBox = { time_percent: det.time_percent, bbox: det.bbox }
         const params = getDetailedCropParams(outW, outH, width, height, detTimed, ov.detailedZoom ?? 1)
         if (px < params.dstX1 || px > params.dstX2 || py < params.dstY1 || py > params.dstY2) return null
@@ -445,11 +446,13 @@ export function pickTrackAtScreenPoint(
     outW: number,
     outH: number,
     player: PlayerState,
+    videoWidth: number,
+    videoHeight: number,
     frameIndex: number,
     ov: OverviewView,
     dominantOrientationDeg: number = 0
 ): number | null {
-    const { width, height } = getRotatedDimensions(player.video.width, player.video.height, dominantOrientationDeg)
+    const { width, height } = getRotatedDimensions(videoWidth, videoHeight, dominantOrientationDeg)
     const base = computeBaseRect(outW, outH, width, height)
     const stab = player.getStabilizationAtFrame(frameIndex)
 
