@@ -175,13 +175,7 @@ function drawAnnotationDot(ctx: Ctx2D, x: number, y: number, size: number, color
     ctx.fill()
 }
 
-function drawAnnotationsOverview(
-    ctx: Ctx2D,
-    strokes: AnnotationStroke[],
-    vidW: number,
-    vidH: number,
-    scale: number
-) {
+function drawAnnotationsOverview(ctx: Ctx2D, strokes: AnnotationStroke[], vidW: number, vidH: number, scale: number) {
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     for (const stroke of strokes) {
@@ -370,6 +364,23 @@ export function drawFrame(
         }
         ctx.restore()
     } else if (player.mode === 'detailed' && player.currentTrackId != null) {
+        // Detailed mode should only crop when the track is active at this frame.
+        // If the user enters detailed mode while the track isn't active (or while we're transitioning),
+        // fall back to full-frame rendering for this frame.
+        if (!player.isTrackActiveAtFrame(player.currentTrackId, nowFrame)) {
+            drawDetailedCrop(
+                ctx,
+                cssW,
+                cssH,
+                sourceCanvas,
+                rotatedVideo.width,
+                rotatedVideo.height,
+                null,
+                ov.detailedZoom ?? 1
+            )
+            return
+        }
+
         const det = player.getDetectionAtFrameRequired(player.currentTrackId, nowFrame)
 
         const vidW = rotatedVideo.width
@@ -425,6 +436,7 @@ export function screenPointToVideoNorm(
     }
 
     if (player.mode === 'detailed' && player.currentTrackId != null) {
+        if (!player.isTrackActiveAtFrame(player.currentTrackId, frameIndex)) return null
         const det = player.getDetectionAtFrameRequired(player.currentTrackId, frameIndex)
         const detTimed: TimedBBox = { time_percent: det.time_percent, bbox: det.bbox }
         const params = getDetailedCropParams(outW, outH, width, height, detTimed, ov.detailedZoom ?? 1)

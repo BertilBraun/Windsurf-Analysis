@@ -117,10 +117,6 @@ export const Player: React.FC<Props> = ({
         setIsExporting(false)
         setExportProgressPct(null)
         detailedZoom.reset()
-    }, [job.id])
-
-    React.useEffect(() => {
-        // reset annotations when opening a new job
         annotations.reset()
     }, [job.id])
 
@@ -132,12 +128,15 @@ export const Player: React.FC<Props> = ({
     }, [player?.mode])
 
     React.useEffect(() => {
-        const mySourceFile = sourceFile
-        setPlayer(null)
-        webPlayer.dispose().then(() => {
+        async function start() {
+            const mySourceFile = sourceFile
+            setPlayer(null)
+            await webPlayer.dispose()
             if (!mySourceFile || mySourceFile !== sourceFile) return
-            void webPlayer.load(mySourceFile)
-        })
+            await webPlayer.load(mySourceFile)
+            webPlayer.play()
+        }
+        start()
     }, [sourceFile])
 
     React.useEffect(() => {
