@@ -40,18 +40,16 @@ export const DrawOverlay: React.FC<DrawOverlayProps> = ({
                 <div className="mt-2 flex items-center gap-1">
                     <Button
                         type="button"
-                        variant="inverse"
+                        variant={drawTool === 'freehand' ? 'outline' : 'inverse'}
                         size="sm"
                         onClick={() => onDrawToolChange('freehand')}
-                        className={drawTool === 'freehand' ? 'bg-white text-black hover:bg-white' : ''}
                         text={t('player.canvas.draw.freehand')}
                     />
                     <Button
                         type="button"
-                        variant="inverse"
+                        variant={drawTool === 'line' ? 'outline' : 'inverse'}
                         size="sm"
                         onClick={() => onDrawToolChange('line')}
-                        className={drawTool === 'line' ? 'bg-white text-black hover:bg-white' : ''}
                         text={t('player.canvas.draw.line')}
                     />
                 </div>
