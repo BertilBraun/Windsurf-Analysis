@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import uuid
-
 from db.firestore_client import jobs, now, results
 from models import JobPatch, JobRecord, JobResults, JobStatus
 from google.cloud import firestore
