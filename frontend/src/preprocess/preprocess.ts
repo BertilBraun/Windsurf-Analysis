@@ -1,5 +1,17 @@
-import { MP4FrameSource } from './frame_source'
-import { Mp4Encoder } from './mp4_encoder'
+import {
+    ALL_FORMATS,
+    BlobSource,
+    BufferTarget,
+    CanvasSource,
+    Input,
+    Mp4OutputFormat,
+    Output,
+    type Quality,
+    QUALITY_HIGH,
+    QUALITY_LOW,
+    QUALITY_MEDIUM,
+    VideoSampleSink,
+} from 'mediabunny'
 
 export type UploadQuality = 'original' | 'high' | 'medium' | 'minimum'
 
@@ -9,7 +21,6 @@ interface TargetSpec {
 }
 
 function ensureEven(n: number): number {
-    // Many codecs prefer even dimensions
     return n % 2 === 0 ? n : n - 1
 }
 
@@ -47,18 +58,6 @@ function create2DCanvas(
     throw new Error('No canvas implementation available (OffscreenCanvas/DOM)')
 }
 
-// Very simple bitrate heuristic that scales with pixels and fps.
-// Tuned so ~8 Mbps at 1080p30 for "high".
-function estimateBitrate(width: number, height: number, fps: number, quality: UploadQuality): number {
-    const mp = (width * height) / 1_000_000 // megapixels
-    const fpsFactor = fps / 30
-    const baseFor1080p30 = 4_000_000 // * mp ≈ 8 Mbps for 1080p30
-    const qMul = quality === 'minimum' ? 0.45 : quality === 'medium' ? 0.7 : quality === 'high' ? 1.0 : 1.1 // 'original' - lean a bit higher
-    const est = Math.round(baseFor1080p30 * mp * fpsFactor * qMul)
-    // Keep within sensible bounds
-    return Math.min(Math.max(est, 300_000), 20_000_000)
-}
-
 function chooseSpec(w: number, h: number, q: UploadQuality): TargetSpec {
     const longer = Math.max(w, h)
     if (q === 'original') return { longSide: longer, fps: 0 } // keep source fps
@@ -67,151 +66,166 @@ function chooseSpec(w: number, h: number, q: UploadQuality): TargetSpec {
     return { longSide: 640, fps: 15 }
 }
 
+function toExactArrayBuffer(buf: ArrayBuffer): ArrayBuffer {
+    return buf.slice(0)
+}
+
+async function getApproxFps(videoTrack: Awaited<ReturnType<Input['getPrimaryVideoTrack']>>): Promise<number> {
+    if (!videoTrack) return 30
+    const stats = await videoTrack.computePacketStats(100)
+    if (Number.isFinite(stats.averagePacketRate) && stats.averagePacketRate > 0) return stats.averagePacketRate
+    return 30
+}
+
 export async function processVideo(params: {
     file: File
-    onFrame: (
-        frame: VideoFrame,
-        ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D
-    ) => Promise<boolean | 'stop'>
+    inputStartSec?: number
+    inputEndSec?: number
     outputWidth: number
     outputHeight: number
+    /**
+     * If omitted, uses the source video's approximate FPS.
+     * The output is always constant frame rate (CFR).
+     */
     outputFps?: number
-    bitrate?: number
-    onProgress?: (p: number) => void
+    /**
+     * Pass Mediabunny's `QUALITY_*` constants (recommended) or a numeric bitrate (bps).
+     */
+    videoBitrate?: number | Quality
+    onProgress?: (p01: number) => void
+    onFrame: (
+        frame: VideoFrame,
+        ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D,
+        timestampSec: number,
+        inputDurationSec: number | null
+    ) => Promise<boolean>
 }): Promise<ArrayBuffer> {
-    const { file, onFrame, outputWidth, outputHeight, outputFps, bitrate, onProgress } = params
-    // Tiny reporter with throttling to avoid spamming the callback
-    let lastReported = -1
-    const report = (p: number) => {
-        if (!onProgress) return
-        const clamped = Math.max(0, Math.min(1, p))
-        if (clamped === 1 || clamped === 0 || clamped - lastReported >= 0.005) {
-            lastReported = clamped
-            try {
-                onProgress(clamped)
-            } catch {}
-        }
-    }
+    const {
+        file,
+        inputStartSec,
+        inputEndSec,
+        outputWidth,
+        outputHeight,
+        outputFps,
+        videoBitrate,
+        onProgress,
+        onFrame,
+    } = params
 
-    report(0)
-
-    // 1) Read the file into memory
-    const inputBuffer = await file.arrayBuffer()
-
-    // 2) Set up the source (demux+decode)
-    const src = new MP4FrameSource(inputBuffer)
-    const info = await src.getTrackInfo()
-    const srcFps = Math.max(1, info.approxFps)
-
-    const outFps = outputFps ?? srcFps
-
-    // 4) Choose a bitrate (codec-agnostic heuristic)
-    const outBitrate = bitrate ?? estimateBitrate(outputWidth, outputHeight, outFps, 'high')
-
-    // 5) Set up encoder + canvas
-    const enc = new Mp4Encoder({ width: outputWidth, height: outputHeight, fps: outFps, bitrate: outBitrate })
-    const { canvas, ctx } = create2DCanvas(outputWidth, outputHeight)
-
-    // total "units" for progress (prefer exact nbSamples; else fall back to duration * fps)
-    const totalUnits = Math.max(1, info.nbSamples > 0 ? info.nbSamples : Math.round((info.durationSec || 0) * srcFps))
-    let processedUnits = 0
+    const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS })
+    const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() })
 
     try {
-        for await (const frame of src.frames()) {
-            processedUnits++
-            // Decode/demux dominates work → map to 0..0.95 of total
-            // (Keeps UI snappy and avoids getting "stuck at 100%" while muxing)
-            const decodePortion = 0.95
-            report((processedUnits / totalUnits) * decodePortion)
+        const videoTrack = await input.getPrimaryVideoTrack()
+        if (!videoTrack) throw new Error('No video track found.')
 
-            // Draw scaled
-            // Clear is not strictly required if we always cover the full frame,
-            // but it can help avoid artifacts when scaling down non-integer ratios.
-            ctx.clearRect(0, 0, outputWidth, outputHeight)
-            const keepFrame = await onFrame(frame, ctx)
-            if (keepFrame === 'stop') {
-                // Stop decode as soon as possible (important for export speed / resource usage).
-                src.close()
-                break
+        const inputDurationSec = await input.computeDuration().catch(() => null)
+        const fps = Math.max(1e-6, outputFps ?? (await getApproxFps(videoTrack)))
+
+        const { canvas, ctx } = create2DCanvas(outputWidth, outputHeight)
+        const videoSource = new CanvasSource(canvas, { codec: 'avc', bitrate: videoBitrate ?? QUALITY_HIGH })
+        output.addVideoTrack(videoSource, { frameRate: fps })
+
+        await output.start()
+
+        const expectedFrames =
+            typeof inputStartSec === 'number' && typeof inputEndSec === 'number' && inputEndSec > inputStartSec
+                ? Math.max(1, Math.ceil((inputEndSec - inputStartSec) * fps))
+                : null
+
+        let framesWritten = 0
+        const sink = new VideoSampleSink(videoTrack)
+        for await (const sample of sink.samples(inputStartSec, inputEndSec)) {
+            const vf = sample.toVideoFrame()
+            try {
+                ctx.clearRect(0, 0, outputWidth, outputHeight)
+                const keep = await onFrame(vf, ctx, sample.timestamp, inputDurationSec)
+                if (!keep) continue
+
+                await videoSource.add(framesWritten / fps, 1 / fps)
+                framesWritten++
+
+                if (onProgress && expectedFrames) onProgress(Math.min(0.95, (framesWritten / expectedFrames) * 0.95))
+            } finally {
+                try {
+                    vf.close()
+                } catch {}
+                sample.close()
             }
-            if (!keepFrame) continue
-
-            // Push to encoder at constant frame rate
-            await enc.appendFrame(canvas)
         }
 
-        report(0.95)
+        if (onProgress) onProgress(0.95)
+        await output.finalize()
+        if (onProgress) onProgress(1)
 
-        // 7) Finalize MP4 and return as ArrayBuffer
-        const { blob } = await enc.finalize()
-
-        report(1)
-
-        return await blob.arrayBuffer()
+        const buf = output.target.buffer
+        if (!buf) throw new Error('Failed to retrieve output buffer.')
+        return toExactArrayBuffer(buf)
     } finally {
-        src.close()
-        enc.destroy()
+        try {
+            input.dispose()
+        } catch {}
     }
 }
 
-/**
- * Read a video file, downscale/reframe it by quality (resolution + fps),
- * and return an MP4 ArrayBuffer encoded with WebCodecs + mp4-muxer.
- *
- * Strategy:
- * - Demux+decode with MP4FrameSource
- * - Resize each kept frame onto a 2D canvas
- * - Pick frames using a Bresenham-style accumulator so we hit target FPS evenly
- * - Encode CFR with Mp4Encoder and return the resulting ArrayBuffer
- */
 export async function preprocessVideo(
     file: File,
     quality: UploadQuality,
-    onProgress?: (p: number) => void
+    onProgress?: (p: number) => void,
+    videoBitrate?: number | Quality
 ): Promise<ArrayBuffer> {
-    // 1) Read the file into memory
-    const inputBuffer = await file.arrayBuffer()
+    // NOTE: Alternatively use https://mediabunny.dev/guide/converting-media-files
 
-    // 2) Set up the source (demux+decode)
-    const src = new MP4FrameSource(inputBuffer)
-    const info = await src.getTrackInfo()
-    const srcW = info.width
-    const srcH = info.height
-    const srcFps = Math.max(1, info.approxFps)
+    const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS })
+    let srcW = 1
+    let srcH = 1
+    let srcFps = 30
+    try {
+        const videoTrack = await input.getPrimaryVideoTrack()
+        if (!videoTrack) throw new Error('No video track found.')
+        srcW = videoTrack.displayWidth
+        srcH = videoTrack.displayHeight
+        srcFps = await getApproxFps(videoTrack)
+    } finally {
+        try {
+            input.dispose()
+        } catch {}
+    }
 
-    // 3) Decide target spec (resolution + fps)
     const spec = chooseSpec(srcW, srcH, quality)
     const { width: outW, height: outH } =
         quality === 'original'
             ? { width: ensureEven(srcW), height: ensureEven(srcH) }
             : fitToLongSide(srcW, srcH, spec.longSide)
 
-    // Keep source FPS if spec.fps == 0; otherwise, never exceed source fps (we don’t synthesize extra frames here)
     const outFps = spec.fps === 0 ? srcFps : Math.min(spec.fps, srcFps)
+    const defaultVideoBitrate =
+        quality === 'minimum'
+            ? QUALITY_LOW
+            : quality === 'medium'
+            ? QUALITY_MEDIUM
+            : quality === 'high'
+            ? QUALITY_HIGH
+            : QUALITY_HIGH
 
-    const bitrate = estimateBitrate(outW, outH, outFps, quality)
-
-    // 6) Frame selection using a Bresenham-style accumulator.
-    //    ratio = outFps / srcFps. For each decoded frame: acc += ratio; if acc >= 1 → keep (emit), acc -= 1.
     const ratio = outFps / srcFps
     let acc = 0
 
-    const onFrame = async (frame: VideoFrame, ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D) => {
-        ctx.drawImage(frame, 0, 0, ctx.canvas.width, ctx.canvas.height)
-        acc += ratio
-        if (acc >= 1) {
-            acc -= 1
-            return true
-        }
-        return false
-    }
     return processVideo({
         file,
-        onFrame,
         outputWidth: outW,
         outputHeight: outH,
         outputFps: outFps,
-        bitrate,
+        videoBitrate: videoBitrate ?? defaultVideoBitrate,
         onProgress,
+        onFrame: async (frame, ctx) => {
+            ctx.drawImage(frame, 0, 0, ctx.canvas.width, ctx.canvas.height)
+            acc += ratio
+            if (acc >= 1) {
+                acc -= 1
+                return true
+            }
+            return false
+        },
     })
 }

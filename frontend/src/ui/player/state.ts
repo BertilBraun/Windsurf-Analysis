@@ -83,6 +83,23 @@ export class PlayerState {
         return det
     }
 
+    getClosestDetectionAtFrame(trackId: number, frameIndex: number): TrackDetection {
+        assert(frameIndex >= 0 && frameIndex < this.frameCount, 'Invalid frame index')
+        const track = this.getTrackById(trackId)
+        const detections = track.detections
+        // Find the detection which is the closest to the frame index
+        let closest = detections[0]
+        let closestDistance = Math.abs(frameIndex - this.frameIndexForPercent(closest!.time_percent))
+        for (const detection of detections) {
+            const distance = Math.abs(frameIndex - this.frameIndexForPercent(detection.time_percent))
+            if (distance < closestDistance) {
+                closest = detection
+                closestDistance = distance
+            }
+        }
+        return closest
+    }
+
     getTrackFrameRange(trackId: number): { startFrameIndex: number; endFrameIndex: number } {
         const track = this.getTrackById(trackId)
         const startFrameIndex = this.frameIndexForPercent(track.start_percent)

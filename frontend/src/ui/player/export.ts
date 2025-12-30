@@ -1,8 +1,9 @@
 import { processVideo } from '../../preprocess/preprocess'
+import { QUALITY_HIGH } from 'mediabunny'
 import { drawRotatedToCanvas } from './rotation'
 import { PlayerState } from './state'
 import { drawWatermark, getWatermarkAsset } from './watermark'
-import { drawDetailedCrop, getSharedOffscreenCanvas, TimedBBox } from './rendering'
+import { drawDetailedCrop, getSharedOffscreenCanvas } from './rendering'
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
@@ -64,31 +65,35 @@ export async function exportTrackMp4(params: {
 }): Promise<Blob> {
     const { file, player, dominantOrientationDeg, trackId, startSec, endSec, onProgress } = params
 
-    const outputWidth = 1280
-    const outputHeight = 720
-    const bitrate = 8_000_000
+    const outputWidth = 1920
+    const outputHeight = 1920
 
     // Best-effort watermark; if it fails to load, we still export.
     const watermark = await getWatermarkAsset()
 
-    let frameIndex = -1
-    const onFrame = async (frame: VideoFrame, ctx: Ctx2D) => {
-        frameIndex++
-        const tSec = (frame.timestamp || 0) / 1_000_000
+    const onFrame = async (frame: VideoFrame, ctx: Ctx2D, tSec: number, inputDurationSec: number | null) => {
+        const dur = inputDurationSec
+        const frameIndex =
+            dur && dur > 0 ? player.frameIndexForPercent(Math.max(0, Math.min(1, tSec / dur))) : player.frameCount - 1
 
-        if (tSec + 1e-6 < startSec) return false
-        if (tSec >= endSec) return 'stop'
+        const detection = player.getClosestDetectionAtFrame(trackId, frameIndex)
 
         const rotCanvas = getSharedOffscreenCanvas()
         const rotated = drawRotatedToCanvas(frame, rotCanvas, dominantOrientationDeg)
-
-        const det0 = player.getDetectionAtFrame(trackId, frameIndex)
-        const det: TimedBBox | null = det0 ? { time_percent: det0.time_percent, bbox: det0.bbox } : null
-        drawDetailedCrop(ctx, outputWidth, outputHeight, rotCanvas, rotated.width, rotated.height, det)
+        drawDetailedCrop(ctx, outputWidth, outputHeight, rotCanvas, rotated.width, rotated.height, detection)
         drawWatermark(ctx, outputWidth, outputHeight, watermark)
         return true
     }
 
-    const outBuf = await processVideo({ file, onFrame, outputWidth, outputHeight, bitrate, onProgress })
+    const outBuf = await processVideo({
+        file,
+        onFrame,
+        inputStartSec: startSec,
+        inputEndSec: endSec,
+        outputWidth,
+        outputHeight,
+        videoBitrate: QUALITY_HIGH,
+        onProgress,
+    })
     return new Blob([outBuf], { type: 'video/mp4' })
 }

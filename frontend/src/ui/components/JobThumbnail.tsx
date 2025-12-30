@@ -1,34 +1,14 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { ALL_FORMATS, BlobSource, CanvasSink, Input } from 'mediabunny'
 import { JobSummary } from '../types'
 import { getFileByRelativePath } from '../utils/fsAccess'
 import { getThumbnailBlob, saveThumbnailBlob } from '../utils/idb'
-import { drawRotatedToCanvas } from '../player/rotation'
+import { quantizeOrientation } from '../player/rotation'
 
 const THUMB_TARGET_W = 256
 const THUMB_MIME = 'image/jpeg'
 const THUMB_QUALITY = 0.7
-
-function once(target: EventTarget, type: string, onError?: (e: any) => Error): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const cleanup = () => {
-            try {
-                target.removeEventListener(type, onOk as any)
-                if (onError) target.removeEventListener('error', onErr as any)
-            } catch {}
-        }
-        const onOk = () => {
-            cleanup()
-            resolve()
-        }
-        const onErr = (e: any) => {
-            cleanup()
-            reject(onError ? onError(e) : new Error('event_error'))
-        }
-        target.addEventListener(type, onOk as any, { once: true } as any)
-        if (onError) target.addEventListener('error', onErr as any, { once: true } as any)
-    })
-}
 
 function canvasToBlob(canvas: HTMLCanvasElement, mime: string, quality: number): Promise<Blob> {
     return new Promise((resolve, reject) => {
@@ -41,6 +21,17 @@ function canvasToBlob(canvas: HTMLCanvasElement, mime: string, quality: number):
             quality
         )
     })
+}
+
+async function canvasLikeToBlob(
+    canvas: HTMLCanvasElement | OffscreenCanvas,
+    mime: string,
+    quality: number
+): Promise<Blob> {
+    if (typeof (canvas as any).convertToBlob === 'function') {
+        return (canvas as OffscreenCanvas).convertToBlob({ type: mime, quality } as any)
+    }
+    return canvasToBlob(canvas as HTMLCanvasElement, mime, quality)
 }
 
 async function hasReadPermission(dirHandle: FileSystemDirectoryHandle): Promise<boolean> {
@@ -68,39 +59,35 @@ async function resolveFirstExistingFile(
 }
 
 async function generateThumbnailBlobFromVideo(file: File, dominantOrientation: number): Promise<Blob> {
-    const videoUrl = URL.createObjectURL(file)
+    const input = new Input({
+        formats: ALL_FORMATS,
+        source: new BlobSource(file),
+    })
+
     try {
-        const video = document.createElement('video')
-        video.muted = true
-        video.preload = 'metadata'
-        video.src = videoUrl
+        const videoTrack = await input.getPrimaryVideoTrack()
+        if (!videoTrack) throw new Error('no_primary_video_track')
 
-        await once(video, 'loadedmetadata', () => new Error('video_error'))
+        const startTimestamp = await videoTrack.getFirstTimestamp()
+        const endTimestamp = await videoTrack.computeDuration()
 
-        const seekTarget = video.duration < 0.1 ? video.duration : 0.1
-        try {
-            video.currentTime = seekTarget
-        } catch {}
-        await once(video, 'seeked', () => new Error('video_error'))
+        const safeStart = Math.max(0, startTimestamp)
+        const safeEnd = Math.max(safeStart, endTimestamp)
+        const duration = safeEnd - safeStart
 
-        const oriented = document.createElement('canvas')
-        const { width, height } = drawRotatedToCanvas(video, oriented, dominantOrientation)
+        const timestamp = safeStart + Math.min(0.1, Math.max(0, duration))
 
-        const scale = Math.min(1, THUMB_TARGET_W / width)
-        const outWidth = Math.max(1, Math.floor(width * scale))
-        const outHeight = Math.max(1, Math.floor(height * scale))
+        const sink = new CanvasSink(videoTrack, {
+            width: THUMB_TARGET_W,
+            rotation: quantizeOrientation(dominantOrientation),
+        })
 
-        const canvas = document.createElement('canvas')
-        canvas.width = outWidth
-        canvas.height = outHeight
-        const ctx = canvas.getContext('2d')!
-        ctx.imageSmoothingEnabled = true
-        ctx.imageSmoothingQuality = 'high'
-        ctx.drawImage(oriented, 0, 0, outWidth, outHeight)
+        const wrapped = await sink.getCanvas(timestamp)
+        if (!wrapped) throw new Error('thumbnail_frame_null')
 
-        return canvasToBlob(canvas, THUMB_MIME, THUMB_QUALITY)
+        return canvasLikeToBlob(wrapped.canvas as any, THUMB_MIME, THUMB_QUALITY)
     } finally {
-        URL.revokeObjectURL(videoUrl)
+        input.dispose()
     }
 }
 
