@@ -449,21 +449,18 @@ export const Player: React.FC<Props> = ({
 
     const onClick = React.useCallback(() => {
         if (drawMode) return
-        const p0 = player
-        if (!p0 || hoveredTrackId == null || p0.mode !== 'overview') {
+        if (!player || hoveredTrackId == null || player.mode !== 'overview') {
             setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
             return
         }
 
-        const trackId = hoveredTrackId
-        trackEvent('surfer_clicked', { track_id: trackId })
-        const range = p0.getTrackFrameRange(trackId)
-        if (!range) {
+        trackEvent('surfer_clicked', { track_id: hoveredTrackId })
+        const active = player.isTrackActiveAtFrame(hoveredTrackId, webPlayer.currentFrameIndex)
+        if (active) {
+            setPlayer(p => (p ? p.copy({ mode: 'detailed', currentTrackId: hoveredTrackId }) : p))
+        } else {
             setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
-            return
         }
-
-        setPlayer(p => (p ? p.copy({ mode: 'detailed', currentTrackId: trackId }) : p))
     }, [drawMode, player, hoveredTrackId])
 
     const exportVisible = !!player && player.mode === 'detailed' && player.currentTrackId != null

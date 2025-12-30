@@ -77,12 +77,6 @@ export class PlayerState {
         return null
     }
 
-    getDetectionAtFrameRequired(trackId: number, frameIndex: number): TrackDetection {
-        const det = this.getDetectionAtFrame(trackId, frameIndex)
-        if (!det) throw new Error(`Missing detection for track ${trackId} at frame ${frameIndex}.`)
-        return det
-    }
-
     getClosestDetectionAtFrame(trackId: number, frameIndex: number): TrackDetection {
         assert(frameIndex >= 0 && frameIndex < this.frameCount, 'Invalid frame index')
         const track = this.getTrackById(trackId)

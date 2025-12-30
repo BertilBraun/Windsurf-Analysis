@@ -268,8 +268,8 @@ function drawStabilizationTransforms(
             const si = player.getStabilizationAtFrame(tFrame)
             const vx = sScale * si.dx
             const vy = sScale * si.dy
-            const px = cx + (vx - vx0) - 300
-            const py = cy + (vy - vy0) - 300
+            const px = cx + (vx - vx0)
+            const py = cy + (vy - vy0)
             pts.push({ x: px, y: py })
         }
         if (pts.length >= 2) {
@@ -338,14 +338,15 @@ export function drawFrame(
         ctx.imageSmoothingQuality = 'high'
         ctx.drawImage(offscreen, -rotatedVideo.width * 0.5, -rotatedVideo.height * 0.5)
 
-        if (false) {
+        if (true) {
+            // TODO false
             drawStabilizationTransforms(ctx, player, nowFrame, sBase, cx, cy)
         }
 
         // Draw detections under same transform
         for (const t of player.tracks) {
             const isHovered = ov.hoveredTrackId === t.track_id
-            if (!isHovered) continue
+            // TODO if (!isHovered) continue
 
             const det = player.getDetectionAtFrame(t.track_id, nowFrame)
             if (!det) continue
@@ -364,33 +365,15 @@ export function drawFrame(
         }
         ctx.restore()
     } else if (player.mode === 'detailed' && player.currentTrackId != null) {
-        // Detailed mode should only crop when the track is active at this frame.
-        // If the user enters detailed mode while the track isn't active (or while we're transitioning),
-        // fall back to full-frame rendering for this frame.
-        if (!player.isTrackActiveAtFrame(player.currentTrackId, nowFrame)) {
-            drawDetailedCrop(
-                ctx,
-                cssW,
-                cssH,
-                sourceCanvas,
-                rotatedVideo.width,
-                rotatedVideo.height,
-                null,
-                ov.detailedZoom ?? 1
-            )
-            return
-        }
-
-        const det = player.getDetectionAtFrameRequired(player.currentTrackId, nowFrame)
+        const det = player.getClosestDetectionAtFrame(player.currentTrackId, nowFrame)
 
         const vidW = rotatedVideo.width
         const vidH = rotatedVideo.height
         // Reuse shared crop-draw logic (same as export path).
         const zMul = ov.detailedZoom ?? 1
-        const detTimed: TimedBBox | null = det ? { time_percent: det.time_percent, bbox: det.bbox } : null
-        drawDetailedCrop(ctx, cssW, cssH, sourceCanvas, vidW, vidH, detTimed, zMul)
-        if (detTimed && annotations.length > 0) {
-            drawAnnotationsDetailed(ctx, annotations, cssW, cssH, vidW, vidH, detTimed, zMul)
+        drawDetailedCrop(ctx, cssW, cssH, sourceCanvas, vidW, vidH, det, zMul)
+        if (annotations.length > 0) {
+            drawAnnotationsDetailed(ctx, annotations, cssW, cssH, vidW, vidH, det, zMul)
         }
     }
 }
@@ -436,10 +419,8 @@ export function screenPointToVideoNorm(
     }
 
     if (player.mode === 'detailed' && player.currentTrackId != null) {
-        if (!player.isTrackActiveAtFrame(player.currentTrackId, frameIndex)) return null
-        const det = player.getDetectionAtFrameRequired(player.currentTrackId, frameIndex)
-        const detTimed: TimedBBox = { time_percent: det.time_percent, bbox: det.bbox }
-        const params = getDetailedCropParams(outW, outH, width, height, detTimed, ov.detailedZoom ?? 1)
+        const det = player.getClosestDetectionAtFrame(player.currentTrackId, frameIndex)
+        const params = getDetailedCropParams(outW, outH, width, height, det, ov.detailedZoom ?? 1)
         if (px < params.dstX1 || px > params.dstX2 || py < params.dstY1 || py > params.dstY2) return null
         const vx = params.winX1 + px / params.s
         const vy = params.winY1 + py / params.s
