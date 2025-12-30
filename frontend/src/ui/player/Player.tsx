@@ -180,7 +180,7 @@ export const Player: React.FC<Props> = ({
             const goToTrack = (track: Track) => {
                 const n = webPlayer.frameCount
                 if (!player || n <= 0) return
-                const startFrame = clamp(Math.round(track.start_percent * n), 0, n - 1)
+                const startFrame = player.frameIndexForPercent(track.start_percent)
                 setPlayer(p => (p ? p.copy({ mode: 'detailed', currentTrackId: track.track_id }) : p))
                 seekToFrame(startFrame, webPlayer.playing)
             }
@@ -196,10 +196,12 @@ export const Player: React.FC<Props> = ({
                 const currentFrame = webPlayer.currentFrameIndex
                 const n = webPlayer.frameCount
                 if (forward) {
-                    const track = tracks.find(t0 => Math.round(t0.start_percent * n) > currentFrame)
+                    const track = tracks.find(t0 => player.frameIndexForPercent(t0.start_percent) > currentFrame)
                     goToTrack(track ?? tracks[0])
                 } else {
-                    const track = [...tracks].reverse().find(t0 => Math.round(t0.start_percent * n) < currentFrame)
+                    const track = [...tracks]
+                        .reverse()
+                        .find(t0 => player.frameIndexForPercent(t0.start_percent) < currentFrame)
                     goToTrack(track ?? tracks[tracks.length - 1])
                 }
             }
@@ -561,7 +563,7 @@ export const Player: React.FC<Props> = ({
                 <div className="px-3 py-2 bg-black/60 border-t border-gray-700">
                     <div className="mb-2">
                         <Timeline
-                            onSeekPercent={p => seekToFrame(Math.round(p * webPlayer.frameCount), false)}
+                            onSeekPercent={p => seekToFrame(player.frameIndexForPercent(p), false)}
                             currentProgressPercent={webPlayer.currentPercent}
                         />
                     </div>

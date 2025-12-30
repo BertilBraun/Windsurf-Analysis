@@ -14,7 +14,7 @@ type PlayerStateInit = {
 export class PlayerState {
     mode: PlayerMode
     currentTrackId: number | null
-    frameCount: number
+    frameCount: number // this is the total frame count of the video - it will always be >0
     tracks: Track[]
 
     private stabilizationByFrame: Array<{ dx: number; dy: number; da: number }>
@@ -64,12 +64,12 @@ export class PlayerState {
         assert(frameIndex >= 0 && frameIndex < this.frameCount, 'Invalid frame index')
         const track = this.getTrackById(trackId)
         const detections = track.detections
-        // Binary search for the detection at the frame index where math.round(detection.time_percent * (this.frameCount - 1)) equals frameIndex
+        // Binary search for the detection at the frame index where frameIndexForPercent(detection.time_percent) equals frameIndex
         let lo = 0
         let hi = detections.length - 1
         while (lo <= hi) {
             const mid = Math.floor((lo + hi) / 2)
-            const midFrameIndex = Math.round(detections[mid]!.time_percent * this.frameCount)
+            const midFrameIndex = this.frameIndexForPercent(detections[mid]!.time_percent)
             if (midFrameIndex === frameIndex) return detections[mid]
             if (midFrameIndex < frameIndex) lo = mid + 1
             else hi = mid - 1
@@ -85,8 +85,8 @@ export class PlayerState {
 
     getTrackFrameRange(trackId: number): { startFrameIndex: number; endFrameIndex: number } {
         const track = this.getTrackById(trackId)
-        const startFrameIndex = clampInt(Math.round(track.start_percent * this.frameCount), 0, this.frameCount - 1)
-        const endFrameIndex = clampInt(Math.round(track.end_percent * this.frameCount), 0, this.frameCount - 1)
+        const startFrameIndex = this.frameIndexForPercent(track.start_percent)
+        const endFrameIndex = this.frameIndexForPercent(track.end_percent)
         return { startFrameIndex, endFrameIndex }
     }
 
@@ -100,6 +100,11 @@ export class PlayerState {
         const track = this.tracks.find(track => track.track_id === trackId)
         assert(track !== undefined, 'Track not found for id ${trackId}')
         return track!
+    }
+
+    frameIndexForPercent(percent: number): number {
+        assert(percent >= 0 && percent <= 1, 'Invalid percent')
+        return clampInt(Math.round(percent * this.frameCount), 0, this.frameCount - 1)
     }
 }
 
