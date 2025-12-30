@@ -77,30 +77,28 @@ async function generateThumbnailBlobFromVideo(file: File, dominantOrientation: n
 
         await once(video, 'loadedmetadata', () => new Error('video_error'))
 
-        const seekTarget = Math.min(0.1, (video.duration || 1) - 0.1)
+        const seekTarget = video.duration < 0.1 ? video.duration : 0.1
         try {
             video.currentTime = seekTarget
         } catch {}
         await once(video, 'seeked', () => new Error('video_error'))
 
         const oriented = document.createElement('canvas')
-        drawRotatedToCanvas(video, oriented, dominantOrientation)
+        const { width, height } = drawRotatedToCanvas(video, oriented, dominantOrientation)
 
-        const w = Math.max(1, oriented.width)
-        const h = Math.max(1, oriented.height)
-        const scale = Math.min(1, THUMB_TARGET_W / w)
-        const outW = Math.max(1, Math.floor(w * scale))
-        const outH = Math.max(1, Math.floor(h * scale))
+        const scale = Math.min(1, THUMB_TARGET_W / width)
+        const outWidth = Math.max(1, Math.floor(width * scale))
+        const outHeight = Math.max(1, Math.floor(height * scale))
 
         const canvas = document.createElement('canvas')
-        canvas.width = outW
-        canvas.height = outH
+        canvas.width = outWidth
+        canvas.height = outHeight
         const ctx = canvas.getContext('2d')!
         ctx.imageSmoothingEnabled = true
         ctx.imageSmoothingQuality = 'high'
-        ctx.drawImage(oriented, 0, 0, outW, outH)
-        const blob = await canvasToBlob(canvas, THUMB_MIME, THUMB_QUALITY)
-        return blob
+        ctx.drawImage(oriented, 0, 0, outWidth, outHeight)
+
+        return canvasToBlob(canvas, THUMB_MIME, THUMB_QUALITY)
     } finally {
         URL.revokeObjectURL(videoUrl)
     }
