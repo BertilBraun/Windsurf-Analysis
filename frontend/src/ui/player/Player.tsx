@@ -83,6 +83,7 @@ export const Player: React.FC<Props> = ({
                 webPlayer.currentFrameIndex,
                 {
                     zoom,
+                    detailedZoom: detailedZoom.value,
                     offsetX: offset.x,
                     offsetY: offset.y,
                     hoveredTrackId,
@@ -90,7 +91,16 @@ export const Player: React.FC<Props> = ({
                 job.dominant_orientation
             )
         },
-        [player, zoom, offset.x, offset.y, hoveredTrackId, job.dominant_orientation, webPlayer.currentFrameIndex]
+        [
+            player,
+            zoom,
+            detailedZoom.value,
+            offset.x,
+            offset.y,
+            hoveredTrackId,
+            job.dominant_orientation,
+            webPlayer.currentFrameIndex,
+        ]
     )
 
     const annotations = useAnnotations(getDrawPoint, {
