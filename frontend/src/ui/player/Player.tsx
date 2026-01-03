@@ -459,7 +459,14 @@ export const Player: React.FC<Props> = ({
 
     const onClick = React.useCallback(() => {
         if (drawMode) return
-        if (!player || hoveredTrackId == null || player.mode !== 'overview') {
+        if (!player) return
+
+        if (player.mode === 'overview' && hoveredTrackId == null) {
+            webPlayer.pause()
+            return
+        }
+
+        if (player.mode !== 'overview' || hoveredTrackId == null) {
             setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
             return
         }
@@ -475,7 +482,7 @@ export const Player: React.FC<Props> = ({
         } else {
             setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
         }
-    }, [drawMode, focusedClickHintDismissed, hoveredTrackId, player, webPlayer.currentFrameIndex])
+    }, [drawMode, focusedClickHintDismissed, hoveredTrackId, player, webPlayer.currentFrameIndex, webPlayer.pause])
 
     const exportVisible = !!player && player.mode === 'detailed' && player.currentTrackId != null
     const exportEnabled = exportVisible && !isExporting

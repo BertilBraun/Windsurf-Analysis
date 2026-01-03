@@ -27,6 +27,7 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     stepKeys,
 }) => {
     const { t } = useTranslation()
+    const canClose = !!ingressFolderName
     const steps: Step[] = React.useMemo(
         () => [
             {
@@ -223,7 +224,10 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     return (
         <>
             <Modal
-                onClose={onClose}
+                onClose={canClose ? onClose : undefined}
+                closeOnBackdropClick={canClose}
+                closeOnEscape={canClose}
+                showCloseButton={canClose}
                 title={t('components.analyzerTutorialModal.title')}
                 contentClassName="rounded-2xl border border-slate-200 bg-white shadow-xl w-[760px] max-w-[96vw]"
                 additionalHeader={
@@ -266,7 +270,13 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                                 text={t('common.next')}
                             />
                         ) : (
-                            <Button variant="primary" size="sm" onClick={onClose} text={t('common.done')} />
+                            <Button
+                                variant="primary"
+                                size="sm"
+                                disabled={!canClose}
+                                onClick={canClose ? onClose : undefined}
+                                text={t('common.done')}
+                            />
                         )}
                     </div>
                 </div>

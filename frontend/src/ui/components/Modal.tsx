@@ -12,6 +12,9 @@ export type ModalProps = {
     title?: string
     headerClassName?: string
     hideHeader?: boolean
+    closeOnBackdropClick?: boolean
+    closeOnEscape?: boolean
+    showCloseButton?: boolean
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -24,6 +27,9 @@ export const Modal: React.FC<ModalProps> = ({
     title,
     headerClassName,
     hideHeader,
+    closeOnBackdropClick = true,
+    closeOnEscape = true,
+    showCloseButton = true,
 }) => {
     const { t } = useTranslation()
     const defaultContent = 'rounded-2xl border border-slate-200 bg-white shadow-xl'
@@ -32,13 +38,29 @@ export const Modal: React.FC<ModalProps> = ({
     React.useEffect(() => {
         contentRef.current?.focus?.()
     }, [])
+
+    React.useEffect(() => {
+        if (!onClose) return
+        if (!closeOnEscape) return
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== 'Escape') return
+            e.preventDefault()
+            onClose()
+        }
+        document.addEventListener('keydown', onKeyDown)
+        return () => document.removeEventListener('keydown', onKeyDown)
+    }, [closeOnEscape, onClose])
+
     return (
         <div
             className={`fixed inset-0 z-50 flex items-center justify-center ${containerClassName || ''}`}
             role="dialog"
             aria-modal="true"
         >
-            <div className={`absolute inset-0 ${backdropClassName || 'bg-black/60'}`} onClick={onClose} />
+            <div
+                className={`absolute inset-0 ${backdropClassName || 'bg-black/60'}`}
+                onClick={closeOnBackdropClick ? onClose : undefined}
+            />
             <div
                 className={`relative z-10 ${contentClasses}`}
                 onClick={e => e.stopPropagation()}
@@ -54,7 +76,7 @@ export const Modal: React.FC<ModalProps> = ({
                         <div className="font-semibold text-slate-900">{title}</div>
                         <div className="flex-1" />
                         {additionalHeader}
-                        {onClose && (
+                        {onClose && showCloseButton && (
                             <Button size="sm" variant="ghost" onClick={onClose} text={t('components.modal.close')} />
                         )}
                     </div>
