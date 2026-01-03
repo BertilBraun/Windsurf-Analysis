@@ -52,16 +52,11 @@ async function assertVideoWithinMaxFrames(file: File, maxFrames: number): Promis
         const videoTrack = await input.getPrimaryVideoTrack()
         if (!videoTrack) throw new Error('No video track found.')
 
-        const sink = new VideoSampleSink(videoTrack)
-        let frames = 0
-        for await (const sample of sink.samples()) {
-            try {
-                frames++
-                if (frames > maxFrames) throw new Error('Video too long')
-            } finally {
-                sample.close()
-            }
-        }
+        const duration = await videoTrack.computeDuration()
+        const packetStats = await videoTrack.computePacketStats(100)
+        const averageFrameRate = packetStats.averagePacketRate
+        const totalFrames = duration * averageFrameRate
+        if (totalFrames > maxFrames) throw new Error('Video too long')
     } finally {
         try {
             input.dispose()
