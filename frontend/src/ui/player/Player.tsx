@@ -462,7 +462,8 @@ export const Player: React.FC<Props> = ({
         if (!player) return
 
         if (player.mode === 'overview' && hoveredTrackId == null) {
-            webPlayer.pause()
+            if (webPlayer.playing) webPlayer.pause()
+            else webPlayer.play()
             return
         }
 
@@ -482,7 +483,16 @@ export const Player: React.FC<Props> = ({
         } else {
             setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
         }
-    }, [drawMode, focusedClickHintDismissed, hoveredTrackId, player, webPlayer.currentFrameIndex, webPlayer.pause])
+    }, [
+        drawMode,
+        focusedClickHintDismissed,
+        hoveredTrackId,
+        player,
+        webPlayer.currentFrameIndex,
+        webPlayer.pause,
+        webPlayer.play,
+        webPlayer.playing,
+    ])
 
     const exportVisible = !!player && player.mode === 'detailed' && player.currentTrackId != null
     const exportEnabled = exportVisible && !isExporting
