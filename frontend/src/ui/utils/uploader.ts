@@ -1,5 +1,5 @@
 import { modalUrl } from '../../firebase'
-import { getVideoTrack } from '../hooks/useVideoFps'
+import { ALL_FORMATS, BlobSource, Input, VideoSampleSink } from 'mediabunny'
 import { UploadQuality } from '../types'
 import { trackEvent } from './analytics'
 import { computeSha256 } from './localFileIndex'
@@ -13,6 +13,7 @@ const MODAL_BASE = modalUrl + '/api/v1'
 
 const MAX_PARALLEL_UPLOAD_REQUESTS = 16
 const MAX_PARALLEL_VIDEO_UPLOADS = 3
+const MAX_FRAMES = 30 * 60 * 3 // 3 minutes at 30fps
 
 function createLimiter(max: number) {
     const waiters: Array<() => void> = []
@@ -44,6 +45,29 @@ function createLimiter(max: number) {
 
 const acquireUploadSlot = createLimiter(MAX_PARALLEL_UPLOAD_REQUESTS)
 const acquireVideoUploadSlot = createLimiter(MAX_PARALLEL_VIDEO_UPLOADS)
+
+async function assertVideoWithinMaxFrames(file: File, maxFrames: number): Promise<void> {
+    const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS })
+    try {
+        const videoTrack = await input.getPrimaryVideoTrack()
+        if (!videoTrack) throw new Error('No video track found.')
+
+        const sink = new VideoSampleSink(videoTrack)
+        let frames = 0
+        for await (const sample of sink.samples()) {
+            try {
+                frames++
+                if (frames > maxFrames) throw new Error('Video too long')
+            } finally {
+                sample.close()
+            }
+        }
+    } finally {
+        try {
+            input.dispose()
+        } catch {}
+    }
+}
 
 export async function doXhrUpload(
     url: string,
@@ -120,11 +144,8 @@ export async function uploadVideoFile(params: {
         quality,
     })
 
-    // get number of frames of the video and skip if longer than MAX_FRAMES
-    const video = await getVideoTrack(file)
-    const frameCount = video?.FrameCount
-    const MAX_FRAMES = 30 * 60 * 3 // 3 minutes at 30fps
-    if (!frameCount || frameCount > MAX_FRAMES) throw new Error('Video too long')
+    // Limit upload length by counting demuxed video samples.
+    await assertVideoWithinMaxFrames(file, MAX_FRAMES)
 
     const sha256 = precomputedSha256 || (await computeSha256(file)).sha256
     const created = await createJobForChecksum(sha256, ctx)
