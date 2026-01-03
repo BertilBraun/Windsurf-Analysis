@@ -4,8 +4,11 @@ import { useIngressScanner } from '../hooks/useIngressScanner'
 import type { IngressUploadItem, IngressUploadStatus } from '../hooks/useIngressScanner'
 import type { UploadContext } from '../utils/uploader'
 import { clamp } from '../utils/clamp'
+import { loadSetting, saveSetting } from '../utils/idb'
 import { Modal } from './Modal'
 import { Button } from './Button'
+
+const WATCH_FOLDER_AUTO_EXPANDED_KEY = 'watchFolder.widget.autoExpandedOnFirstVideo.v1'
 
 type Props = {
     dirHandle: FileSystemDirectoryHandle | null
@@ -62,11 +65,31 @@ export const IngressWidget: React.FC<Props> = ({
     const scanner = useIngressScanner(dirHandle, uploadCtx, knownChecksumsSha256, pendingChecksumsSha256, enabled)
     const [expanded, setExpanded] = React.useState(false)
     const [showQuotaModal, setShowQuotaModal] = React.useState(false)
+    const [autoExpandedOnce, setAutoExpandedOnce] = React.useState<boolean>(false)
     const panelRef = React.useRef<HTMLDivElement | null>(null)
+
+    React.useEffect(() => {
+        loadSetting<boolean>(WATCH_FOLDER_AUTO_EXPANDED_KEY).then(saved => {
+            setAutoExpandedOnce(!!saved)
+        })
+    }, [])
 
     React.useEffect(() => {
         if (scanner.lastError?.toLowerCase().includes('quota')) setShowQuotaModal(true)
     }, [scanner.lastError])
+
+    React.useEffect(() => {
+        if (scanner.lastError) {
+            setExpanded(true)
+            return
+        }
+
+        if (autoExpandedOnce) return
+        if (scanner.uploads.length === 0) return
+        setExpanded(true)
+        setAutoExpandedOnce(true)
+        void saveSetting(WATCH_FOLDER_AUTO_EXPANDED_KEY, true)
+    }, [autoExpandedOnce, scanner.lastError, scanner.uploads.length])
 
     React.useEffect(() => {
         if (!expanded) return
