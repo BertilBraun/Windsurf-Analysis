@@ -356,7 +356,7 @@ export function drawFrame(
             const w = Math.max(1, (x2p - x1p) * rotatedVideo.width)
             const h = Math.max(1, (y2p - y1p) * rotatedVideo.height)
 
-            ctx.strokeStyle = 'rgba(148, 163, 184, 0.95)'
+            ctx.strokeStyle = '#10b981'
             ctx.lineWidth = 2 / sBase
             ctx.strokeRect(Math.round(x1) + 0.5, Math.round(y1) + 0.5, Math.round(w), Math.round(h))
         }
