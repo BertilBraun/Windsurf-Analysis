@@ -462,8 +462,13 @@ export const Player: React.FC<Props> = ({
         if (!player) return
 
         if (player.mode === 'overview' && hoveredTrackId == null) {
-            if (webPlayer.playing) webPlayer.pause()
-            else webPlayer.play()
+            if (webPlayer.playing) {
+                webPlayer.pause()
+            } else if (webPlayer.ended || (webPlayer.frameCount > 0 && webPlayer.currentFrameIndex >= webPlayer.frameCount - 1)) {
+                void webPlayer.seekFrame(0, true)
+            } else {
+                webPlayer.play()
+            }
             return
         }
 
@@ -489,9 +494,12 @@ export const Player: React.FC<Props> = ({
         hoveredTrackId,
         player,
         webPlayer.currentFrameIndex,
+        webPlayer.ended,
+        webPlayer.frameCount,
         webPlayer.pause,
         webPlayer.play,
         webPlayer.playing,
+        webPlayer.seekFrame,
     ])
 
     const exportVisible = !!player && player.mode === 'detailed' && player.currentTrackId != null
