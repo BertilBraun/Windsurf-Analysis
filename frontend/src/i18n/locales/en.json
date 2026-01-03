@@ -368,6 +368,9 @@
                 "focused": "Focused view",
                 "overview": "Overview"
             },
+            "hints": {
+                "clickRiderFocused": "Click a rider to switch to Focused view"
+            },
             "export": {
                 "errorLabel": "Export: {{message}}",
                 "errors": {

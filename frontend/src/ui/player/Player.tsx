@@ -9,11 +9,14 @@ import { useCappedValue } from '../hooks/useCappedValue'
 import { usePlaybackSpeed } from '../hooks/usePlaybackSpeed'
 import { clamp } from '../utils/clamp'
 import { trackEvent } from '../utils/analytics'
+import { loadSetting, saveSetting } from '../utils/idb'
 import { buildExportFilename, downloadExport, exportTrackMp4 } from './export'
 import { useJobVideoSource } from './useJobVideoSource'
 import { drawFrame, pickTrackAtScreenPoint, screenPointToVideoNorm } from './rendering'
 import { useAnnotations } from './useAnnotations'
 import { useWebCodexPlayer } from './useWebCodexPlayer'
+
+const PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY = 'player.focusedClickHintDismissed.v1'
 
 type Props = {
     job: JobDetail
@@ -47,6 +50,7 @@ export const Player: React.FC<Props> = ({
     const [hoveredTrackId, setHoveredTrackId] = React.useState<number | null>(null)
     const [isExporting, setIsExporting] = React.useState<boolean>(false)
     const [exportProgressPct, setExportProgressPct] = React.useState<number | null>(null)
+    const [focusedClickHintDismissed, setFocusedClickHintDismissed] = React.useState<boolean>(false)
 
     const { sourceFile, fileMissing, error } = useJobVideoSource({ job, dirHandle })
     const errorText = error ? t(error.key, { message: error.detail }) : null
@@ -109,6 +113,12 @@ export const Player: React.FC<Props> = ({
         isPlaying: webPlayer.playing,
         currentFrameIndex: webPlayer.currentFrameIndex,
     })
+
+    React.useEffect(() => {
+        loadSetting<boolean>(PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY).then(saved => {
+            setFocusedClickHintDismissed(!!saved)
+        })
+    }, [])
 
     React.useEffect(() => {
         trackEvent('player_open', { job_id: job.id })
@@ -457,11 +467,15 @@ export const Player: React.FC<Props> = ({
         trackEvent('surfer_clicked', { track_id: hoveredTrackId })
         const active = player.isTrackActiveAtFrame(hoveredTrackId, webPlayer.currentFrameIndex)
         if (active) {
+            if (!focusedClickHintDismissed) {
+                setFocusedClickHintDismissed(true)
+                void saveSetting(PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY, true)
+            }
             setPlayer(p => (p ? p.copy({ mode: 'detailed', currentTrackId: hoveredTrackId }) : p))
         } else {
             setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
         }
-    }, [drawMode, player, hoveredTrackId])
+    }, [drawMode, focusedClickHintDismissed, hoveredTrackId, player, webPlayer.currentFrameIndex])
 
     const exportVisible = !!player && player.mode === 'detailed' && player.currentTrackId != null
     const exportEnabled = exportVisible && !isExporting
@@ -525,6 +539,11 @@ export const Player: React.FC<Props> = ({
         return t('player.canvas.modeIndicator.overview')
     }, [drawMode, player?.mode, t])
 
+    const showFocusedClickHint = !drawMode && player?.mode === 'overview' && !focusedClickHintDismissed
+
+    const canvasCursorClass =
+        drawMode ? 'cursor-crosshair' : !drawMode && player?.mode === 'overview' && hoveredTrackId != null ? 'cursor-pointer' : ''
+
     return (
         <div className="relative flex flex-col h-full">
             <div className="relative flex-1 bg-black overflow-hidden">
@@ -533,6 +552,13 @@ export const Player: React.FC<Props> = ({
                         {modeIndicatorLabel}
                     </div>
                 </div>
+                {showFocusedClickHint && (
+                    <div className="absolute left-1/2 top-10 -translate-x-1/2 z-20 pointer-events-none">
+                        <div className="px-3 py-2 rounded-md bg-black/70 border border-gray-700 text-gray-100 text-xs">
+                            {t('player.canvas.hints.clickRiderFocused')}
+                        </div>
+                    </div>
+                )}
                 {errorText && <div className="absolute left-2 top-2 text-red-500 text-sm">{errorText}</div>}
                 {webPlayer.error && (
                     <div className="absolute left-2 top-7 right-2 text-red-400 text-xs whitespace-pre-wrap break-words">
@@ -562,7 +588,7 @@ export const Player: React.FC<Props> = ({
                 <div ref={containerRef} className="absolute inset-0">
                     <canvas
                         ref={canvasRef}
-                        className={`absolute inset-0 block ${drawMode ? 'cursor-crosshair' : ''}`}
+                        className={`absolute inset-0 block ${canvasCursorClass}`}
                         onWheel={onWheelCanvas}
                         onMouseMove={onMouseMove}
                         onMouseLeave={() => setHoveredTrackId(null)}
