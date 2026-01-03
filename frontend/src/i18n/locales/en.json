@@ -294,7 +294,7 @@
                 },
                 "report": {
                     "label": "Report",
-                    "title": "Report an issue with this analysis"
+                    "title": "Report a problem in this video"
                 },
                 "shortcuts": {
                     "label": "Shortcuts",
@@ -315,11 +315,11 @@
                 "processingTitle": "Sending report\u2026",
                 "send": "Send report",
                 "sending": "Sending report\u2026",
-                "subtitle": "Help us improve the analysis quality for <strong>{{target}}</strong>.",
+                "subtitle": "Help us improve tracking and detection for this video.",
                 "thanksBody": "Thanks for your feedback. We will use it to improve the analyzer.",
                 "thanksTitle": "Thanks for your feedback!",
                 "tip": "Tip: include an approximate timestamp if you can.",
-                "title": "Report an issue"
+                "title": "Report a problem in this video"
             }
         },
         "settingsModal": {
@@ -444,7 +444,7 @@
             "feedback": {
                 "body": "Thanks for testing the beta. We'd love to hear what you think so we can improve it.",
                 "errorNoJob": "We couldn't find a processed job to attach this feedback to.",
-                "placeholder": "What did you like? What was confusing or missing?",
+                "placeholder": "What worked well?\nWhat was confusing or missing?",
                 "send": "Send feedback",
                 "title": "We'd love your feedback"
             },
