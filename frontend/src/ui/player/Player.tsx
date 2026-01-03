@@ -519,9 +519,20 @@ export const Player: React.FC<Props> = ({
         }
     }, [isExporting, job.dominant_orientation, job.id, job.local_relative_path, player, sourceFile, t])
 
+    const modeIndicatorLabel = React.useMemo(() => {
+        if (drawMode) return t('player.canvas.modeIndicator.draw')
+        if (player?.mode === 'detailed') return t('player.canvas.modeIndicator.focused')
+        return t('player.canvas.modeIndicator.overview')
+    }, [drawMode, player?.mode, t])
+
     return (
         <div className="relative flex flex-col h-full">
             <div className="relative flex-1 bg-black overflow-hidden">
+                <div className="absolute right-2 top-2 z-20 pointer-events-none">
+                    <div className="px-2 py-1 rounded-md bg-black/60 border border-gray-700 text-gray-100 text-[11px] font-medium">
+                        {modeIndicatorLabel}
+                    </div>
+                </div>
                 {errorText && <div className="absolute left-2 top-2 text-red-500 text-sm">{errorText}</div>}
                 {webPlayer.error && (
                     <div className="absolute left-2 top-7 right-2 text-red-400 text-xs whitespace-pre-wrap break-words">

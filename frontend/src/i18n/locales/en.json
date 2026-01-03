@@ -363,6 +363,11 @@
                 "missingMapping": "Missing local mapping for file",
                 "noIngressFolder": "No ingress folder selected"
             },
+            "modeIndicator": {
+                "draw": "Draw mode",
+                "focused": "Focused view",
+                "overview": "Overview"
+            },
             "export": {
                 "errorLabel": "Export: {{message}}",
                 "errors": {
