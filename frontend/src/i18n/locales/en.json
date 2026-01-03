@@ -123,14 +123,14 @@
         },
         "ingressWidget": {
             "fab": {
-                "aria": "Open ingress uploads",
+                "aria": "Open watch folder",
                 "status": {
                     "error": "Error \u2014 action needed",
                     "monitoring": "Monitoring",
                     "selectFolder": "Select folder (required)",
                     "uploading": "Uploading {{count}}\u2026"
                 },
-                "title": "Ingress"
+                "title": "Watch Folder"
             },
             "issue": {
                 "ingressError": {
@@ -151,12 +151,12 @@
             },
             "leaveWarning": "Uploads are still running. If you leave now, your videos may not finish uploading.",
             "panel": {
-                "description": "Select your \u201cwindsurf analysis videos\u201d folder. GybeLock monitors it and auto-uploads new videos.",
-                "folderLabel": "Folder",
+                "description": "GybeLock watches this folder and processes new videos automatically.",
+                "folderLabel": "Watch Folder",
                 "noFolder": "No folder selected",
                 "noUploads": "No uploads right now.",
                 "permissionPending": "(permission pending)",
-                "title": "Ingress uploads",
+                "title": "Watch Folder",
                 "uploadsTitle": "Uploads"
             },
             "quota": {
@@ -169,8 +169,8 @@
                 "idle": "Idle",
                 "idleNoFolder": "Idle \u2014 no folder selected",
                 "justNow": "just now",
-                "label": "Current status: {{status}}",
-                "monitoring": "Monitoring \u2014 last scan {{time}}",
+                "label": "Status: {{status}}",
+                "monitoring": "Watching for new videos \u2014 last scan {{time}}",
                 "permissionDenied": "Permission denied",
                 "uploading": "Uploading {{count}} file(s)\u2026"
             },
