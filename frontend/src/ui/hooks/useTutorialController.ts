@@ -4,30 +4,29 @@ import { trackEvent } from '../utils/analytics'
 import type { JobDetail } from '../types'
 import type { AnalyzerTutorialModalProps } from '../components/AnalyzerTutorialModal'
 
-const ANALYZER_TUTORIAL_SEEN_KEY = 'analyzerTutorialSeen.v1'
-const ANALYZER_TUTORIAL_PROGRESS_KEY = 'analyzerTutorialProgress.v1'
+const ANALYZER_TUTORIAL_SEEN_KEY = 'analyzerTutorialSeen.v2'
+const ANALYZER_TUTORIAL_PROGRESS_KEY = 'analyzerTutorialProgress.v2'
 
 type TutorialOpenSource = 'header' | 'empty_state' | 'auto'
 
 type TutorialStepKey =
-    | 'intro'
-    | 'ingress-folder'
-    | 'drop-mp4s'
-    | 'open-video'
-    | 'review-track'
-    | 'shortcuts-export-report'
+    | 'what'
+    | 'watch-folder'
+    | 'add-videos'
+    | 'review-riding'
+    | 'review-tools'
+    | 'feedback-reports'
 
 const ALL_TUTORIAL_STEP_KEYS: TutorialStepKey[] = [
-    'intro',
-    'ingress-folder',
-    'drop-mp4s',
-    'open-video',
-    'review-track',
-    'shortcuts-export-report',
+    'what',
+    'watch-folder',
+    'add-videos',
+    'review-riding',
+    'review-tools',
+    'feedback-reports',
 ]
-const ONBOARDING_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['intro', 'ingress-folder', 'drop-mp4s']
-const OPEN_VIDEO_STEP_KEYS: TutorialStepKey[] = ['open-video']
-const PLAYER_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['review-track', 'shortcuts-export-report']
+const ONBOARDING_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['what', 'watch-folder', 'add-videos']
+const PLAYER_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['review-riding', 'review-tools', 'feedback-reports']
 
 type TutorialControllerOptions = {
     dirHandle: FileSystemDirectoryHandle | null
@@ -110,7 +109,7 @@ export const useTutorialController = ({
     React.useEffect(() => {
         loadSetting<boolean>(ANALYZER_TUTORIAL_SEEN_KEY).then(seen => {
             if (seen) return
-            openTutorial('auto', ONBOARDING_TUTORIAL_STEP_KEYS, 'intro')
+            openTutorial('auto', ONBOARDING_TUTORIAL_STEP_KEYS, 'what')
         })
     }, [openTutorial])
 
@@ -119,30 +118,17 @@ export const useTutorialController = ({
     React.useEffect(() => {
         if (!tutorialProgressLoaded) return
         if (showTutorial) return
-        if (!jobsInitialSyncComplete) return
-        if (succeededJobsCount === 0) return
-        if (tutorialSeenSteps.has('open-video')) return
-        const stepKeys = getContextualStepKeys(OPEN_VIDEO_STEP_KEYS)
-        openTutorial('auto', stepKeys, 'open-video')
-    }, [
-        getContextualStepKeys,
-        jobsInitialSyncComplete,
-        openTutorial,
-        showTutorial,
-        succeededJobsCount,
-        tutorialProgressLoaded,
-        tutorialSeenSteps,
-    ])
-
-    React.useEffect(() => {
-        if (!tutorialProgressLoaded) return
-        if (showTutorial) return
         if (!selectedJob) return
         if (hasOpenedPlayerRef.current) return
         hasOpenedPlayerRef.current = true
-        if (tutorialSeenSteps.has('review-track') && tutorialSeenSteps.has('shortcuts-export-report')) return
+        if (
+            tutorialSeenSteps.has('review-riding') &&
+            tutorialSeenSteps.has('review-tools') &&
+            tutorialSeenSteps.has('feedback-reports')
+        )
+            return
         const stepKeys = getContextualStepKeys(PLAYER_TUTORIAL_STEP_KEYS)
-        openTutorial('auto', stepKeys, 'review-track')
+        openTutorial('auto', stepKeys, 'review-riding')
     }, [getContextualStepKeys, openTutorial, selectedJob, showTutorial, tutorialProgressLoaded, tutorialSeenSteps])
 
     const tutorialModalProps: AnalyzerTutorialModalProps = React.useMemo(

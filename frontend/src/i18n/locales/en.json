@@ -29,36 +29,51 @@
             "restartTitle": "Restart tutorial",
             "stepLabel": "Step {{current}} of {{total}}",
             "steps": {
-                "drop": {
-                    "bullets": {
-                        "copy": "Copy or move your <code>.mp4</code> files into the ingress folder (<b>subfolders are fine</b>).",
-                        "detect": "GybeLock will automatically detect new files and start uploading.",
-                        "ingress": "Open <b>Ingress</b> anytime to see upload progress and errors."
-                    },
-                    "title": "2) Drop MP4s into the folder"
+                "what": {
+                    "body": "GybeLock lets you <b>drop windsurfing videos into a local folder</b>, automatically <b>processes them in the background</b>, and lets you <b>review them later in a smooth player</b>.",
+                    "bodyMuted": "Just add MP4s to your folder \u2014 GybeLock handles the rest.",
+                    "footageNote1": "Designed for shore-shot, long-zoom footage.",
+                    "footageNote2": "Not designed for GoPro or action-cam POV videos.",
+                    "title": "What GybeLock does"
                 },
-                "ingress": {
-                    "bullets": {
-                        "permission": "You will need to grant folder permission so GybeLock can keep monitoring it.",
-                        "select": "Either here or in Ingress (bottom-right), click <b>Select folder</b> and choose where you\u2019ll drop your beach-shot MP4 videos."
-                    },
-                    "current": "Current: <strong>{{name}}</strong>",
-                    "lede": "First, select a folder on your computer where you want to drop your videos. GybeLock will monitor that folder and automatically upload new MP4s you add there.",
-                    "tip": "Tip: After selecting a folder, check that it shows <b>Monitoring</b> (or uploading if you just added videos).",
-                    "title": "1) Set the ingress folder"
+                "watchFolder": {
+                    "body": "Choose a <b>local folder</b> where your windsurfing videos live. GybeLock will <b>watch this folder</b> and automatically process any new MP4s you add.",
+                    "button": "Choose Watch Folder",
+                    "currentFolder": "Current folder: {{name}}",
+                    "permissions": "Your browser will ask for permission to access this folder so GybeLock can keep watching it.",
+                    "safety": "<b>Your files are never changed, moved, or modified.</b> GybeLock only reads this folder and mirrors its structure here.",
+                    "status": "Status: Watching for new videos",
+                    "tip": "Tip: It\u2019s often easiest to <b>create a new empty folder</b> (for example \u201cWindsurf Videos\u201d) and use that.",
+                    "title": "Choose a Watch Folder"
                 },
-                "intro": {
-                    "how": {
-                        "bullets": {
-                            "ingress": "You choose an <b>ingress folder</b> on your computer.",
-                            "thumbnails": "Processed videos then appear in <b>Analyzed Videos</b> as thumbnails you can open.",
-                            "upload": "GybeLock monitors it and <b>auto-uploads</b> new MP4s you drop in."
-                        },
-                        "title": "How it works (high level)"
+                "addVideos": {
+                    "body": "Copy or move <b>MP4 videos</b> into your Watch Folder.",
+                    "muted": "Videos appear here automatically as they are processed.",
+                    "subfolders": "<b>Subfolders are supported</b> \u2014 GybeLock mirrors your folder structure exactly.",
+                    "title": "Add videos"
+                },
+                "reviewRiding": {
+                    "focused": "<b>Hover a rider and click</b> to switch to <b>Focused view</b>, where that rider stays centered and stable.",
+                    "overview": "Videos open in <b>Overview mode</b>, where the scene is stabilized and all riders stay visible.",
+                    "tip": "Tip: Use the timeline to scrub or slow down playback for frame-by-frame review.",
+                    "title": "Review your riding"
+                },
+                "reviewTools": {
+                    "bullets": {
+                        "draw": "Draw lines and shapes for coaching",
+                        "export": "Export the focused rider as a clip",
+                        "slow": "Slow down playback or step frame by frame"
                     },
-                    "lede": "GybeLock turns shaky, long-zoom beach videos into a smooth player where you can click a rider and review a focused (cropped) track.",
-                    "note": "Designed for <b>beach-shot</b> footage (shore camera, long zoom/tele). It is <b>not</b> designed for GoPro/action-cam POV footage.",
-                    "title": "What GybeLock does (and what footage works)"
+                    "title": "Review tools"
+                },
+                "feedbackReports": {
+                    "body": "Found an issue or have an idea?",
+                    "bullets": {
+                        "feedback": "Use <b>Feedback</b> for general thoughts, ideas, or missing features",
+                        "report": "Use <b>Report</b> to flag tracking or detection problems in a video"
+                    },
+                    "muted": "Even short notes are very helpful during the beta.",
+                    "title": "Feedback & reports"
                 },
                 "open": {
                     "bullets": {
@@ -82,23 +97,6 @@
                         "timeline": "Use the timeline to seek."
                     },
                     "title": "5) Review a track"
-                },
-                "tips": {
-                    "export": {
-                        "body": "<b>Export</b> saves the selected track as an MP4 to keep or share.",
-                        "title": "Export"
-                    },
-                    "report": {
-                        "body": "Spot a <b>detection</b> or <b>tracking</b> issue? Use <b>Report</b> in the player.",
-                        "note": "Beta feedback helps a lot. If possible, include a rough timestamp.",
-                        "title": "Report"
-                    },
-                    "shortcuts": {
-                        "body": "Keyboard shortcuts make review much faster. In the <b>player</b>, click <b>Shortcuts</b> to see them.",
-                        "button": "Show shortcuts",
-                        "title": "Shortcuts (highly recommended)"
-                    },
-                    "title": "Tips: shortcuts, export, report"
                 }
             },
             "title": "Analyzer Tutorial"

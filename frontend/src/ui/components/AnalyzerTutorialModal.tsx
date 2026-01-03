@@ -2,7 +2,6 @@ import React from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Modal } from './Modal'
 import { Button } from './Button'
-import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
 
 type Step = {
     key: string
@@ -28,71 +27,56 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     stepKeys,
 }) => {
     const { t } = useTranslation()
-    const [showShortcuts, setShowShortcuts] = React.useState(false)
     const steps: Step[] = React.useMemo(
         () => [
             {
-                key: 'intro',
-                title: t('components.analyzerTutorialModal.steps.intro.title'),
+                key: 'what',
+                title: t('components.analyzerTutorialModal.steps.what.title'),
                 body: (
                     <div className="space-y-3">
                         <p className="text-sm text-slate-700 leading-6">
-                            {t('components.analyzerTutorialModal.steps.intro.lede')}
-                        </p>
-                        <div className="rounded-xl border border-slate-200 bg-white p-3">
-                            <div className="text-sm font-semibold text-slate-900">
-                                {t('components.analyzerTutorialModal.steps.intro.how.title')}
-                            </div>
-                            <ul className="mt-2 list-disc pl-5 space-y-1 text-sm text-slate-700">
-                                <li>
-                                    <Trans
-                                        i18nKey="components.analyzerTutorialModal.steps.intro.how.bullets.ingress"
-                                        components={{ b: <b /> }}
-                                    />
-                                </li>
-                                <li>
-                                    <Trans
-                                        i18nKey="components.analyzerTutorialModal.steps.intro.how.bullets.upload"
-                                        components={{ b: <b /> }}
-                                    />
-                                </li>
-                                <li>
-                                    <Trans
-                                        i18nKey="components.analyzerTutorialModal.steps.intro.how.bullets.thumbnails"
-                                        components={{ b: <b /> }}
-                                    />
-                                </li>
-                            </ul>
-                        </div>
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900">
                             <Trans
-                                i18nKey="components.analyzerTutorialModal.steps.intro.note"
+                                i18nKey="components.analyzerTutorialModal.steps.what.body"
                                 components={{ b: <b /> }}
                             />
+                        </p>
+                        <div className="text-xs text-slate-500">
+                            {t('components.analyzerTutorialModal.steps.what.bodyMuted')}
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-700">
+                            <div className="text-xs text-slate-600">
+                                {t('components.analyzerTutorialModal.steps.what.footageNote1')}
+                            </div>
+                            <div className="text-xs text-slate-600">
+                                {t('components.analyzerTutorialModal.steps.what.footageNote2')}
+                            </div>
                         </div>
                     </div>
                 ),
             },
             {
-                key: 'ingress-folder',
-                title: t('components.analyzerTutorialModal.steps.ingress.title'),
+                key: 'watch-folder',
+                title: t('components.analyzerTutorialModal.steps.watchFolder.title'),
                 body: (
                     <div className="space-y-3">
                         <p className="text-sm text-slate-700 leading-6">
-                            {t('components.analyzerTutorialModal.steps.ingress.lede')}
-                        </p>
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>
-                                <Trans
-                                    i18nKey="components.analyzerTutorialModal.steps.ingress.bullets.select"
-                                    components={{ b: <b /> }}
-                                />
-                            </li>
-                            <li>{t('components.analyzerTutorialModal.steps.ingress.bullets.permission')}</li>
-                        </ul>
-                        <div className="text-xs text-slate-500">
                             <Trans
-                                i18nKey="components.analyzerTutorialModal.steps.ingress.tip"
+                                i18nKey="components.analyzerTutorialModal.steps.watchFolder.body"
+                                components={{ b: <b /> }}
+                            />
+                        </p>
+                        <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600">
+                            <Trans
+                                i18nKey="components.analyzerTutorialModal.steps.watchFolder.tip"
+                                components={{ b: <b /> }}
+                            />
+                        </div>
+                        <div className="text-sm text-slate-700 leading-6">
+                            {t('components.analyzerTutorialModal.steps.watchFolder.permissions')}
+                        </div>
+                        <div className="text-sm text-slate-700 leading-6">
+                            <Trans
+                                i18nKey="components.analyzerTutorialModal.steps.watchFolder.safety"
                                 components={{ b: <b /> }}
                             />
                         </div>
@@ -104,16 +88,19 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                                 text={
                                     ingressFolderName
                                         ? t('common.actions.changeFolder')
-                                        : t('common.actions.selectFolder')
+                                        : t('components.analyzerTutorialModal.steps.watchFolder.button')
                                 }
                             />
                             {ingressFolderName ? (
                                 <div className="text-xs text-slate-600 text-center">
-                                    <Trans
-                                        i18nKey="components.analyzerTutorialModal.steps.ingress.current"
-                                        components={{ strong: <span className="font-semibold text-slate-900" /> }}
-                                        values={{ name: ingressFolderName }}
-                                    />
+                                    <div className="font-semibold text-slate-900">
+                                        {t('components.analyzerTutorialModal.steps.watchFolder.currentFolder', {
+                                            name: ingressFolderName,
+                                        })}
+                                    </div>
+                                    <div className="text-slate-600">
+                                        {t('components.analyzerTutorialModal.steps.watchFolder.status')}
+                                    </div>
                                 </div>
                             ) : null}
                         </div>
@@ -121,114 +108,88 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                 ),
             },
             {
-                key: 'drop-mp4s',
-                title: t('components.analyzerTutorialModal.steps.drop.title'),
+                key: 'add-videos',
+                title: t('components.analyzerTutorialModal.steps.addVideos.title'),
                 body: (
                     <div className="space-y-3">
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>
-                                <Trans
-                                    i18nKey="components.analyzerTutorialModal.steps.drop.bullets.copy"
-                                    components={{
-                                        code: <code className="px-1 py-0.5 rounded bg-slate-100" />,
-                                        b: <b />,
-                                    }}
-                                />
-                            </li>
-                            <li>{t('components.analyzerTutorialModal.steps.drop.bullets.detect')}</li>
-                            <li>
-                                <Trans
-                                    i18nKey="components.analyzerTutorialModal.steps.drop.bullets.ingress"
-                                    components={{ b: <b /> }}
-                                />
-                            </li>
-                        </ul>
-                    </div>
-                ),
-            },
-            {
-                key: 'open-video',
-                title: t('components.analyzerTutorialModal.steps.open.title'),
-                body: (
-                    <div className="space-y-3">
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>
-                                <Trans
-                                    i18nKey="components.analyzerTutorialModal.steps.open.bullets.thumbnail"
-                                    components={{ b: <b /> }}
-                                />
-                            </li>
-                            <li>{t('components.analyzerTutorialModal.steps.open.bullets.click')}</li>
-                        </ul>
-                    </div>
-                ),
-            },
-            {
-                key: 'review-track',
-                title: t('components.analyzerTutorialModal.steps.review.title'),
-                body: (
-                    <div className="space-y-3">
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li>
-                                <Trans
-                                    i18nKey="components.analyzerTutorialModal.steps.review.bullets.overview"
-                                    components={{ b: <b /> }}
-                                />
-                            </li>
-                            <li>{t('components.analyzerTutorialModal.steps.review.bullets.hover')}</li>
-                            <li>{t('components.analyzerTutorialModal.steps.review.bullets.click')}</li>
-                            <li>{t('components.analyzerTutorialModal.steps.review.bullets.timeline')}</li>
-                        </ul>
-                    </div>
-                ),
-            },
-            {
-                key: 'shortcuts-export-report',
-                title: t('components.analyzerTutorialModal.steps.tips.title'),
-                body: (
-                    <div className="space-y-3">
-                        <div className="rounded-xl border border-slate-200 bg-white p-3">
-                            <div className="text-sm font-semibold text-slate-900">
-                                {t('components.analyzerTutorialModal.steps.tips.shortcuts.title')}
-                            </div>
-                            <div className="mt-1 text-sm text-slate-700">
-                                <Trans
-                                    i18nKey="components.analyzerTutorialModal.steps.tips.shortcuts.body"
-                                    components={{ b: <b /> }}
-                                />
-                            </div>
-                            <div className="mt-3">
-                                <Button
-                                    variant="secondary"
-                                    onClick={() => setShowShortcuts(true)}
-                                    text={t('components.analyzerTutorialModal.steps.tips.shortcuts.button')}
-                                />
-                            </div>
+                        <p className="text-sm text-slate-700 leading-6">
+                            <Trans
+                                i18nKey="components.analyzerTutorialModal.steps.addVideos.body"
+                                components={{ b: <b /> }}
+                            />
+                        </p>
+                        <p className="text-sm text-slate-700 leading-6">
+                            <Trans
+                                i18nKey="components.analyzerTutorialModal.steps.addVideos.subfolders"
+                                components={{ b: <b /> }}
+                            />
+                        </p>
+                        <div className="text-xs text-slate-500">
+                            {t('components.analyzerTutorialModal.steps.addVideos.muted')}
                         </div>
-                        <div className="rounded-xl border border-slate-200 bg-white p-3">
-                            <div className="text-sm font-semibold text-slate-900">
-                                {t('components.analyzerTutorialModal.steps.tips.export.title')}
-                            </div>
-                            <div className="mt-1 text-sm text-slate-700">
-                                <Trans
-                                    i18nKey="components.analyzerTutorialModal.steps.tips.export.body"
-                                    components={{ b: <b /> }}
-                                />
-                            </div>
+                    </div>
+                ),
+            },
+            {
+                key: 'review-riding',
+                title: t('components.analyzerTutorialModal.steps.reviewRiding.title'),
+                body: (
+                    <div className="space-y-3">
+                        <p className="text-sm text-slate-700 leading-6">
+                            <Trans
+                                i18nKey="components.analyzerTutorialModal.steps.reviewRiding.overview"
+                                components={{ b: <b /> }}
+                            />
+                        </p>
+                        <p className="text-sm text-slate-700 leading-6">
+                            <Trans
+                                i18nKey="components.analyzerTutorialModal.steps.reviewRiding.focused"
+                                components={{ b: <b /> }}
+                            />
+                        </p>
+                        <div className="text-xs text-slate-500">
+                            {t('components.analyzerTutorialModal.steps.reviewRiding.tip')}
                         </div>
-                        <div className="rounded-xl border border-slate-200 bg-white p-3">
-                            <div className="text-sm font-semibold text-slate-900">
-                                {t('components.analyzerTutorialModal.steps.tips.report.title')}
-                            </div>
-                            <div className="mt-1 text-sm text-slate-700">
+                    </div>
+                ),
+            },
+            {
+                key: 'review-tools',
+                title: t('components.analyzerTutorialModal.steps.reviewTools.title'),
+                body: (
+                    <div className="space-y-3">
+                        <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
+                            <li>{t('components.analyzerTutorialModal.steps.reviewTools.bullets.draw')}</li>
+                            <li>{t('components.analyzerTutorialModal.steps.reviewTools.bullets.slow')}</li>
+                            <li>{t('components.analyzerTutorialModal.steps.reviewTools.bullets.export')}</li>
+                        </ul>
+                    </div>
+                ),
+            },
+            {
+                key: 'feedback-reports',
+                title: t('components.analyzerTutorialModal.steps.feedbackReports.title'),
+                body: (
+                    <div className="space-y-3">
+                        <p className="text-sm text-slate-700 leading-6">
+                            {t('components.analyzerTutorialModal.steps.feedbackReports.body')}
+                        </p>
+                        <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
+                            <li>
                                 <Trans
-                                    i18nKey="components.analyzerTutorialModal.steps.tips.report.body"
+                                    i18nKey="components.analyzerTutorialModal.steps.feedbackReports.bullets.report"
                                     components={{ b: <b /> }}
                                 />
-                            </div>
-                            <div className="mt-2 text-xs text-slate-500">
-                                {t('components.analyzerTutorialModal.steps.tips.report.note')}
-                            </div>
+                            </li>
+                            <li>
+                                <Trans
+                                    i18nKey="components.analyzerTutorialModal.steps.feedbackReports.bullets.feedback"
+                                    components={{ b: <b /> }}
+                                />
+                            </li>
+                        </ul>
+                        <div className="text-xs text-slate-500">
+                            {t('components.analyzerTutorialModal.steps.feedbackReports.muted')}
                         </div>
                     </div>
                 ),
@@ -252,8 +213,8 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     const isFirst = safeIdx === 0
     const isLast = safeIdx === visibleSteps.length - 1
 
-    // set global style var(z-ingress-widget) to 1000 so that the ingress widget is highlighted
-    if (step.key === 'ingress-folder' || step.key === 'drop-mp4s') {
+    // Set global style var(--z-ingress-widget) so the Watch Folder widget is highlighted.
+    if (step.key === 'watch-folder') {
         document.documentElement.style.setProperty('--z-ingress-widget', '1000')
     } else {
         document.documentElement.style.setProperty('--z-ingress-widget', 'auto')
@@ -311,7 +272,6 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                 </div>
             </Modal>
 
-            {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
         </>
     )
 }
