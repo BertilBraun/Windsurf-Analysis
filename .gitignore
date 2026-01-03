@@ -20,3 +20,5 @@ test_outputs/**
 
 !server/inference/weights/**
 !.vscode/tasks.json
+
+test/**
