@@ -50,7 +50,7 @@ export const HomePage: React.FC = () => {
                     </div>
 
                     <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-                        <div className="aspect-video bg-slate-900">
+                        <div className="aspect-video bg-slate-900 relative">
                             <video
                                 key={demoVideoSrc.mp4}
                                 className="w-full h-full object-cover"
@@ -62,6 +62,11 @@ export const HomePage: React.FC = () => {
                                 <source src={demoVideoSrc.av1} type='video/mp4; codecs="av01.0.05M.08"' />
                                 <source src={demoVideoSrc.mp4} type="video/mp4" />
                             </video>
+                            <div className="absolute inset-0 pointer-events-none select-none text-white font-bold drop-shadow">
+                                <div className="absolute top-3 left-3 text-sm sm:text-base">Raw</div>
+                                <div className="absolute bottom-3 left-3 text-sm sm:text-base">Tracking</div>
+                                <div className="absolute top-3 right-3 text-sm sm:text-base">Result</div>
+                            </div>
                         </div>
                         <div className="px-4 py-3 border-b border-slate-200 grid grid-cols-2 text-sm font-semibold text-slate-700">
                             <div className="text-center">{t('screens.home.comparison.beforeLabel')}</div>
