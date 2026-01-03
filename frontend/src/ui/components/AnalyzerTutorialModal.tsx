@@ -2,6 +2,7 @@ import React from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Modal } from './Modal'
 import { Button } from './Button'
+import { Text, TextStack, TextStrong } from './Typography'
 
 type Step = {
     key: string
@@ -34,53 +35,59 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                 key: 'what',
                 title: t('components.analyzerTutorialModal.steps.what.title'),
                 body: (
-                    <div className="space-y-3">
-                        <p className="text-sm text-slate-700 leading-6">
+                    <TextStack variant="support">
+                        <Text as="p" variant="support">
                             <Trans
                                 i18nKey="components.analyzerTutorialModal.steps.what.body"
-                                components={{ b: <b /> }}
+                                components={{ b: <TextStrong /> }}
                             />
-                        </p>
-                        <div className="text-xs text-slate-500">
+                        </Text>
+                        <Text as="p" variant="support">
                             {t('components.analyzerTutorialModal.steps.what.bodyMuted')}
-                        </div>
+                        </Text>
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-700">
-                            <div className="text-xs text-slate-600">
-                                {t('components.analyzerTutorialModal.steps.what.footageNote1')}
-                            </div>
-                            <div className="text-xs text-slate-600">
-                                {t('components.analyzerTutorialModal.steps.what.footageNote2')}
-                            </div>
+                            <TextStack variant="muted" className="space-y-1">
+                                <Text as="div" variant="muted">
+                                    {t('components.analyzerTutorialModal.steps.what.footageNote1')}
+                                </Text>
+                                <Text as="div" variant="muted">
+                                    {t('components.analyzerTutorialModal.steps.what.footageNote2')}
+                                </Text>
+                            </TextStack>
                         </div>
-                    </div>
+                    </TextStack>
                 ),
             },
             {
                 key: 'watch-folder',
                 title: t('components.analyzerTutorialModal.steps.watchFolder.title'),
                 body: (
-                    <div className="space-y-3">
-                        <p className="text-sm text-slate-700 leading-6">
+                    <TextStack variant="support">
+                        <Text as="p" variant="support">
                             <Trans
                                 i18nKey="components.analyzerTutorialModal.steps.watchFolder.body"
-                                components={{ b: <b /> }}
+                                components={{ b: <TextStrong /> }}
                             />
-                        </p>
-                        <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600">
-                            <Trans
-                                i18nKey="components.analyzerTutorialModal.steps.watchFolder.tip"
-                                components={{ b: <b /> }}
-                            />
+                        </Text>
+                        <div className="rounded-xl border border-slate-200 bg-white p-3">
+                            <Text as="div" variant="muted">
+                                <Trans
+                                    i18nKey="components.analyzerTutorialModal.steps.watchFolder.tip"
+                                    components={{ b: <TextStrong /> }}
+                                />
+                            </Text>
                         </div>
-                        <div className="text-sm text-slate-700 leading-6">
-                            {t('components.analyzerTutorialModal.steps.watchFolder.permissions')}
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                            <Text as="div" variant="support" weight="semibold" className="text-amber-950">
+                                {t('components.analyzerTutorialModal.steps.watchFolder.permissions')}
+                            </Text>
                         </div>
-                        <div className="text-sm text-slate-700 leading-6">
+                        <Text as="div" variant="support">
                             <Trans
                                 i18nKey="components.analyzerTutorialModal.steps.watchFolder.safety"
-                                components={{ b: <b /> }}
+                                components={{ b: <TextStrong /> }}
                             />
-                        </div>
+                        </Text>
 
                         <div className="pt-2 flex flex-col items-center gap-2">
                             <Button
@@ -93,42 +100,42 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                                 }
                             />
                             {ingressFolderName ? (
-                                <div className="text-xs text-slate-600 text-center">
-                                    <div className="font-semibold text-slate-900">
+                                <div className="text-center">
+                                    <Text as="div" variant="muted" weight="semibold" className="text-slate-900">
                                         {t('components.analyzerTutorialModal.steps.watchFolder.currentFolder', {
                                             name: ingressFolderName,
                                         })}
-                                    </div>
-                                    <div className="text-slate-600">
+                                    </Text>
+                                    <Text as="div" variant="muted">
                                         {t('components.analyzerTutorialModal.steps.watchFolder.status')}
-                                    </div>
+                                    </Text>
                                 </div>
                             ) : null}
                         </div>
-                    </div>
+                    </TextStack>
                 ),
             },
             {
                 key: 'add-videos',
                 title: t('components.analyzerTutorialModal.steps.addVideos.title'),
                 body: (
-                    <div className="space-y-3">
-                        <p className="text-sm text-slate-700 leading-6">
+                    <TextStack variant="support">
+                        <Text as="p" variant="support">
                             <Trans
                                 i18nKey="components.analyzerTutorialModal.steps.addVideos.body"
-                                components={{ b: <b /> }}
+                                components={{ b: <TextStrong /> }}
                             />
-                        </p>
-                        <p className="text-sm text-slate-700 leading-6">
+                        </Text>
+                        <Text as="p" variant="support">
+                            {t('components.analyzerTutorialModal.steps.addVideos.muted')}
+                        </Text>
+                        <Text as="div" variant="muted">
                             <Trans
                                 i18nKey="components.analyzerTutorialModal.steps.addVideos.subfolders"
-                                components={{ b: <b /> }}
+                                components={{ b: <TextStrong /> }}
                             />
-                        </p>
-                        <div className="text-xs text-slate-500">
-                            {t('components.analyzerTutorialModal.steps.addVideos.muted')}
-                        </div>
-                    </div>
+                        </Text>
+                    </TextStack>
                 ),
             },
             {
@@ -159,11 +166,36 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                 title: t('components.analyzerTutorialModal.steps.reviewTools.title'),
                 body: (
                     <div className="space-y-3">
-                        <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
-                            <li>{t('components.analyzerTutorialModal.steps.reviewTools.bullets.draw')}</li>
-                            <li>{t('components.analyzerTutorialModal.steps.reviewTools.bullets.slow')}</li>
-                            <li>{t('components.analyzerTutorialModal.steps.reviewTools.bullets.export')}</li>
-                        </ul>
+                        <div className="flex gap-3 items-start">
+                            <div className="min-w-24">
+                                <Text as="div" variant="muted" weight="semibold" className="uppercase tracking-wide">
+                                    {t('components.analyzerTutorialModal.steps.reviewTools.labels.draw')}
+                                </Text>
+                            </div>
+                            <Text as="div" variant="support">
+                                {t('components.analyzerTutorialModal.steps.reviewTools.bullets.draw')}
+                            </Text>
+                        </div>
+                        <div className="flex gap-3 items-start">
+                            <div className="min-w-24">
+                                <Text as="div" variant="muted" weight="semibold" className="uppercase tracking-wide">
+                                    {t('components.analyzerTutorialModal.steps.reviewTools.labels.timeline')}
+                                </Text>
+                            </div>
+                            <Text as="div" variant="support">
+                                {t('components.analyzerTutorialModal.steps.reviewTools.bullets.slow')}
+                            </Text>
+                        </div>
+                        <div className="flex gap-3 items-start">
+                            <div className="min-w-24">
+                                <Text as="div" variant="muted" weight="semibold" className="uppercase tracking-wide">
+                                    {t('components.analyzerTutorialModal.steps.reviewTools.labels.export')}
+                                </Text>
+                            </div>
+                            <Text as="div" variant="support">
+                                {t('components.analyzerTutorialModal.steps.reviewTools.bullets.export')}
+                            </Text>
+                        </div>
                     </div>
                 ),
             },

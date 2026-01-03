@@ -31,7 +31,7 @@
             "steps": {
                 "what": {
                     "body": "GybeLock lets you <b>drop windsurfing videos into a local folder</b>, automatically <b>processes them in the background</b>, and lets you <b>review them later in a smooth player</b>.",
-                    "bodyMuted": "Just add MP4s to your folder \u2014 GybeLock handles the rest.",
+                    "bodyMuted": "Just add MP4s to your folder \u2014 that should be okay.",
                     "footageNote1": "Designed for shore-shot, long-zoom footage.",
                     "footageNote2": "Not designed for GoPro or action-cam POV videos.",
                     "title": "What GybeLock does"
@@ -49,7 +49,7 @@
                 "addVideos": {
                     "body": "Copy or move <b>MP4 videos</b> into your Watch Folder.",
                     "muted": "Videos appear here automatically as they are processed.",
-                    "subfolders": "<b>Subfolders are supported</b> \u2014 GybeLock mirrors your folder structure exactly.",
+                    "subfolders": "Tip: <b>Subfolders are supported</b> \u2014 GybeLock mirrors your folder structure exactly.",
                     "title": "Add videos"
                 },
                 "reviewRiding": {
@@ -59,10 +59,15 @@
                     "title": "Review your riding"
                 },
                 "reviewTools": {
+                    "labels": {
+                        "draw": "Draw tools",
+                        "export": "Export",
+                        "timeline": "Timeline"
+                    },
                     "bullets": {
                         "draw": "Draw lines and shapes for coaching",
                         "export": "Export the focused rider as a clip",
-                        "slow": "Slow down playback or step frame by frame"
+                        "slow": "Scrub the timeline, slow down playback, or step frame by frame"
                     },
                     "title": "Review tools"
                 },
