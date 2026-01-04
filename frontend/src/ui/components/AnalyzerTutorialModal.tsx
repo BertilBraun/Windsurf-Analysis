@@ -78,22 +78,6 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                                 components={{ b: <TextStrong /> }}
                             />
                         </Text>
-                        <details className="rounded-xl border border-slate-200 bg-white p-3">
-                            <summary className="text-sm text-slate-700 cursor-pointer select-none">
-                                {t('components.analyzerTutorialModal.steps.watchFolder.moreInfo')}
-                            </summary>
-                            <div className="mt-2 text-sm text-slate-600 leading-6">
-                                <Trans
-                                    i18nKey="components.analyzerTutorialModal.steps.watchFolder.moreInfoBody"
-                                    components={{ b: <TextStrong /> }}
-                                />
-                            </div>
-                        </details>
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                            <Text as="div" variant="support" weight="semibold" className="text-amber-950">
-                                {t('components.analyzerTutorialModal.steps.watchFolder.permissions')}
-                            </Text>
-                        </div>
                         <div className="rounded-xl border border-slate-200 bg-white p-3">
                             <Text as="div" variant="muted">
                                 <Trans
@@ -125,6 +109,14 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                                     </Text>
                                 </div>
                             ) : null}
+                        </div>
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                            <Text as="div" variant="support" className="text-amber-950">
+                                <Trans
+                                    i18nKey="components.analyzerTutorialModal.steps.watchFolder.permissions"
+                                    components={{ b: <TextStrong /> }}
+                                />
+                            </Text>
                         </div>
                     </TextStack>
                 ),
@@ -181,9 +173,9 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                                 components={{ b: <b /> }}
                             />
                         </p>
-                        <p className="text-sm text-slate-600 leading-6">
+                        <Text as="p" variant="muted">
                             {t('components.analyzerTutorialModal.steps.reviewRiding.tip')}
-                        </p>
+                        </Text>
                     </div>
                 ),
             },
@@ -192,9 +184,9 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                 title: t('components.analyzerTutorialModal.steps.feedbackReports.title'),
                 body: (
                     <div className="space-y-3">
-                        <p className="text-sm text-slate-700 leading-6">
+                        <Text as="p" variant="support">
                             {t('components.analyzerTutorialModal.steps.feedbackReports.body')}
-                        </p>
+                        </Text>
                         <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
                             <li>
                                 <Trans
@@ -209,9 +201,9 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                                 />
                             </li>
                         </ul>
-                        <div className="text-xs text-slate-500">
+                        <Text as="p" variant="support">
                             {t('components.analyzerTutorialModal.steps.feedbackReports.muted')}
-                        </div>
+                        </Text>
                     </div>
                 ),
             },
