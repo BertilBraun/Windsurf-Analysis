@@ -27,6 +27,8 @@ type Props = {
     onOpenPrevJob?: () => void
     drawMode: boolean
     onToggleDrawMode: () => void
+    player: PlayerState | null
+    setPlayer: React.Dispatch<React.SetStateAction<PlayerState | null>>
 }
 
 export const Player: React.FC<Props> = ({
@@ -37,13 +39,14 @@ export const Player: React.FC<Props> = ({
     onOpenPrevJob,
     drawMode,
     onToggleDrawMode,
+    player,
+    setPlayer,
 }) => {
     const { t } = useTranslation()
     const [exportError, setExportError] = React.useState<string | null>(null)
     const [playerInitError, setPlayerInitError] = React.useState<string | null>(null)
     const containerRef = React.useRef<HTMLDivElement | null>(null)
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null)
-    const [player, setPlayer] = React.useState<PlayerState | null>(null)
     const { zoom, offset, onWheelZoom } = useZoom({ minZoom: 0.5, maxZoom: 4 })
     const detailedZoom = useCappedValue(1, 0.5, 2.0)
     const { speed, bumpSpeed } = usePlaybackSpeed(1.0)

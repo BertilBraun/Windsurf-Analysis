@@ -4,6 +4,7 @@ import { Modal } from './Modal'
 import { Button } from './Button'
 import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
 import { Player } from '../player/Player'
+import type { PlayerState } from '../player/state'
 import { JobDetail, ReportType } from '../types'
 import { Spinner } from './Spinner'
 
@@ -20,9 +21,11 @@ export const PlayerModal: React.FC<{
     const [showReport, setShowReport] = React.useState<boolean>(false)
     const [showReportThanks, setShowReportThanks] = React.useState<boolean>(false)
     const [drawMode, setDrawMode] = React.useState<boolean>(false)
+    const [player, setPlayer] = React.useState<PlayerState | null>(null)
 
     React.useEffect(() => {
         setDrawMode(false)
+        setPlayer(null)
     }, [job.id])
 
     const toggleDrawMode = React.useCallback(() => {
@@ -34,6 +37,7 @@ export const PlayerModal: React.FC<{
             <Modal
                 key={job.id}
                 onClose={onClose}
+                closeOnEscape={player?.mode !== 'detailed'}
                 title={job.local_relative_path?.replace(/\.mp4$/i, '') ?? t('common.notAvailable')}
                 additionalHeader={
                     <>
@@ -68,6 +72,8 @@ export const PlayerModal: React.FC<{
                             onOpenPrevJob={onOpenPrevJob}
                             drawMode={drawMode}
                             onToggleDrawMode={toggleDrawMode}
+                            player={player}
+                            setPlayer={setPlayer}
                         />
                     </div>
                 </div>
