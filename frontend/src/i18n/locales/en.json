@@ -1,8 +1,8 @@
 {
     "common": {
         "actions": {
-            "changeFolder": "Change folder",
-            "selectFolder": "Select folder"
+            "changeFolder": "Change video folder",
+            "selectFolder": "Choose Video Folder"
         },
         "back": "Back",
         "cancel": "Cancel",
@@ -38,18 +38,18 @@
                     "title": "What GybeLock does"
                 },
                 "watchFolder": {
-                    "body": "Choose a <b>local folder</b> where your windsurfing videos live. GybeLock will <b>watch this folder</b> and automatically process any new MP4s you add.",
-                    "button": "Choose Watch Folder",
+                    "body": "Choose a <b>local folder</b> where your windsurfing videos live. GybeLock will <b>monitor this folder</b> and automatically process any new MP4s you add.",
+                    "button": "Choose Video Folder",
                     "currentFolder": "Current folder: {{name}}",
-                    "nextDisabledTooltip": "Select a Watch Folder to continue.",
-                    "permissions": "Your browser will ask for permission to access this folder so GybeLock can keep watching it.",
+                    "nextDisabledTooltip": "Select a Video Folder to continue.",
+                    "permissions": "Your browser will ask for permission to access this folder so GybeLock can keep monitoring it.",
                     "safety": "<b>Your files are never changed, moved, or modified.</b> GybeLock only reads this folder and mirrors its structure here.",
-                    "status": "Status: Watching for new videos",
+                    "status": "Status: Waiting for videos",
                     "tip": "Tip: It’s often easiest to <b>create a new empty folder</b> (for example “Windsurf Videos”) and use that.",
-                    "title": "Choose a Watch Folder"
+                    "title": "Choose a Video Folder"
                 },
                 "addVideos": {
-                    "body": "Copy or move <b>MP4 videos</b> into your Watch Folder.",
+                    "body": "Copy or move <b>MP4 videos</b> into your Video Folder.",
                     "muted": "Videos appear here automatically as they are processed.",
                     "subfolders": "Tip: <b>Subfolders are supported</b> — GybeLock mirrors your folder structure exactly.",
                     "title": "Add videos"
@@ -114,14 +114,14 @@
         },
         "ingressWidget": {
             "fab": {
-                "aria": "Open watch folder",
+                "aria": "Open video folder",
                 "status": {
                     "error": "Error — action needed",
                     "monitoring": "Monitoring",
-                    "selectFolder": "Select folder (required)",
+                    "selectFolder": "Choose Video Folder (required)",
                     "uploading": "Uploading {{count}}…"
                 },
-                "title": "Watch Folder"
+                "title": "Video Folder"
             },
             "issue": {
                 "ingressError": {
@@ -146,11 +146,11 @@
             "leaveWarning": "Uploads are still running. If you leave now, your videos may not finish uploading.",
             "panel": {
                 "description": "GybeLock watches this folder and processes new videos automatically.",
-                "folderLabel": "Watch Folder",
+                "folderLabel": "Video Folder",
                 "noFolder": "No folder selected",
                 "noUploads": "No uploads right now.",
                 "permissionPending": "(permission pending)",
-                "title": "Watch Folder",
+                "title": "Video Folder",
                 "uploadsTitle": "Uploads"
             },
             "quota": {
@@ -164,7 +164,7 @@
                 "idleNoFolder": "Idle — no folder selected",
                 "justNow": "just now",
                 "label": "Status: {{status}}",
-                "monitoring": "Watching for new videos — last scan {{time}}",
+                "monitoring": "Waiting for videos — last scan {{time}}",
                 "permissionDenied": "Permission denied",
                 "uploading": "Uploading {{count}} file(s)…"
             },
@@ -530,7 +530,7 @@
                     },
                     "ingress": {
                         "body": "Choose a folder on your computer. GybeLock watches it for new videos.",
-                        "title": "<strong>Pick a watch folder</strong>"
+                        "title": "<strong>Pick a video folder</strong>"
                     },
                     "process": {
                         "body": "Give it a few minutes. Your videos will be ready to review.",

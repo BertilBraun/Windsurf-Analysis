@@ -255,7 +255,7 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
             ? t('components.analyzerTutorialModal.steps.watchFolder.nextDisabledTooltip')
             : undefined
 
-    // Set global style var(--z-ingress-widget) so the Watch Folder widget is highlighted.
+    // Set global style var(--z-ingress-widget) so the Video Folder widget is highlighted.
     if (step.key === 'watch-folder') {
         document.documentElement.style.setProperty('--z-ingress-widget', '1000')
     } else {
