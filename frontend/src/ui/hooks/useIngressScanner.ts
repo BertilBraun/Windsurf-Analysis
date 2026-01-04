@@ -151,7 +151,7 @@ export function useIngressScanner(
             if (result) {
                 const { snapshot, filesByKey } = result
                 const stabilityByPath = new Map<string, boolean>()
-                const REQUIRED_STABLE_SCANS = 2
+                const REQUIRED_STABLE_SCANS = 1
 
                 const updateStability = (fp: FileFingerprint) => {
                     const prev = stabilityRef.current.get(fp.path)

@@ -28,7 +28,7 @@ export function useJobs(): UseJobsReturn {
     const { shaToPaths } = useLocalFileIndex(null) // NOTE: automatically refreshed once the ingress scanner refreshes
     const readyRef = React.useRef<boolean>(false)
     const jobDetailCacheRef = React.useRef<Map<string, Promise<JobDetail>>>(new Map())
-    const realtimeUnsubRef = React.useRef<Unsubscribe | null>(null)
+    const userJobsUnsubRef = React.useRef<Unsubscribe | null>(null)
     const jobUnsubsRef = React.useRef<Map<string, Unsubscribe>>(new Map())
     const jobsByIdRef = React.useRef<Map<string, JobSummary>>(new Map())
     const activeJobIdsRef = React.useRef<Set<string>>(new Set())
@@ -89,9 +89,9 @@ export function useJobs(): UseJobsReturn {
     }, [getLastKnownPathForSha, publishJobsFromRef, shaToPaths])
 
     const stopRealtime = React.useCallback(() => {
-        if (realtimeUnsubRef.current) {
-            realtimeUnsubRef.current()
-            realtimeUnsubRef.current = null
+        if (userJobsUnsubRef.current) {
+            userJobsUnsubRef.current()
+            userJobsUnsubRef.current = null
         }
         for (const unsub of jobUnsubsRef.current.values()) unsub()
         jobUnsubsRef.current.clear()
@@ -118,7 +118,7 @@ export function useJobs(): UseJobsReturn {
         setInitialSyncComplete(hydratedActiveCount >= active.size)
     }, [])
 
-    // Start realtime subscriptions on mount; cleanup on unmount.
+        // Start realtime subscriptions on mount; cleanup on unmount.
     React.useEffect(() => {
         stopRealtime()
         setJobs([])
@@ -134,7 +134,7 @@ export function useJobs(): UseJobsReturn {
             where('deleted_at', '==', null)
         )
 
-        realtimeUnsubRef.current = onSnapshot(
+        userJobsUnsubRef.current = onSnapshot(
             userJobsQ,
             snap => {
                 setReady(true)
@@ -151,6 +151,7 @@ export function useJobs(): UseJobsReturn {
                 }
 
                 // Remove jobs that are no longer associated to the user (regardless of whether we still have a listener).
+                let removedAny = false
                 for (const existingId of Array.from(jobsByIdRef.current.keys())) {
                     if (activeJobIds.has(existingId)) continue
                     jobUnsubsRef.current.get(existingId)?.()
@@ -158,12 +159,14 @@ export function useJobs(): UseJobsReturn {
                     jobsByIdRef.current.delete(existingId)
                     jobDetailCacheRef.current.delete(existingId)
                     void deleteSetting(`jobDetail:${existingId}`)
+                    removedAny = true
                 }
+                if (removedAny) publishJobsFromRef()
 
-                // Subscribe to newly-added jobs
+                // Subscribe to newly-added jobs. Unsubscribe per-job listeners once jobs become terminal.
                 for (const jobId of activeJobIds) {
                     if (jobUnsubsRef.current.has(jobId)) continue
-                    // If we already have the job in memory (e.g. was terminal and we unsubscribed earlier),
+                    // If we already have the job in memory (e.g. it was terminal and we unsubscribed earlier),
                     // don't re-subscribe.
                     if (jobsByIdRef.current.has(jobId)) continue
 
@@ -193,11 +196,16 @@ export function useJobs(): UseJobsReturn {
                             }
 
                             void (async () => {
+                                if (!activeJobIdsRef.current.has(jobId)) return
+
                                 const sha = summaryBase.original_checksum_sha256
                                 const local_relative_paths = getLocalPathsForSha(sha)
                                 const local_relative_path = local_relative_paths.length ? local_relative_paths[0] : null
                                 const last_known_local_path =
                                     local_relative_paths.length === 0 ? await getLastKnownPathForSha(sha) : null
+
+                                if (!activeJobIdsRef.current.has(jobId)) return
+
                                 const summary: JobSummary = {
                                     ...summaryBase,
                                     local_relative_path,
@@ -209,7 +217,7 @@ export function useJobs(): UseJobsReturn {
                                 publishJobsFromRef()
                                 recomputeInitialSyncComplete()
 
-                                // Optimization: stop listening once job is terminal.
+                                // Stop listening once job is terminal (we only need realtime while it's processing).
                                 const s = String(summaryBase.status || '').toLowerCase()
                                 const isTerminal =
                                     s === 'succeeded' || s === 'failed' || s === 'canceled' || s === 'cancelled'
