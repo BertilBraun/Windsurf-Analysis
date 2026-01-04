@@ -9,6 +9,7 @@
         "close": "Close",
         "done": "Done",
         "next": "Next",
+        "or": "Or",
         "notAvailable": "n/a"
     },
     "components": {
@@ -804,7 +805,7 @@
             "actions": {
                 "createAccount": "Create an account",
                 "forgot": "Forgot password",
-                "google": "Sign in with Google",
+                "google": "Continue with Google",
                 "login": "Login"
             },
             "errors": {
@@ -812,14 +813,23 @@
                 "loginFailed": "Login failed",
                 "resetFailed": "Could not send password reset email"
             },
+            "footer": {
+                "noAccount": "Don\u2019t have an account?",
+                "signup": "Sign up"
+            },
             "info": {
                 "resetSent": "Password reset email sent to {{email}}."
+            },
+            "labels": {
+                "email": "Email address",
+                "password": "Password"
             },
             "placeholders": {
                 "email": "email",
                 "password": "password"
             },
-            "title": "Login"
+            "subtitle": "Use Google or your email address to continue.",
+            "title": "Login to GybeLock"
         },
         "pricing": {
             "after": {
@@ -865,15 +875,25 @@
             "errors": {
                 "failed": "Signup failed"
             },
+            "footer": {
+                "haveAccount": "Already have an account?",
+                "login": "Log in"
+            },
             "info": {
                 "created": "Account created. Please verify your email (check inbox/spam)."
+            },
+            "labels": {
+                "email": "Email address",
+                "password": "Password",
+                "repeatPassword": "Repeat password"
             },
             "placeholders": {
                 "email": "email",
                 "password": "password",
                 "repeatPassword": "repeat password"
             },
-            "title": "Sign up"
+            "subtitle": "Create your account to start analyzing videos.",
+            "title": "Sign up to GybeLock"
         }
     }
 }

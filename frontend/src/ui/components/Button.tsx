@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { AnimatedDots } from './AnimatedDots'
+import { Spinner } from './Spinner'
 
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
     text?: string
@@ -47,8 +47,8 @@ export const Button: React.FC<ButtonProps> = ({
     const content =
         isPending && text ? (
             <span>
-                {text}
-                {t('components.button.pendingSuffix')} <AnimatedDots />
+                {text}&nbsp;
+                <Spinner />
             </span>
         ) : (
             children ?? text

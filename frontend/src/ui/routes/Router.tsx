@@ -50,7 +50,7 @@ const AnalyzerRoute: React.FC = () => {
 
     if (!isSignedIn) {
         return (
-            <div className="min-h-dvh bg-white text-slate-900">
+            <div className="min-h-dvh bg-gradient-to-br from-brand-50 via-white to-white text-slate-900">
                 <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
                     <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3 flex items-center gap-3">
                         <LogoButton onClick={() => navigate('/')} />
@@ -59,33 +59,27 @@ const AnalyzerRoute: React.FC = () => {
                 </header>
 
                 <main className="mx-auto max-w-[1400px] px-4 sm:px-6 py-10">
-                    <div className="max-w-md">
-                        <div className="text-sm text-slate-600 mb-4">
-                            {authMode === 'signup'
-                                ? t('routes.analyzer.auth.signupPrompt')
-                                : t('routes.analyzer.auth.loginPrompt')}
-                        </div>
-                        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                            {authMode === 'signup' ? (
-                                <SignupPage
-                                    onBackToLogin={() => setAuthMode('login')}
-                                    onSuccess={() => {
-                                        // After signup the user will be signed in; if email is unverified,
-                                        // this route will immediately show the verification screen.
-                                    }}
-                                />
-                            ) : (
-                                <LoginPage
-                                    onSignup={() => setAuthMode('signup')}
-                                    onSuccess={() => {
-                                        // Stay on /analyzer; the authenticated state will re-render the Analyzer view.
-                                        // Preserve deep-link intent if any (future-proof).
-                                        const from = (location.state as any)?.from
-                                        if (typeof from === 'string' && from.startsWith('/')) navigate(from)
-                                    }}
-                                />
-                            )}
-                        </div>
+                    <div className="relative mx-auto w-full max-w-md">
+                        <div className="pointer-events-none absolute inset-x-0 -top-12 mx-auto h-56 w-56 rounded-full bg-brand-50 blur-3xl opacity-70" />
+                        {authMode === 'signup' ? (
+                            <SignupPage
+                                onBackToLogin={() => setAuthMode('login')}
+                                onSuccess={() => {
+                                    // After signup the user will be signed in; if email is unverified,
+                                    // this route will immediately show the verification screen.
+                                }}
+                            />
+                        ) : (
+                            <LoginPage
+                                onSignup={() => setAuthMode('signup')}
+                                onSuccess={() => {
+                                    // Stay on /analyzer; the authenticated state will re-render the Analyzer view.
+                                    // Preserve deep-link intent if any (future-proof).
+                                    const from = (location.state as any)?.from
+                                    if (typeof from === 'string' && from.startsWith('/')) navigate(from)
+                                }}
+                            />
+                        )}
                     </div>
                 </main>
             </div>

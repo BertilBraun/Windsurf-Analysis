@@ -7,6 +7,7 @@ import JobThumbnail from './JobThumbnail'
 import { Modal } from './Modal'
 import { trackEvent } from '../utils/analytics'
 import trashbinSvg from '../assets/trashbin.svg'
+import { Spinner } from './Spinner'
 
 export type JobListSortKey = 'name' | 'date'
 export type JobListSortDir = 'asc' | 'desc'
@@ -192,10 +193,7 @@ export function getJobListOrderedJobIds(
     return ordered.map(j => j.id)
 }
 
-const TrashIcon: React.FC<{ className?: string; tone?: 'default' | 'danger' }> = ({
-    className,
-    tone = 'default',
-}) => {
+const TrashIcon: React.FC<{ className?: string; tone?: 'default' | 'danger' }> = ({ className, tone = 'default' }) => {
     const filter =
         tone === 'danger'
             ? 'invert(21%) sepia(92%) saturate(7440%) hue-rotate(356deg) brightness(97%) contrast(117%)'
@@ -448,7 +446,7 @@ const UnmappedJobsSection: React.FC<{
     }
 
     return (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
             <div className="flex items-start justify-between gap-3 mb-2">
                 <Button
                     type="button"
@@ -624,7 +622,7 @@ export const JobList: React.FC<{
                                         className="inline-flex items-center gap-1 text-[11px] text-blue-700"
                                         title={t('components.jobList.folder.inProgress', { count: node.activeJobs })}
                                     >
-                                        <span className="inline-block w-3 h-3 rounded-full border-2 border-blue-600/30 border-t-blue-600 animate-spin" />
+                                        <Spinner />
                                     </span>
                                 )}
                             </span>

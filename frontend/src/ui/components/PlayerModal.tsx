@@ -5,6 +5,7 @@ import { Button } from './Button'
 import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
 import { Player } from '../player/Player'
 import { JobDetail, ReportType } from '../types'
+import { Spinner } from './Spinner'
 
 export const PlayerModal: React.FC<{
     job: JobDetail
@@ -119,7 +120,7 @@ const ReportVideoModal: React.FC<{
         return (
             <Modal onClose={onClose} title={t('components.playerModal.report.processingTitle')}>
                 <div className="p-6 flex flex-col items-center gap-3">
-                    <span className="inline-block w-8 h-8 rounded-full border-2 border-brand-600/30 border-t-brand-600 animate-spin" />
+                    <Spinner size="medium" />
                     <div className="text-sm text-slate-600">{t('components.playerModal.report.processingBody')}</div>
                 </div>
             </Modal>
