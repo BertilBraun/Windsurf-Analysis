@@ -50,10 +50,7 @@ export function useIngressScanner(
     // Firestore job snapshots to catch up. Keep TTL short so deletions/re-association work.
     const recentlyHandledRef = React.useRef<Map<string, number>>(new Map())
     // Track files that are still being copied so we only upload once they settle.
-    const pendingStableRef = React.useRef<Set<string>>(new Set())
     const stabilityRef = React.useRef<Map<string, { size: number; mtimeMs: number; stableCount: number }>>(new Map())
-    const pendingHandledRef = React.useRef<Set<string>>(new Set())
-    const pendingChecksumsRef = React.useRef<ReadonlySet<string> | null>(null)
     const [suspended, setSuspended] = React.useState(false)
     const { settings } = useSettings()
 
@@ -68,17 +65,6 @@ export function useIngressScanner(
     const timerRef = React.useRef<number | null>(null)
     const { refresh, loaded, scanStatus } = useLocalFileIndex(dirHandle)
 
-    React.useEffect(() => {
-        pendingChecksumsRef.current = pendingChecksumsSha256 ?? null
-        if (!pendingChecksumsSha256) {
-            pendingHandledRef.current.clear()
-            return
-        }
-        for (const sha of Array.from(pendingHandledRef.current)) {
-            if (!pendingChecksumsSha256.has(sha)) pendingHandledRef.current.delete(sha)
-        }
-    }, [pendingChecksumsSha256])
-
     const shouldUpload = React.useCallback(
         (sha: string) => {
             if (!uploadsEnabled) return false
@@ -86,6 +72,8 @@ export function useIngressScanner(
 
             // Gold standard: if a job with this checksum already exists for this user, skip.
             if (knownChecksumsSha256?.has(sha)) return false
+            // If the server already has an uploading job, don't create another upload attempt.
+            if (pendingChecksumsSha256?.has(sha)) return false
 
             // Short TTL cache to avoid repeated /jobs calls for the same checksum while Firestore updates.
             const lastHandledAt = recentlyHandledRef.current.get(sha) ?? 0
@@ -103,7 +91,7 @@ export function useIngressScanner(
 
             return true
         },
-        [knownChecksumsSha256, uploadCtx, uploadsEnabled]
+        [knownChecksumsSha256, pendingChecksumsSha256, uploadCtx, uploadsEnabled]
     )
 
     const uploadOne = React.useCallback(
@@ -124,9 +112,6 @@ export function useIngressScanner(
                     onStarted: () => updateUpload(sha, { status: 'uploading' }),
                     precomputedSha256: sha,
                 })
-                if (pendingChecksumsRef.current?.has(sha)) {
-                    pendingHandledRef.current.add(sha)
-                }
                 recentlyHandledRef.current.set(sha, Date.now())
 
                 if (result === 'skipped') {
@@ -164,7 +149,7 @@ export function useIngressScanner(
         try {
             const result = await refresh()
             if (result) {
-                const { snapshot, filesByKey, newFingerprints } = result
+                const { snapshot, filesByKey } = result
                 const stabilityByPath = new Map<string, boolean>()
                 const REQUIRED_STABLE_SCANS = 2
 
@@ -188,60 +173,36 @@ export function useIngressScanner(
                 }
 
                 const work: Promise<void>[] = []
-                const pathToFingerprint = new Map(snapshot.files.map(fp => [fp.path, fp]))
                 const currentPaths = new Set(snapshot.files.map(fp => fp.path))
+                const queuedThisScan = new Set<string>()
 
                 const ensureStable = (fp: FileFingerprint) => {
                     if (!isStable(fp)) {
-                        pendingStableRef.current.add(fp.path)
                         return false
                     }
-                    pendingStableRef.current.delete(fp.path)
                     return true
                 }
 
                 const queueUpload = (fp: FileFingerprint, sha: string) => {
                     if (!ensureStable(fp)) return
                     if (!shouldUpload(sha)) return
+                    if (queuedThisScan.has(sha)) return
+                    queuedThisScan.add(sha)
                     const file = filesByKey.get(fingerprintKey(fp))
                     if (!file) return
                     work.push(uploadOne(sha, file, fp.path))
                 }
 
-                for (const fp of newFingerprints) {
+                for (const fp of snapshot.files) {
                     const sha = getFingerprintSha(snapshot, fp)
                     if (!sha) continue
                     queueUpload(fp, sha)
-                }
-
-                if (pendingStableRef.current.size > 0) {
-                    for (const path of Array.from(pendingStableRef.current)) {
-                        const fp = pathToFingerprint.get(path)
-                        if (!fp) {
-                            pendingStableRef.current.delete(path)
-                            continue
-                        }
-                        const sha = getFingerprintSha(snapshot, fp)
-                        if (!sha) continue
-                        queueUpload(fp, sha)
-                    }
-                }
-
-                if (pendingChecksumsSha256 && pendingChecksumsSha256.size > 0) {
-                    for (const fp of snapshot.files) {
-                        const sha = getFingerprintSha(snapshot, fp)
-                        if (!sha) continue
-                        if (!pendingChecksumsSha256.has(sha)) continue
-                        if (pendingHandledRef.current.has(sha)) continue
-                        queueUpload(fp, sha)
-                    }
                 }
 
                 if (stabilityRef.current.size > 0) {
                     for (const path of Array.from(stabilityRef.current.keys())) {
                         if (!currentPaths.has(path)) {
                             stabilityRef.current.delete(path)
-                            pendingStableRef.current.delete(path)
                         }
                     }
                 }
@@ -254,7 +215,7 @@ export function useIngressScanner(
             setLastRunAt(Date.now())
         }
         timerRef.current = window.setTimeout(scanContinuously, intervalMs)
-    }, [dirHandle, intervalMs, loaded, refresh, shouldUpload, uploadOne, pendingChecksumsSha256])
+    }, [dirHandle, intervalMs, loaded, refresh, shouldUpload, uploadOne])
 
     React.useEffect(() => {
         if (timerRef.current) window.clearTimeout(timerRef.current)

@@ -7,14 +7,12 @@ import {
     buildShaToPaths,
     computeSha256,
     fingerprintKey,
-    getNewFingerprints,
     normalizeRelativePath,
 } from '../utils/localFileIndex'
 
 type RefreshResult = {
     snapshot: FileSnapshot
     filesByKey: Map<string, File>
-    newFingerprints: FileFingerprint[]
 }
 
 export type LocalFileIndexScanStatus = {
@@ -91,8 +89,7 @@ async function scanDirectory(
         updatedAt: Date.now(),
     }
 
-    const newFingerprints = getNewFingerprints(prevSnapshot, snapshot)
-    return { snapshot, filesByKey, newFingerprints }
+    return { snapshot, filesByKey }
 }
 
 export function useLocalFileIndex(dirHandle: FileSystemDirectoryHandle | null) {
