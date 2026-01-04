@@ -520,7 +520,7 @@
                 "stepLabel": "Step {{n}}",
                 "steps": {
                     "drop": {
-                        "body": "New files are automatically uploaded for processing in the background.",
+                        "body": "New files are automatically uploaded for processing in the background \u2014 You can add tens of videos at once and let GybeLock process them in the background.",
                         "title": "<strong>Drop MP4 videos into the folder</strong>"
                     },
                     "ingress": {
