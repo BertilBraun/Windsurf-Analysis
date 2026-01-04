@@ -66,7 +66,10 @@ export const IngressWidget: React.FC<Props> = ({
     const [expanded, setExpanded] = React.useState(false)
     const [showQuotaModal, setShowQuotaModal] = React.useState(false)
     const [autoExpandedOnce, setAutoExpandedOnce] = React.useState<boolean>(false)
+    const [showMultiVideoHint, setShowMultiVideoHint] = React.useState(false)
     const panelRef = React.useRef<HTMLDivElement | null>(null)
+    const prevUploadingRef = React.useRef(0)
+    const hintTimerRef = React.useRef<number | null>(null)
 
     React.useEffect(() => {
         loadSetting<boolean>(WATCH_FOLDER_AUTO_EXPANDED_KEY).then(saved => {
@@ -119,6 +122,22 @@ export const IngressWidget: React.FC<Props> = ({
         onUploadingChange?.(scanner.uploading)
     }, [onUploadingChange, scanner.uploading])
 
+    React.useEffect(() => {
+        const prev = prevUploadingRef.current
+        prevUploadingRef.current = scanner.uploading
+
+        if (prev > 0) return
+        if (scanner.uploading <= 0) return
+
+        setShowMultiVideoHint(true)
+        if (hintTimerRef.current) window.clearTimeout(hintTimerRef.current)
+        hintTimerRef.current = window.setTimeout(() => setShowMultiVideoHint(false), 6000)
+
+        return () => {
+            if (hintTimerRef.current) window.clearTimeout(hintTimerRef.current)
+        }
+    }, [scanner.uploading])
+
     const uploading = scanner.uploading
     const ringPercent = meanProgress(scanner.uploads)
     const hasIssues = !dirHandle || dirPermission !== 'granted' || !!scanner.lastError
@@ -169,6 +188,28 @@ export const IngressWidget: React.FC<Props> = ({
 
     return (
         <>
+            {showMultiVideoHint && (
+                <div
+                    className="fixed max-w-[320px] rounded-xl bg-slate-900 text-white px-3 py-2 shadow-lg flex items-start gap-3"
+                    style={{
+                        right: 'var(--analyzer-side-offset, 1rem)',
+                        bottom: 'calc(var(--analyzer-bottom-offset, 1rem) + 64px)',
+                        zIndex: 'var(--z-ingress-widget)',
+                    }}
+                    role="status"
+                    aria-live="polite"
+                >
+                    <div className="text-sm leading-snug">{t('components.ingressWidget.hints.multiVideo')}</div>
+                    <button
+                        type="button"
+                        className="ml-auto text-white/70 hover:text-white text-sm leading-none"
+                        aria-label={t('common.close')}
+                        onClick={() => setShowMultiVideoHint(false)}
+                    >
+                        ×
+                    </button>
+                </div>
+            )}
             <div
                 className="fixed"
                 style={{

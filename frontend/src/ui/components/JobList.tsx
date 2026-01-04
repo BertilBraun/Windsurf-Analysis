@@ -704,8 +704,15 @@ export const JobList: React.FC<{
     if (jobs.length === 0) {
         return (
             <div className="text-center text-gray-500">
-                {initialSyncComplete ? t('components.jobList.waiting') : t('components.jobList.loading')}
-                <AnimatedDots />
+                <div>
+                    {initialSyncComplete ? t('components.jobList.waiting') : t('components.jobList.loading')}
+                    <AnimatedDots />
+                </div>
+                {initialSyncComplete && (
+                    <div className="mt-2 text-sm text-slate-500 max-w-md mx-auto">
+                        {t('components.jobList.emptyTip')}
+                    </div>
+                )}
             </div>
         )
     }

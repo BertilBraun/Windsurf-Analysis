@@ -140,6 +140,9 @@
                     "title": "Folder permission needed"
                 }
             },
+            "hints": {
+                "multiVideo": "You can add more videos — they’ll process automatically."
+            },
             "leaveWarning": "Uploads are still running. If you leave now, your videos may not finish uploading.",
             "panel": {
                 "description": "GybeLock watches this folder and processes new videos automatically.",
@@ -183,6 +186,7 @@
                 "expand": "Expand all",
                 "expandTitle": "Expand all folders"
             },
+            "emptyTip": "Tip: Most people drop several videos, leave them processing, and review them later.",
             "folder": {
                 "closedIcon": "▸",
                 "inProgress": "{{count}} in progress",
