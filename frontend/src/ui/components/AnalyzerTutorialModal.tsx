@@ -249,6 +249,11 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     const step = visibleSteps[safeIdx] ?? visibleSteps[0]!
     const isFirst = safeIdx === 0
     const isLast = safeIdx === visibleSteps.length - 1
+    const canGoNext = step.key !== 'watch-folder' || !!ingressFolderName
+    const nextTooltip =
+        step.key === 'watch-folder' && !ingressFolderName
+            ? t('components.analyzerTutorialModal.steps.watchFolder.nextDisabledTooltip')
+            : undefined
 
     // Set global style var(--z-ingress-widget) so the Watch Folder widget is highlighted.
     if (step.key === 'watch-folder') {
@@ -258,65 +263,75 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     }
 
     return (
-        <>
-            <Modal
-                onClose={canClose ? onClose : undefined}
-                closeOnBackdropClick={canClose}
-                closeOnEscape={canClose}
-                showCloseButton={canClose}
-                title={t('components.analyzerTutorialModal.title')}
-                contentClassName="rounded-2xl border border-slate-200 bg-white shadow-xl w-[760px] max-w-[96vw]"
-                additionalHeader={
-                    <div className="flex items-center gap-2">
-                        <div className="text-xs text-slate-600">
-                            {t('components.analyzerTutorialModal.stepLabel', {
-                                current: safeIdx + 1,
-                                total: visibleSteps.length,
-                            })}
-                        </div>
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => onStepIndexChange(0)}
-                            text={t('components.analyzerTutorialModal.restart')}
-                            title={t('components.analyzerTutorialModal.restartTitle')}
-                        />
+        <Modal
+            onClose={canClose ? onClose : undefined}
+            closeOnBackdropClick={canClose}
+            closeOnEscape={canClose}
+            showCloseButton={canClose}
+            title={t('components.analyzerTutorialModal.title')}
+            contentClassName="rounded-2xl border border-slate-200 bg-white shadow-xl w-[760px] max-w-[96vw]"
+            additionalHeader={
+                <div className="flex items-center gap-2">
+                    <div className="text-xs text-slate-600">
+                        {t('components.analyzerTutorialModal.stepLabel', {
+                            current: safeIdx + 1,
+                            total: visibleSteps.length,
+                        })}
                     </div>
-                }
-            >
-                <div className="p-4 max-h-[72vh] overflow-auto">
-                    <h3 className="m-0 text-lg font-semibold text-slate-900">{step.title}</h3>
-                    <div className="mt-3 text-sm text-slate-700 leading-6">{step.body}</div>
-                </div>
-
-                <div className="px-4 py-3 border-t border-slate-200 flex items-center justify-between gap-2">
                     <Button
-                        variant="ghost"
                         size="sm"
-                        disabled={isFirst}
-                        onClick={() => onStepIndexChange(Math.max(0, safeIdx - 1))}
-                        text={t('common.back')}
+                        variant="ghost"
+                        onClick={() => onStepIndexChange(0)}
+                        text={t('components.analyzerTutorialModal.restart')}
+                        title={t('components.analyzerTutorialModal.restartTitle')}
                     />
-                    <div className="flex items-center gap-2">
-                        {!isLast ? (
+                </div>
+            }
+        >
+            <div className="p-4 max-h-[72vh] overflow-auto">
+                <h3 className="m-0 text-lg font-semibold text-slate-900">{step.title}</h3>
+                <div className="mt-3 text-sm text-slate-700 leading-6">{step.body}</div>
+            </div>
+
+            <div className="px-4 py-3 border-t border-slate-200 flex items-center justify-between gap-2">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={isFirst}
+                    onClick={() => onStepIndexChange(Math.max(0, safeIdx - 1))}
+                    text={t('common.back')}
+                />
+                <div className="flex items-center gap-2">
+                    {!isLast ? (
+                        nextTooltip ? (
+                            <span title={nextTooltip} className="inline-flex cursor-not-allowed">
+                                <Button
+                                    variant="primary"
+                                    size="sm"
+                                    disabled
+                                    className="pointer-events-none"
+                                    text={t('common.next')}
+                                />
+                            </span>
+                        ) : (
                             <Button
                                 variant="primary"
                                 size="sm"
                                 onClick={() => onStepIndexChange(Math.min(visibleSteps.length - 1, safeIdx + 1))}
                                 text={t('common.next')}
                             />
-                        ) : (
-                            <Button
-                                variant="primary"
-                                size="sm"
-                                disabled={!canClose}
-                                onClick={canClose ? onClose : undefined}
-                                text={t('common.done')}
-                            />
-                        )}
-                    </div>
+                        )
+                    ) : (
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            disabled={!canClose}
+                            onClick={canClose ? onClose : undefined}
+                            text={t('common.done')}
+                        />
+                    )}
                 </div>
-            </Modal>
-        </>
+            </div>
+        </Modal>
     )
 }

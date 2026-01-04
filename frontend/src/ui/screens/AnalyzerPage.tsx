@@ -168,8 +168,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
 
     const { showTutorial, openTutorial, tutorialModalProps } = useTutorialController({
         dirHandle,
-        jobsInitialSyncComplete,
-        succeededJobsCount: succeededJobs.length,
         selectedJob,
         onPickIngressFolder: () => void pickDirectory(),
     })
@@ -221,7 +219,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                             size="sm"
                             variant="ghost"
                             onClick={() => {
-                                openTutorial('header', null, 'intro')
+                                openTutorial('header', null, 'what')
                             }}
                             text={t('screens.analyzer.actions.tutorial')}
                         />
@@ -281,7 +279,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                                 />
                                 <Button
                                     variant="primary"
-                                    onClick={() => openTutorial('empty_state', null, 'intro')}
+                                    onClick={() => openTutorial('empty_state', null, 'what')}
                                     text={t('screens.analyzer.emptyState.openTutorial')}
                                 />
                             </div>

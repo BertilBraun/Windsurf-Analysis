@@ -9,13 +9,7 @@ const ANALYZER_TUTORIAL_PROGRESS_KEY = 'analyzerTutorialProgress.v2'
 
 type TutorialOpenSource = 'header' | 'empty_state' | 'auto'
 
-type TutorialStepKey =
-    | 'what'
-    | 'watch-folder'
-    | 'add-videos'
-    | 'review-riding'
-    | 'review-tools'
-    | 'feedback-reports'
+type TutorialStepKey = 'what' | 'watch-folder' | 'add-videos' | 'review-riding' | 'review-tools' | 'feedback-reports'
 
 const ALL_TUTORIAL_STEP_KEYS: TutorialStepKey[] = [
     'what',
@@ -30,8 +24,6 @@ const PLAYER_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['review-riding', 'review-t
 
 type TutorialControllerOptions = {
     dirHandle: FileSystemDirectoryHandle | null
-    jobsInitialSyncComplete: boolean
-    succeededJobsCount: number
     selectedJob: JobDetail | null
     onPickIngressFolder: () => void
 }
@@ -44,8 +36,6 @@ type TutorialControllerState = {
 
 export const useTutorialController = ({
     dirHandle,
-    jobsInitialSyncComplete,
-    succeededJobsCount,
     selectedJob,
     onPickIngressFolder,
 }: TutorialControllerOptions): TutorialControllerState => {

@@ -41,6 +41,7 @@
                     "body": "Choose a <b>local folder</b> where your windsurfing videos live. GybeLock will <b>watch this folder</b> and automatically process any new MP4s you add.",
                     "button": "Choose Watch Folder",
                     "currentFolder": "Current folder: {{name}}",
+                    "nextDisabledTooltip": "Select a Watch Folder to continue.",
                     "permissions": "Your browser will ask for permission to access this folder so GybeLock can keep watching it.",
                     "safety": "<b>Your files are never changed, moved, or modified.</b> GybeLock only reads this folder and mirrors its structure here.",
                     "status": "Status: Watching for new videos",
