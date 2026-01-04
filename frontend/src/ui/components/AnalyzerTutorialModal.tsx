@@ -29,6 +29,12 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
 }) => {
     const { t } = useTranslation()
     const canClose = !!ingressFolderName
+    const pickRequestedRef = React.useRef(false)
+
+    const handlePickIngressFolder = React.useCallback(() => {
+        pickRequestedRef.current = true
+        onPickIngressFolder()
+    }, [onPickIngressFolder])
     const steps: Step[] = React.useMemo(
         () => [
             {
@@ -89,7 +95,7 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                         <div className="pt-2 flex flex-col items-center gap-2">
                             <Button
                                 variant={ingressFolderName ? 'secondary' : 'primary'}
-                                onClick={() => onPickIngressFolder()}
+                                onClick={handlePickIngressFolder}
                                 text={
                                     ingressFolderName
                                         ? t('common.actions.changeFolder')
@@ -117,6 +123,18 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                 title: t('components.analyzerTutorialModal.steps.addVideos.title'),
                 body: (
                     <TextStack variant="support">
+                        {ingressFolderName ? (
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                <Text as="div" variant="support" weight="semibold" className="text-slate-900">
+                                    {t('components.analyzerTutorialModal.steps.addVideos.folderSelected', {
+                                        name: ingressFolderName,
+                                    })}
+                                </Text>
+                                <Text as="div" variant="muted" className="mt-0.5">
+                                    {t('components.analyzerTutorialModal.steps.addVideos.statusWaiting')}
+                                </Text>
+                            </div>
+                        ) : null}
                         <Text as="p" variant="support">
                             <Trans
                                 i18nKey="components.analyzerTutorialModal.steps.addVideos.body"
@@ -232,7 +250,7 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                 ),
             },
         ],
-        [ingressFolderName, onPickIngressFolder, t]
+        [handlePickIngressFolder, ingressFolderName, t]
     )
 
     const visibleSteps = React.useMemo(() => {
@@ -254,6 +272,16 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
         step.key === 'watch-folder' && !ingressFolderName
             ? t('components.analyzerTutorialModal.steps.watchFolder.nextDisabledTooltip')
             : undefined
+
+    React.useEffect(() => {
+        if (step.key !== 'watch-folder') return
+        if (!pickRequestedRef.current) return
+        if (!ingressFolderName) return
+        pickRequestedRef.current = false
+        const nextIdx = Math.min(visibleSteps.length - 1, safeIdx + 1)
+        if (nextIdx === safeIdx) return
+        onStepIndexChange(nextIdx)
+    }, [ingressFolderName, onStepIndexChange, safeIdx, step.key, visibleSteps.length])
 
     // Set global style var(--z-ingress-widget) so the Video Folder widget is highlighted.
     if (step.key === 'watch-folder') {

@@ -50,7 +50,9 @@
                 },
                 "addVideos": {
                     "body": "Copy or move <b>MP4 videos</b> into your Video Folder.",
+                    "folderSelected": "Video folder selected: {{name}}",
                     "muted": "Videos appear here automatically as they are processed.",
+                    "statusWaiting": "Status: Waiting for videos",
                     "subfolders": "Tip: <b>Subfolders are supported</b> — GybeLock mirrors your folder structure exactly.",
                     "title": "Add videos"
                 },
