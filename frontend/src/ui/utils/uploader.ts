@@ -2,7 +2,6 @@ import { modalUrl } from '../../firebase'
 import { ALL_FORMATS, BlobSource, Input, VideoSampleSink } from 'mediabunny'
 import { UploadQuality } from '../types'
 import { trackEvent } from './analytics'
-import { computeSha256 } from './localFileIndex'
 
 export type UploadContext = {
     authorizedFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>
@@ -127,10 +126,10 @@ export async function uploadVideoFile(params: {
     quality: UploadQuality
     ctx: UploadContext
     onProgress: (percent: number) => void
-    onStarted?: () => void
-    precomputedSha256?: string
+    onStarted: () => void
+    sha256: string
 }): Promise<'uploaded' | 'skipped'> {
-    const { file, quality, ctx, onProgress, onStarted, precomputedSha256 } = params
+    const { file, quality, ctx, onProgress, onStarted, sha256 } = params
 
     // Step 1: Create job (also acts as duplicate/quota check)
     trackEvent('analysis_upload_start', {
@@ -142,7 +141,6 @@ export async function uploadVideoFile(params: {
     // Limit upload length by counting demuxed video samples.
     await assertVideoWithinMaxFrames(file, MAX_FRAMES)
 
-    const sha256 = precomputedSha256 || (await computeSha256(file)).sha256
     const created = await createJobForChecksum(sha256, ctx)
     if (created === 'skipped') {
         trackEvent('analysis_upload_skipped', { reason: 'duplicate_or_already_processed' })
@@ -201,8 +199,7 @@ export async function uploadVideoFileToJob(
 ): Promise<'uploaded'> {
     // Step 2: Preprocess
     // TODO reenable: const processed = await preprocessVideo(file, quality, progress => onProgress(progress * PERCENT_PREPROCESS))
-    const processed = await file.arrayBuffer()
-    const totalSize = processed.byteLength
+    const totalSize = file.size
     const totalParts = Math.ceil(totalSize / CHUNK_SIZE)
 
     // Step 3: INIT chunked upload (also carries model params)
@@ -223,8 +220,6 @@ export async function uploadVideoFileToJob(
     const { resume_from_part } = (await initRes.json()) as { resume_from_part: number }
 
     // Step 4: Upload parts (parallel with aggregated progress)
-    const processedView = new Uint8Array(processed)
-
     // Precompute part sizes
     const partSizes: number[] = Array.from({ length: totalParts }, (_, i) => {
         const start = i * CHUNK_SIZE
@@ -253,14 +248,14 @@ export async function uploadVideoFileToJob(
     async function uploadOnePart(partIndex: number): Promise<void> {
         const start = partIndex * CHUNK_SIZE
         const end = Math.min(start + CHUNK_SIZE, totalSize)
-        const chunkBytes = processedView.subarray(start, end)
         const partSize = partSizes[partIndex]
+        const chunkBlob = file.slice(start, end)
 
         const partForm = new FormData()
         partForm.append('part_index', String(partIndex))
         partForm.append(
             'chunk',
-            new Blob([chunkBytes], { type: file.type || 'application/octet-stream' }),
+            chunkBlob,
             `${file.name}.part${partIndex}`
         )
 

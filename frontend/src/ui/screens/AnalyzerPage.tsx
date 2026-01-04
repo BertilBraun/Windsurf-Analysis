@@ -19,6 +19,7 @@ import { ConsentModal } from '../components/ConsentModal'
 import settingsIcon from '../assets/settings.svg'
 
 const FEEDBACK_PROMPT_SEEN_KEY = 'feedbackPromptSeen.v1'
+
 export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => void }> = ({
     onGoHome,
     onGoPricing,
@@ -37,10 +38,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const [consentSubmitting, setConsentSubmitting] = React.useState<boolean>(false)
     const [ingressUploading, setIngressUploading] = React.useState<number>(0)
 
-    // Workaround: some TS tooling instances may cache older prop typings during rapid edits.
-    // This keeps runtime behavior correct while avoiding a stale "extra props" diagnostic.
-    const TutorialModal = AnalyzerTutorialModal as React.FC<any>
-
     // Ingress folder handle stored at the page level for the whole session
     const [dirHandle, setDirHandle] = React.useState<FileSystemDirectoryHandle | null>(null)
     const [dirPermission, setDirPermission] = React.useState<'granted' | 'denied' | 'prompt' | null>(null)
@@ -48,20 +45,16 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const knownChecksumsSha256 = React.useMemo(() => {
         const s = new Set<string>()
         for (const j of jobs) {
-            const sha = String(j.original_checksum_sha256 || '')
-            if (!sha) continue
             if (j.status === 'uploading') continue
-            s.add(sha)
+            s.add(j.original_checksum_sha256)
         }
         return s
     }, [jobs])
     const pendingChecksumsSha256 = React.useMemo(() => {
         const s = new Set<string>()
         for (const j of jobs) {
-            const sha = String(j.original_checksum_sha256 || '')
-            if (!sha) continue
             if (j.status !== 'uploading') continue
-            s.add(sha)
+            s.add(j.original_checksum_sha256)
         }
         return s
     }, [jobs])
@@ -334,7 +327,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                 {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onLogout={logout} />}
                 {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
                 {shouldShowFeedback && <FeedbackModal onClose={handleFeedbackClose} />}
-                {showTutorial && <TutorialModal {...tutorialModalProps} />}
+                {showTutorial && <AnalyzerTutorialModal {...tutorialModalProps} />}
 
                 <IngressWidget
                     dirHandle={dirHandle}

@@ -35,6 +35,30 @@ function now() {
     return typeof performance !== 'undefined' ? performance.now() : Date.now()
 }
 
+function getHashConcurrency(): number {
+    const hc =
+        typeof navigator !== 'undefined' && (navigator as any).hardwareConcurrency
+            ? Math.floor((navigator as any).hardwareConcurrency)
+            : 0
+    // Hashing is disk+CPU heavy; keep this conservative to avoid memory spikes.
+    if (hc > 0) return Math.max(1, Math.min(4, Math.floor(hc / 2)))
+    return 2
+}
+
+async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+    let nextIdx = 0
+    async function worker(): Promise<void> {
+        while (true) {
+            const i = nextIdx
+            if (i >= items.length) return
+            nextIdx = i + 1
+            await fn(items[i])
+        }
+    }
+    const n = Math.max(1, Math.min(limit, items.length))
+    await Promise.all(Array.from({ length: n }, () => worker()))
+}
+
 async function scanDirectory(
     dirHandle: FileSystemDirectoryHandle,
     prevSnapshot: FileSnapshot | null,
@@ -81,7 +105,7 @@ async function scanDirectory(
         if (processed % 25 === 0) await new Promise(resolve => window.setTimeout(resolve, 0))
     }
 
-    await Promise.all(entries.map(computeSha))
+    await mapLimit(entries, getHashConcurrency(), computeSha)
 
     const snapshot: FileSnapshot = {
         files,

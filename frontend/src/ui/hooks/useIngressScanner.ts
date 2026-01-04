@@ -15,6 +15,8 @@ export type IngressUploadItem = {
 }
 
 const AUTO_RETRY_MS = 15000
+const HANDLED_TTL_MS = 15_000
+const SKIPPED_TTL_MS = 60 * 60 * 1000
 
 function isTransientUploadError(err: any): boolean {
     const msg = String(err?.message || err || '').toLowerCase()
@@ -33,9 +35,9 @@ function isTransientUploadError(err: any): boolean {
 
 export function useIngressScanner(
     dirHandle: FileSystemDirectoryHandle | null,
-    uploadCtx: UploadContext | null,
-    knownChecksumsSha256?: ReadonlySet<string> | null,
-    pendingChecksumsSha256?: ReadonlySet<string> | null,
+    uploadCtx: UploadContext,
+    knownChecksumsSha256: ReadonlySet<string> | null,
+    pendingChecksumsSha256: ReadonlySet<string> | null,
     uploadsEnabled: boolean = true,
     intervalMs: number = 5000
 ) {
@@ -48,7 +50,7 @@ export function useIngressScanner(
     const retryAfterRef = React.useRef<Map<string, number>>(new Map())
     // Avoid hammering the server for the same checksum between scans while waiting for
     // Firestore job snapshots to catch up. Keep TTL short so deletions/re-association work.
-    const recentlyHandledRef = React.useRef<Map<string, number>>(new Map())
+    const recentlyHandledUntilRef = React.useRef<Map<string, number>>(new Map())
     // Track files that are still being copied so we only upload once they settle.
     const stabilityRef = React.useRef<Map<string, { size: number; mtimeMs: number; stableCount: number }>>(new Map())
     const [suspended, setSuspended] = React.useState(false)
@@ -63,22 +65,21 @@ export function useIngressScanner(
     }, [])
 
     const timerRef = React.useRef<number | null>(null)
+    const scanGenRef = React.useRef<number>(0)
+    const scanInFlightRef = React.useRef<boolean>(false)
     const { refresh, loaded, scanStatus } = useLocalFileIndex(dirHandle)
 
     const shouldUpload = React.useCallback(
         (sha: string) => {
             if (!uploadsEnabled) return false
-            if (!uploadCtx) return false
 
             // Gold standard: if a job with this checksum already exists for this user, skip.
             if (knownChecksumsSha256?.has(sha)) return false
             // If the server already has an uploading job, don't create another upload attempt.
             if (pendingChecksumsSha256?.has(sha)) return false
 
-            // Short TTL cache to avoid repeated /jobs calls for the same checksum while Firestore updates.
-            const lastHandledAt = recentlyHandledRef.current.get(sha) ?? 0
-            const HANDLED_TTL_MS = 15_000
-            if (Date.now() - lastHandledAt < HANDLED_TTL_MS) return false
+            const handledUntil = recentlyHandledUntilRef.current.get(sha) ?? 0
+            if (Date.now() < handledUntil) return false
 
             if (failedRef.current.has(sha)) {
                 const retryAfter = retryAfterRef.current.get(sha)
@@ -91,7 +92,7 @@ export function useIngressScanner(
 
             return true
         },
-        [knownChecksumsSha256, pendingChecksumsSha256, uploadCtx, uploadsEnabled]
+        [knownChecksumsSha256, pendingChecksumsSha256, uploadsEnabled]
     )
 
     const uploadOne = React.useCallback(
@@ -107,12 +108,13 @@ export function useIngressScanner(
                 const result = await uploadVideoFile({
                     file,
                     quality: settings.uploadQuality,
-                    ctx: uploadCtx!,
+                    ctx: uploadCtx,
                     onProgress: percent => updateUpload(sha, { progress: Math.round(percent * 100) }),
                     onStarted: () => updateUpload(sha, { status: 'uploading' }),
-                    precomputedSha256: sha,
+                    sha256: sha,
                 })
-                recentlyHandledRef.current.set(sha, Date.now())
+                const ttl = result === 'skipped' ? SKIPPED_TTL_MS : HANDLED_TTL_MS
+                recentlyHandledUntilRef.current.set(sha, Date.now() + ttl)
 
                 if (result === 'skipped') {
                     removeUpload(sha)
@@ -140,16 +142,23 @@ export function useIngressScanner(
     )
 
     const scanContinuously = React.useCallback(async () => {
+        const myGen = scanGenRef.current
         if (!dirHandle) return
-        if (!loaded) {
+
+        // Prevent overlapping scans; without this it's easy to end up with multiple concurrent
+        // loops scheduling timers with different captured props/sets.
+        if (scanInFlightRef.current || !loaded) {
+            if (scanGenRef.current !== myGen) return
             timerRef.current = window.setTimeout(scanContinuously, intervalMs)
             return
         }
 
+        scanInFlightRef.current = true
         try {
             const result = await refresh()
             if (result) {
                 const { snapshot, filesByKey } = result
+
                 const stabilityByPath = new Map<string, boolean>()
                 const REQUIRED_STABLE_SCANS = 1
 
@@ -176,15 +185,8 @@ export function useIngressScanner(
                 const currentPaths = new Set(snapshot.files.map(fp => fp.path))
                 const queuedThisScan = new Set<string>()
 
-                const ensureStable = (fp: FileFingerprint) => {
-                    if (!isStable(fp)) {
-                        return false
-                    }
-                    return true
-                }
-
                 const queueUpload = (fp: FileFingerprint, sha: string) => {
-                    if (!ensureStable(fp)) return
+                    if (!isStable(fp)) return
                     if (!shouldUpload(sha)) return
                     if (queuedThisScan.has(sha)) return
                     queuedThisScan.add(sha)
@@ -195,7 +197,6 @@ export function useIngressScanner(
 
                 for (const fp of snapshot.files) {
                     const sha = getFingerprintSha(snapshot, fp)
-                    if (!sha) continue
                     queueUpload(fp, sha)
                 }
 
@@ -213,7 +214,10 @@ export function useIngressScanner(
         } catch (e: any) {
             setLastError(e?.message || String(e))
             setLastRunAt(Date.now())
+        } finally {
+            scanInFlightRef.current = false
         }
+        if (scanGenRef.current !== myGen) return
         timerRef.current = window.setTimeout(scanContinuously, intervalMs)
     }, [dirHandle, intervalMs, loaded, refresh, shouldUpload, uploadOne])
 
@@ -224,9 +228,11 @@ export function useIngressScanner(
             return
         }
         setActive(true)
+        scanGenRef.current += 1
         // immediate run, then interval
         scanContinuously()
         return () => {
+            scanGenRef.current += 1
             if (timerRef.current) window.clearTimeout(timerRef.current)
             timerRef.current = null
         }

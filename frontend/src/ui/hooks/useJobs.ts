@@ -191,7 +191,7 @@ export function useJobs(): UseJobsReturn {
                                 status: String(j?.status ?? 'uploading') as any,
                                 created_at: toIso(j?.created_at),
                                 updated_at: toIso(j?.updated_at),
-                                original_checksum_sha256: String(j?.original_checksum_sha256 ?? ''),
+                                original_checksum_sha256: String(j?.original_checksum_sha256 ?? jobId),
                                 dominant_orientation: Number(j?.dominant_orientation ?? 0),
                             }
 

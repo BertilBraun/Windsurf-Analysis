@@ -14,10 +14,10 @@ class JobsRepo:
         return JobRecord.model_validate(snap.to_dict() or {})
 
     def get_job_by_checksum(self, checksum: str) -> JobRecord | None:
-        q = jobs.where('original_checksum_sha256', '==', checksum).limit(1).stream()
-        for snap in q:
-            return JobRecord.model_validate(snap.to_dict() or {})
-        return None
+        snap = jobs.document(checksum).get()
+        if not snap.exists:
+            return None
+        return JobRecord.model_validate(snap.to_dict() or {})
 
     def create_job(self, original_checksum_sha256: str) -> JobRecord:
         job_id = original_checksum_sha256
