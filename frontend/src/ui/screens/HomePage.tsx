@@ -21,9 +21,10 @@ export const HomePage: React.FC = () => {
         <div className="flex flex-col gap-10">
             <section className="rounded-2xl border border-slate-200 bg-linear-to-b from-white to-slate-50 p-5 sm:p-8">
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.3fr)] gap-6 items-center">
-                    <div className="max-w-md">
+                    <div>
                         {/*<div className="text-xs font-semibold text-brand-700 mb-2">{t('screens.home.hero.brand')}</div>*/}
                         <Heading level={1}>{t('screens.home.hero.title')}</Heading>
+                        <br />
                         <TextStack className="mt-4">
                             <p>
                                 <Trans i18nKey="screens.home.hero.lede1" components={{ strong: <TextStrong /> }} />
@@ -34,6 +35,7 @@ export const HomePage: React.FC = () => {
                             <p>{t('screens.home.hero.lede3')}</p>
                         </TextStack>
 
+                        <br />
                         <div className="mt-5 flex flex-col sm:flex-row gap-3 sm:items-center">
                             <Button
                                 variant="primary"
@@ -44,6 +46,7 @@ export const HomePage: React.FC = () => {
                                 {t('screens.home.hero.freeVideos')}
                             </Text>
                         </div>
+                        <br />
                         <Text as="div" variant="muted" className="mt-2">
                             {t('screens.home.hero.disclaimer')}
                         </Text>

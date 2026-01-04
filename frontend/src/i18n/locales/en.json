@@ -148,7 +148,7 @@
             },
             "leaveWarning": "Uploads are still running. If you leave now, your videos may not finish uploading.",
             "panel": {
-                "description": "GybeLock watches this folder and processes new videos automatically.",
+                "description": "GybeLock waits for new videos in this folder and processes them automatically.",
                 "folderLabel": "Video Folder",
                 "noFolder": "No folder selected",
                 "noUploads": "No uploads right now.",
@@ -189,7 +189,7 @@
                 "expand": "Expand all",
                 "expandTitle": "Expand all folders"
             },
-            "emptyTip": "Tip: Most people drop several videos, leave them processing, and review them later.",
+            "emptyTip": "Tip: Most people add several videos to the Video Folder, leave them processing, and review them later.",
             "folder": {
                 "closedIcon": "▸",
                 "inProgress": "{{count}} in progress",

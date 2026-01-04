@@ -703,7 +703,7 @@ export const JobList: React.FC<{
 
     if (jobs.length === 0) {
         return (
-            <div className="text-center text-gray-500">
+            <div className="text-center text-gray-500 flex flex-col items-center gap-8">
                 <div>
                     {initialSyncComplete ? t('components.jobList.waiting') : t('components.jobList.loading')}
                     <AnimatedDots />
