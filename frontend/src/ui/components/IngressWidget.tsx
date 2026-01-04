@@ -130,13 +130,18 @@ export const IngressWidget: React.FC<Props> = ({
         if (scanner.uploading <= 0) return
 
         setShowMultiVideoHint(true)
+    }, [scanner.uploading])
+
+    React.useEffect(() => {
+        if (!showMultiVideoHint) return
         if (hintTimerRef.current) window.clearTimeout(hintTimerRef.current)
-        hintTimerRef.current = window.setTimeout(() => setShowMultiVideoHint(false), 6000)
+        hintTimerRef.current = window.setTimeout(() => setShowMultiVideoHint(false), 5000)
 
         return () => {
             if (hintTimerRef.current) window.clearTimeout(hintTimerRef.current)
+            hintTimerRef.current = null
         }
-    }, [scanner.uploading])
+    }, [showMultiVideoHint])
 
     const uploading = scanner.uploading
     const ringPercent = meanProgress(scanner.uploads)
@@ -190,7 +195,7 @@ export const IngressWidget: React.FC<Props> = ({
         <>
             {showMultiVideoHint && (
                 <div
-                    className="fixed max-w-[320px] rounded-xl bg-slate-900 text-white px-3 py-2 shadow-lg flex items-start gap-3"
+                    className="fixed max-w-[340px] rounded-xl border border-slate-200 bg-white/95 backdrop-blur px-3 py-2 shadow-lg flex items-start gap-3 text-slate-900"
                     style={{
                         right: 'var(--analyzer-side-offset, 1rem)',
                         bottom: 'calc(var(--analyzer-bottom-offset, 1rem) + 64px)',
@@ -199,15 +204,8 @@ export const IngressWidget: React.FC<Props> = ({
                     role="status"
                     aria-live="polite"
                 >
-                    <div className="text-sm leading-snug">{t('components.ingressWidget.hints.multiVideo')}</div>
-                    <button
-                        type="button"
-                        className="ml-auto text-white/70 hover:text-white text-sm leading-none"
-                        aria-label={t('common.close')}
-                        onClick={() => setShowMultiVideoHint(false)}
-                    >
-                        ×
-                    </button>
+                    <div className="mt-0.5 h-2 w-2 rounded-full bg-brand-600 shrink-0" aria-hidden="true" />
+                    <div className="text-xs leading-snug text-slate-700">{t('components.ingressWidget.hints.multiVideo')}</div>
                 </div>
             )}
             <div
