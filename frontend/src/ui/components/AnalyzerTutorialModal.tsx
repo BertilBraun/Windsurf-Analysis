@@ -45,13 +45,10 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                         <Text as="p" variant="support">
                             {t('components.analyzerTutorialModal.steps.what.bodyMuted')}
                         </Text>
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-700">
-                            <TextStack variant="muted" className="space-y-1">
-                                <Text as="div" variant="muted">
-                                    {t('components.analyzerTutorialModal.steps.what.footageNote1')}
-                                </Text>
-                                <Text as="div" variant="muted">
-                                    {t('components.analyzerTutorialModal.steps.what.footageNote2')}
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                            <TextStack variant="support" className="space-y-1">
+                                <Text as="div" variant="support">
+                                    {t('components.analyzerTutorialModal.steps.what.footageNote')}
                                 </Text>
                             </TextStack>
                         </div>
@@ -69,6 +66,17 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                                 components={{ b: <TextStrong /> }}
                             />
                         </Text>
+                        <Text as="div" variant="support">
+                            <Trans
+                                i18nKey="components.analyzerTutorialModal.steps.watchFolder.safety"
+                                components={{ b: <TextStrong /> }}
+                            />
+                        </Text>
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                            <Text as="div" variant="support" weight="semibold" className="text-amber-950">
+                                {t('components.analyzerTutorialModal.steps.watchFolder.permissions')}
+                            </Text>
+                        </div>
                         <div className="rounded-xl border border-slate-200 bg-white p-3">
                             <Text as="div" variant="muted">
                                 <Trans
@@ -77,17 +85,6 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                                 />
                             </Text>
                         </div>
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                            <Text as="div" variant="support" weight="semibold" className="text-amber-950">
-                                {t('components.analyzerTutorialModal.steps.watchFolder.permissions')}
-                            </Text>
-                        </div>
-                        <Text as="div" variant="support">
-                            <Trans
-                                i18nKey="components.analyzerTutorialModal.steps.watchFolder.safety"
-                                components={{ b: <TextStrong /> }}
-                            />
-                        </Text>
 
                         <div className="pt-2 flex flex-col items-center gap-2">
                             <Button
@@ -155,9 +152,6 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                                 components={{ b: <b /> }}
                             />
                         </p>
-                        <div className="text-xs text-slate-500">
-                            {t('components.analyzerTutorialModal.steps.reviewRiding.tip')}
-                        </div>
                     </div>
                 ),
             },
@@ -184,6 +178,16 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                             </div>
                             <Text as="div" variant="support">
                                 {t('components.analyzerTutorialModal.steps.reviewTools.bullets.slow')}
+                            </Text>
+                        </div>
+                        <div className="flex gap-3 items-start">
+                            <div className="min-w-24">
+                                <Text as="div" variant="muted" weight="semibold" className="uppercase tracking-wide">
+                                    {t('components.analyzerTutorialModal.steps.reviewTools.labels.zoom')}
+                                </Text>
+                            </div>
+                            <Text as="div" variant="support">
+                                {t('components.analyzerTutorialModal.steps.reviewTools.bullets.zoom')}
                             </Text>
                         </div>
                         <div className="flex gap-3 items-start">
@@ -313,7 +317,6 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                     </div>
                 </div>
             </Modal>
-
         </>
     )
 }
