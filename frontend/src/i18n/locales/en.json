@@ -15,7 +15,8 @@
         "analyticsConsentBanner": {
             "accept": "Accept",
             "decline": "Decline",
-            "message": "GybeLock would like to use <bold>Google Analytics</bold> to understand basic usage (page views and clicks). You can accept or decline. Details are in the <privacyLink>Privacy Policy</privacyLink>."
+            "title": "Help us improve GybeLock",
+            "message": "We use Google Analytics to collect anonymous usage data (no ads, no cross-site tracking). See our <privacyLink>Privacy Policy</privacyLink> for details."
         },
         "consentModal": {
             "accept": "Continue",

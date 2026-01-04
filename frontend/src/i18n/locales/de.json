@@ -1,7 +1,8 @@
 {
     "components": {
         "analyticsConsentBanner": {
-            "message": "GybeLock moechte <bold>Google Analytics</bold> verwenden, um die grundlegende Nutzung zu verstehen (Seitenaufrufe und Klicks). Du kannst akzeptieren oder ablehnen. Details stehen in der <privacyLink>Datenschutzerklaerung</privacyLink>.",
+            "title": "Hilf uns, GybeLock zu verbessern",
+            "message": "Wir verwenden Google Analytics, um anonyme Nutzungsdaten zu sammeln (keine Werbung, kein Cross-Site-Tracking).<br />Du kannst deine Auswahl jederzeit ändern. Details findest du in unserer <privacyLink>Datenschutzerklärung</privacyLink>.",
             "decline": "Ablehnen",
             "accept": "Akzeptieren"
         },

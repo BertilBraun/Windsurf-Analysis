@@ -84,14 +84,20 @@ export const AnalyticsConsentBanner: React.FC = () => {
             className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 backdrop-blur"
         >
             <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3 flex flex-col sm:flex-row gap-3 sm:items-center">
-                <div className="text-xs text-slate-700 leading-5">
-                    <Trans
-                        i18nKey="components.analyticsConsentBanner.message"
-                        components={{
-                            bold: <b />,
-                            privacyLink: <Link className="text-brand-700 underline underline-offset-4" to="/privacy" />,
-                        }}
-                    />
+                <div className="leading-5">
+                    <div className="text-sm font-semibold text-slate-900">
+                        {t('components.analyticsConsentBanner.title')}
+                    </div>
+                    <div className="text-xs text-slate-700">
+                        <Trans
+                            i18nKey="components.analyticsConsentBanner.message"
+                            components={{
+                                privacyLink: (
+                                    <Link className="text-brand-700 underline underline-offset-4" to="/privacy" />
+                                ),
+                            }}
+                        />
+                    </div>
                 </div>
                 <div className="flex-1" />
                 <div className="flex gap-2">
