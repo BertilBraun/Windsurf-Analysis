@@ -61,6 +61,7 @@
                 "reviewRiding": {
                     "focused": "<b>Hover a rider and click</b> to switch to <b>Focused view</b>, where that rider stays centered and stable.",
                     "overview": "Videos open in <b>Overview mode</b>, where the scene is stabilized and all riders stay visible.",
+                    "tip": "Tip: Click anywhere or press Esc to return to Overview mode.",
                     "title": "Review your riding"
                 },
                 "reviewTools": {

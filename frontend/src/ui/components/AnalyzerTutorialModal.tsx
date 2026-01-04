@@ -181,6 +181,9 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                                 components={{ b: <b /> }}
                             />
                         </p>
+                        <p className="text-sm text-slate-600 leading-6">
+                            {t('components.analyzerTutorialModal.steps.reviewRiding.tip')}
+                        </p>
                     </div>
                 ),
             },
