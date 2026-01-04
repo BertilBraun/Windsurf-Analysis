@@ -188,54 +188,6 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                 ),
             },
             {
-                key: 'review-tools',
-                title: t('components.analyzerTutorialModal.steps.reviewTools.title'),
-                body: (
-                    <div className="space-y-3">
-                        <div className="flex gap-3 items-start">
-                            <div className="min-w-24">
-                                <Text as="div" variant="muted" weight="semibold" className="uppercase tracking-wide">
-                                    {t('components.analyzerTutorialModal.steps.reviewTools.labels.draw')}
-                                </Text>
-                            </div>
-                            <Text as="div" variant="support">
-                                {t('components.analyzerTutorialModal.steps.reviewTools.bullets.draw')}
-                            </Text>
-                        </div>
-                        <div className="flex gap-3 items-start">
-                            <div className="min-w-24">
-                                <Text as="div" variant="muted" weight="semibold" className="uppercase tracking-wide">
-                                    {t('components.analyzerTutorialModal.steps.reviewTools.labels.timeline')}
-                                </Text>
-                            </div>
-                            <Text as="div" variant="support">
-                                {t('components.analyzerTutorialModal.steps.reviewTools.bullets.slow')}
-                            </Text>
-                        </div>
-                        <div className="flex gap-3 items-start">
-                            <div className="min-w-24">
-                                <Text as="div" variant="muted" weight="semibold" className="uppercase tracking-wide">
-                                    {t('components.analyzerTutorialModal.steps.reviewTools.labels.zoom')}
-                                </Text>
-                            </div>
-                            <Text as="div" variant="support">
-                                {t('components.analyzerTutorialModal.steps.reviewTools.bullets.zoom')}
-                            </Text>
-                        </div>
-                        <div className="flex gap-3 items-start">
-                            <div className="min-w-24">
-                                <Text as="div" variant="muted" weight="semibold" className="uppercase tracking-wide">
-                                    {t('components.analyzerTutorialModal.steps.reviewTools.labels.export')}
-                                </Text>
-                            </div>
-                            <Text as="div" variant="support">
-                                {t('components.analyzerTutorialModal.steps.reviewTools.bullets.export')}
-                            </Text>
-                        </div>
-                    </div>
-                ),
-            },
-            {
                 key: 'feedback-reports',
                 title: t('components.analyzerTutorialModal.steps.feedbackReports.title'),
                 body: (

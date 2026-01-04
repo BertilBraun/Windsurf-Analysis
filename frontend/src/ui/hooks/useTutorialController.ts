@@ -9,18 +9,17 @@ const ANALYZER_TUTORIAL_PROGRESS_KEY = 'analyzerTutorialProgress.v2'
 
 type TutorialOpenSource = 'header' | 'empty_state' | 'auto'
 
-type TutorialStepKey = 'what' | 'watch-folder' | 'add-videos' | 'review-riding' | 'review-tools' | 'feedback-reports'
+type TutorialStepKey = 'what' | 'watch-folder' | 'add-videos' | 'review-riding' | 'feedback-reports'
 
 const ALL_TUTORIAL_STEP_KEYS: TutorialStepKey[] = [
     'what',
     'watch-folder',
     'add-videos',
     'review-riding',
-    'review-tools',
     'feedback-reports',
 ]
 const ONBOARDING_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['what', 'watch-folder', 'add-videos']
-const PLAYER_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['review-riding', 'review-tools', 'feedback-reports']
+const PLAYER_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['review-riding', 'feedback-reports']
 
 type TutorialControllerOptions = {
     dirHandle: FileSystemDirectoryHandle | null
@@ -113,7 +112,6 @@ export const useTutorialController = ({
         hasOpenedPlayerRef.current = true
         if (
             tutorialSeenSteps.has('review-riding') &&
-            tutorialSeenSteps.has('review-tools') &&
             tutorialSeenSteps.has('feedback-reports')
         )
             return
