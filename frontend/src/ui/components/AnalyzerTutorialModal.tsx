@@ -78,6 +78,17 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                                 components={{ b: <TextStrong /> }}
                             />
                         </Text>
+                        <details className="rounded-xl border border-slate-200 bg-white p-3">
+                            <summary className="text-sm text-slate-700 cursor-pointer select-none">
+                                {t('components.analyzerTutorialModal.steps.watchFolder.moreInfo')}
+                            </summary>
+                            <div className="mt-2 text-sm text-slate-600 leading-6">
+                                <Trans
+                                    i18nKey="components.analyzerTutorialModal.steps.watchFolder.moreInfoBody"
+                                    components={{ b: <TextStrong /> }}
+                                />
+                            </div>
+                        </details>
                         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                             <Text as="div" variant="support" weight="semibold" className="text-amber-950">
                                 {t('components.analyzerTutorialModal.steps.watchFolder.permissions')}
