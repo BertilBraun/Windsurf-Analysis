@@ -88,9 +88,7 @@ export const HomePage: React.FC = () => {
                     <li>{t('screens.home.problem.bullets.riders')}</li>
                     <li>{t('screens.home.problem.bullets.moments')}</li>
                 </ul>
-                <Text as="p" variant="support">
-                    {t('screens.home.problem.outro')}
-                </Text>
+                <p>{t('screens.home.problem.outro')}</p>
             </Section>
 
             <Section
@@ -102,33 +100,21 @@ export const HomePage: React.FC = () => {
                 <p>{t('screens.home.what.intro')}</p>
                 <ul className="list-disc pl-5 space-y-1">
                     <li>
-                        <Trans
-                            i18nKey="screens.home.what.bullets.stabilizes"
-                            components={{ strong: <TextStrong /> }}
-                        />
+                        <Trans i18nKey="screens.home.what.bullets.stabilizes" components={{ strong: <TextStrong /> }} />
                     </li>
                     <li>
-                        <Trans
-                            i18nKey="screens.home.what.bullets.locksOnto"
-                            components={{ strong: <TextStrong /> }}
-                        />
+                        <Trans i18nKey="screens.home.what.bullets.locksOnto" components={{ strong: <TextStrong /> }} />
                     </li>
                     <li>
-                        <Trans
-                            i18nKey="screens.home.what.bullets.centered"
-                            components={{ strong: <TextStrong /> }}
-                        />
+                        <Trans i18nKey="screens.home.what.bullets.centered" components={{ strong: <TextStrong /> }} />
                     </li>
                     <li>
-                        <Trans
-                            i18nKey="screens.home.what.bullets.follows"
-                            components={{ strong: <TextStrong /> }}
-                        />
+                        <Trans i18nKey="screens.home.what.bullets.follows" components={{ strong: <TextStrong /> }} />
                     </li>
                 </ul>
-                <Text as="p" variant="support">
+                <p>
                     <Trans i18nKey="screens.home.what.outro" components={{ em: <em /> }} />
-                </Text>
+                </p>
             </Section>
 
             <Section
@@ -143,11 +129,9 @@ export const HomePage: React.FC = () => {
                     <li>{t('screens.home.built.bullets.multiple')}</li>
                     <li>{t('screens.home.built.bullets.conditions')}</li>
                 </ul>
-                <p>
-                    <Trans i18nKey="screens.home.built.notDesigned" components={{ strong: <TextStrong /> }} />
-                </p>
+                <p>{t('screens.home.built.outro')}</p>
                 <Text as="p" variant="support">
-                    {t('screens.home.built.outro')}
+                    <Trans i18nKey="screens.home.built.notDesigned" components={{ strong: <TextStrong /> }} />
                 </Text>
             </Section>
 
@@ -173,9 +157,7 @@ export const HomePage: React.FC = () => {
                     <li>{t('screens.home.who.bullets.friends')}</li>
                     <li>{t('screens.home.who.bullets.anyone')}</li>
                 </ul>
-                <Text as="p" variant="support">
-                    {t('screens.home.who.outro')}
-                </Text>
+                <p>{t('screens.home.who.outro')}</p>
             </Section>
 
             <Section title={t('screens.home.why.title')}>
