@@ -49,13 +49,11 @@ export const LogoButton: React.FC<LogoButtonProps> = ({
     const resolvedAlt = alt ?? t('components.logoButton.alt')
     const ariaLabel = props['aria-label'] ?? t('components.logoButton.ariaLabel')
 
-    const img = (
-        <img src={src} alt={resolvedAlt} className={cx('h-7 w-auto', imgClassName)} style={imgStyle} />
-    )
+    const img = <img src={src} alt={resolvedAlt} className={cx('h-7 w-auto', imgClassName)} style={imgStyle} />
 
     if ('to' in props) {
         return (
-            <Link to={props.to} className={commonClassName} aria-label={ariaLabel} title={resolvedTitle}>
+            <Link to={props.to!} className={commonClassName} aria-label={ariaLabel} title={resolvedTitle}>
                 {img}
             </Link>
         )

@@ -467,7 +467,10 @@ export const Player: React.FC<Props> = ({
         if (player.mode === 'overview' && hoveredTrackId == null) {
             if (webPlayer.playing) {
                 webPlayer.pause()
-            } else if (webPlayer.ended || (webPlayer.frameCount > 0 && webPlayer.currentFrameIndex >= webPlayer.frameCount - 1)) {
+            } else if (
+                webPlayer.ended ||
+                (webPlayer.frameCount > 0 && webPlayer.currentFrameIndex >= webPlayer.frameCount - 1)
+            ) {
                 void webPlayer.seekFrame(0, true)
             } else {
                 webPlayer.play()
@@ -569,8 +572,11 @@ export const Player: React.FC<Props> = ({
 
     const showFocusedClickHint = !drawMode && player?.mode === 'overview' && !focusedClickHintDismissed
 
-    const canvasCursorClass =
-        drawMode ? 'cursor-crosshair' : !drawMode && player?.mode === 'overview' && hoveredTrackId != null ? 'cursor-pointer' : ''
+    const canvasCursorClass = drawMode
+        ? 'cursor-crosshair'
+        : !drawMode && player?.mode === 'overview' && hoveredTrackId != null
+        ? 'cursor-pointer'
+        : ''
 
     return (
         <div className="relative flex flex-col h-full">

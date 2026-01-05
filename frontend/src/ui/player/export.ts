@@ -80,7 +80,7 @@ export async function exportTrackMp4(params: {
 
         const rotCanvas = getSharedOffscreenCanvas()
         const rotated = drawRotatedToCanvas(frame, rotCanvas, dominantOrientationDeg)
-        drawDetailedCrop(ctx, outputWidth, outputHeight, rotCanvas, rotated.width, rotated.height, detection)
+        drawDetailedCrop(ctx, outputWidth, outputHeight, rotCanvas, rotated.width, rotated.height, detection, 1)
         drawWatermark(ctx, outputWidth, outputHeight, watermark)
         return true
     }

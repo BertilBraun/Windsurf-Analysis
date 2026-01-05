@@ -10,7 +10,7 @@ export type HeadingProps = Omit<React.HTMLAttributes<HTMLHeadingElement>, 'color
 }
 
 export const Heading: React.FC<HeadingProps> = ({ level, tone = 'default', className, ...props }) => {
-    const Tag = (level === 1 ? 'h1' : level === 2 ? 'h2' : 'h3') as const
+    const Tag = level === 1 ? 'h1' : level === 2 ? 'h2' : 'h3'
     const baseClass =
         level === 1
             ? 'text-3xl sm:text-4xl font-semibold tracking-tight'

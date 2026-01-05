@@ -1,5 +1,5 @@
 import { clamp } from '../utils/clamp'
-import { MAX_SCALE, MIN_SCALE, TARGET_BBOX_HEIGHT_RATIO } from './constants'
+import { MAX_SCALE, MIN_SCALE, TARGET_BBOX_HEIGHT_RATIO, TARGET_BBOX_WIDTH_RATIO } from './constants'
 import { computeBaseRect } from './renderMath'
 import { drawRotatedToCanvas, getRotatedDimensions } from './rotation'
 import { PlayerState } from './state'
@@ -47,77 +47,12 @@ export function ensureCanvasSize(canvas: HTMLCanvasElement, cssWidth: number, cs
     return ctx
 }
 
-function drawFitContain(ctx: Ctx2D, outW: number, outH: number, src: CanvasImageSource, srcW: number, srcH: number) {
-    const base = computeBaseRect(outW, outH, srcW, srcH)
-    ctx.imageSmoothingEnabled = true
-    ctx.imageSmoothingQuality = 'high'
-    ctx.drawImage(src, 0, 0, srcW, srcH, base.x, base.y, base.w, base.h)
-}
-
-export function drawDetailedCrop(
-    ctx: Ctx2D,
-    outputWidth: number,
-    outputHeight: number,
-    srcCanvas: CanvasImageSource,
-    srcWidth: number,
-    srcHeight: number,
-    det: TimedBBox | null,
-    zoomMul: number = 1
-) {
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.fillStyle = '#000'
-    ctx.fillRect(0, 0, outputWidth, outputHeight)
-
-    if (!det) {
-        drawFitContain(ctx, outputWidth, outputHeight, srcCanvas, srcWidth, srcHeight)
-        return
-    }
-
-    const [x1p, y1p, x2p, y2p] = det.bbox
-    const x1 = x1p * srcWidth
-    const y1 = y1p * srcHeight
-    const x2 = x2p * srcWidth
-    const y2 = y2p * srcHeight
-    const bboxW = Math.max(1, x2 - x1)
-    const bboxH = Math.max(1, y2 - y1)
-
-    const sHeight = (TARGET_BBOX_HEIGHT_RATIO * outputHeight) / bboxH
-    const sWidthLimit = outputWidth / bboxW
-    const sBase = clamp(Math.min(sHeight, sWidthLimit), MIN_SCALE, MAX_SCALE)
-    const s = clamp(sBase * Math.max(1e-6, zoomMul), MIN_SCALE, MAX_SCALE)
-
-    const cx = (x1 + x2) * 0.5
-    const cy = (y1 + y2) * 0.5
-    const cropW = outputWidth / s
-    const cropH = outputHeight / s
-    const winX1 = cx - cropW / 2
-    const winY1 = cy - cropH / 2
-    const winX2 = winX1 + cropW
-    const winY2 = winY1 + cropH
-
-    const srcX1 = Math.max(0, Math.floor(winX1))
-    const srcY1 = Math.max(0, Math.floor(winY1))
-    const srcX2 = Math.min(srcWidth, Math.ceil(winX2))
-    const srcY2 = Math.min(srcHeight, Math.ceil(winY2))
-    const dstX1 = Math.max(0, Math.floor((srcX1 - winX1) * s))
-    const dstY1 = Math.max(0, Math.floor((srcY1 - winY1) * s))
-    const dstX2 = Math.min(outputWidth, Math.ceil((srcX2 - winX1) * s))
-    const dstY2 = Math.min(outputHeight, Math.ceil((srcY2 - winY1) * s))
-
-    const srcWW = clamp(srcX2 - srcX1, 0, srcWidth)
-    const srcHH = clamp(srcY2 - srcY1, 0, srcHeight)
-    const dstWW = clamp(dstX2 - dstX1, 0, outputWidth)
-    const dstHH = clamp(dstY2 - dstY1, 0, outputHeight)
-
-    if (srcWW > 0 && srcHH > 0 && dstWW > 0 && dstHH > 0) {
-        ctx.imageSmoothingEnabled = true
-        ctx.imageSmoothingQuality = 'high'
-        ctx.drawImage(srcCanvas, srcX1, srcY1, srcWW, srcHH, dstX1, dstY1, dstWW, dstHH)
-    }
-}
-
 type DetailedCropParams = {
     s: number
+    srcX1: number
+    srcY1: number
+    srcX2: number
+    srcY2: number
     winX1: number
     winY1: number
     dstX1: number
@@ -143,8 +78,8 @@ function getDetailedCropParams(
     const bboxH = Math.max(1, y2 - y1)
 
     const sHeight = (TARGET_BBOX_HEIGHT_RATIO * outputHeight) / bboxH
-    const sWidthLimit = outputWidth / bboxW
-    const sBase = clamp(Math.min(sHeight, sWidthLimit), MIN_SCALE, MAX_SCALE)
+    const sWidth = (TARGET_BBOX_WIDTH_RATIO * outputWidth) / bboxW
+    const sBase = clamp(Math.min(sHeight, sWidth), MIN_SCALE, MAX_SCALE)
     const s = clamp(sBase * Math.max(1e-6, zoomMul), MIN_SCALE, MAX_SCALE)
 
     const cx = (x1 + x2) * 0.5
@@ -165,7 +100,34 @@ function getDetailedCropParams(
     const dstX2 = Math.min(outputWidth, Math.ceil((srcX2 - winX1) * s))
     const dstY2 = Math.min(outputHeight, Math.ceil((srcY2 - winY1) * s))
 
-    return { s, winX1, winY1, dstX1, dstY1, dstX2, dstY2 }
+    return { s, srcX1, srcY1, srcX2, srcY2, winX1, winY1, dstX1, dstY1, dstX2, dstY2 }
+}
+
+export function drawDetailedCrop(
+    ctx: Ctx2D,
+    outputWidth: number,
+    outputHeight: number,
+    srcCanvas: CanvasImageSource,
+    srcWidth: number,
+    srcHeight: number,
+    det: TimedBBox,
+    zoomMul: number
+) {
+    const params = getDetailedCropParams(outputWidth, outputHeight, srcWidth, srcHeight, det, zoomMul)
+
+    const srcWW = clamp(params.srcX2 - params.srcX1, 0, srcWidth)
+    const srcHH = clamp(params.srcY2 - params.srcY1, 0, srcHeight)
+    const dstWW = clamp(params.dstX2 - params.dstX1, 0, outputWidth)
+    const dstHH = clamp(params.dstY2 - params.dstY1, 0, outputHeight)
+
+    if (srcWW > 0 && srcHH > 0 && dstWW > 0 && dstHH > 0) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0)
+        ctx.fillStyle = '#000'
+        ctx.fillRect(0, 0, outputWidth, outputHeight)
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
+        ctx.drawImage(srcCanvas, params.srcX1, params.srcY1, srcWW, srcHH, params.dstX1, params.dstY1, dstWW, dstHH)
+    }
 }
 
 function drawAnnotationDot(ctx: Ctx2D, x: number, y: number, size: number, color: string) {
@@ -209,7 +171,7 @@ function drawAnnotationsDetailed(
     vidW: number,
     vidH: number,
     det: TimedBBox,
-    zoomMul: number = 1
+    zoomMul: number
 ) {
     const params = getDetailedCropParams(outputWidth, outputHeight, vidW, vidH, det, zoomMul)
     const dstW = params.dstX2 - params.dstX1
@@ -244,6 +206,43 @@ function drawAnnotationsDetailed(
         })
         ctx.stroke()
     }
+    ctx.restore()
+}
+
+function drawDetailedBBoxOverlay(
+    ctx: Ctx2D,
+    outputWidth: number,
+    outputHeight: number,
+    vidW: number,
+    vidH: number,
+    det: TimedBBox,
+    zoomMul: number
+) {
+    const params = getDetailedCropParams(outputWidth, outputHeight, vidW, vidH, det, zoomMul)
+    const dstW = params.dstX2 - params.dstX1
+    const dstH = params.dstY2 - params.dstY1
+    if (dstW <= 0 || dstH <= 0) return
+
+    const [x1p, y1p, x2p, y2p] = det.bbox
+    const x1 = x1p * vidW
+    const y1 = y1p * vidH
+    const x2 = x2p * vidW
+    const y2 = y2p * vidH
+
+    const rx1 = (x1 - params.winX1) * params.s
+    const ry1 = (y1 - params.winY1) * params.s
+    const rx2 = (x2 - params.winX1) * params.s
+    const ry2 = (y2 - params.winY1) * params.s
+    const w = Math.max(1, rx2 - rx1)
+    const h = Math.max(1, ry2 - ry1)
+
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(params.dstX1, params.dstY1, dstW, dstH)
+    ctx.clip()
+    ctx.strokeStyle = '#10b981'
+    ctx.lineWidth = 2
+    ctx.strokeRect(Math.round(rx1) + 0.5, Math.round(ry1) + 0.5, Math.round(w), Math.round(h))
     ctx.restore()
 }
 
@@ -317,7 +316,6 @@ export function drawFrame(
     const rotatedVideo = drawRotatedToCanvas(source, offscreen, dominantOrientationDeg, sourceSize)
 
     // Current frame for stabilization/detection lookup
-    const nowFrame = frameIndex
     const sourceCanvas: HTMLCanvasElement = offscreen
 
     if (player.mode === 'overview') {
@@ -326,7 +324,7 @@ export function drawFrame(
         const cx = base.x + base.w * 0.5 + ov.offsetX
         const cy = base.y + base.h * 0.5 + ov.offsetY
         const sBase = (base.w / rotatedVideo.width) * z
-        const stab = player.getStabilizationAtFrame(nowFrame)
+        const stab = player.getStabilizationAtFrame(frameIndex)
 
         ctx.save()
         ctx.translate(cx, cy)
@@ -340,7 +338,7 @@ export function drawFrame(
 
         if (true) {
             // TODO false
-            drawStabilizationTransforms(ctx, player, nowFrame, sBase, cx, cy)
+            drawStabilizationTransforms(ctx, player, frameIndex, sBase, cx, cy)
         }
 
         // Draw detections under same transform
@@ -348,7 +346,7 @@ export function drawFrame(
             const isHovered = ov.hoveredTrackId === t.track_id
             if (!isHovered) continue
 
-            const det = player.getDetectionAtFrame(t.track_id, nowFrame)
+            const det = player.getDetectionAtFrame(t.track_id, frameIndex)
             if (!det) continue
             const [x1p, y1p, x2p, y2p] = det.bbox
             const x1 = x1p * rotatedVideo.width - rotatedVideo.width * 0.5
@@ -365,13 +363,14 @@ export function drawFrame(
         }
         ctx.restore()
     } else if (player.mode === 'detailed' && player.currentTrackId != null) {
-        const det = player.getClosestDetectionAtFrame(player.currentTrackId, nowFrame)
+        const det = player.getClosestDetectionAtFrame(player.currentTrackId, frameIndex)
 
         const vidW = rotatedVideo.width
         const vidH = rotatedVideo.height
         // Reuse shared crop-draw logic (same as export path).
         const zMul = ov.detailedZoom ?? 1
         drawDetailedCrop(ctx, cssW, cssH, sourceCanvas, vidW, vidH, det, zMul)
+        drawDetailedBBoxOverlay(ctx, cssW, cssH, vidW, vidH, det, zMul)
         if (annotations.length > 0) {
             drawAnnotationsDetailed(ctx, annotations, cssW, cssH, vidW, vidH, det, zMul)
         }
