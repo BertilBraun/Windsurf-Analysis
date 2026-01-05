@@ -368,6 +368,7 @@ class DetectionTunerWindow(QMainWindow):
                         frame_idx=frame_idx,
                         bbox=[x1, y1, x2, y2],
                         confidence=float(confs[i]),
+                        interpolated=False,
                     )
                 ],
             )

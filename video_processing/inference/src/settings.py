@@ -31,6 +31,20 @@ MAX_OVERLAP_LENGTH_SECONDS = 5
 # Minimum percentage of total frames a track must appear in (default 5%)
 MIN_FRAME_PERCENTAGE = 5
 
+# RTS smoothing (post-processing)
+# These parameters control the Kalman filter used in TrackRTSSmoothing and how strongly we apply its smoothed bbox
+# at frames that already have a detection.
+# - Higher `TRACK_RTS_MEAS_STD_*` => trust detections less (more smoothing)
+# - Higher `TRACK_RTS_PROC_STD_*` => trust motion model less (less smoothing / more responsive to detections)
+# - `TRACK_RTS_DETECTION_BBOX_BLEND` controls how much the smoothed bbox replaces the original bbox at detection frames:
+#     0.0 = keep original detections, 1.0 = fully replace with RTS-smoothed bbox
+TRACK_RTS_PROC_STD_WEIGHT_POS = 1.0 / 20.0
+TRACK_RTS_PROC_STD_WEIGHT_VEL = 1.0 / 40.0
+TRACK_RTS_MEAS_STD_WEIGHT_POS = 1.0 / 100.0
+TRACK_RTS_MEAS_STD_WEIGHT_SIZE = 1.0 / 100.0
+TRACK_RTS_DETECTION_BBOX_BLEND = 0.35
+TRACK_RTS_ENABLE_BACKWARD_SMOOTHER = True
+
 VIDEO_SUFFIX_SECONDS = 1.0
 
 # Greedy preprocessor settings

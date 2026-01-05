@@ -33,6 +33,7 @@ export type TrackDetection = {
     time_percent: number
     bbox: [number, number, number, number]
     confidence: number
+    interpolated: boolean
 }
 
 export type Track = {

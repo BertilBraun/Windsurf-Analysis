@@ -1,4 +1,5 @@
 import os
+import cv2
 import numpy as np
 from collections.abc import Mapping, Sequence
 from typing import NamedTuple
@@ -14,6 +15,130 @@ from ..util.video_io import get_video_properties
 Transform = NamedTuple(
     'Transform', [('dx', float), ('dy', float), ('da', float), ('frame_idx', int)]
 )  # dx, dy, da for each frame relative to the previous frame (frame[i] - frame[i-1]) -> frame[i] = frame[i-1] + dx, dy, da
+
+
+class MaskedVidStabEstimator:
+    """
+    VidStab-like motion estimator, but supports per-frame masks.
+
+    This follows the same high-level approach as `vidstab.VidStab`:
+    - Detect GFTT keypoints on prev frame (optionally masked)
+    - Track with LK optical flow to current frame
+    - Estimate a partial affine transform (prev -> curr)
+
+    Returns per-frame deltas mapping points from prev -> curr:
+        p_curr = R(da) * p_prev + [dx, dy]
+    """
+
+    def __init__(
+        self,
+        *,
+        processing_max_dim: int | float = float('inf'),
+        max_corners: int = 200,
+        quality_level: float = 0.01,
+        min_distance: float = 30.0,
+        block_size: int = 3,
+    ) -> None:
+        self.processing_max_dim = float(processing_max_dim)
+        self.feature_params: dict[str, object] = dict(
+            maxCorners=int(max_corners),
+            qualityLevel=float(quality_level),
+            minDistance=float(min_distance),
+            blockSize=int(block_size),
+        )
+
+        self._initialized = False
+        self._prev_gray: np.ndarray | None = None
+        self._prev_pts: np.ndarray | None = None  # (N,1,2) float32 in processed resolution
+
+    def _resize_gray(self, gray: np.ndarray) -> tuple[np.ndarray, float]:
+        h, w = gray.shape[:2]
+        max_dim = max(h, w)
+        if max_dim <= 0:
+            return gray, 1.0
+        if max_dim <= self.processing_max_dim:
+            return gray, 1.0
+        scale = float(self.processing_max_dim) / float(max_dim)
+        out = cv2.resize(gray, (int(round(w * scale)), int(round(h * scale))), interpolation=cv2.INTER_AREA)
+        return out, scale
+
+    def _detect_points(self, gray_proc: np.ndarray, mask_proc: np.ndarray | None) -> np.ndarray:
+        if mask_proc is not None and mask_proc.dtype != np.uint8:
+            mask_proc = mask_proc.astype(np.uint8, copy=False)
+        pts = cv2.goodFeaturesToTrack(gray_proc, mask=mask_proc, **self.feature_params)
+        if pts is None:
+            return np.empty((0, 1, 2), dtype=np.float32)
+        return pts.astype(np.float32, copy=False)
+
+    def apply(
+        self,
+        *,
+        frame_idx: int,
+        frame_bgr: np.ndarray,
+        excluded_bboxes: Sequence[Sequence[int]] | None = None,
+        mask_margin_px: int = 0,
+    ) -> Transform | None:
+        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+        gray_proc, scale = self._resize_gray(gray)
+
+        mask_proc = None
+        if excluded_bboxes:
+            mask_full = build_keypoint_mask(
+                frame_shape=frame_bgr.shape,
+                excluded_bboxes=excluded_bboxes,
+                margin_px=mask_margin_px,
+            )
+            if scale != 1.0:
+                h2, w2 = gray_proc.shape[:2]
+                mask_proc = cv2.resize(mask_full, (w2, h2), interpolation=cv2.INTER_NEAREST)
+            else:
+                mask_proc = mask_full
+
+        cur_pts = self._detect_points(gray_proc, mask_proc)
+
+        if not self._initialized:
+            self._initialized = True
+            self._prev_gray = gray_proc.copy()
+            self._prev_pts = cur_pts.copy()
+            return None
+
+        assert self._prev_gray is not None
+        assert self._prev_pts is not None
+
+        if self._prev_pts.size == 0:
+            self._prev_gray = gray_proc.copy()
+            self._prev_pts = cur_pts.copy()
+            return Transform(dx=0.0, dy=0.0, da=0.0, frame_idx=int(frame_idx))
+
+        matched, status, _err = cv2.calcOpticalFlowPyrLK(self._prev_gray, gray_proc, self._prev_pts, None)
+        if matched is None or status is None:
+            self._prev_gray = gray_proc.copy()
+            self._prev_pts = cur_pts.copy()
+            return Transform(dx=0.0, dy=0.0, da=0.0, frame_idx=int(frame_idx))
+
+        prev_good = self._prev_pts[status.flatten() == 1]
+        curr_good = matched[status.flatten() == 1]
+
+        H = None
+        if prev_good.shape[0] >= 4 and curr_good.shape[0] == prev_good.shape[0]:
+            H, _inliers = cv2.estimateAffinePartial2D(prev_good, curr_good)
+
+        if H is None:
+            dx = dy = da = 0.0
+        else:
+            dx = float(H[0, 2])
+            dy = float(H[1, 2])
+            da = float(np.arctan2(float(H[1, 0]), float(H[0, 0])))
+
+            # Map translation back to original resolution.
+            if scale != 1.0:
+                dx /= scale
+                dy /= scale
+
+        self._prev_gray = gray_proc.copy()
+        self._prev_pts = cur_pts.copy()
+
+        return Transform(dx=dx, dy=dy, da=da, frame_idx=int(frame_idx))
 
 
 @cache_to_file('vidstab_transforms')
@@ -104,14 +229,22 @@ def build_keypoint_mask(
     *,
     frame_shape: tuple[int, int, int] | tuple[int, int],
     excluded_bboxes: Sequence[Sequence[int]],
+    margin_px: int = 0,
 ) -> np.ndarray:
     height, width = int(frame_shape[0]), int(frame_shape[1])
     mask = np.full((height, width), 255, dtype=np.uint8)
 
+    margin = max(0, int(margin_px))
     for bbox in excluded_bboxes:
         if len(bbox) != 4:
             raise ValueError(f'Invalid bbox: {bbox}')
         x1, y1, x2, y2 = (int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))
+        x1 = max(0, min(width, x1 - margin))
+        y1 = max(0, min(height, y1 - margin))
+        x2 = max(0, min(width, x2 + margin))
+        y2 = max(0, min(height, y2 + margin))
+        if x2 <= x1 or y2 <= y1:
+            continue
         mask[y1:y2, x1:x2] = 0
 
     return mask

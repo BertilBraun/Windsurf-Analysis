@@ -69,6 +69,7 @@ def _build_metadata(tracks: list[Track], input_path: Path, video_props: VideoInf
                         frame_idx=det.frame_idx,
                         bbox=[int(det.bbox.x1), int(det.bbox.y1), int(det.bbox.x2), int(det.bbox.y2)],
                         confidence=float(det.confidence),
+                        interpolated=det.interpolated,
                     )
                     for det in t.sorted_detections
                 ],
@@ -108,6 +109,7 @@ def _to_tracklites(tracks: list[Track], video_props: VideoInfo) -> list[TrackLit
                         frame_idx=int(d.frame_idx),
                         bbox=[int(d.bbox.x1), int(d.bbox.y1), int(d.bbox.x2), int(d.bbox.y2)],
                         confidence=float(d.confidence),
+                        interpolated=d.interpolated,
                     )
                     for d in t.sorted_detections
                 ],

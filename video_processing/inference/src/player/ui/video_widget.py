@@ -75,11 +75,17 @@ class VideoWidget(QWidget):
         # Draw based on mode
         if self.state.current_mode == 'detailed' and self.state.current_track_id is not None:
             target_rect = self._fit_aspect_rect(OUTPUT_WIDTH, OUTPUT_HEIGHT, self.rect())
-            det_bbox = self._bbox_for_track_at_frame(self.state.current_track_id, self.state.current_frame)
-            if det_bbox:
+            det = self._det_for_track_at_frame(self.state.current_track_id, self.state.current_frame)
+            if det is not None:
                 # Render directly at target_rect size using high-quality OpenCV interpolation
                 painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-                self._draw_detailed_with_padding(painter, det_bbox, target_rect)
+                x1, y1, x2, y2 = det.bbox
+                self._draw_detailed_with_padding(
+                    painter,
+                    (int(x1), int(y1), int(x2), int(y2)),
+                    det.interpolated,
+                    target_rect,
+                )
 
             else:
                 # Draw full frame into fixed-aspect target
@@ -120,7 +126,8 @@ class VideoWidget(QWidget):
                     ry1 = int(offset_y + y1 * scale_y)
                     rx2 = int(offset_x + x2 * scale_x)
                     ry2 = int(offset_y + y2 * scale_y)
-                    pen = QPen(self._color_for_track(track_id))
+                    is_interpolated = d.interpolated
+                    pen = QPen(QColor(249, 115, 22) if is_interpolated else self._color_for_track(track_id))
                     pen.setWidth(2)
                     painter.setPen(pen)
                     painter.drawRect(QRect(rx1, ry1, rx2 - rx1, ry2 - ry1))
@@ -169,14 +176,13 @@ class VideoWidget(QWidget):
         y = bounds.y() + (bounds.height() - h) // 2
         return QRect(x, y, w, h)
 
-    def _bbox_for_track_at_frame(self, track_id: int, frame_idx: int) -> Optional[Tuple[int, int, int, int]]:
+    def _det_for_track_at_frame(self, track_id: int, frame_idx: int):
         for t in self.state.loaded_tracks:
             if t.track_id != track_id:
                 continue
             for d in t.detections:
                 if d.frame_idx == frame_idx:
-                    x1, y1, x2, y2 = d.bbox
-                    return int(x1), int(y1), int(x2), int(y2)
+                    return d
         return None
 
     def mousePressEvent(self, event):  # type: ignore[override]
@@ -392,7 +398,11 @@ class VideoWidget(QWidget):
     # Detailed-mode renderer with black padding (no stretching)
     # ------------------------------------------------------------------
     def _draw_detailed_with_padding(
-        self, painter: QPainter, det_bbox: Tuple[int, int, int, int], target_rect: QRect
+        self,
+        painter: QPainter,
+        det_bbox: Tuple[int, int, int, int],
+        det_interpolated: bool,
+        target_rect: QRect,
     ) -> None:
         if self.current_frame_image is None or self.current_frame_image.isNull():
             return
@@ -454,3 +464,15 @@ class VideoWidget(QWidget):
         # Draw directly with no additional scaling
         composed = _to_qimage(out_np)
         painter.drawImage(target_rect, composed)
+
+        # Draw bbox overlay (in the composed output coordinate system)
+        rx1 = int((x1 - win_x1) * s)
+        ry1 = int((y1 - win_y1) * s)
+        rx2 = int((x2 - win_x1) * s)
+        ry2 = int((y2 - win_y1) * s)
+        w = max(1, rx2 - rx1)
+        h = max(1, ry2 - ry1)
+        pen = QPen(QColor(249, 115, 22) if det_interpolated else QColor(16, 185, 129))
+        pen.setWidth(2)
+        painter.setPen(pen)
+        painter.drawRect(QRect(target_rect.x() + rx1, target_rect.y() + ry1, w, h))

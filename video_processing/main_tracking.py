@@ -101,6 +101,7 @@ def embedding_extraction_and_tracking(
                             clamp_percentage(d.bbox.y2 / props.height),
                         ],
                         'confidence': clamp_percentage(d.confidence),
+                        'interpolated': d.interpolated,
                     }
                     for d in t.sorted_detections
                 ],

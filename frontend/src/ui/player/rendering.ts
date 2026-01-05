@@ -13,7 +13,7 @@ export type OverviewView = {
 }
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
-export type TimedBBox = { time_percent: number; bbox: [number, number, number, number] }
+export type TimedBBox = { time_percent: number; bbox: [number, number, number, number]; interpolated: boolean }
 export type AnnotationPoint = { x: number; y: number }
 export type AnnotationStroke = {
     id: string
@@ -240,7 +240,7 @@ function drawDetailedBBoxOverlay(
     ctx.beginPath()
     ctx.rect(params.dstX1, params.dstY1, dstW, dstH)
     ctx.clip()
-    ctx.strokeStyle = '#10b981'
+    ctx.strokeStyle = det.interpolated ? '#f97316' : '#10b981'
     ctx.lineWidth = 2
     ctx.strokeRect(Math.round(rx1) + 0.5, Math.round(ry1) + 0.5, Math.round(w), Math.round(h))
     ctx.restore()
@@ -354,7 +354,7 @@ export function drawFrame(
             const w = Math.max(1, (x2p - x1p) * rotatedVideo.width)
             const h = Math.max(1, (y2p - y1p) * rotatedVideo.height)
 
-            ctx.strokeStyle = '#10b981'
+            ctx.strokeStyle = det.interpolated ? '#f97316' : '#10b981'
             ctx.lineWidth = 2 / sBase
             ctx.strokeRect(Math.round(x1) + 0.5, Math.round(y1) + 0.5, Math.round(w), Math.round(h))
         }

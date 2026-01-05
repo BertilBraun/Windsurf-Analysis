@@ -242,6 +242,7 @@ def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Pat
                         frame_idx=det.frame_idx,
                         bbox=[int(det.bbox.x1), int(det.bbox.y1), int(det.bbox.x2), int(det.bbox.y2)],
                         confidence=float(det.confidence),
+                        interpolated=bool(det.interpolated),
                     )
                     for det in track.sorted_detections
                 ],

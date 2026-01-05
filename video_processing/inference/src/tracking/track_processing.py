@@ -13,7 +13,15 @@ import numpy as np
 from ..tracking.tracking import Tracker
 from ..visualization.stabilize import Transform
 
-from ..settings import MIN_FRAME_PERCENTAGE
+from ..settings import (
+    MIN_FRAME_PERCENTAGE,
+    TRACK_RTS_DETECTION_BBOX_BLEND,
+    TRACK_RTS_ENABLE_BACKWARD_SMOOTHER,
+    TRACK_RTS_MEAS_STD_WEIGHT_POS,
+    TRACK_RTS_MEAS_STD_WEIGHT_SIZE,
+    TRACK_RTS_PROC_STD_WEIGHT_POS,
+    TRACK_RTS_PROC_STD_WEIGHT_VEL,
+)
 from ..util.video_io import VideoInfo
 from ..common_types import Detection, Track, BoundingBox, FrameIndex
 from ..motion.kalman_filter import KFState, _KalmanFilter, KF
@@ -123,10 +131,10 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
     state = KFState.init(
         detections[0],
         _KalmanFilter(
-            proc_std_weight_pos=1.0 / 20.0,
-            proc_std_weight_vel=1.0 / 40.0,
-            meas_std_weight_pos=1.0 / 100.0,
-            meas_std_weight_size=1.0 / 100.0,
+            proc_std_weight_pos=TRACK_RTS_PROC_STD_WEIGHT_POS,
+            proc_std_weight_vel=TRACK_RTS_PROC_STD_WEIGHT_VEL,
+            meas_std_weight_pos=TRACK_RTS_MEAS_STD_WEIGHT_POS,
+            meas_std_weight_size=TRACK_RTS_MEAS_STD_WEIGHT_SIZE,
         ),
     )
 
@@ -185,8 +193,12 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
                 mu_filt[i] = predicted_state.mean
                 P_filt[i] = predicted_state.cov
 
-    # Backward pass: RTS smoothing
-    mu_smooth, P_smooth = _rts_smoother(mu_filt, P_filt, mu_pred, P_pred, Fs)
+    if TRACK_RTS_ENABLE_BACKWARD_SMOOTHER:
+        # Backward pass: RTS smoothing
+        mu_smooth, P_smooth = _rts_smoother(mu_filt, P_filt, mu_pred, P_pred, Fs)
+    else:
+        # Forward-only filtering (less "global" smoothing; avoids future-looking corrections).
+        mu_smooth, P_smooth = mu_filt, P_filt
 
     # Generate smoothed detections for all frames
     smoothed_detections: list[Detection] = []
@@ -201,11 +213,16 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
         # Use original detection if available, otherwise create interpolated one
         if frame_idx in detection_dict:
             original_det = detection_dict[frame_idx]
+            blend = float(np.clip(TRACK_RTS_DETECTION_BBOX_BLEND, 0.0, 1.0))
+            out_bbox = (
+                original_det.bbox if blend <= 0.0 else original_det.bbox.interpolate(smoothed_bbox, alpha=blend)
+            )
             smoothed_det = Detection(
-                bbox=smoothed_bbox,
+                bbox=out_bbox,
                 embedding=original_det.embedding,
                 confidence=original_det.confidence,
                 frame_idx=frame_idx,
+                interpolated=False,
             )
         else:
             # Interpolate embedding and confidence from nearest detections
@@ -215,6 +232,7 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
                 embedding=embedding,
                 confidence=confidence,
                 frame_idx=frame_idx,
+                interpolated=True,
             )
 
         smoothed_detections.append(smoothed_det)

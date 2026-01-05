@@ -141,6 +141,7 @@ class Detection:
     embedding: Embedding
     confidence: float
     frame_idx: FrameIndex
+    interpolated: bool = False
 
     def copy(self) -> Detection:
         return Detection(
@@ -148,6 +149,7 @@ class Detection:
             embedding=self.embedding,
             confidence=self.confidence,
             frame_idx=self.frame_idx,
+            interpolated=self.interpolated,
         )
 
     def interpolate(self, other: Detection, alpha: float, frame_idx: FrameIndex) -> Detection:
@@ -160,6 +162,7 @@ class Detection:
             embedding=new_embedding,
             confidence=new_confidence,
             frame_idx=frame_idx,
+            interpolated=True,
         )
 
     def __hash__(self) -> int:

@@ -53,6 +53,7 @@ def _to_tracklites(tracks: list[Track], video_props: VideoInfo) -> list[TrackLit
                         frame_idx=int(d.frame_idx),
                         bbox=[int(d.bbox.x1), int(d.bbox.y1), int(d.bbox.x2), int(d.bbox.y2)],
                         confidence=float(d.confidence),
+                        interpolated=d.interpolated,
                     )
                     for d in t.sorted_detections
                 ],
