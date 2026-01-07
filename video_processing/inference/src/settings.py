@@ -38,11 +38,11 @@ MIN_FRAME_PERCENTAGE = 5
 # - Higher `TRACK_RTS_PROC_STD_*` => trust motion model less (less smoothing / more responsive to detections)
 # - `TRACK_RTS_DETECTION_BBOX_BLEND` controls how much the smoothed bbox replaces the original bbox at detection frames:
 #     0.0 = keep original detections, 1.0 = fully replace with RTS-smoothed bbox
-TRACK_RTS_PROC_STD_WEIGHT_POS = 1.0 / 20.0
-TRACK_RTS_PROC_STD_WEIGHT_VEL = 1.0 / 40.0
-TRACK_RTS_MEAS_STD_WEIGHT_POS = 1.0 / 100.0
-TRACK_RTS_MEAS_STD_WEIGHT_SIZE = 1.0 / 100.0
-TRACK_RTS_DETECTION_BBOX_BLEND = 0.35
+TRACK_RTS_PROC_STD_WEIGHT_POS = 1.0 / 20.0 * 1.5
+TRACK_RTS_PROC_STD_WEIGHT_VEL = 1.0 / 40.0 * 1.5
+TRACK_RTS_MEAS_STD_WEIGHT_POS = 1.0 / 100.0 * 0.7
+TRACK_RTS_MEAS_STD_WEIGHT_SIZE = 1.0 / 100.0 * 0.7
+TRACK_RTS_DETECTION_BBOX_BLEND = 0.0  # TODO 0.4
 TRACK_RTS_ENABLE_BACKWARD_SMOOTHER = True
 
 VIDEO_SUFFIX_SECONDS = 1.0
@@ -90,6 +90,7 @@ OPTIMIZER_TIMEOUT_SECONDS = 60
 OUTPUT_WIDTH = 1000  # width of the written video
 OUTPUT_HEIGHT = 1000  # height of the written video
 TARGET_BBOX_HEIGHT_RATIO = 0.70  # bbox should fill ~60 % of output height
+TARGET_BBOX_WIDTH_RATIO = 0.45  # bbox should fill ~45 % of output width
 SMOOTHING_ALPHA = 0.0  # 0 = no smoothing, 0.8 ≈ keep 80 % of the previous scale
 MIN_SCALE = 0.2  # avoid over/under-zoom
 MAX_SCALE = 10.0  # avoid over/under-zoom

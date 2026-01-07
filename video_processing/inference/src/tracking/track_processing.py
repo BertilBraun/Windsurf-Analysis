@@ -213,12 +213,18 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
         # Use original detection if available, otherwise create interpolated one
         if frame_idx in detection_dict:
             original_det = detection_dict[frame_idx]
-            blend = float(np.clip(TRACK_RTS_DETECTION_BBOX_BLEND, 0.0, 1.0))
-            out_bbox = (
-                original_det.bbox if blend <= 0.0 else original_det.bbox.interpolate(smoothed_bbox, alpha=blend)
-            )
+            neighborhood = [
+                (detection_dict[frame_idx - 2] if frame_idx - 2 in detection_dict else None, 0),
+                (detection_dict[frame_idx - 1] if frame_idx - 1 in detection_dict else None, 1),
+                (original_det, 4),
+                (detection_dict[frame_idx + 1] if frame_idx + 1 in detection_dict else None, 0.5),
+                (detection_dict[frame_idx + 2] if frame_idx + 2 in detection_dict else None, 0),
+            ]
+            neighborhood_bbox = sum(
+                (d.bbox * weight for d, weight in neighborhood if d is not None), start=BoundingBox(0, 0, 0, 0)
+            ) / sum(weight for d, weight in neighborhood if d is not None)
             smoothed_det = Detection(
-                bbox=out_bbox,
+                bbox=neighborhood_bbox,
                 embedding=original_det.embedding,
                 confidence=original_det.confidence,
                 frame_idx=frame_idx,
