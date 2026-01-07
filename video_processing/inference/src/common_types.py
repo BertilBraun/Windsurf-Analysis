@@ -10,6 +10,10 @@ from typing import Iterator
 from .util.similarity_helpers import Embedding
 
 
+def interpolate(a: float, b: float, alpha: float) -> float:
+    return (1 - alpha) * a + alpha * b
+
+
 @dataclass(frozen=True)
 class Point:
     x: int
@@ -22,7 +26,7 @@ class Point:
         return math.sqrt((self.x - other.x) ** 2 + (self.y - other.y) ** 2)
 
     def interpolate(self, other: Point, alpha: float) -> Point:
-        return Point(int((1 - alpha) * self.x + alpha * other.x), int((1 - alpha) * self.y + alpha * other.y))
+        return Point(int(interpolate(self.x, other.x, alpha)), int(interpolate(self.y, other.y, alpha)))
 
 
 @dataclass(frozen=True)
@@ -79,8 +83,8 @@ class BoundingBox:
 
     def interpolate(self, other: BoundingBox, alpha: float) -> BoundingBox:
         center = self.center.interpolate(other.center, alpha)
-        width = int((1 - alpha) * self.width + alpha * other.width)
-        height = int((1 - alpha) * self.height + alpha * other.height)
+        width = int(interpolate(self.width, other.width, alpha))
+        height = int(interpolate(self.height, other.height, alpha))
         return BoundingBox(
             center.x - width // 2,
             center.y - height // 2,
@@ -134,6 +138,30 @@ class BoundingBox:
             return False
         return self.x1 == other.x1 and self.y1 == other.y1 and self.x2 == other.x2 and self.y2 == other.y2
 
+    def __add__(self, other: BoundingBox) -> BoundingBox:
+        return BoundingBox(
+            self.x1 + other.x1,
+            self.y1 + other.y1,
+            self.x2 + other.x2,
+            self.y2 + other.y2,
+        )
+
+    def __mul__(self, other: float) -> BoundingBox:
+        return BoundingBox(
+            int(self.x1 * other),
+            int(self.y1 * other),
+            int(self.x2 * other),
+            int(self.y2 * other),
+        )
+
+    def __truediv__(self, other: float) -> BoundingBox:
+        return BoundingBox(
+            int(self.x1 / other),
+            int(self.y1 / other),
+            int(self.x2 / other),
+            int(self.y2 / other),
+        )
+
 
 @dataclass
 class Detection:
@@ -155,7 +183,7 @@ class Detection:
     def interpolate(self, other: Detection, alpha: float, frame_idx: FrameIndex) -> Detection:
         new_bbox = self.bbox.interpolate(other.bbox, alpha)
         new_embedding = self.embedding.interpolate(other.embedding, alpha)
-        new_confidence = (1 - alpha) * self.confidence + alpha * other.confidence
+        new_confidence = interpolate(self.confidence, other.confidence, alpha)
 
         return Detection(
             bbox=new_bbox,

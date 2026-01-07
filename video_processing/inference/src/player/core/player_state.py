@@ -39,10 +39,18 @@ class Metadata:
 
 
 class PlayerState:
-    def reset(self, input_video_path: str, video_properties: VideoProperties, loaded_tracks: List[TrackLite]) -> None:
+    def reset(
+        self,
+        input_video_path: str,
+        video_properties: VideoProperties,
+        loaded_tracks: List[TrackLite],
+        *,
+        stabilization_by_frame: Optional[list[tuple[float, float, float]]] = None,
+    ) -> None:
         self.input_video_path = input_video_path
         self.video_properties = video_properties
         self.loaded_tracks = loaded_tracks
+        self.stabilization_by_frame = stabilization_by_frame or self._default_stabilization_by_frame()
 
         self.current_mode: Literal['overview', 'detailed'] = 'overview'
         self.current_track_id: Optional[int] = None
@@ -54,6 +62,12 @@ class PlayerState:
         self.visible_tracks = self._extract_visible_tracks()
         # Fast lookup of detections that occur at a given frame index
         self.detections_by_frame = self._rebuild_detection_index()
+
+    def _default_stabilization_by_frame(self) -> list[tuple[float, float, float]]:
+        total = int(getattr(self, 'video_properties', VideoProperties(0, 0, 0, 0)).total_frames or 0)
+        if total <= 0:
+            return []
+        return [(0.0, 0.0, 0.0) for _ in range(total)]
 
     def _extract_visible_tracks(self) -> Set[int]:
         return {t.track_id for t in self.loaded_tracks}
@@ -68,3 +82,12 @@ class PlayerState:
             for det in track.detections:
                 index.setdefault(det.frame_idx, []).append((track.track_id, det))
         return index
+
+    def get_stabilization_at_frame(self, frame_idx: int) -> tuple[float, float, float]:
+        if not self.stabilization_by_frame:
+            return (0.0, 0.0, 0.0)
+        if frame_idx < 0:
+            return self.stabilization_by_frame[0]
+        if frame_idx >= len(self.stabilization_by_frame):
+            return self.stabilization_by_frame[-1]
+        return self.stabilization_by_frame[frame_idx]

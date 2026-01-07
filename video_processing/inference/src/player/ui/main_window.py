@@ -1,5 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
+import json
 import pickle
 from typing import Optional, List
 
@@ -152,15 +153,67 @@ class MainWindow(QMainWindow):
     def _load_metadata(self, metadata_path: Path) -> None:
         with open(metadata_path, 'rb') as f:
             metadata: Metadata = pickle.load(f)
+
+        stabilization_by_frame = self._load_stabilization_by_frame(metadata_path, metadata.video_properties.total_frames)
         self.state.reset(
             input_video_path=metadata.input_video_path,
             video_properties=metadata.video_properties,
             loaded_tracks=metadata.tracks,
+            stabilization_by_frame=stabilization_by_frame,
         )
 
         self.setWindowTitle(f'Windsurf Player - {Path(metadata.input_video_path).name}')
 
         self._open_video(Path(metadata.input_video_path))
+
+    @staticmethod
+    def _load_stabilization_by_frame(metadata_path: Path, total_frames: int) -> list[tuple[float, float, float]]:
+        """
+        Load per-frame stabilization deltas from the local pipeline output.
+
+        Expected sibling file: `<stem>.stabilization_transforms.json` next to `<stem>.tracks.pkl`.
+        Returns a dense list of (dx, dy, da) (da in radians), length `total_frames` when possible.
+        """
+        if total_frames <= 0:
+            return []
+
+        name = metadata_path.name
+        if name.endswith('.tracks.pkl'):
+            stem = name[: -len('.tracks.pkl')]
+        else:
+            stem = metadata_path.stem
+
+        path = metadata_path.with_name(f'{stem}.stabilization_transforms.json')
+        if not path.exists():
+            return [(0.0, 0.0, 0.0) for _ in range(int(total_frames))]
+
+        try:
+            payload = json.loads(path.read_text(encoding='utf-8'))
+            transforms = payload.get('transforms', [])
+        except Exception:
+            return [(0.0, 0.0, 0.0) for _ in range(int(total_frames))]
+
+        out: list[tuple[float, float, float]] = [(0.0, 0.0, 0.0) for _ in range(int(total_frames))]
+
+        if isinstance(transforms, list) and len(transforms) == int(total_frames) and all(
+            isinstance(t, dict) for t in transforms
+        ):
+            # Dense list; allow either implicit index or explicit frame_idx.
+            for i, t in enumerate(transforms):
+                frame_idx = int(t.get('frame_idx', i))
+                if 0 <= frame_idx < len(out):
+                    out[frame_idx] = (float(t.get('dx', 0.0)), float(t.get('dy', 0.0)), float(t.get('da', 0.0)))
+            return out
+
+        if isinstance(transforms, list):
+            for t in transforms:
+                if not isinstance(t, dict):
+                    continue
+                frame_idx = int(t.get('frame_idx', -1))
+                if 0 <= frame_idx < len(out):
+                    out[frame_idx] = (float(t.get('dx', 0.0)), float(t.get('dy', 0.0)), float(t.get('da', 0.0)))
+
+        return out
 
     def _open_video(self, video_path: Path) -> None:
         if self.video:
