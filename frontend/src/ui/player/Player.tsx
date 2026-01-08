@@ -27,6 +27,7 @@ type Props = {
     onOpenPrevJob?: () => void
     drawMode: boolean
     onToggleDrawMode: () => void
+    disableOverviewStabilization: boolean
     player: PlayerState | null
     setPlayer: React.Dispatch<React.SetStateAction<PlayerState | null>>
 }
@@ -39,6 +40,7 @@ export const Player: React.FC<Props> = ({
     onOpenPrevJob,
     drawMode,
     onToggleDrawMode,
+    disableOverviewStabilization,
     player,
     setPlayer,
 }) => {
@@ -94,6 +96,7 @@ export const Player: React.FC<Props> = ({
                     offsetX: offset.x,
                     offsetY: offset.y,
                     hoveredTrackId,
+                    disableStabilization: disableOverviewStabilization && player.mode === 'overview',
                 },
                 job.dominant_orientation
             )
@@ -105,6 +108,7 @@ export const Player: React.FC<Props> = ({
             offset.x,
             offset.y,
             hoveredTrackId,
+            disableOverviewStabilization,
             job.dominant_orientation,
             webPlayer.currentFrameIndex,
         ]
@@ -249,7 +253,14 @@ export const Player: React.FC<Props> = ({
             src,
             { width: webPlayer.width, height: webPlayer.height },
             player,
-            { zoom, detailedZoom: detailedZoom.value, offsetX: offset.x, offsetY: offset.y, hoveredTrackId },
+            {
+                zoom,
+                detailedZoom: detailedZoom.value,
+                offsetX: offset.x,
+                offsetY: offset.y,
+                hoveredTrackId,
+                disableStabilization: disableOverviewStabilization && player.mode === 'overview',
+            },
             visible,
             frameIndex,
             job.dominant_orientation
@@ -441,6 +452,7 @@ export const Player: React.FC<Props> = ({
                     offsetX: offset.x,
                     offsetY: offset.y,
                     hoveredTrackId,
+                    disableStabilization: disableOverviewStabilization && player.mode === 'overview',
                 },
                 job.dominant_orientation
             )
@@ -453,6 +465,7 @@ export const Player: React.FC<Props> = ({
             offset.x,
             offset.y,
             hoveredTrackId,
+            disableOverviewStabilization,
             job.dominant_orientation,
             webPlayer.currentFrameIndex,
             webPlayer.width,

@@ -287,6 +287,11 @@
                 "shortcuts": {
                     "label": "Shortcuts",
                     "title": "Keyboard shortcuts"
+                },
+                "overviewStabilization": {
+                    "labelOn": "Stab: On",
+                    "labelOff": "Stab: Off",
+                    "title": "Toggle stabilization in overview mode"
                 }
             },
             "report": {

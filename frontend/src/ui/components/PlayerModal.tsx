@@ -7,6 +7,9 @@ import { Player } from '../player/Player'
 import type { PlayerState } from '../player/state'
 import { JobDetail, ReportType } from '../types'
 import { Spinner } from './Spinner'
+import { loadSetting, saveSetting } from '../utils/idb'
+
+const PLAYER_DISABLE_OVERVIEW_STABILIZATION_KEY = 'player.disableOverviewStabilization.v1'
 
 export const PlayerModal: React.FC<{
     job: JobDetail
@@ -22,6 +25,13 @@ export const PlayerModal: React.FC<{
     const [showReportThanks, setShowReportThanks] = React.useState<boolean>(false)
     const [drawMode, setDrawMode] = React.useState<boolean>(false)
     const [player, setPlayer] = React.useState<PlayerState | null>(null)
+    const [disableOverviewStabilization, setDisableOverviewStabilization] = React.useState<boolean>(false)
+
+    React.useEffect(() => {
+        loadSetting<boolean>(PLAYER_DISABLE_OVERVIEW_STABILIZATION_KEY).then(saved => {
+            setDisableOverviewStabilization(!!saved)
+        })
+    }, [])
 
     React.useEffect(() => {
         setDrawMode(false)
@@ -30,6 +40,14 @@ export const PlayerModal: React.FC<{
 
     const toggleDrawMode = React.useCallback(() => {
         setDrawMode(mode => !mode)
+    }, [])
+
+    const toggleOverviewStabilization = React.useCallback(() => {
+        setDisableOverviewStabilization(prev => {
+            const next = !prev
+            void saveSetting(PLAYER_DISABLE_OVERVIEW_STABILIZATION_KEY, next)
+            return next
+        })
     }, [])
 
     return (
@@ -46,6 +64,16 @@ export const PlayerModal: React.FC<{
                             title={t('components.playerModal.actions.draw.title')}
                             text={t('components.playerModal.actions.draw.label')}
                             variant={drawMode ? 'primary' : 'secondary'}
+                        />
+                        <Button
+                            onClick={toggleOverviewStabilization}
+                            title={t('components.playerModal.actions.overviewStabilization.title')}
+                            text={
+                                disableOverviewStabilization
+                                    ? t('components.playerModal.actions.overviewStabilization.labelOff')
+                                    : t('components.playerModal.actions.overviewStabilization.labelOn')
+                            }
+                            variant={disableOverviewStabilization ? 'secondary' : 'primary'}
                         />
                         <Button
                             onClick={() => setShowShortcuts(true)}
@@ -72,6 +100,7 @@ export const PlayerModal: React.FC<{
                             onOpenPrevJob={onOpenPrevJob}
                             drawMode={drawMode}
                             onToggleDrawMode={toggleDrawMode}
+                            disableOverviewStabilization={disableOverviewStabilization}
                             player={player}
                             setPlayer={setPlayer}
                         />

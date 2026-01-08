@@ -10,6 +10,7 @@ export type OverviewView = {
     offsetX: number
     offsetY: number
     hoveredTrackId: number | null
+    disableStabilization?: boolean
 }
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
@@ -324,7 +325,7 @@ export function drawFrame(
         const cx = base.x + base.w * 0.5 + ov.offsetX
         const cy = base.y + base.h * 0.5 + ov.offsetY
         const sBase = (base.w / rotatedVideo.width) * z
-        const stab = player.getStabilizationAtFrame(frameIndex)
+        const stab = ov.disableStabilization ? { dx: 0, dy: 0, da: 0 } : player.getStabilizationAtFrame(frameIndex)
 
         ctx.save()
         ctx.translate(cx, cy)
@@ -336,8 +337,7 @@ export function drawFrame(
         ctx.imageSmoothingQuality = 'high'
         ctx.drawImage(offscreen, -rotatedVideo.width * 0.5, -rotatedVideo.height * 0.5)
 
-        if (true) {
-            // TODO false
+        if (false && !ov.disableStabilization) {
             drawStabilizationTransforms(ctx, player, frameIndex, sBase, cx, cy)
         }
 
@@ -392,7 +392,7 @@ export function screenPointToVideoNorm(
     const { width, height } = getRotatedDimensions(videoWidth, videoHeight, dominantOrientationDeg)
     if (player.mode === 'overview') {
         const base = computeBaseRect(outW, outH, width, height)
-        const stab = player.getStabilizationAtFrame(frameIndex)
+        const stab = ov.disableStabilization ? { dx: 0, dy: 0, da: 0 } : player.getStabilizationAtFrame(frameIndex)
 
         const z = ov.zoom
         const cx = base.x + base.w * 0.5 + ov.offsetX
@@ -446,7 +446,7 @@ export function pickTrackAtScreenPoint(
 ): number | null {
     const { width, height } = getRotatedDimensions(videoWidth, videoHeight, dominantOrientationDeg)
     const base = computeBaseRect(outW, outH, width, height)
-    const stab = player.getStabilizationAtFrame(frameIndex)
+    const stab = ov.disableStabilization ? { dx: 0, dy: 0, da: 0 } : player.getStabilizationAtFrame(frameIndex)
 
     const z = ov.zoom
     const cx = base.x + base.w * 0.5 + ov.offsetX
