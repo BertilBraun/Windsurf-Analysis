@@ -36,15 +36,13 @@ function stripExtension(name: string): string {
 }
 
 export function buildExportFilename(params: {
-    sourceFileName: string | null
+    sourceFileName: string
     localRelativePath: string | null | undefined
     trackId: number
     startSec: number
     endSec: number
 }): string {
-    const baseFromFile = params.sourceFileName ? stripExtension(basename(params.sourceFileName)) : ''
-    const baseFromPath = params.localRelativePath ? stripExtension(basename(params.localRelativePath)) : ''
-    const base = sanitizeFilenameBase(baseFromFile || baseFromPath)
+    const base = sanitizeFilenameBase(stripExtension(basename(params.sourceFileName)))
     const start = params.startSec.toFixed(2)
     const end = params.endSec.toFixed(2)
     return `${base}_track_${params.trackId}_${start}-${end}.mp4`
@@ -71,15 +69,12 @@ export async function exportTrackMp4(params: {
     // Best-effort watermark; if it fails to load, we still export.
     const watermark = await getWatermarkAsset()
 
-    const onFrame = async (frame: VideoFrame, ctx: Ctx2D, tSec: number, inputDurationSec: number | null) => {
-        const dur = inputDurationSec
-        const frameIndex =
-            dur && dur > 0 ? player.frameIndexForPercent(Math.max(0, Math.min(1, tSec / dur))) : player.frameCount - 1
-
+    const onFrame = async (current: { frame: VideoFrame; timestampSec: number; frameIndex: number }, ctx: Ctx2D) => {
+        const frameIndex = Math.max(0, Math.min(player.frameCount - 1, current.frameIndex))
         const detection = player.getClosestDetectionAtFrame(trackId, frameIndex)
 
         const rotCanvas = getSharedOffscreenCanvas()
-        const rotated = drawRotatedToCanvas(frame, rotCanvas, dominantOrientationDeg)
+        const rotated = drawRotatedToCanvas(current.frame, rotCanvas, dominantOrientationDeg)
         drawDetailedCrop(ctx, outputWidth, outputHeight, rotCanvas, rotated.width, rotated.height, detection, 1)
         drawWatermark(ctx, outputWidth, outputHeight, watermark)
         return true

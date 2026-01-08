@@ -1,5 +1,6 @@
 import React from 'react'
-import { ALL_FORMATS, BlobSource, CanvasSink, EncodedPacketSink, Input, type WrappedCanvas } from 'mediabunny'
+import { ALL_FORMATS, BlobSource, CanvasSink, Input, type WrappedCanvas } from 'mediabunny'
+import { getSortedVideoPacketMeta } from '../../media/videoPackets'
 import { clamp } from '../utils/clamp'
 
 export type WebCodexFrame = {
@@ -386,23 +387,10 @@ export function useWebCodexPlayer(params: {
                 setWidth(displayW)
                 setHeight(displayH)
 
-                const packetSink = new EncodedPacketSink(videoTrack)
-                const packets: Array<{ ts: number; dur: number; key: boolean; tie: number }> = []
-
-                for await (const pkt of packetSink.packets(undefined, undefined, { metadataOnly: true })) {
-                    if (pkt.timestamp < 0) continue
-                    packets.push({
-                        ts: pkt.timestamp,
-                        dur: pkt.duration,
-                        key: pkt.type === 'key',
-                        tie: pkt.sequenceNumber ?? 0,
-                    })
-                }
+                const packets = await getSortedVideoPacketMeta(videoTrack)
 
                 if (opId !== opIdRef.current) return
                 if (packets.length === 0) throw new Error(`No presentable packets found for ${fileLabel} (${codec}).`)
-
-                packets.sort((a, b) => a.ts - b.ts || a.tie - b.tie)
 
                 const pts = packets.map(p => p.ts)
                 const dur = packets.map(p => p.dur)

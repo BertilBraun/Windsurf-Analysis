@@ -557,7 +557,7 @@ export const Player: React.FC<Props> = ({
             })
 
             const filename = buildExportFilename({
-                sourceFileName: sourceFile?.name,
+                sourceFileName: sourceFile.name,
                 localRelativePath: job.local_relative_path,
                 trackId: track.track_id,
                 startSec,

@@ -12,6 +12,7 @@ import {
     QUALITY_MEDIUM,
     VideoSampleSink,
 } from 'mediabunny'
+import { closestIndexForTimestampSec, getSortedVideoPacketMeta } from '../media/videoPackets'
 
 export type UploadQuality = 'original' | 'high' | 'medium' | 'minimum'
 
@@ -94,10 +95,8 @@ export async function processVideo(params: {
     videoBitrate?: number | Quality
     onProgress?: (p01: number) => void
     onFrame: (
-        frame: VideoFrame,
-        ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D,
-        timestampSec: number,
-        inputDurationSec: number | null
+        current: { frame: VideoFrame; timestampSec: number; frameIndex: number },
+        ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D
     ) => Promise<boolean>
 }): Promise<ArrayBuffer> {
     const {
@@ -119,7 +118,7 @@ export async function processVideo(params: {
         const videoTrack = await input.getPrimaryVideoTrack()
         if (!videoTrack) throw new Error('No video track found.')
 
-        const inputDurationSec = await input.computeDuration().catch(() => null)
+        const packetPtsSec = (await getSortedVideoPacketMeta(videoTrack)).map(p => p.ts)
         const fps = Math.max(1e-6, outputFps ?? (await getApproxFps(videoTrack)))
 
         const { canvas, ctx } = create2DCanvas(outputWidth, outputHeight)
@@ -139,7 +138,14 @@ export async function processVideo(params: {
             const vf = sample.toVideoFrame()
             try {
                 ctx.clearRect(0, 0, outputWidth, outputHeight)
-                const keep = await onFrame(vf, ctx, sample.timestamp, inputDurationSec)
+                const keep = await onFrame(
+                    {
+                        frame: vf,
+                        timestampSec: sample.timestamp,
+                        frameIndex: closestIndexForTimestampSec(packetPtsSec, sample.timestamp),
+                    },
+                    ctx
+                )
                 if (!keep) continue
 
                 await videoSource.add(framesWritten / fps, 1 / fps)
@@ -218,8 +224,8 @@ export async function preprocessVideo(
         outputFps: outFps,
         videoBitrate: videoBitrate ?? defaultVideoBitrate,
         onProgress,
-        onFrame: async (frame, ctx) => {
-            ctx.drawImage(frame, 0, 0, ctx.canvas.width, ctx.canvas.height)
+        onFrame: async (current, ctx) => {
+            ctx.drawImage(current.frame, 0, 0, ctx.canvas.width, ctx.canvas.height)
             acc += ratio
             if (acc >= 1) {
                 acc -= 1
