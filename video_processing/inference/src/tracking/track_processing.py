@@ -15,7 +15,6 @@ from ..visualization.stabilize import Transform
 
 from ..settings import (
     MIN_FRAME_PERCENTAGE,
-    TRACK_RTS_DETECTION_BBOX_BLEND,
     TRACK_RTS_ENABLE_BACKWARD_SMOOTHER,
     TRACK_RTS_MEAS_STD_WEIGHT_POS,
     TRACK_RTS_MEAS_STD_WEIGHT_SIZE,

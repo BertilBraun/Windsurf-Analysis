@@ -33,7 +33,6 @@ from inference.src.tracking.track_processing import TrackPostProcessing  # noqa:
 from inference.src.util.timing import timeit  # noqa: E402
 from inference.src.util.video_io import VideoReader, get_video_properties  # noqa: E402
 from inference.src.visualization.stabilize import (  # noqa: E402
-    MaskedVidStabEstimator,
     STABLE_GFTT_BLOCK_SIZE,
     STABLE_GFTT_MAX_CORNERS,
     STABLE_GFTT_MIN_DISTANCE,

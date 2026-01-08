@@ -370,7 +370,7 @@ export function drawFrame(
         // Reuse shared crop-draw logic (same as export path).
         const zMul = ov.detailedZoom ?? 1
         drawDetailedCrop(ctx, cssW, cssH, sourceCanvas, vidW, vidH, det, zMul)
-        drawDetailedBBoxOverlay(ctx, cssW, cssH, vidW, vidH, det, zMul)
+        // drawDetailedBBoxOverlay(ctx, cssW, cssH, vidW, vidH, det, zMul)
         if (annotations.length > 0) {
             drawAnnotationsDetailed(ctx, annotations, cssW, cssH, vidW, vidH, det, zMul)
         }
