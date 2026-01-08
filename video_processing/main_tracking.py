@@ -14,8 +14,13 @@ from inference.src.tracking.track_processing import TrackPostProcessing
 from inference.src.tracking.tracking import Tracker
 from inference.src.util.video_io import VideoReader, get_video_properties
 from inference.src.util.timing import timeit
-from inference.src.visualization.stabilize import Transform, gmc_transform_from_frame, vidstab_like_transforms
-from inference.src.motion.gmc import GMC
+from inference.src.visualization.stabilize import (
+    MaskedVidStabEstimator,
+    STABLE_SMOOTHING_WINDOW,
+    Transform,
+    stable_processing_max_dim_half,
+    vidstab_like_transforms,
+)
 
 from main_inference import (
     report_job_failure_on_exception,
@@ -56,10 +61,10 @@ def embedding_extraction_and_tracking(
         send_progress(job_id, 'stabilization')
 
         with timeit(f'{job_id}: Stabilization + crops (single pass)'):
-            parsed_transforms, raw_detections_with_crops = _compute_gmc_transforms_and_crop_detections(
+            parsed_transforms, raw_detections_with_crops = _compute_masked_vidstab_transforms_and_crop_detections(
                 input_video_path,
                 raw_detections,
-                downscale=2,
+                mask_margin_px=20,
             )
 
         send_progress(job_id, 'appearance')
@@ -112,7 +117,7 @@ def embedding_extraction_and_tracking(
         with timeit(f'{job_id}: Stabilization Optimization'):
             # Compute the transforms which the frontend should use as per frame warps for stabilization
             # stabilized_transforms = optimize_trajectory_world(transforms, properties.width, properties.height)
-            smoothing_window = min(20, props.total_frames - 1)
+            smoothing_window = min(int(STABLE_SMOOTHING_WINDOW), props.total_frames - 1)
             stabilized_transforms = vidstab_like_transforms(parsed_transforms, smoothing_window)
 
         # Frontend convenience: emit an explicit identity transform for frame 0.
@@ -141,11 +146,11 @@ def embedding_extraction_and_tracking(
         send_complete(job_id, 'succeeded', results)
 
 
-def _compute_gmc_transforms_and_crop_detections(
+def _compute_masked_vidstab_transforms_and_crop_detections(
     input_video_path: str,
     raw_detections: list[dict],
     *,
-    downscale: int,
+    mask_margin_px: int,
 ) -> tuple[list[Transform], list[RawDetection]]:
     detections_by_frame: dict[int, list[tuple[BoundingBox, float]]] = defaultdict(list)
     for detection in raw_detections:
@@ -161,7 +166,7 @@ def _compute_gmc_transforms_and_crop_detections(
             )
         )
 
-    gmc = GMC(downscale=downscale)
+    estimator = MaskedVidStabEstimator(processing_max_dim=stable_processing_max_dim_half(input_video_path))
     transforms: list[Transform] = []
     raw_detections_with_crops: list[RawDetection] = []
 
@@ -171,11 +176,11 @@ def _compute_gmc_transforms_and_crop_detections(
             per_frame_dets = detections_by_frame.get(frame_idx, [])
 
             excluded_bboxes = [([bbox.x1, bbox.y1, bbox.x2, bbox.y2]) for bbox, _ in per_frame_dets]
-            transform = gmc_transform_from_frame(
-                gmc,
+            transform = estimator.apply(
                 frame_idx=frame_idx,
-                frame=frame,
+                frame_bgr=frame,
                 excluded_bboxes=excluded_bboxes,
+                mask_margin_px=int(mask_margin_px),
             )
             if transform is not None:
                 transforms.append(transform)

@@ -17,6 +17,18 @@ Transform = NamedTuple(
 )  # dx, dy, da for each frame relative to the previous frame (frame[i] - frame[i-1]) -> frame[i] = frame[i-1] + dx, dy, da
 
 
+STABLE_GFTT_MAX_CORNERS = 200
+STABLE_GFTT_QUALITY_LEVEL = 0.05
+STABLE_GFTT_MIN_DISTANCE = 30.0
+STABLE_GFTT_BLOCK_SIZE = 3
+STABLE_SMOOTHING_WINDOW = 10
+
+
+def stable_processing_max_dim_half(input_video: str | os.PathLike) -> int:
+    props = get_video_properties(input_video)
+    return max(1, int(round(max(int(props.width), int(props.height)) / 2.0)))
+
+
 class MaskedVidStabEstimator:
     """
     VidStab-like motion estimator, but supports per-frame masks.
@@ -34,10 +46,10 @@ class MaskedVidStabEstimator:
         self,
         *,
         processing_max_dim: int | float = float('inf'),
-        max_corners: int = 200,
-        quality_level: float = 0.01,
-        min_distance: float = 30.0,
-        block_size: int = 3,
+        max_corners: int = STABLE_GFTT_MAX_CORNERS,
+        quality_level: float = STABLE_GFTT_QUALITY_LEVEL,
+        min_distance: float = STABLE_GFTT_MIN_DISTANCE,
+        block_size: int = STABLE_GFTT_BLOCK_SIZE,
     ) -> None:
         self.processing_max_dim = float(processing_max_dim)
         self.feature_params: dict[str, object] = dict(
@@ -139,6 +151,51 @@ class MaskedVidStabEstimator:
         self._prev_pts = cur_pts.copy()
 
         return Transform(dx=dx, dy=dy, da=da, frame_idx=int(frame_idx))
+
+
+def compute_stabilization_transforms_masked_vidstab(
+    input_video: str | os.PathLike,
+    *,
+    bboxes_by_frame: Mapping[int, Sequence[Sequence[int]]] | None = None,
+    mask_margin_px: int = 20,
+    processing_max_dim: int | None = None,
+    max_corners: int = STABLE_GFTT_MAX_CORNERS,
+    quality_level: float = STABLE_GFTT_QUALITY_LEVEL,
+    min_distance: float = STABLE_GFTT_MIN_DISTANCE,
+    block_size: int = STABLE_GFTT_BLOCK_SIZE,
+    limit_frames: int | None = None,
+) -> list[Transform]:
+    """
+    Compute per-frame camera motion deltas (prev->curr) using a VidStab-like GFTT+LK estimator with optional bbox masks.
+
+    Returns `Transform` entries for frames 1..N-1 (frame 0 has no prev frame, so returns None and is omitted).
+    """
+    if processing_max_dim is None:
+        processing_max_dim = stable_processing_max_dim_half(input_video)
+
+    estimator = MaskedVidStabEstimator(
+        processing_max_dim=int(processing_max_dim),
+        max_corners=int(max_corners),
+        quality_level=float(quality_level),
+        min_distance=float(min_distance),
+        block_size=int(block_size),
+    )
+    out: list[Transform] = []
+    with VideoReader(input_video) as reader:
+        for frame_idx, frame in reader.read_frames():
+            frame_idx = int(frame_idx)
+            if limit_frames is not None and frame_idx >= int(limit_frames):
+                break
+            excluded = None if bboxes_by_frame is None else bboxes_by_frame.get(frame_idx, ())
+            t = estimator.apply(
+                frame_idx=frame_idx,
+                frame_bgr=frame,
+                excluded_bboxes=excluded,
+                mask_margin_px=int(mask_margin_px),
+            )
+            if t is not None:
+                out.append(t)
+    return out
 
 
 @cache_to_file('vidstab_transforms')
