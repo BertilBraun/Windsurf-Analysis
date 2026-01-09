@@ -232,6 +232,7 @@
         },
         "jobThumbnail": {
             "fileNotFound": "VIDEO FILE NOT FOUND",
+            "openAnalysisTooltip": "Click to open video analysis.",
             "generating": "Generating thumbnail…",
             "status": {
                 "appearance": "Identifying surfers",

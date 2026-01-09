@@ -235,7 +235,7 @@ export const JobThumbnail: React.FC<{
     }
 
     return (
-        <div className={boxClasses}>
+        <div className={boxClasses} title={t('components.jobThumbnail.openAnalysisTooltip')}>
             {thumbUrl ? (
                 <>
                     <img
