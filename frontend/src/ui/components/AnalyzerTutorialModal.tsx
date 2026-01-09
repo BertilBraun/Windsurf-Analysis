@@ -280,13 +280,16 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
             </div>
 
             <div className="px-4 py-3 border-t border-slate-200 flex items-center justify-between gap-2">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={isFirst}
-                    onClick={() => onStepIndexChange(Math.max(0, safeIdx - 1))}
-                    text={t('common.back')}
-                />
+                {isFirst ? (
+                    <div />
+                ) : (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onStepIndexChange(Math.max(0, safeIdx - 1))}
+                        text={t('common.back')}
+                    />
+                )}
                 <div className="flex items-center gap-2">
                     {!isLast ? (
                         nextTooltip ? (
