@@ -266,13 +266,6 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                             total: visibleSteps.length,
                         })}
                     </div>
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onStepIndexChange(0)}
-                        text={t('components.analyzerTutorialModal.restart')}
-                        title={t('components.analyzerTutorialModal.restartTitle')}
-                    />
                 </div>
             }
         >
