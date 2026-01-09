@@ -287,7 +287,7 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                 )}
                 <div className="flex items-center gap-2">
                     {!isLast ? (
-                        nextTooltip ? (
+                        step.key === 'watch-folder' && !ingressFolderName ? null : nextTooltip ? (
                             <span title={nextTooltip} className="inline-flex cursor-not-allowed">
                                 <Button
                                     variant="primary"
