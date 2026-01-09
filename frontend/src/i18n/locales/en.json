@@ -48,6 +48,7 @@
                     "nextDisabledTooltip": "Select a Video Folder to continue.",
                     "permissions": "Your browser will <b>ask for permission to access this folder</b> so GybeLock can keep processing your videos.",
                     "safety": "<b>Your files are never changed, moved, or modified.</b> GybeLock only reads this folder.",
+                    "uploadNotice": "When you add videos, GybeLock <b>securely uploads them to our servers</b> for stabilization and analysis. <b>Your original files are never modified.</b>",
                     "status": "Status: Waiting for videos",
                     "tip": "Tip: It’s often easiest to <b>create a new empty folder</b> (for example “Windsurf Videos”) and use that.",
                     "title": "Choose a Video Folder"
@@ -447,7 +448,7 @@
                     "question": "How do I delete my account?"
                 },
                 "fileNotFound": {
-                    "answer": "The player opens videos from your local ingress folder. If the file can’t be located, select the correct folder again (Ingress → <strong>Change folder</strong>) and make sure the video still exists in that folder.",
+                    "answer": "The player opens videos from your local video folder. If the file can’t be located, select the correct folder again (Video Folder → <strong>Change folder</strong>) and make sure the video still exists in that folder.",
                     "question": "Why does the player say “VIDEO FILE NOT FOUND”?"
                 },
                 "formats": {
@@ -456,10 +457,10 @@
                 },
                 "ingressFolder": {
                     "answer": "It’s a folder on your computer that GybeLock monitors periodically. When you drop a new video in it, GybeLock will automatically upload it for processing.",
-                    "question": "What is the ingress folder?"
+                    "question": "What is the local video folder?"
                 },
                 "movedVideo": {
-                    "answer": "If the moved/renamed file can’t be found, the player may show <strong>VIDEO FILE NOT FOUND</strong>. Put the video back into the ingress folder (or expected subfolder) and make sure the correct ingress folder is selected.",
+                    "answer": "If the moved/renamed file can’t be found, the player may show <strong>VIDEO FILE NOT FOUND</strong>. Put the video back into the local video folder (or expected subfolder) and make sure the correct local video folder is selected.",
                     "question": "I moved or renamed a video. What should I do?"
                 },
                 "processedVideos": {

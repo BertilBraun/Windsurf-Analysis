@@ -86,6 +86,15 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                             </Text>
                         </div>
 
+                        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+                            <Text as="div" variant="support">
+                                <Trans
+                                    i18nKey="components.analyzerTutorialModal.steps.watchFolder.uploadNotice"
+                                    components={{ b: <TextStrong /> }}
+                                />
+                            </Text>
+                        </div>
+
                         <div className="pt-2 flex flex-col items-center gap-2">
                             <Button
                                 variant={ingressFolderName ? 'secondary' : 'primary'}
