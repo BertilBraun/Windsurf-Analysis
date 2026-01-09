@@ -17,6 +17,7 @@ import { useAnnotations } from './useAnnotations'
 import { useWebCodexPlayer } from './useWebCodexPlayer'
 
 const PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY = 'player.focusedClickHintDismissed.v1'
+const PLAYER_OPENED_ONCE_KEY = 'player.openedOnce.v1'
 
 type Props = {
     job: JobDetail
@@ -125,6 +126,10 @@ export const Player: React.FC<Props> = ({
         loadSetting<boolean>(PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY).then(saved => {
             setFocusedClickHintDismissed(!!saved)
         })
+    }, [])
+
+    React.useEffect(() => {
+        void saveSetting(PLAYER_OPENED_ONCE_KEY, true)
     }, [])
 
     React.useEffect(() => {

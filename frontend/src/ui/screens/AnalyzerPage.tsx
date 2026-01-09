@@ -19,6 +19,7 @@ import { ConsentModal } from '../components/ConsentModal'
 import settingsIcon from '../assets/settings.svg'
 
 const FEEDBACK_PROMPT_SEEN_KEY = 'feedbackPromptSeen.v1'
+const PLAYER_OPENED_ONCE_KEY = 'player.openedOnce.v1'
 
 export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => void }> = ({
     onGoHome,
@@ -34,6 +35,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const [sortDir, setSortDir] = React.useState<JobListSortDir>('desc')
     const [showFeedback, setShowFeedback] = React.useState<boolean>(false)
     const [feedbackPromptSeen, setFeedbackPromptSeen] = React.useState<boolean | null>(null)
+    const [playerOpenedOnce, setPlayerOpenedOnce] = React.useState<boolean | null>(null)
     const [consentRequired, setConsentRequired] = React.useState<boolean>(false)
     const [consentSubmitting, setConsentSubmitting] = React.useState<boolean>(false)
     const [ingressUploading, setIngressUploading] = React.useState<number>(0)
@@ -79,6 +81,12 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     React.useEffect(() => {
         loadSetting<boolean>(FEEDBACK_PROMPT_SEEN_KEY).then(seen => {
             setFeedbackPromptSeen(!!seen)
+        })
+    }, [])
+
+    React.useEffect(() => {
+        loadSetting<boolean>(PLAYER_OPENED_ONCE_KEY).then(opened => {
+            setPlayerOpenedOnce(!!opened)
         })
     }, [])
 
@@ -155,9 +163,10 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     React.useEffect(() => {
         if (!jobsInitialSyncComplete) return
         if (feedbackPromptSeen !== false) return
-        if (succeededJobs.length < 3) return
+        if (playerOpenedOnce !== true) return
+        if (succeededJobs.length <= 3) return
         setShowFeedback(true)
-    }, [feedbackPromptSeen, jobsInitialSyncComplete, succeededJobs.length])
+    }, [feedbackPromptSeen, jobsInitialSyncComplete, playerOpenedOnce, succeededJobs.length])
 
     const { showTutorial, openTutorial, tutorialModalProps } = useTutorialController({
         dirHandle,
