@@ -238,7 +238,7 @@
                 "detection": "Detecting Surfers",
                 "failed": "Failed",
                 "orientation": "Orienting Video",
-                "uploading": "Uploading video",
+                "uploading": "Uploading to GybeLock (secure)",
                 "stabilization": "Stabilizing Video",
                 "starting": "Starting",
                 "succeeded": "Succeeded",
@@ -456,7 +456,7 @@
                     "question": "What formats are supported?"
                 },
                 "ingressFolder": {
-                    "answer": "It’s a folder on your computer that GybeLock monitors periodically. When you drop a new video in it, GybeLock will automatically upload it for processing.",
+                    "answer": "It’s a folder on your computer that GybeLock keeps an eye on for new videos. When you drop a new video in it, GybeLock will automatically upload it for processing.",
                     "question": "What is the local video folder?"
                 },
                 "movedVideo": {
