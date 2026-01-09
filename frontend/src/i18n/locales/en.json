@@ -54,7 +54,7 @@
                     "title": "Choose a Video Folder"
                 },
                 "addVideos": {
-                    "body": "Copy or move <b>MP4 videos</b> into your Video Folder.",
+                    "body": "Drag <b>MP4 videos</b> into this folder (or copy them there).",
                     "folderSelected": "Video folder selected: {{name}}",
                     "muted": "Videos appear here automatically as they are processed.",
                     "statusWaiting": "Status: Waiting for videos",
