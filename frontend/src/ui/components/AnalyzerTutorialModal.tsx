@@ -236,8 +236,7 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     const step = visibleSteps[safeIdx] ?? visibleSteps[0]!
     const isFirst = safeIdx === 0
     const isLast = safeIdx === visibleSteps.length - 1
-    const canClose = !isFirst
-    const canGoNext = step.key !== 'watch-folder' || !!ingressFolderName
+    const canClose = !!ingressFolderName
     const nextTooltip =
         step.key === 'watch-folder' && !ingressFolderName
             ? t('components.analyzerTutorialModal.steps.watchFolder.nextDisabledTooltip')
