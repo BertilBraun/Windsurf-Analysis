@@ -243,6 +243,17 @@
                 "starting": "Starting",
                 "succeeded": "Succeeded",
                 "tracking": "Tracking Surfers"
+            },
+            "statusTooltip": {
+                "appearance": "Identifying each surfer so GybeLock can track them.",
+                "canceled": "Processing was canceled.",
+                "detection": "Detecting surfers in the video.",
+                "failed": "Processing failed. Try again later or choose a different video.",
+                "orientation": "Figuring out the video's rotation and orientation.",
+                "starting": "Preparing your video for processing.",
+                "stabilization": "Stabilizing the video for smoother viewing.",
+                "tracking": "Tracking surfer movement frame by frame.",
+                "uploading": "Uploading your video to GybeLock for processing."
             }
         },
         "keyboardShortcutsModal": {

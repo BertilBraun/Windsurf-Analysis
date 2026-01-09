@@ -219,10 +219,15 @@ export const JobThumbnail: React.FC<{
                 : '#10b981'
 
         const statusKey = `components.jobThumbnail.status.${job.status}`
+        const tooltipKey = `components.jobThumbnail.statusTooltip.${job.status}`
 
         return (
             <div className={boxClasses}>
-                <span className="text-white rounded-md px-2 py-1 text-sm" style={{ background: color }}>
+                <span
+                    className="text-white rounded-md px-2 py-1 text-sm"
+                    style={{ background: color }}
+                    title={t(tooltipKey)}
+                >
                     {t(statusKey)}
                 </span>
             </div>
