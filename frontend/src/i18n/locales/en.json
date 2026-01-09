@@ -42,7 +42,7 @@
                     "title": "What GybeLock does"
                 },
                 "watchFolder": {
-                    "body": "Choose a <b>local folder</b> where your windsurfing videos live. GybeLock will <b>monitor this folder</b> and automatically process any new MP4s you add.",
+                    "body": "Choose a <b>folder on your computer</b> where your windsurfing videos live. GybeLock will <b>monitor this folder</b> and automatically process any new MP4s you add.",
                     "button": "Choose Video Folder",
                     "currentFolder": "Current folder: {{name}}",
                     "nextDisabledTooltip": "Select a Video Folder to continue.",
@@ -132,7 +132,7 @@
             },
             "issue": {
                 "ingressError": {
-                    "title": "Ingress error"
+                    "title": "Local video folder error"
                 },
                 "noFolder": {
                     "message": "Select a folder so GybeLock can keep an eye on it and auto-upload new videos.",
@@ -143,7 +143,7 @@
                     "title": "Folder permission denied"
                 },
                 "permissionNeeded": {
-                    "message": "Please grant permission so GybeLock can keep monitoring the folder.",
+                    "message": "Please grant permission so GybeLock can keep an eye on the folder.",
                     "title": "Folder permission needed"
                 }
             },
@@ -416,7 +416,7 @@
                 "title": "Beta — read more"
             },
             "emptyState": {
-                "body": "Select an ingress folder, drop MP4s into it, then open a job once it’s <b>Succeeded</b>.",
+                "body": "Select a local video folder, drop MP4s into it, then open a job once it’s <b>Succeeded</b>.",
                 "openTutorial": "Open tutorial",
                 "title": "Getting started"
             },
