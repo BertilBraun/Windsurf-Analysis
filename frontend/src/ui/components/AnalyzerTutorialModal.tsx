@@ -231,7 +231,11 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
             ? t('components.analyzerTutorialModal.steps.watchFolder.nextDisabledTooltip')
             : undefined
     const nextLabel =
-        step.key === 'what' ? t('components.analyzerTutorialModal.actions.startSetup') : t('common.next')
+        step.key === 'what'
+            ? t('components.analyzerTutorialModal.actions.startSetup')
+            : step.key === 'add-videos'
+            ? t('components.analyzerTutorialModal.actions.startAddingVideos')
+            : t('common.next')
 
     React.useEffect(() => {
         if (step.key !== 'watch-folder') return

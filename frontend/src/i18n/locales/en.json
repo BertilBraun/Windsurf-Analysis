@@ -28,6 +28,7 @@
         },
         "analyzerTutorialModal": {
             "actions": {
+                "startAddingVideos": "I'll start adding videos",
                 "startSetup": "Start setup"
             },
             "restart": "Restart",
@@ -123,7 +124,7 @@
                 "aria": "Open video folder",
                 "status": {
                     "error": "Error — action needed",
-                    "monitoring": "Monitoring",
+                    "monitoring": "Looking for new videos",
                     "selectFolder": "Choose Video Folder (required)",
                     "uploading": "Uploading {{count}}…"
                 },
@@ -134,8 +135,8 @@
                     "title": "Ingress error"
                 },
                 "noFolder": {
-                    "message": "Select a folder so GybeLock can monitor it and auto-upload new videos.",
-                    "title": "No ingress folder selected"
+                    "message": "Select a folder so GybeLock can keep an eye on it and auto-upload new videos.",
+                    "title": "No local video folder selected"
                 },
                 "permissionDenied": {
                     "message": "Re-select the folder and make sure you grant access.",
