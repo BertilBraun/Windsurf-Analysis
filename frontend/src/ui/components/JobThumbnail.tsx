@@ -224,7 +224,7 @@ export const JobThumbnail: React.FC<{
         return (
             <div className={boxClasses}>
                 <span
-                    className="text-white rounded-md px-2 py-1 text-sm"
+                    className="text-white rounded-md px-2 py-1 text-sm text-center"
                     style={{ background: color }}
                     title={t(tooltipKey)}
                 >
@@ -246,7 +246,7 @@ export const JobThumbnail: React.FC<{
                     {playable && <PlayOverlay />}
                 </>
             ) : (
-                <div className="text-gray-500 text-sm">{t('components.jobThumbnail.generating')}</div>
+                <div className="text-gray-500 text-sm text-center">{t('components.jobThumbnail.generating')}</div>
             )}
         </div>
     )
