@@ -28,7 +28,6 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     stepKeys,
 }) => {
     const { t } = useTranslation()
-    const canClose = !!ingressFolderName
     const pickRequestedRef = React.useRef(false)
 
     const handlePickIngressFolder = React.useCallback(() => {
@@ -225,6 +224,7 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     const step = visibleSteps[safeIdx] ?? visibleSteps[0]!
     const isFirst = safeIdx === 0
     const isLast = safeIdx === visibleSteps.length - 1
+    const canClose = !isFirst
     const canGoNext = step.key !== 'watch-folder' || !!ingressFolderName
     const nextTooltip =
         step.key === 'watch-folder' && !ingressFolderName
