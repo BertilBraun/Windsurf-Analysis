@@ -305,8 +305,8 @@
                     "title": "Keyboard shortcuts"
                 },
                 "overviewStabilization": {
-                    "labelOn": "Stab: On",
-                    "labelOff": "Stab: Off",
+                    "labelOn": "Stabilization: On",
+                    "labelOff": "Stabilization: Off",
                     "title": "Toggle stabilization in overview mode"
                 }
             },
