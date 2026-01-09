@@ -230,6 +230,8 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
         step.key === 'watch-folder' && !ingressFolderName
             ? t('components.analyzerTutorialModal.steps.watchFolder.nextDisabledTooltip')
             : undefined
+    const nextLabel =
+        step.key === 'what' ? t('components.analyzerTutorialModal.actions.startSetup') : t('common.next')
 
     React.useEffect(() => {
         if (step.key !== 'watch-folder') return
@@ -307,7 +309,7 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                                 variant="primary"
                                 size="sm"
                                 onClick={() => onStepIndexChange(Math.min(visibleSteps.length - 1, safeIdx + 1))}
-                                text={t('common.next')}
+                                text={nextLabel}
                             />
                         )
                     ) : (

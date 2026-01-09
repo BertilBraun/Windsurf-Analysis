@@ -27,6 +27,9 @@
             "title": "Terms and privacy"
         },
         "analyzerTutorialModal": {
+            "actions": {
+                "startSetup": "Start setup"
+            },
             "restart": "Restart",
             "restartTitle": "Restart tutorial",
             "stepLabel": "Step {{current}} of {{total}}",
