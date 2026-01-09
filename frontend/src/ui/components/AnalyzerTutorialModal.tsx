@@ -155,6 +155,9 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                         <Text as="p" variant="support">
                             {t('components.analyzerTutorialModal.steps.addVideos.muted')}
                         </Text>
+                        <Text as="p" variant="muted">
+                            {t('components.analyzerTutorialModal.steps.addVideos.processingTime')}
+                        </Text>
                         <Text as="div" variant="muted">
                             <Trans
                                 i18nKey="components.analyzerTutorialModal.steps.addVideos.subfolders"

@@ -57,6 +57,7 @@
                     "body": "Drag <b>MP4 videos</b> into this folder (or copy them there).",
                     "folderSelected": "Video folder selected: {{name}}",
                     "muted": "Videos appear here automatically as they are processed.",
+                    "processingTime": "Most videos take 1–3 minutes to process.",
                     "statusWaiting": "Status: Waiting for videos",
                     "subfolders": "Tip: <b>Subfolders are supported</b> — GybeLock mirrors your folder structure exactly.",
                     "title": "Add videos"
