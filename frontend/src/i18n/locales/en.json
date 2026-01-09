@@ -42,7 +42,7 @@
                     "title": "What GybeLock does"
                 },
                 "watchFolder": {
-                    "body": "Choose a <b>folder on your computer</b> where your windsurfing videos live. GybeLock will <b>monitor this folder</b> and automatically process any new MP4s you add.",
+                    "body": "Choose a <b>folder on your computer</b> where your windsurfing videos live. GybeLock <b>keeps an eye on this folder for new videos</b> and automatically processes any new MP4s you add.",
                     "button": "Choose Video Folder",
                     "currentFolder": "Current folder: {{name}}",
                     "nextDisabledTooltip": "Select a Video Folder to continue.",
@@ -94,7 +94,7 @@
                 "open": {
                     "troubleshoot": {
                         "bullets": {
-                            "folder": "Re-check you selected the correct ingress folder",
+                            "folder": "Re-check you selected the correct local video folder",
                             "path": "Make sure the video still exists at its expected path"
                         },
                         "title": "Troubleshooting:"
@@ -480,7 +480,7 @@
                     "question": "Why was my upload skipped?"
                 },
                 "uploadsPaused": {
-                    "answer": "Open <strong>Ingress</strong> and check the error message. If uploads paused after a failure, use <strong>Retry failed</strong>. If you see a beta feedback request message, please reach out to us.",
+                    "answer": "Open <strong>Video Folder</strong> and check the error message. If uploads paused after a failure, use <strong>Retry failed</strong>. If you see a beta feedback request message, please reach out to us.",
                     "question": "Uploads are paused / stuck. What can I do?"
                 },
                 "videoTooLong": {
