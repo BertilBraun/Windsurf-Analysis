@@ -326,7 +326,11 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                             size="sm"
                             disabled={!canClose}
                             onClick={canClose ? onClose : undefined}
-                            text={t('common.done')}
+                            text={
+                                step.key === 'add-videos'
+                                    ? t('components.analyzerTutorialModal.actions.startAddingVideos')
+                                    : t('common.done')
+                            }
                         />
                     )}
                 </div>
