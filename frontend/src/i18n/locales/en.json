@@ -2,6 +2,7 @@
     "common": {
         "actions": {
             "changeFolder": "Change video folder",
+            "retry": "Retry",
             "selectFolder": "Choose Video Folder"
         },
         "back": "Back",

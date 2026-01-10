@@ -64,6 +64,26 @@ def update_user_consent(
     if payload.terms_accepted is False:
         raise HTTPException(status_code=400, detail='Terms must be accepted')
 
+    if not user_repo.does_user_exist(user_id):
+        terms_accepted_at = None
+        privacy_accepted_at = None
+        if payload.terms_accepted:
+            ts = now()
+            terms_accepted_at = ts
+            privacy_accepted_at = ts
+        marketing_consent = payload.marketing_consent if payload.marketing_consent is not None else None
+        marketing_consent_at = now() if payload.marketing_consent else None
+
+        user_repo.create_user(
+            user_id,
+            user.email,
+            terms_accepted_at=terms_accepted_at,
+            privacy_accepted_at=privacy_accepted_at,
+            marketing_consent=marketing_consent,
+            marketing_consent_at=marketing_consent_at,
+        )
+        return {'ok': True, 'created': True}
+
     fields: dict = {}
     if payload.terms_accepted:
         ts = now()

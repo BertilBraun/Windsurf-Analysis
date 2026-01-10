@@ -15,7 +15,6 @@ import { FeedbackModal } from '../components/FeedbackModal'
 import { trackEvent } from '../utils/analytics'
 import { AnalyzerTutorialModal } from '../components/AnalyzerTutorialModal'
 import { useTutorialController } from '../hooks/useTutorialController'
-import { ConsentModal } from '../components/ConsentModal'
 import settingsIcon from '../assets/settings.svg'
 
 const FEEDBACK_PROMPT_SEEN_KEY = 'feedbackPromptSeen.v1'
@@ -26,7 +25,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     onGoPricing,
 }) => {
     const { t } = useTranslation()
-    const { logout, user, authorizedFetch, uid } = useAuth()
+    const { logout, user, authorizedFetch } = useAuth()
     const { jobs, initialSyncComplete: jobsInitialSyncComplete, refreshJobDetail, deleteJobs, reportJob } = useJobs()
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
     const [showSettings, setShowSettings] = React.useState<boolean>(false)
@@ -36,8 +35,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const [showFeedback, setShowFeedback] = React.useState<boolean>(false)
     const [feedbackPromptSeen, setFeedbackPromptSeen] = React.useState<boolean | null>(null)
     const [playerOpenedOnce, setPlayerOpenedOnce] = React.useState<boolean | null>(null)
-    const [consentRequired, setConsentRequired] = React.useState<boolean>(false)
-    const [consentSubmitting, setConsentSubmitting] = React.useState<boolean>(false)
     const [ingressUploading, setIngressUploading] = React.useState<number>(0)
 
     // Ingress folder handle stored at the page level for the whole session
@@ -88,29 +85,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
             setPlayerOpenedOnce(!!opened)
         })
     }, [])
-
-    React.useEffect(() => {
-        if (!uid) return
-        let cancelled = false
-        ;(async () => {
-            try {
-                const res = await authorizedFetch(`/users/${uid}`)
-                if (!res.ok) return
-                const data = (await res.json()) as {
-                    terms_accepted_at?: string | null
-                    privacy_accepted_at?: string | null
-                }
-                if (cancelled) return
-                const needsConsent = !data?.terms_accepted_at || !data?.privacy_accepted_at
-                setConsentRequired(needsConsent)
-            } catch (e) {
-                console.warn('Failed to load user consent state', e)
-            }
-        })()
-        return () => {
-            cancelled = true
-        }
-    }, [authorizedFetch, uid])
 
     const pickDirectory = async () => {
         try {
@@ -347,32 +321,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     enabled={jobsInitialSyncComplete}
                     onUploadingChange={setIngressUploading}
                 />
-
-                {consentRequired && (
-                    <ConsentModal
-                        isSubmitting={consentSubmitting}
-                        onSubmit={async marketingConsent => {
-                            if (!uid) return
-                            setConsentSubmitting(true)
-                            try {
-                                const res = await authorizedFetch(`/users/${uid}/consent`, {
-                                    method: 'PATCH',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        terms_accepted: true,
-                                        marketing_consent: marketingConsent,
-                                    }),
-                                })
-                                if (!res.ok) throw new Error(await res.text())
-                                setConsentRequired(false)
-                            } catch (e) {
-                                console.error('Failed to update consent', e)
-                            } finally {
-                                setConsentSubmitting(false)
-                            }
-                        }}
-                    />
-                )}
 
                 {/* Beta badge: bottom-left, subtle (brand) */}
                 <div
