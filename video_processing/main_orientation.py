@@ -22,7 +22,7 @@ app = modal.App('windsurf-analysis-orientation', image=inference_image)
     scaledown_window=10,
     cpu=2.0,
 )
-# TODO @modal.concurrent(max_inputs=16, target_inputs=12)
+@modal.concurrent(max_inputs=8, target_inputs=8)
 class OrientationModel:
     @modal.enter()
     def setup(self):

@@ -3,7 +3,6 @@ from typing import Literal
 import modal
 import contextlib
 import requests
-import json
 import tempfile
 
 from pathlib import Path
@@ -101,7 +100,7 @@ def send_progress(
     timeout=600,  # 10 minutes
     secrets=[modal.Secret.from_name('backend-secret')],
 )
-# @modal.concurrent(max_inputs=16, target_inputs=12)
+@modal.concurrent(max_inputs=4, target_inputs=4)
 class InferenceModel:
     @modal.enter()
     def setup(self):
