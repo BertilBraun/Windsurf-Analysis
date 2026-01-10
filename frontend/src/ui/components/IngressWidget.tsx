@@ -88,11 +88,11 @@ export const IngressWidget: React.FC<Props> = ({
         }
 
         if (autoExpandedOnce) return
-        if (scanner.uploads.length === 0) return
+        if (scanner.detectedFiles <= 0) return
         setExpanded(true)
         setAutoExpandedOnce(true)
         void saveSetting(WATCH_FOLDER_AUTO_EXPANDED_KEY, true)
-    }, [autoExpandedOnce, scanner.lastError, scanner.uploads.length])
+    }, [autoExpandedOnce, scanner.detectedFiles, scanner.lastError])
 
     React.useEffect(() => {
         if (!expanded) return

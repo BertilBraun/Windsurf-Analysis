@@ -2,7 +2,7 @@ import React from 'react'
 import { AuthorizedFetch, uploadVideoFile } from '../utils/uploader'
 import { useSettings } from './useSettings'
 import { useLocalFileIndex } from './useLocalFileIndex'
-import { fingerprintKey, getFingerprintSha, type FileFingerprint } from '../utils/localFileIndex'
+import { computeSha256, fingerprintKey, getFingerprintSha, type FileFingerprint } from '../utils/localFileIndex'
 
 export type IngressUploadStatus = 'queued' | 'uploading' | 'done' | 'error' | 'skipped'
 
@@ -67,7 +67,7 @@ export function useIngressScanner(
     const timerRef = React.useRef<number | null>(null)
     const scanGenRef = React.useRef<number>(0)
     const scanInFlightRef = React.useRef<boolean>(false)
-    const { refresh, loaded, scanStatus } = useLocalFileIndex(dirHandle)
+    const { refresh, loaded, scanStatus, snapshot, rememberFingerprintSha } = useLocalFileIndex(dirHandle)
 
     const shouldUpload = React.useCallback(
         (sha: string) => {
@@ -147,7 +147,7 @@ export function useIngressScanner(
 
         // Prevent overlapping scans; without this it's easy to end up with multiple concurrent
         // loops scheduling timers with different captured props/sets.
-        if (scanInFlightRef.current || !loaded) {
+        if (scanInFlightRef.current || !loaded || document.hidden) {
             if (scanGenRef.current !== myGen) return
             timerRef.current = window.setTimeout(scanContinuously, intervalMs)
             return
@@ -157,7 +157,7 @@ export function useIngressScanner(
         try {
             const result = await refresh()
             if (result) {
-                const { snapshot, filesByKey } = result
+                const { snapshot, entriesByKey } = result
 
                 const stabilityByPath = new Map<string, boolean>()
                 const REQUIRED_STABLE_SCANS = 1
@@ -184,20 +184,44 @@ export function useIngressScanner(
                 const work: Promise<void>[] = []
                 const currentPaths = new Set(snapshot.files.map(fp => fp.path))
                 const queuedThisScan = new Set<string>()
+                const hashingInFlight = new Set<string>() // fingerprint keys
 
-                const queueUpload = (fp: FileFingerprint, sha: string) => {
+                const resolveSha = async (fp: FileFingerprint): Promise<string | null> => {
+                    const existing = getFingerprintSha(snapshot, fp)
+                    if (existing) return existing
+                    const key = fingerprintKey(fp)
+                    if (hashingInFlight.has(key)) return null
+                    hashingInFlight.add(key)
+                    try {
+                        const entry = entriesByKey.get(key)
+                        if (!entry) return null
+                        const file = await entry.getFile()
+                        const computed = await computeSha256(file)
+                        await rememberFingerprintSha(fp, computed.sha256)
+                        return computed.sha256
+                    } catch {
+                        return null
+                    } finally {
+                        hashingInFlight.delete(key)
+                    }
+                }
+
+                const queueUpload = async (fp: FileFingerprint) => {
                     if (!isStable(fp)) return
+                    const sha = await resolveSha(fp)
+                    if (!sha) return
                     if (!shouldUpload(sha)) return
                     if (queuedThisScan.has(sha)) return
                     queuedThisScan.add(sha)
-                    const file = filesByKey.get(fingerprintKey(fp))
-                    if (!file) return
+                    const entry = entriesByKey.get(fingerprintKey(fp))
+                    if (!entry) return
+                    const file = await entry.getFile()
                     work.push(uploadOne(sha, file, fp.path))
                 }
 
                 for (const fp of snapshot.files) {
-                    const sha = getFingerprintSha(snapshot, fp)
-                    queueUpload(fp, sha)
+                    // eslint-disable-next-line no-await-in-loop
+                    await queueUpload(fp)
                 }
 
                 if (stabilityRef.current.size > 0) {
@@ -253,5 +277,7 @@ export function useIngressScanner(
         [uploads]
     )
 
-    return { active, lastRunAt, lastError, uploading, uploads, suspended, retryFailed, scanStatus }
+    const detectedFiles = snapshot?.files.length ?? 0
+
+    return { active, lastRunAt, lastError, uploading, uploads, suspended, retryFailed, scanStatus, detectedFiles }
 }

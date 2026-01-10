@@ -5,14 +5,13 @@ import {
     type FileFingerprint,
     type FileSnapshot,
     buildShaToPaths,
-    computeSha256,
     fingerprintKey,
     normalizeRelativePath,
 } from '../utils/localFileIndex'
 
 type RefreshResult = {
     snapshot: FileSnapshot
-    filesByKey: Map<string, File>
+    entriesByKey: Map<string, FsEntry>
 }
 
 export type LocalFileIndexScanStatus = {
@@ -35,14 +34,14 @@ function now() {
     return typeof performance !== 'undefined' ? performance.now() : Date.now()
 }
 
-function getHashConcurrency(): number {
+function getMetadataConcurrency(): number {
     const hc =
         typeof navigator !== 'undefined' && (navigator as any).hardwareConcurrency
             ? Math.floor((navigator as any).hardwareConcurrency)
             : 0
-    // Hashing is disk+CPU heavy; keep this conservative to avoid memory spikes.
-    if (hc > 0) return Math.max(1, Math.min(4, Math.floor(hc / 2)))
-    return 2
+    // Metadata reads are light; still keep it conservative to reduce filesystem contention.
+    if (hc > 0) return Math.max(1, Math.min(6, Math.floor(hc / 2)))
+    return 3
 }
 
 async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
@@ -70,42 +69,45 @@ async function scanDirectory(
     const prevMap = new Map(Object.entries(prevSnapshot?.fingerprintToSha ?? {}))
     const files: FileFingerprint[] = []
     const fingerprintToSha: Record<string, string> = {}
-    const filesByKey = new Map<string, File>()
+    const entriesByKey = new Map<string, FsEntry>()
     const total = entries.length
     let processed = 0
     let lastUpdate = now()
 
     const maybeUpdate = () => {
         if (processed === total || now() - lastUpdate > 150 || processed % 25 === 0) {
+            // Keep the existing "hashing" phase label for UI compatibility,
+            // but we only read metadata here (no content hashing).
             onProgress?.({ phase: 'hashing', total, processed })
             lastUpdate = now()
         }
     }
 
-    const computeSha = async (entry: FsEntry) => {
-        const file = await entry.getFile()
-        if (file.type && file.type.toLowerCase() !== 'video/mp4') return
-        const fp: FileFingerprint = {
-            path: normalizeRelativePath(entry.relativePath),
-            size: file.size,
-            mtimeMs: file.lastModified,
-        }
-        const key = fingerprintKey(fp)
-        filesByKey.set(key, file)
-        files.push(fp)
+    const readFingerprint = async (entry: FsEntry) => {
+        try {
+            const file = await entry.getFile()
+            if (file.type && file.type.toLowerCase() !== 'video/mp4') return
+            const fp: FileFingerprint = {
+                path: normalizeRelativePath(entry.relativePath),
+                size: file.size,
+                mtimeMs: file.lastModified,
+            }
+            const key = fingerprintKey(fp)
+            files.push(fp)
+            entriesByKey.set(key, entry)
 
-        let sha = prevMap.get(key)
-        if (!sha) {
-            const computed = await computeSha256(file)
-            sha = computed.sha256
+            const sha = prevMap.get(key)
+            if (sha) fingerprintToSha[key] = String(sha)
+        } catch {
+            // Ignore files that are transiently inaccessible (e.g. mid-copy).
+        } finally {
+            processed += 1
+            maybeUpdate()
+            if (processed % 50 === 0) await new Promise(resolve => window.setTimeout(resolve, 0))
         }
-        fingerprintToSha[key] = String(sha)
-        processed += 1
-        maybeUpdate()
-        if (processed % 25 === 0) await new Promise(resolve => window.setTimeout(resolve, 0))
     }
 
-    await mapLimit(entries, getHashConcurrency(), computeSha)
+    await mapLimit(entries, getMetadataConcurrency(), readFingerprint)
 
     const snapshot: FileSnapshot = {
         files,
@@ -113,7 +115,7 @@ async function scanDirectory(
         updatedAt: Date.now(),
     }
 
-    return { snapshot, filesByKey }
+    return { snapshot, entriesByKey }
 }
 
 export function useLocalFileIndex(dirHandle: FileSystemDirectoryHandle | null) {
@@ -171,7 +173,19 @@ export function useLocalFileIndex(dirHandle: FileSystemDirectoryHandle | null) {
         return result
     }, [dirHandle])
 
+    const rememberFingerprintSha = React.useCallback(async (fp: FileFingerprint, sha: string) => {
+        const current = snapshotRef.current
+        if (!current) return
+        const key = fingerprintKey(fp)
+        if (current.fingerprintToSha[key] === sha) return
+        current.fingerprintToSha[key] = sha
+        snapshotRef.current = current
+        setSnapshot({ ...current, fingerprintToSha: { ...current.fingerprintToSha } })
+        emitSnapshotUpdate(current)
+        await saveFileSnapshot(current)
+    }, [])
+
     const shaToPaths = React.useMemo(() => buildShaToPaths(snapshot), [snapshot])
 
-    return { snapshot, refresh, shaToPaths, loaded, scanStatus }
+    return { snapshot, refresh, rememberFingerprintSha, shaToPaths, loaded, scanStatus }
 }

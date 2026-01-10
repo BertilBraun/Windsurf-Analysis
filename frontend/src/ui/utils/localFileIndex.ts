@@ -1,5 +1,4 @@
 import shajs from 'sha.js'
-import { assert } from './assert'
 
 const HASH_CHUNK_SIZE = 8 * 1024 * 1024 // 8 MiB
 
@@ -40,10 +39,9 @@ export function fingerprintKey(fp: FileFingerprint): string {
     return `${path}|${fp.size}|${fp.mtimeMs}`
 }
 
-export function getFingerprintSha(snapshot: FileSnapshot, fp: FileFingerprint): string {
+export function getFingerprintSha(snapshot: FileSnapshot, fp: FileFingerprint): string | null {
     const key = fingerprintKey(fp)
-    assert(snapshot.fingerprintToSha[key] !== undefined, 'Fingerprint not found in snapshot')
-    return snapshot.fingerprintToSha[key]
+    return snapshot.fingerprintToSha[key] ?? null
 }
 
 export function getNewFingerprints(prev: FileSnapshot | null, next: FileSnapshot): FileFingerprint[] {
@@ -60,6 +58,7 @@ export function buildShaToPaths(snapshot: FileSnapshot | null): Map<string, stri
 
     for (const fp of snapshot.files) {
         const sha = getFingerprintSha(snapshot, fp)
+        if (!sha) continue
         const path = normalizeRelativePath(fp.path)
         const existing = map.get(sha)
         if (existing) existing.push(path)
