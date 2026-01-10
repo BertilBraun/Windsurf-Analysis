@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 
 import modal
+import tempfile
 
 from inference.src.util.timing import timeit
 from inference.src.orientation_fixer import OrientationFixer
@@ -9,9 +10,8 @@ from main_inference import (
     report_job_failure_on_exception,
     image as inference_image,
     send_progress,
-    volume as shared_volume,
-    wait_for_volume_reload,
 )
+from gcs_io import download_gs_uri, upload_file_to_gs_uri
 
 
 app = modal.App('windsurf-analysis-orientation', image=inference_image)
@@ -19,7 +19,6 @@ app = modal.App('windsurf-analysis-orientation', image=inference_image)
 
 @app.cls(
     secrets=[modal.Secret.from_name('backend-secret')],
-    volumes={'/data': shared_volume},
     scaledown_window=10,
     cpu=2.0,
 )
@@ -31,27 +30,26 @@ class OrientationModel:
         self.orientation_fixer = OrientationFixer('/root/inference/weights/orientation_fixer/best.pt')
 
     @modal.method()
-    def orient_and_enqueue(self, job_id: str, yolo_model: str):
+    def orient_and_enqueue(self, job_id: str, yolo_model: str, source_gs_uri: str, upright_gs_uri: str):
         with report_job_failure_on_exception(job_id):
-            video_path = f'/data/{job_id}.mp4'
-            wait_for_volume_reload(video_path)
+            tmpdir = tempfile.gettempdir()
+            video_path = os.path.join(tmpdir, f'{job_id}.mp4')
+            download_gs_uri(source_gs_uri, dest_path=video_path)
 
             send_progress(job_id, 'orientation')
 
             with timeit(f'{job_id}: Orientation detection'):
-                print(f'{job_id}: Starting Orientation detection')
                 dominant_orientation = self.orientation_fixer.detect_orientation(video_path)
                 print(f'{job_id}: Dominant orientation: {dominant_orientation}')
 
-            oriented_video_path = f'/data/{job_id}_upright.mp4'
+            oriented_video_path = os.path.join(tmpdir, f'{job_id}_upright.mp4')
             if dominant_orientation != 0:
                 self.orientation_fixer.apply_rotation(video_path, oriented_video_path, dominant_orientation)
                 os.remove(video_path)
             else:
                 os.rename(video_path, oriented_video_path)
 
-            # Persist upright video into shared volume
-            shared_volume.commit()
+            upload_file_to_gs_uri(oriented_video_path, gs_uri=upright_gs_uri, content_type='video/mp4')
 
             # Enqueue GPU inference continuation
             InferenceModel = modal.Cls.from_name('windsurf-analysis', 'InferenceModel')
@@ -59,4 +57,5 @@ class OrientationModel:
                 job_id=job_id,
                 yolo_model=yolo_model,
                 dominant_orientation=dominant_orientation,
+                upright_gs_uri=upright_gs_uri,
             )

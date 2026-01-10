@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from auth.firebase_auth import User, get_current_user
+from config import settings
 from models import JobStatus
 from repos.jobs_repo import JobsRepo
 from repos.reports_repo import ReportType, ReportsRepo
@@ -28,6 +29,13 @@ class JobCreateRequest(BaseModel):
 class JobCreateResponse(BaseModel):
     job_id: str
     status: JobStatus
+
+
+class JobUploadCompleteRequest(BaseModel):
+    object_path: str = Field(min_length=1)
+    size_bytes: int = Field(ge=0)
+    mime_type: str = 'video/mp4'
+    yolo_model: str = Field(min_length=1)
 
 
 class JobSummaryItem(BaseModel):
@@ -74,6 +82,85 @@ def create_job(payload: JobCreateRequest, user: User = Depends(get_current_user)
     job_record = jobs_repo.create_job(payload.original_checksum_sha256)
     user_jobs_repo.create_user_job(user.uid, job_record.job_id)
     return JobCreateResponse(job_id=job_record.job_id, status=job_record.status)
+
+
+def _gs_uri(bucket: str, object_path: str) -> str:
+    clean = object_path.lstrip('/')
+    return f'gs://{bucket}/{clean}'
+
+
+def _trigger_modal_start(job_id: str, *, source_gs_uri: str, upright_gs_uri: str, yolo_model: str) -> None:
+    if not settings.modal_shared_secret:
+        raise RuntimeError('MODAL_SHARED_SECRET is not configured')
+    if not settings.modal_trigger_base_url:
+        raise RuntimeError('MODAL_TRIGGER_BASE_URL is not configured')
+
+    import json
+    import urllib.request
+
+    url = f'{settings.modal_trigger_base_url}/api/v1/internal/jobs/{job_id}/start'
+    body = json.dumps({'source_gs_uri': source_gs_uri, 'upright_gs_uri': upright_gs_uri, 'yolo_model': yolo_model}).encode(
+        'utf-8'
+    )
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method='POST',
+        headers={
+            'Content-Type': 'application/json',
+            settings.modal_secret_header: settings.modal_shared_secret,
+        },
+    )
+    with urllib.request.urlopen(req, timeout=30) as res:
+        if getattr(res, 'status', 200) >= 400:
+            raise RuntimeError(f'Modal trigger failed: HTTP {res.status}')
+
+
+@router.post('/{job_id}/upload/complete')
+def upload_complete(job_id: str, payload: JobUploadCompleteRequest, user: User = Depends(get_current_user)):
+    _require_owned(user, job_id)
+
+    bucket = settings.firebase_storage_bucket
+    if not bucket:
+        raise HTTPException(status_code=500, detail='FIREBASE_STORAGE_BUCKET is not configured')
+
+    job = jobs_repo.get_job(job_id)
+    if job.status != JobStatus.uploading:
+        # Idempotent behavior: if the job already moved on, don't error.
+        return {'ok': True, 'status': job.status.value}
+
+    expected_prefix = f'uploads/{user.uid}/{job_id}'
+    if not payload.object_path.startswith(expected_prefix):
+        raise HTTPException(status_code=400, detail='Invalid object_path')
+
+    source_gs_uri = _gs_uri(bucket, payload.object_path)
+    upright_object_path = f'processed/{user.uid}/{job_id}_upright.mp4'
+    upright_gs_uri = _gs_uri(bucket, upright_object_path)
+
+    # Persist upload metadata and move to "starting" before triggering Modal.
+    from google.cloud import firestore
+    from models import JobPatch
+
+    jobs_repo.update_job(
+        job_id,
+        JobPatch(
+            size_bytes=payload.size_bytes,
+            mime_type=payload.mime_type,
+            ac_storage_url=source_gs_uri,
+            uploaded_at=firestore.SERVER_TIMESTAMP,
+            status=JobStatus.starting,
+            started_at=firestore.SERVER_TIMESTAMP,
+            error_message=None,
+        ),
+    )
+
+    try:
+        _trigger_modal_start(job_id, source_gs_uri=source_gs_uri, upright_gs_uri=upright_gs_uri, yolo_model=payload.yolo_model)
+    except Exception as e:
+        jobs_repo.update_job(job_id, JobPatch(status=JobStatus.failed, error_message=str(e)))
+        raise HTTPException(status_code=502, detail=f'Failed to start processing: {e}')
+
+    return {'ok': True, 'status': JobStatus.starting.value}
 
 
 @router.get('/{job_id}', response_model=JobDetail)

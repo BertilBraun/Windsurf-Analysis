@@ -27,9 +27,8 @@ from main_inference import (
     image as inference_image,
     send_complete,
     send_progress,
-    volume as shared_volume,
-    wait_for_volume_reload,
 )
+from gcs_io import download_gs_uri
 
 
 app = modal.App('windsurf-analysis-tracking', image=inference_image)
@@ -43,7 +42,6 @@ def clamp_percentage(p: float) -> float:
 
 @app.function(
     secrets=[modal.Secret.from_name('backend-secret')],
-    volumes={'/data': shared_volume},
     scaledown_window=10,
     timeout=600,
     cpu=2.0,
@@ -53,10 +51,15 @@ def embedding_extraction_and_tracking(
     job_id: str,
     dominant_orientation: int,
     raw_detections: list[dict],
+    upright_gs_uri: str,
 ):
     with report_job_failure_on_exception(job_id):
-        input_video_path = f'/data/{job_id}_upright.mp4'
-        wait_for_volume_reload(input_video_path)
+        import tempfile
+        import os
+
+        tmpdir = tempfile.gettempdir()
+        input_video_path = os.path.join(tmpdir, f'{job_id}_upright.mp4')
+        download_gs_uri(upright_gs_uri, dest_path=input_video_path)
 
         send_progress(job_id, 'stabilization')
 

@@ -2,32 +2,20 @@ from __future__ import annotations
 
 from google.cloud import firestore
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Any, Literal
 
-from auth.firebase_auth import User, get_current_user
 from auth.internal_auth import require_modal_secret
 from models import JobPatch, JobResults, JobStatus
 from repos.jobs_repo import JobsRepo
-from repos.user_jobs_repo import UserJobsRepo
 from repos.user_repo import UserRepo
+from repos.user_jobs_repo import UserJobsRepo
 
 
 router = APIRouter(prefix='/internal/jobs', tags=['internal-jobs'], dependencies=[Depends(require_modal_secret)])
 jobs_repo = JobsRepo()
 user_jobs_repo = UserJobsRepo()
 user_repo = UserRepo()
-
-
-class InternalVerifyRequest(BaseModel):
-    required_statuses: list[JobStatus] | None = None
-
-
-class InternalUploadedRequest(BaseModel):
-    ac_checksum_sha256: str
-    size_bytes: int = Field(ge=0)
-    mime_type: str = 'video/mp4'
-    ac_storage_url: str = 'N/A'
 
 
 class InternalStatusRequest(BaseModel):
@@ -45,46 +33,6 @@ class InternalResultsRequest(BaseModel):
     status: Literal['succeeded', 'failed']
     results: JobsCompleteResults | None = None
     error_message: str | None = None
-
-
-def _require_owned(user: User, job_id: str) -> None:
-    assoc = user_jobs_repo.get_user_job(user.uid, job_id)
-    if assoc is None or assoc.deleted_at is not None:
-        raise HTTPException(status_code=404, detail='Not found')
-
-
-@router.post('/{job_id}/verify')
-def verify_job(job_id: str, payload: InternalVerifyRequest, user: User = Depends(get_current_user)):
-    _require_owned(user, job_id)
-
-    required = payload.required_statuses
-    if required:
-        if jobs_repo.get_job(job_id).status not in required:
-            raise HTTPException(status_code=409, detail='Job not in allowed state')
-
-    return {'ok': True}
-
-
-@router.post('/{job_id}/uploaded')
-def mark_uploaded(job_id: str, payload: InternalUploadedRequest, user: User = Depends(get_current_user)):
-    _require_owned(user, job_id)
-
-    if jobs_repo.get_job(job_id).status != JobStatus.uploading:
-        raise HTTPException(status_code=409, detail='Job not in a state that accepts uploads')
-
-    jobs_repo.update_job(
-        job_id,
-        JobPatch(
-            ac_checksum_sha256=payload.ac_checksum_sha256,
-            size_bytes=payload.size_bytes,
-            mime_type=payload.mime_type,
-            ac_storage_url=payload.ac_storage_url,
-            uploaded_at=firestore.SERVER_TIMESTAMP,
-            status=JobStatus.starting,
-            started_at=firestore.SERVER_TIMESTAMP,
-        ),
-    )
-    return {'ok': True}
 
 
 @router.post('/{job_id}/status')

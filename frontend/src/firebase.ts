@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app'
 import { GoogleAuthProvider, getAuth } from 'firebase/auth'
 import { initializeFirestore } from 'firebase/firestore'
+import { getStorage } from 'firebase/storage'
 import { requireEnv } from './env'
 
 const firebaseConfig = {
@@ -13,9 +14,9 @@ const firebaseConfig = {
 }
 
 export const backendUrl = requireEnv('VITE_BACKEND_URL')
-export const modalUrl = requireEnv('VITE_MODAL_API_BASE').replace(/\/+$/, '')
 
 export const firebaseApp = initializeApp(firebaseConfig)
 export const auth = getAuth(firebaseApp)
 export const db = initializeFirestore(firebaseApp, {}, requireEnv('VITE_FIREBASE_DATABASE_ID'))
+export const storage = getStorage(firebaseApp)
 export const googleProvider = new GoogleAuthProvider()

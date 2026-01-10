@@ -1,14 +1,15 @@
 import os
-import time
 from typing import Literal
 import modal
 import contextlib
 import requests
 import json
+import tempfile
 
 from pathlib import Path
 
 from config import settings
+from gcs_io import download_gs_uri
 
 from inference.src.util.timing import timeit
 from inference.src.tracking.detector import ObjectDetector
@@ -42,7 +43,6 @@ image = (
 )
 
 app = modal.App('windsurf-analysis-inference', image=image)
-volume = modal.Volume.from_name('windsurf-analysis-volume', create_if_missing=True)
 
 
 # failure webhook context manager
@@ -64,17 +64,13 @@ def send_complete(
     error_message: str | None = None,
 ):
     try:
-        # NOTE: Modal API expects multipart/form fields (FastAPI Form), not JSON.
-        # It forwards results to Cloud Run via /internal/jobs/{job_id}/results.
-        data: dict[str, str] = {'status': status}
-        if results is not None:
-            data['results_json'] = json.dumps(results)
-        if error_message is not None:
-            data['error_message'] = error_message
-
         requests.post(
-            f'{settings.modal_backend_base_url}/jobs/{job_id}/complete',
-            data=data,
+            f'{settings.cloud_run_base_url}/internal/jobs/{job_id}/results',
+            json={
+                'status': status,
+                'results': results,
+                'error_message': error_message,
+            },
             headers={'X-Modal-Secret': settings.modal_shared_secret},
             timeout=60,
         ).raise_for_status()
@@ -98,26 +94,10 @@ def send_progress(
         print(f'Error posting progress webhook: {e}')
 
 
-def wait_for_volume_reload(video_path: str, max_attempts: int = 10, delay: float = 5.0) -> None:
-    for _ in range(max_attempts):
-        if os.path.exists(video_path):
-            return
-        print(f'Video {video_path} not found, retrying...')
-        time.sleep(delay)
-        print('Reloading volume...')
-        try:
-            volume.reload()
-            print('Volume reloaded')
-        except Exception as e:
-            print(f'Error reloading volume - retrying: {e}')
-    raise Exception(f'Failed to reload volume after {max_attempts} attempts or video {video_path} not found')
-
-
 @app.cls(
     gpu='T4',
     max_containers=2,
     scaledown_window=5,  # Scaledown window is 5 seconds
-    volumes={'/data': volume.read_only()},
     timeout=600,  # 10 minutes
     secrets=[modal.Secret.from_name('backend-secret')],
 )
@@ -141,10 +121,12 @@ class InferenceModel:
         job_id: str,
         yolo_model: str,
         dominant_orientation: int,
+        upright_gs_uri: str,
     ):
         with report_job_failure_on_exception(job_id):
-            video_path = f'/data/{job_id}_upright.mp4'
-            wait_for_volume_reload(video_path)
+            tmpdir = tempfile.gettempdir()
+            video_path = os.path.join(tmpdir, f'{job_id}_upright.mp4')
+            download_gs_uri(upright_gs_uri, dest_path=video_path)
 
             processor = self._get_processor(yolo_model)
             send_progress(job_id, 'detection')
@@ -157,6 +139,7 @@ class InferenceModel:
             TrackingFn.spawn(
                 job_id=str(job_id),
                 dominant_orientation=dominant_orientation,
+                upright_gs_uri=upright_gs_uri,
                 raw_detections=[
                     {
                         'bbox': [d.bbox.x1, d.bbox.y1, d.bbox.x2, d.bbox.y2],

@@ -1,16 +1,14 @@
-import { modalUrl } from '../../firebase'
 import { ALL_FORMATS, BlobSource, Input, VideoSampleSink } from 'mediabunny'
 import { UploadQuality } from '../types'
 import { trackEvent } from './analytics'
+import { auth, storage } from '../../firebase'
+import { ref, uploadBytesResumable } from 'firebase/storage'
 
 export type UploadContext = {
     authorizedFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>
     getAuthHeader: () => Promise<string>
 }
 
-const MODAL_BASE = modalUrl + '/api/v1'
-
-const MAX_PARALLEL_UPLOAD_REQUESTS = 16
 const MAX_PARALLEL_VIDEO_UPLOADS = 3
 const MAX_FRAMES = 30 * 60 * 3 // 3 minutes at 30fps
 
@@ -42,7 +40,6 @@ function createLimiter(max: number) {
     }
 }
 
-const acquireUploadSlot = createLimiter(MAX_PARALLEL_UPLOAD_REQUESTS)
 const acquireVideoUploadSlot = createLimiter(MAX_PARALLEL_VIDEO_UPLOADS)
 
 async function assertVideoWithinMaxFrames(file: File, maxFrames: number): Promise<void> {
@@ -61,59 +58,6 @@ async function assertVideoWithinMaxFrames(file: File, maxFrames: number): Promis
             input.dispose()
         } catch {}
     }
-}
-
-export async function doXhrUpload(
-    url: string,
-    getAuthHeader: (() => Promise<string>) | null,
-    form: FormData,
-    onProgress?: (percent: number) => void
-): Promise<void> {
-    const release = await acquireUploadSlot()
-    try {
-        const authHeader = getAuthHeader ? await getAuthHeader() : null
-        await new Promise<void>((resolve, reject) => {
-            const xhr = new XMLHttpRequest()
-            xhr.open('POST', url, true)
-            if (authHeader) xhr.setRequestHeader('Authorization', authHeader)
-            xhr.upload.onprogress = e => {
-                if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total)
-            }
-            xhr.onerror = () => reject(new Error('Network error'))
-            xhr.onload = () => {
-                if (xhr.status >= 200 && xhr.status < 300) resolve()
-                else reject(new Error(xhr.responseText || `HTTP ${xhr.status}`))
-            }
-            xhr.send(form)
-        })
-    } finally {
-        release()
-    }
-}
-
-const CHUNK_SIZE = 8 * 1024 * 1024 // 8 MiB per part
-const DEFAULT_PART_CONCURRENCY = 8
-const MIN_PART_CONCURRENCY = 2
-const MAX_PART_CONCURRENCY = 16
-
-function getPartConcurrency(): number {
-    // Allow temporary tuning without redeploys.
-    if (typeof localStorage !== 'undefined') {
-        const raw = localStorage.getItem('uploadPartConcurrency')
-        if (raw) {
-            const parsed = Number(raw)
-            if (Number.isFinite(parsed) && parsed > 0) {
-                return Math.min(MAX_PARALLEL_UPLOAD_REQUESTS, Math.floor(parsed))
-            }
-        }
-    }
-
-    const hc =
-        typeof navigator !== 'undefined' && (navigator as any).hardwareConcurrency
-            ? Math.floor((navigator as any).hardwareConcurrency)
-            : 0
-    const base = hc > 0 ? Math.max(MIN_PART_CONCURRENCY, Math.min(MAX_PART_CONCURRENCY, hc)) : DEFAULT_PART_CONCURRENCY
-    return Math.min(MAX_PARALLEL_UPLOAD_REQUESTS, base)
 }
 
 // TODO with preprocess const PERCENT_PREPROCESS = 0.3
@@ -190,6 +134,37 @@ export async function createJobForChecksum(
     return { job_id }
 }
 
+async function uploadVideoToFirebaseStorage(params: {
+    file: File
+    job_id: string
+    onProgress: (percent: number) => void
+}): Promise<{ object_path: string }> {
+    const { file, job_id, onProgress } = params
+    const user = auth.currentUser
+    if (!user) throw new Error('Not authenticated')
+
+    const object_path = `uploads/${user.uid}/${job_id}.mp4`
+    const uploadRef = ref(storage, object_path)
+
+    await new Promise<void>((resolve, reject) => {
+        const task = uploadBytesResumable(uploadRef, file, {
+            contentType: file.type || 'video/mp4',
+        })
+
+        task.on(
+            'state_changed',
+            snap => {
+                const total = snap.totalBytes || file.size || 1
+                onProgress(Math.min(PERCENT_UPLOAD, (snap.bytesTransferred / total) * PERCENT_UPLOAD + PERCENT_PREPROCESS))
+            },
+            err => reject(err),
+            () => resolve()
+        )
+    })
+
+    return { object_path }
+}
+
 export async function uploadVideoFileToJob(
     file: File,
     quality: UploadQuality,
@@ -199,108 +174,18 @@ export async function uploadVideoFileToJob(
 ): Promise<'uploaded'> {
     // Step 2: Preprocess
     // TODO reenable: const processed = await preprocessVideo(file, quality, progress => onProgress(progress * PERCENT_PREPROCESS))
-    const totalSize = file.size
-    const totalParts = Math.ceil(totalSize / CHUNK_SIZE)
+    const { object_path } = await uploadVideoToFirebaseStorage({ file, job_id, onProgress })
 
-    // Step 3: INIT chunked upload (also carries model params)
-    const initForm = new FormData()
-    initForm.append('total_size', String(totalSize))
-    initForm.append('chunk_size', String(CHUNK_SIZE))
-    initForm.append('total_parts', String(totalParts))
-    initForm.append('file_name', file.name)
-    initForm.append('mime_type', file.type || 'video/mp4')
-    initForm.append('yolo_model', 'windsurfing/best.pt')
-
-    const initRes = await fetch(`${MODAL_BASE}/jobs/${job_id}/upload/init`, {
+    // Step 3: Mark upload complete and start processing
+    const completeRes = await ctx.authorizedFetch(`/jobs/${job_id}/upload/complete`, {
         method: 'POST',
-        headers: { Authorization: await ctx.getAuthHeader() },
-        body: initForm,
-    })
-    if (!initRes.ok) throw new Error(await initRes.text())
-    const { resume_from_part } = (await initRes.json()) as { resume_from_part: number }
-
-    // Step 4: Upload parts (parallel with aggregated progress)
-    // Precompute part sizes
-    const partSizes: number[] = Array.from({ length: totalParts }, (_, i) => {
-        const start = i * CHUNK_SIZE
-        const end = Math.min(start + CHUNK_SIZE, totalSize)
-        return end - start
-    })
-
-    // Bytes already safely on server due to resume
-    const initialUploadedBytes = partSizes.slice(0, resume_from_part).reduce((a, b) => a + b, 0)
-
-    // Track per-part uploaded bytes to aggregate progress across concurrent uploads
-    const perPartUploaded: number[] = new Array(totalParts).fill(0)
-    let aggregatedUploaded = initialUploadedBytes
-
-    const updateOverallProgress = () => {
-        const overall = aggregatedUploaded / totalSize
-        onProgress(Math.min(PERCENT_UPLOAD, overall * PERCENT_UPLOAD + PERCENT_PREPROCESS))
-    }
-
-    // Work queue of part indices to upload
-    const workIndices: number[] = []
-    for (let i = resume_from_part; i < totalParts; i++) workIndices.push(i)
-
-    let nextIdx = 0
-
-    async function uploadOnePart(partIndex: number): Promise<void> {
-        const start = partIndex * CHUNK_SIZE
-        const end = Math.min(start + CHUNK_SIZE, totalSize)
-        const partSize = partSizes[partIndex]
-        const chunkBlob = file.slice(start, end)
-
-        const partForm = new FormData()
-        partForm.append('part_index', String(partIndex))
-        partForm.append(
-            'chunk',
-            chunkBlob,
-            `${file.name}.part${partIndex}`
-        )
-
-        await doXhrUpload(
-            `${MODAL_BASE}/jobs/${job_id}/upload/part`,
-            ctx.getAuthHeader,
-            partForm,
-            (percent: number) => {
-                const bytes = Math.max(0, Math.min(partSize, Math.round(percent * partSize)))
-                const delta = bytes - perPartUploaded[partIndex]
-                if (delta > 0) {
-                    perPartUploaded[partIndex] += delta
-                    aggregatedUploaded += delta
-                    updateOverallProgress()
-                }
-            }
-        )
-
-        // Ensure we account for any rounding differences at completion
-        const deltaToFull = partSize - perPartUploaded[partIndex]
-        if (deltaToFull > 0) {
-            perPartUploaded[partIndex] += deltaToFull
-            aggregatedUploaded += deltaToFull
-            updateOverallProgress()
-        }
-    }
-
-    async function worker(): Promise<void> {
-        while (true) {
-            const i = nextIdx
-            if (i >= workIndices.length) return
-            nextIdx = i + 1
-            const partIndex = workIndices[i]
-            await uploadOnePart(partIndex)
-        }
-    }
-
-    const concurrency = Math.min(getPartConcurrency(), Math.max(1, workIndices.length))
-    const workers = Array.from({ length: concurrency }, () => worker())
-    await Promise.all(workers)
-
-    // Step 5: COMPLETE upload (server concatenates, checksums, and spawns inference)
-    const completeRes = await fetch(`${MODAL_BASE}/jobs/${job_id}/upload/complete`, {
-        method: 'POST',
-        headers: { Authorization: await ctx.getAuthHeader() },
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            object_path,
+            size_bytes: file.size,
+            mime_type: file.type || 'video/mp4',
+            yolo_model: 'windsurfing/best.pt',
+        }),
     })
     if (!completeRes.ok) throw new Error(await completeRes.text())
     onProgress(1)

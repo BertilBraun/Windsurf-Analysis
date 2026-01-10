@@ -35,6 +35,11 @@ class Settings:
     modal_secret_header: str = 'X-Modal-Secret'
     modal_shared_secret: str | None = os.getenv('MODAL_SHARED_SECRET')
 
+    # Storage
+    firebase_storage_bucket: str | None = os.getenv('FIREBASE_STORAGE_BUCKET')
+
+    # Modal (Cloud Run -> Modal) trigger endpoint
+    modal_trigger_base_url: str = os.getenv('MODAL_TRIGGER_BASE_URL', '').rstrip('/')
+
 
 settings = Settings()
-

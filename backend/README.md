@@ -34,6 +34,11 @@ gcloud run deploy backend \
   --allow-unauthenticated
 ```
 
+### Environment variables
+- `MODAL_SHARED_SECRET`: shared secret for Modal -> Cloud Run internal endpoints.
+- `MODAL_TRIGGER_BASE_URL`: Modal trigger web endpoint base URL (used to start processing).
+- `FIREBASE_STORAGE_BUCKET`: bucket name, e.g. `gybelock-00.appspot.com` (used to build `gs://...` URIs).
+
 ### CORS (calling from Firebase Hosting)
 If your frontend is hosted on Firebase (e.g. `https://gybelock-00.web.app`) and you call this backend from the browser,
 the backend must allow that origin via CORS. Configure `allowed_origins` in `main.py` and redeploy.
