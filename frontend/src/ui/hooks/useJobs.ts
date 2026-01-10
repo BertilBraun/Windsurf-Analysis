@@ -12,7 +12,7 @@ type UseJobsReturn = {
     ready: boolean
     initialSyncComplete: boolean
     refreshJobDetail: (id: string) => Promise<JobDetail>
-    deleteJob: (id: string) => Promise<void>
+    deleteJobs: (ids: string[]) => Promise<number>
     reportJob: (id: string, type: ReportType, message: string) => Promise<void>
 }
 
@@ -118,7 +118,7 @@ export function useJobs(): UseJobsReturn {
         setInitialSyncComplete(hydratedActiveCount >= active.size)
     }, [])
 
-        // Start realtime subscriptions on mount; cleanup on unmount.
+    // Start realtime subscriptions on mount; cleanup on unmount.
     React.useEffect(() => {
         stopRealtime()
         setJobs([])
@@ -316,14 +316,27 @@ export function useJobs(): UseJobsReturn {
         [authorizedFetch, getLastKnownPathForSha, getLocalPathsForSha]
     )
 
-    const deleteJob = React.useCallback(
-        async (id: string) => {
-            await authorizedFetch(`/jobs/${id}`, { method: 'DELETE' })
-            setJobs(jobs.filter(job => job.id !== id))
-            jobDetailCacheRef.current.delete(id)
-            await deleteSetting(`jobDetail:${id}`)
+    const deleteJobs = React.useCallback(
+        async (ids: string[]) => {
+            const job_ids = Array.from(new Set(ids.filter(Boolean)))
+            if (job_ids.length === 0) return 0
+
+            const res = await authorizedFetch(`/jobs/bulk-delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ job_ids }),
+            })
+            if (!res.ok) throw new Error(await res.text())
+            const data = (await res.json()) as { deleted?: number }
+
+            setJobs(prev => prev.filter(job => !job_ids.includes(job.id)))
+            for (const id of job_ids) {
+                jobDetailCacheRef.current.delete(id)
+                await deleteSetting(`jobDetail:${id}`)
+            }
+            return Number(data.deleted || 0)
         },
-        [authorizedFetch, jobs, setJobs]
+        [authorizedFetch]
     )
 
     const reportJob = React.useCallback(
@@ -344,5 +357,5 @@ export function useJobs(): UseJobsReturn {
         [stopRealtime]
     )
 
-    return { jobs, ready, initialSyncComplete, refreshJobDetail, deleteJob, reportJob }
+    return { jobs, ready, initialSyncComplete, refreshJobDetail, deleteJobs, reportJob }
 }

@@ -27,6 +27,28 @@ class UserJobsRepo:
             UserJobRecord(user_id=user_id, job_id=job_id, deleted_at=now()).model_dump(mode='json')
         )
 
+    def mark_user_jobs_deleted(self, user_id: str, job_ids: list[str]) -> int:
+        """Soft-delete associations for a list of job ids. Returns count marked."""
+        if not job_ids:
+            return 0
+        unique_job_ids = list(dict.fromkeys(job_ids))
+
+        deleted = 0
+        batch = db.batch()
+        for job_id in unique_job_ids:
+            batch.set(
+                self._doc(user_id, job_id),
+                UserJobRecord(user_id=user_id, job_id=job_id, deleted_at=now()).model_dump(mode='json'),
+            )
+            deleted += 1
+            # Firestore batch limit is 500 operations; keep margin.
+            if deleted % 450 == 0:
+                batch.commit()
+                batch = db.batch()
+        if deleted % 450 != 0:
+            batch.commit()
+        return deleted
+
     def delete_all_for_user(self, user_id: str) -> int:
         """Hard-delete all user_jobs docs for a user. Returns count deleted."""
         deleted = 0

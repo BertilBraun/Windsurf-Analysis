@@ -306,8 +306,8 @@ const UnmappedJobsSection: React.FC<{
     sortKey: JobListSortKey
     sortDir: JobListSortDir
     dirHandle: FileSystemDirectoryHandle | null
-    onDeleteJob: (id: string) => Promise<void> | void
-}> = ({ unmappedJobs, sortKey, sortDir, dirHandle, onDeleteJob }) => {
+    onDeleteJobs: (ids: string[]) => Promise<number>
+}> = ({ unmappedJobs, sortKey, sortDir, dirHandle, onDeleteJobs }) => {
     const { t } = useTranslation()
     const [isOpen, setIsOpen] = React.useState<boolean>(true)
     const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null)
@@ -364,7 +364,7 @@ const UnmappedJobsSection: React.FC<{
         async (id: string) => {
             markDeleting(id)
             try {
-                await onDeleteJob(id)
+                await onDeleteJobs([id])
                 trackEvent('joblist_unmapped_delete', { job_id: id })
             } catch (e) {
                 console.error('Failed to delete job', e)
@@ -372,7 +372,7 @@ const UnmappedJobsSection: React.FC<{
                 unmarkDeleting(id)
             }
         },
-        [markDeleting, onDeleteJob, unmarkDeleting]
+        [markDeleting, onDeleteJobs, unmarkDeleting]
     )
 
     const armPendingDelete = React.useCallback(
@@ -406,9 +406,7 @@ const UnmappedJobsSection: React.FC<{
         setBulkDeleting(true)
         setDeletingJobIds(new Set(unmappedJobs.map(job => job.id)))
         try {
-            for (const job of unmappedJobs) {
-                await onDeleteJob(job.id)
-            }
+            await onDeleteJobs(unmappedJobs.map(j => j.id))
             trackEvent('joblist_unmapped_delete_all', { count: unmappedJobs.length })
         } catch (e) {
             console.error('Failed to delete all unmapped jobs', e)
@@ -416,7 +414,7 @@ const UnmappedJobsSection: React.FC<{
             setBulkDeleting(false)
             setDeletingJobIds(new Set())
         }
-    }, [bulkDeleting, clearPendingDelete, unmappedJobs, onDeleteJob])
+    }, [bulkDeleting, clearPendingDelete, unmappedJobs, onDeleteJobs])
 
     const toggleOpen = React.useCallback(() => {
         setIsOpen(prev => {
@@ -543,7 +541,7 @@ export const JobList: React.FC<{
     sortDir: JobListSortDir
     onToggleSort: (key: JobListSortKey) => void
     onOpen: (id: string, localRelativePath?: string | null) => void
-    onDeleteJob: (id: string) => Promise<void> | void
+    onDeleteJobs: (ids: string[]) => Promise<number>
     openingId?: string | null
     dirHandle?: FileSystemDirectoryHandle | null
     initialSyncComplete?: boolean
@@ -553,7 +551,7 @@ export const JobList: React.FC<{
     sortDir,
     onToggleSort,
     onOpen,
-    onDeleteJob,
+    onDeleteJobs,
     openingId,
     dirHandle = null,
     initialSyncComplete = false,
@@ -732,7 +730,7 @@ export const JobList: React.FC<{
                 sortKey={sortKey}
                 sortDir={sortDir}
                 dirHandle={dirHandle}
-                onDeleteJob={onDeleteJob}
+                onDeleteJobs={onDeleteJobs}
             />
 
             <div className="flex flex-col gap-1">{renderFolder(root, 0)}</div>

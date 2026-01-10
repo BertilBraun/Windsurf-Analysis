@@ -35,7 +35,6 @@ type AuthContextValue = {
     logout: () => void
     resendVerificationEmail: () => Promise<void>
     refreshVerificationStatus: () => Promise<void>
-    getAuthHeader: (forceRefreshToken?: boolean) => Promise<string>
     authorizedFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>
     settings: ReturnType<typeof useSettings>['settings']
 }
@@ -229,7 +228,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             logout,
             resendVerificationEmailCb,
             refreshVerificationStatus,
-            getAuthHeader,
             authorizedFetch,
             settings,
         ]

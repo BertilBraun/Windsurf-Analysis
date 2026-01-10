@@ -38,6 +38,10 @@ class JobUploadCompleteRequest(BaseModel):
     yolo_model: str = Field(min_length=1)
 
 
+class JobsBulkDeleteRequest(BaseModel):
+    job_ids: list[str] = Field(default_factory=list)
+
+
 class JobSummaryItem(BaseModel):
     id: str
     status: JobStatus
@@ -163,6 +167,25 @@ def upload_complete(job_id: str, payload: JobUploadCompleteRequest, user: User =
         raise HTTPException(status_code=502, detail=f'Failed to start processing: {e}')
 
     return {'ok': True, 'status': JobStatus.starting.value}
+
+
+@router.post('/bulk-delete')
+def bulk_delete_jobs(payload: JobsBulkDeleteRequest, user: User = Depends(get_current_user)):
+    job_ids = [j for j in payload.job_ids if isinstance(j, str) and j]
+    # Safety guard: avoid huge requests.
+    if len(job_ids) > 500:
+        raise HTTPException(status_code=400, detail='Too many job_ids')
+
+    # Only delete associations the user actually has; ignore unknown ids to keep it idempotent.
+    allowed: list[str] = []
+    for job_id in job_ids:
+        assoc = user_jobs_repo.get_user_job(user.uid, job_id)
+        if assoc is None or assoc.deleted_at is not None:
+            continue
+        allowed.append(job_id)
+
+    deleted = user_jobs_repo.mark_user_jobs_deleted(user.uid, allowed)
+    return {'ok': True, 'deleted': deleted}
 
 
 @router.get('/{job_id}', response_model=JobDetail)

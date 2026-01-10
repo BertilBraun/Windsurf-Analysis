@@ -26,8 +26,8 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     onGoPricing,
 }) => {
     const { t } = useTranslation()
-    const { logout, user, authorizedFetch, getAuthHeader, uid } = useAuth()
-    const { jobs, initialSyncComplete: jobsInitialSyncComplete, refreshJobDetail, deleteJob, reportJob } = useJobs()
+    const { logout, user, authorizedFetch, uid } = useAuth()
+    const { jobs, initialSyncComplete: jobsInitialSyncComplete, refreshJobDetail, deleteJobs, reportJob } = useJobs()
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
     const [showSettings, setShowSettings] = React.useState<boolean>(false)
     const [showHelp, setShowHelp] = React.useState<boolean>(false)
@@ -294,7 +294,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     sortDir={sortDir}
                     onToggleSort={toggleSort}
                     onOpen={onOpen}
-                    onDeleteJob={deleteJob}
+                    onDeleteJobs={deleteJobs}
                     openingId={openingId}
                     dirHandle={dirHandle}
                     initialSyncComplete={jobsInitialSyncComplete}
