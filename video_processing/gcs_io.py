@@ -55,3 +55,15 @@ def upload_file_to_gs_uri(local_path: str, *, gs_uri: str, content_type: str | N
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(key)
     blob.upload_from_filename(local_path, content_type=content_type)
+
+
+def delete_gs_uri(gs_uri: str, *, ignore_missing: bool = True) -> None:
+    bucket_name, key = parse_gs_uri(gs_uri)
+    client = get_gcs_client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(key)
+    try:
+        blob.delete()
+    except Exception:
+        if not ignore_missing:
+            raise

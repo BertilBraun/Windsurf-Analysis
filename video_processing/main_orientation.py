@@ -11,7 +11,7 @@ from main_inference import (
     image as inference_image,
     send_progress,
 )
-from gcs_io import download_gs_uri, upload_file_to_gs_uri
+from gcs_io import delete_gs_uri, download_gs_uri, upload_file_to_gs_uri
 
 
 app = modal.App('windsurf-analysis-orientation', image=inference_image)
@@ -50,6 +50,12 @@ class OrientationModel:
                 os.rename(video_path, oriented_video_path)
 
             upload_file_to_gs_uri(oriented_video_path, gs_uri=upright_gs_uri, content_type='video/mp4')
+            # Keep only the upright video in storage.
+            try:
+                delete_gs_uri(source_gs_uri, ignore_missing=True)
+            except Exception as e:
+                # Best-effort cleanup; don't fail the job if deletion fails.
+                print(f'WARNING: failed to delete source video {source_gs_uri}: {e}')
 
             # Enqueue GPU inference continuation
             InferenceModel = modal.Cls.from_name('windsurf-analysis', 'InferenceModel')
