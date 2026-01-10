@@ -43,7 +43,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     // Ingress folder handle stored at the page level for the whole session
     const [dirHandle, setDirHandle] = React.useState<FileSystemDirectoryHandle | null>(null)
     const [dirPermission, setDirPermission] = React.useState<'granted' | 'denied' | 'prompt' | null>(null)
-    const uploadCtx = React.useMemo(() => ({ authorizedFetch, getAuthHeader }), [authorizedFetch, getAuthHeader])
     const knownChecksumsSha256 = React.useMemo(() => {
         const s = new Set<string>()
         for (const j of jobs) {
@@ -342,7 +341,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                     dirHandle={dirHandle}
                     dirPermission={dirPermission}
                     onPickDirectory={pickDirectory}
-                    uploadCtx={uploadCtx}
+                    authorizedFetch={authorizedFetch}
                     knownChecksumsSha256={knownChecksumsSha256}
                     pendingChecksumsSha256={pendingChecksumsSha256}
                     enabled={jobsInitialSyncComplete}

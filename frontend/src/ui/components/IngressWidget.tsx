@@ -2,7 +2,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useIngressScanner } from '../hooks/useIngressScanner'
 import type { IngressUploadItem, IngressUploadStatus } from '../hooks/useIngressScanner'
-import type { UploadContext } from '../utils/uploader'
+import type { AuthorizedFetch } from '../utils/uploader'
 import { clamp } from '../utils/clamp'
 import { loadSetting, saveSetting } from '../utils/idb'
 import { Modal } from './Modal'
@@ -14,7 +14,7 @@ type Props = {
     dirHandle: FileSystemDirectoryHandle | null
     dirPermission: 'granted' | 'denied' | 'prompt' | null
     onPickDirectory: () => void
-    uploadCtx: UploadContext
+    authorizedFetch: AuthorizedFetch
     knownChecksumsSha256?: ReadonlySet<string> | null
     pendingChecksumsSha256?: ReadonlySet<string> | null
     enabled?: boolean
@@ -55,14 +55,14 @@ export const IngressWidget: React.FC<Props> = ({
     dirHandle,
     dirPermission,
     onPickDirectory,
-    uploadCtx,
+    authorizedFetch,
     knownChecksumsSha256 = null,
     pendingChecksumsSha256 = null,
     enabled = true,
     onUploadingChange,
 }) => {
     const { t } = useTranslation()
-    const scanner = useIngressScanner(dirHandle, uploadCtx, knownChecksumsSha256, pendingChecksumsSha256, enabled)
+    const scanner = useIngressScanner(dirHandle, authorizedFetch, knownChecksumsSha256, pendingChecksumsSha256, enabled)
     const [expanded, setExpanded] = React.useState(false)
     const [showQuotaModal, setShowQuotaModal] = React.useState(false)
     const [autoExpandedOnce, setAutoExpandedOnce] = React.useState<boolean>(false)
@@ -186,6 +186,7 @@ export const IngressWidget: React.FC<Props> = ({
 
     const fabStatus = React.useMemo(() => {
         if (uploading > 0) return t('components.ingressWidget.fab.status.uploading', { count: uploading })
+        if (processingLabel) return processingLabel
         if (issue?.kind === 'error') return t('components.ingressWidget.fab.status.error')
         if (dirHandle) return t('components.ingressWidget.fab.status.monitoring')
         return t('components.ingressWidget.fab.status.selectFolder')
@@ -205,7 +206,9 @@ export const IngressWidget: React.FC<Props> = ({
                     aria-live="polite"
                 >
                     <div className="mt-0.5 h-2 w-2 rounded-full bg-brand-600 shrink-0" aria-hidden="true" />
-                    <div className="text-xs leading-snug text-slate-700">{t('components.ingressWidget.hints.multiVideo')}</div>
+                    <div className="text-xs leading-snug text-slate-700">
+                        {t('components.ingressWidget.hints.multiVideo')}
+                    </div>
                 </div>
             )}
             <div

@@ -22,13 +22,10 @@ def get_gcs_client() -> storage.Client:
         return _gcs_client
 
     raw = os.environ.get('GCP_SERVICE_ACCOUNT_JSON')
-    if raw:
-        info = json.loads(raw)
-        credentials = service_account.Credentials.from_service_account_info(info)
-        _gcs_client = storage.Client(project=info.get('project_id'), credentials=credentials)
-        return _gcs_client
-
-    _gcs_client = storage.Client()
+    assert raw, 'GCP_SERVICE_ACCOUNT_JSON is not set'
+    info = json.loads(raw)
+    credentials = service_account.Credentials.from_service_account_info(info)
+    _gcs_client = storage.Client(project=info.get('project_id'), credentials=credentials)
     return _gcs_client
 
 
@@ -58,4 +55,3 @@ def upload_file_to_gs_uri(local_path: str, *, gs_uri: str, content_type: str | N
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(key)
     blob.upload_from_filename(local_path, content_type=content_type)
-

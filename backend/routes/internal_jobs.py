@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from google.cloud import firestore
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Any, Literal
 

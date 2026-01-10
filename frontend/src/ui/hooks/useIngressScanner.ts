@@ -1,5 +1,5 @@
 import React from 'react'
-import { UploadContext, uploadVideoFile } from '../utils/uploader'
+import { AuthorizedFetch, uploadVideoFile } from '../utils/uploader'
 import { useSettings } from './useSettings'
 import { useLocalFileIndex } from './useLocalFileIndex'
 import { fingerprintKey, getFingerprintSha, type FileFingerprint } from '../utils/localFileIndex'
@@ -35,7 +35,7 @@ function isTransientUploadError(err: any): boolean {
 
 export function useIngressScanner(
     dirHandle: FileSystemDirectoryHandle | null,
-    uploadCtx: UploadContext,
+    authorizedFetch: AuthorizedFetch,
     knownChecksumsSha256: ReadonlySet<string> | null,
     pendingChecksumsSha256: ReadonlySet<string> | null,
     uploadsEnabled: boolean = true,
@@ -108,7 +108,7 @@ export function useIngressScanner(
                 const result = await uploadVideoFile({
                     file,
                     quality: settings.uploadQuality,
-                    ctx: uploadCtx,
+                    authorizedFetch,
                     onProgress: percent => updateUpload(sha, { progress: Math.round(percent * 100) }),
                     onStarted: () => updateUpload(sha, { status: 'uploading' }),
                     sha256: sha,
@@ -138,7 +138,7 @@ export function useIngressScanner(
                 inProgressRef.current.delete(sha)
             }
         },
-        [removeUpload, settings.uploadQuality, updateUpload, uploadCtx]
+        [removeUpload, settings.uploadQuality, updateUpload, authorizedFetch]
     )
 
     const scanContinuously = React.useCallback(async () => {

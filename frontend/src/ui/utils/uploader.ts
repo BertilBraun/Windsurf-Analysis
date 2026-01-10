@@ -1,15 +1,14 @@
-import { ALL_FORMATS, BlobSource, Input, VideoSampleSink } from 'mediabunny'
+import { ALL_FORMATS, BlobSource, Input } from 'mediabunny'
 import { UploadQuality } from '../types'
 import { trackEvent } from './analytics'
 import { auth, storage } from '../../firebase'
 import { ref, uploadBytesResumable } from 'firebase/storage'
 
-export type UploadContext = {
-    authorizedFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>
-    getAuthHeader: () => Promise<string>
+export type AuthorizedFetch = {
+    (input: RequestInfo, init?: RequestInit): Promise<Response>
 }
 
-const MAX_PARALLEL_VIDEO_UPLOADS = 3
+const MAX_PARALLEL_VIDEO_UPLOADS = 4
 const MAX_FRAMES = 30 * 60 * 3 // 3 minutes at 30fps
 
 function createLimiter(max: number) {
@@ -68,12 +67,12 @@ const PERCENT_UPLOAD = 0.95
 export async function uploadVideoFile(params: {
     file: File
     quality: UploadQuality
-    ctx: UploadContext
+    authorizedFetch: AuthorizedFetch
     onProgress: (percent: number) => void
     onStarted: () => void
     sha256: string
 }): Promise<'uploaded' | 'skipped'> {
-    const { file, quality, ctx, onProgress, onStarted, sha256 } = params
+    const { file, quality, authorizedFetch, onProgress, onStarted, sha256 } = params
 
     // Step 1: Create job (also acts as duplicate/quota check)
     trackEvent('analysis_upload_start', {
@@ -85,7 +84,7 @@ export async function uploadVideoFile(params: {
     // Limit upload length by counting demuxed video samples.
     await assertVideoWithinMaxFrames(file, MAX_FRAMES)
 
-    const created = await createJobForChecksum(sha256, ctx)
+    const created = await createJobForChecksum(sha256, authorizedFetch)
     if (created === 'skipped') {
         trackEvent('analysis_upload_skipped', { reason: 'duplicate_or_already_processed' })
         return 'skipped'
@@ -97,7 +96,7 @@ export async function uploadVideoFile(params: {
 
     try {
         onStarted?.()
-        const result = await uploadVideoFileToJob(file, quality, ctx, job_id, (percent: number) => {
+        const result = await uploadVideoFileToJob(file, quality, authorizedFetch, job_id, (percent: number) => {
             onProgress(percent)
             if (percent >= PERCENT_UPLOAD) releaseVideoSlot()
         })
@@ -112,9 +111,9 @@ export async function uploadVideoFile(params: {
 
 export async function createJobForChecksum(
     sha256: string,
-    ctx: UploadContext
+    authorizedFetch: AuthorizedFetch
 ): Promise<{ job_id: string } | 'skipped'> {
-    const createRes = await ctx.authorizedFetch('/jobs', {
+    const createRes = await authorizedFetch('/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ original_checksum_sha256: sha256 }),
@@ -155,7 +154,9 @@ async function uploadVideoToFirebaseStorage(params: {
             'state_changed',
             snap => {
                 const total = snap.totalBytes || file.size || 1
-                onProgress(Math.min(PERCENT_UPLOAD, (snap.bytesTransferred / total) * PERCENT_UPLOAD + PERCENT_PREPROCESS))
+                onProgress(
+                    Math.min(PERCENT_UPLOAD, (snap.bytesTransferred / total) * PERCENT_UPLOAD + PERCENT_PREPROCESS)
+                )
             },
             err => reject(err),
             () => resolve()
@@ -168,7 +169,7 @@ async function uploadVideoToFirebaseStorage(params: {
 export async function uploadVideoFileToJob(
     file: File,
     quality: UploadQuality,
-    ctx: UploadContext,
+    authorizedFetch: AuthorizedFetch,
     job_id: string,
     onProgress: (percent: number) => void
 ): Promise<'uploaded'> {
@@ -177,7 +178,7 @@ export async function uploadVideoFileToJob(
     const { object_path } = await uploadVideoToFirebaseStorage({ file, job_id, onProgress })
 
     // Step 3: Mark upload complete and start processing
-    const completeRes = await ctx.authorizedFetch(`/jobs/${job_id}/upload/complete`, {
+    const completeRes = await authorizedFetch(`/jobs/${job_id}/upload/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

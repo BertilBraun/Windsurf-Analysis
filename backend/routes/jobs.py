@@ -99,9 +99,9 @@ def _trigger_modal_start(job_id: str, *, source_gs_uri: str, upright_gs_uri: str
     import urllib.request
 
     url = f'{settings.modal_trigger_base_url}/api/v1/internal/jobs/{job_id}/start'
-    body = json.dumps({'source_gs_uri': source_gs_uri, 'upright_gs_uri': upright_gs_uri, 'yolo_model': yolo_model}).encode(
-        'utf-8'
-    )
+    body = json.dumps(
+        {'source_gs_uri': source_gs_uri, 'upright_gs_uri': upright_gs_uri, 'yolo_model': yolo_model}
+    ).encode('utf-8')
     req = urllib.request.Request(
         url,
         data=body,
@@ -155,7 +155,9 @@ def upload_complete(job_id: str, payload: JobUploadCompleteRequest, user: User =
     )
 
     try:
-        _trigger_modal_start(job_id, source_gs_uri=source_gs_uri, upright_gs_uri=upright_gs_uri, yolo_model=payload.yolo_model)
+        _trigger_modal_start(
+            job_id, source_gs_uri=source_gs_uri, upright_gs_uri=upright_gs_uri, yolo_model=payload.yolo_model
+        )
     except Exception as e:
         jobs_repo.update_job(job_id, JobPatch(status=JobStatus.failed, error_message=str(e)))
         raise HTTPException(status_code=502, detail=f'Failed to start processing: {e}')
