@@ -59,7 +59,17 @@ export const Modal: React.FC<ModalProps> = ({
         >
             <div
                 className={`absolute inset-0 ${backdropClassName || 'bg-black/60'}`}
-                onClick={closeOnBackdropClick ? onClose : undefined}
+                onMouseDown={e => {
+                    // Prevent "click-through" into the underlying app (e.g. collapsing panels on document mousedown).
+                    e.preventDefault()
+                    e.stopPropagation()
+                    if (closeOnBackdropClick) onClose?.()
+                }}
+                onClick={e => {
+                    // Extra safety: stop any bubbling click handlers even if closeOnBackdropClick is false.
+                    e.preventDefault()
+                    e.stopPropagation()
+                }}
             />
             <div
                 className={`relative z-10 ${contentClasses}`}
