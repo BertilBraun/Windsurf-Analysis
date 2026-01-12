@@ -2,7 +2,9 @@ import React from 'react'
 import { AuthorizedFetch, uploadVideoFile } from '../utils/uploader'
 import { useSettings } from './useSettings'
 import { useLocalFileIndex } from './useLocalFileIndex'
-import { computeSha256, fingerprintKey, getFingerprintSha, type FileFingerprint } from '../utils/localFileIndex'
+import { type FileFingerprint } from '../utils/localFileIndex'
+import { assert } from '../utils/assert'
+import type { JobSummary } from '../types'
 
 export type IngressUploadStatus = 'queued' | 'uploading' | 'done' | 'error' | 'skipped'
 
@@ -36,8 +38,7 @@ function isTransientUploadError(err: any): boolean {
 export function useIngressScanner(
     dirHandle: FileSystemDirectoryHandle | null,
     authorizedFetch: AuthorizedFetch,
-    knownChecksumsSha256: ReadonlySet<string> | null,
-    pendingChecksumsSha256: ReadonlySet<string> | null,
+    jobs: JobSummary[],
     uploadsEnabled: boolean = true,
     intervalMs: number = 5000
 ) {
@@ -67,16 +68,17 @@ export function useIngressScanner(
     const timerRef = React.useRef<number | null>(null)
     const scanGenRef = React.useRef<number>(0)
     const scanInFlightRef = React.useRef<boolean>(false)
-    const { refresh, loaded, scanStatus, snapshot, rememberFingerprintSha } = useLocalFileIndex(dirHandle)
+    const { refresh, loaded: fileIndexLoaded, scanStatus, snapshot } = useLocalFileIndex(dirHandle)
 
-    const shouldUpload = React.useCallback(
+    const shouldStartNewUpload = React.useCallback(
         (sha: string) => {
             if (!uploadsEnabled) return false
 
             // Gold standard: if a job with this checksum already exists for this user, skip.
-            if (knownChecksumsSha256?.has(sha)) return false
-            // If the server already has an uploading job, don't create another upload attempt.
-            if (pendingChecksumsSha256?.has(sha)) return false
+            if (jobs.some(j => j.sha256 === sha)) return false
+
+            // If a job is already in "uploading" on the server, we only resume if we have a persisted job_id
+            if (inProgressRef.current.has(sha)) return false
 
             const handledUntil = recentlyHandledUntilRef.current.get(sha) ?? 0
             if (Date.now() < handledUntil) return false
@@ -88,54 +90,54 @@ export function useIngressScanner(
                 retryAfterRef.current.delete(sha)
                 if (failedRef.current.size === 0) setSuspended(false)
             }
-            if (inProgressRef.current.has(sha)) return false
 
             return true
         },
-        [knownChecksumsSha256, pendingChecksumsSha256, uploadsEnabled]
+        [jobs, uploadsEnabled]
     )
 
     const uploadOne = React.useCallback(
-        async (sha: string, file: File, relPath: string) => {
+        async (sha256: string, file: File, relativePath: string, existingJobId?: string) => {
             setUploads(prev => {
-                if (prev.some(u => u.id === sha)) return prev
-                return [...prev, { id: sha, relativePath: relPath, progress: 0, status: 'queued', error: null }]
+                assert(!prev.some(u => u.id === sha256), 'Upload already in progress')
+                return [...prev, { id: sha256, relativePath, progress: 0, status: 'queued', error: null }]
             })
 
             try {
-                inProgressRef.current.add(sha)
+                inProgressRef.current.add(sha256)
 
                 const result = await uploadVideoFile({
                     file,
                     quality: settings.uploadQuality,
                     authorizedFetch,
-                    onProgress: percent => updateUpload(sha, { progress: Math.round(percent * 100) }),
-                    onStarted: () => updateUpload(sha, { status: 'uploading' }),
-                    sha256: sha,
+                    onProgress: percent => updateUpload(sha256, { progress: Math.round(percent * 100) }),
+                    onStarted: () => updateUpload(sha256, { status: 'uploading' }),
+                    sha256,
+                    existingJobId,
                 })
                 const ttl = result === 'skipped' ? SKIPPED_TTL_MS : HANDLED_TTL_MS
-                recentlyHandledUntilRef.current.set(sha, Date.now() + ttl)
+                recentlyHandledUntilRef.current.set(sha256, Date.now() + ttl)
 
                 if (result === 'skipped') {
-                    removeUpload(sha)
+                    removeUpload(sha256)
                     return
                 }
-                updateUpload(sha, { progress: 100, status: 'done' })
-                window.setTimeout(() => removeUpload(sha), 3000)
+                updateUpload(sha256, { progress: 100, status: 'done' })
+                window.setTimeout(() => removeUpload(sha256), 3000)
             } catch (e: any) {
-                console.error('Upload failed for', relPath, e)
+                console.error('Upload failed for', relativePath, e)
                 const message = e?.message || String(e)
                 setLastError(message)
-                updateUpload(sha, { status: 'error', error: message })
-                failedRef.current.add(sha)
+                updateUpload(sha256, { status: 'error', error: message })
+                failedRef.current.add(sha256)
                 if (isTransientUploadError(e)) {
-                    retryAfterRef.current.set(sha, Date.now() + AUTO_RETRY_MS)
+                    retryAfterRef.current.set(sha256, Date.now() + AUTO_RETRY_MS)
                 } else {
-                    retryAfterRef.current.delete(sha)
+                    retryAfterRef.current.delete(sha256)
                 }
                 setSuspended(true)
             } finally {
-                inProgressRef.current.delete(sha)
+                inProgressRef.current.delete(sha256)
             }
         },
         [removeUpload, settings.uploadQuality, updateUpload, authorizedFetch]
@@ -147,7 +149,7 @@ export function useIngressScanner(
 
         // Prevent overlapping scans; without this it's easy to end up with multiple concurrent
         // loops scheduling timers with different captured props/sets.
-        if (scanInFlightRef.current || !loaded || document.hidden) {
+        if (scanInFlightRef.current || !fileIndexLoaded || document.hidden) {
             if (scanGenRef.current !== myGen) return
             timerRef.current = window.setTimeout(scanContinuously, intervalMs)
             return
@@ -157,93 +159,63 @@ export function useIngressScanner(
         try {
             const result = await refresh()
             if (result) {
-                const { snapshot, entriesByKey } = result
+                const { snapshot, getFileForFingerprint } = result
 
-                const stabilityByPath = new Map<string, boolean>()
+                const stabilityByPath = new Map<string, { size: number; mtimeMs: number; stableCount: number }>()
                 const REQUIRED_STABLE_SCANS = 1
 
-                const updateStability = (fp: FileFingerprint) => {
-                    const prev = stabilityRef.current.get(fp.path)
-                    if (prev && prev.size === fp.size && prev.mtimeMs === fp.mtimeMs) {
-                        const stableCount = prev.stableCount + 1
-                        stabilityRef.current.set(fp.path, { ...prev, stableCount })
-                        return stableCount >= REQUIRED_STABLE_SCANS
+                const isStable = (fingerprint: FileFingerprint) => {
+                    const prev = stabilityRef.current.get(fingerprint.path)
+                    let stableCount: number
+                    if (prev && prev.size === fingerprint.size && prev.mtimeMs === fingerprint.mtimeMs) {
+                        stableCount = prev.stableCount + 1
+                    } else {
+                        stableCount = 0
                     }
-                    stabilityRef.current.set(fp.path, { size: fp.size, mtimeMs: fp.mtimeMs, stableCount: 0 })
-                    return false
-                }
-
-                const isStable = (fp: FileFingerprint) => {
-                    const existing = stabilityByPath.get(fp.path)
-                    if (typeof existing === 'boolean') return existing
-                    const stable = updateStability(fp)
-                    stabilityByPath.set(fp.path, stable)
-                    return stable
+                    // Update stability tracking for this file
+                    stabilityByPath.set(fingerprint.path, {
+                        size: fingerprint.size,
+                        mtimeMs: fingerprint.mtimeMs,
+                        stableCount,
+                    })
+                    return stableCount >= REQUIRED_STABLE_SCANS
                 }
 
                 const work: Promise<void>[] = []
-                const currentPaths = new Set(snapshot.files.map(fp => fp.path))
-                const queuedThisScan = new Set<string>()
-                const hashingInFlight = new Set<string>() // fingerprint keys
 
-                const resolveSha = async (fp: FileFingerprint): Promise<string | null> => {
-                    const existing = getFingerprintSha(snapshot, fp)
-                    if (existing) return existing
-                    const key = fingerprintKey(fp)
-                    if (hashingInFlight.has(key)) return null
-                    hashingInFlight.add(key)
-                    try {
-                        const entry = entriesByKey.get(key)
-                        if (!entry) return null
-                        const file = await entry.getFile()
-                        const computed = await computeSha256(file)
-                        await rememberFingerprintSha(fp, computed.sha256)
-                        return computed.sha256
-                    } catch {
-                        return null
-                    } finally {
-                        hashingInFlight.delete(key)
-                    }
+                const queueUpload = async (fingerprint: FileFingerprint) => {
+                    if (!isStable(fingerprint)) return
+                    const sha = fingerprint.sha256
+
+                    const currentUploadingJob = jobs.find(j => j.sha256 === sha && j.status === 'uploading')
+                    const shouldContinueUpload = !!currentUploadingJob && !inProgressRef.current.has(sha)
+
+                    if (!shouldContinueUpload && !shouldStartNewUpload(sha)) return
+
+                    const file = await getFileForFingerprint(fingerprint)
+                    work.push(uploadOne(sha, file, fingerprint.path, currentUploadingJob?.id))
                 }
 
-                const queueUpload = async (fp: FileFingerprint) => {
-                    if (!isStable(fp)) return
-                    const sha = await resolveSha(fp)
-                    if (!sha) return
-                    if (!shouldUpload(sha)) return
-                    if (queuedThisScan.has(sha)) return
-                    queuedThisScan.add(sha)
-                    const entry = entriesByKey.get(fingerprintKey(fp))
-                    if (!entry) return
-                    const file = await entry.getFile()
-                    work.push(uploadOne(sha, file, fp.path))
-                }
-
-                for (const fp of snapshot.files) {
+                for (const fp of snapshot.fileFingerprints) {
                     // eslint-disable-next-line no-await-in-loop
                     await queueUpload(fp)
                 }
 
-                if (stabilityRef.current.size > 0) {
-                    for (const path of Array.from(stabilityRef.current.keys())) {
-                        if (!currentPaths.has(path)) {
-                            stabilityRef.current.delete(path)
-                        }
-                    }
-                }
                 await Promise.all(work)
-            }
 
-            setLastRunAt(Date.now())
+                // Update stability tracking for files that are still in the snapshot
+                stabilityRef.current = stabilityByPath
+            }
         } catch (e: any) {
             setLastError(e?.message || String(e))
-            setLastRunAt(Date.now())
         } finally {
             scanInFlightRef.current = false
         }
+
+        setLastRunAt(Date.now())
         if (scanGenRef.current !== myGen) return
         timerRef.current = window.setTimeout(scanContinuously, intervalMs)
-    }, [dirHandle, intervalMs, loaded, refresh, shouldUpload, uploadOne])
+    }, [dirHandle, intervalMs, fileIndexLoaded, refresh, shouldStartNewUpload, uploadOne, jobs])
 
     React.useEffect(() => {
         if (timerRef.current) window.clearTimeout(timerRef.current)
@@ -277,7 +249,7 @@ export function useIngressScanner(
         [uploads]
     )
 
-    const detectedFiles = snapshot?.files.length ?? 0
+    const detectedFiles = React.useMemo(() => snapshot?.fileFingerprints.length ?? 0, [snapshot])
 
     return { active, lastRunAt, lastError, uploading, uploads, suspended, retryFailed, scanStatus, detectedFiles }
 }

@@ -99,7 +99,6 @@ CREATE TABLE videos (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   original_checksum_sha256 char(64) UNIQUE NOT NULL,
   original_file_path text NOT NULL,
-  ac_checksum_sha256 char(64) NOT NULL,
   size_bytes bigint NOT NULL,                 -- size of AC
   mime_type text NOT NULL,                    -- AC mime (e.g., video/mp4)
   original_name text,                         -- client-provided
@@ -202,16 +201,8 @@ Request (multipart/form-data):
 Server behavior:
 
 1. **Enforce quota** for current user.
-2. **Validate checksums** (streaming verify AC against `ac_checksum_sha256`).
-3. **Assert non-existence**: if `ac_checksum_sha256` already in `videos` → **409 Conflict** with body:
-
-   ```json
-   { "error": { "code": "duplicate_original", "message": "Video already exists", "video_id": "uuid" } }
-   ```
-
-   (Discard the uploaded stream; do not persist.)
 4. Persist AC to object storage; create `videos` row.
-5. Create **jobs** row for the user (status `pending`).
+5. Create **jobs** row for the user (status `uploading`).
 6. Trigger **Modal** run (see §8) and return `201 { job_id, status }`.
 
 Response 201:

@@ -87,15 +87,7 @@ const AnalyzerRoute: React.FC = () => {
         return () => {
             cancelled = true
         }
-    }, [
-        authorizedFetch,
-        isAuthenticated,
-        isAuthReady,
-        isSignedIn,
-        needsEmailVerification,
-        uid,
-        consentReloadKey,
-    ])
+    }, [authorizedFetch, isAuthenticated, isAuthReady, isSignedIn, needsEmailVerification, uid, consentReloadKey])
 
     if (!isAuthReady) {
         // Avoid a flash of the logged-out UI while Firebase restores the persisted session.

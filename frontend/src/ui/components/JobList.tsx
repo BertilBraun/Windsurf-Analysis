@@ -53,7 +53,6 @@ type SortElement = {
     updated_at?: string | null
     created_at?: string | null
     local_relative_path?: string | null
-    last_known_local_path?: string | null
 }
 
 function _sortCriteria(a: SortElement, b: SortElement, sortKey: JobListSortKey): number {
@@ -62,8 +61,8 @@ function _sortCriteria(a: SortElement, b: SortElement, sortKey: JobListSortKey):
         const tb = Date.parse(b.updated_at || b.created_at || '') || 0
         return ta < tb ? -1 : ta > tb ? 1 : 0
     } else if (sortKey === 'name') {
-        const aPath = a.local_relative_path || a.last_known_local_path || ''
-        const bPath = b.local_relative_path || b.last_known_local_path || ''
+        const aPath = a.local_relative_path || ''
+        const bPath = b.local_relative_path || ''
         const an = stripMp4(basename(aPath)).toLowerCase() || normalizeRelativePath(aPath).toLowerCase() || a.id
         const bn = stripMp4(basename(bPath)).toLowerCase() || normalizeRelativePath(bPath).toLowerCase() || b.id
         return an < bn ? -1 : an > bn ? 1 : 0
@@ -147,7 +146,7 @@ function buildJobTree(jobs: JobSummary[]) {
 
     const finalize = (node: FolderNode): { total: number; active: number } => {
         let total = node.jobs.length
-        let active = node.jobs.reduce((sum, j) => sum + (isActive(j.status) ? 1 : 0), 0)
+        let active = node.jobs.filter(j => isActive(j.status)).length
         for (const child of node.children.values()) {
             const res = finalize(child)
             total += res.total
@@ -481,9 +480,7 @@ const UnmappedJobsSection: React.FC<{
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {sortedUnmappedJobs.map(job => {
-                    const caption =
-                        stripMp4(basename(job.local_relative_path || job.last_known_local_path)) ||
-                        t('common.notAvailable')
+                    const caption = stripMp4(basename(job.local_relative_path)) || t('common.notAvailable')
                     const isPendingDelete = pendingDeleteId === job.id
                     const isDeleting = bulkDeleting || deletingJobIds.has(job.id)
                     const deleteTitle = isPendingDelete

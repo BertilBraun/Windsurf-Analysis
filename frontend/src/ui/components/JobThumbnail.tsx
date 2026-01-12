@@ -112,12 +112,12 @@ export const JobThumbnail: React.FC<{
     const lastCacheKeyRef = React.useRef<string>('')
 
     const cacheKey = React.useMemo(() => {
-        const sha = String(job.original_checksum_sha256 || '')
+        const sha = String(job.sha256 || '')
         const base = sha || `jobid:${job.id}`
         return `${base}:ori:${Number(job.dominant_orientation || 0)}:w${THUMB_TARGET_W}:q${Math.round(
             THUMB_QUALITY * 100
         )}`
-    }, [job.id, job.original_checksum_sha256, job.dominant_orientation])
+    }, [job.id, job.sha256, job.dominant_orientation])
 
     React.useEffect(() => {
         let revokedThumbUrl: string | null = null
@@ -240,7 +240,7 @@ export const JobThumbnail: React.FC<{
                 <>
                     <img
                         src={thumbUrl}
-                        alt={job.local_relative_path ?? job.original_checksum_sha256}
+                        alt={job.local_relative_path ?? job.sha256}
                         className="absolute inset-0 w-full h-full object-cover"
                     />
                     {playable && <PlayOverlay />}

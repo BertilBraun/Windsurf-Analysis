@@ -7,6 +7,7 @@ import { clamp } from '../utils/clamp'
 import { loadSetting, saveSetting } from '../utils/idb'
 import { Modal } from './Modal'
 import { Button } from './Button'
+import type { JobSummary } from '../types'
 
 const WATCH_FOLDER_AUTO_EXPANDED_KEY = 'watchFolder.widget.autoExpandedOnFirstVideo.v1'
 
@@ -15,8 +16,7 @@ type Props = {
     dirPermission: 'granted' | 'denied' | 'prompt' | null
     onPickDirectory: () => void
     authorizedFetch: AuthorizedFetch
-    knownChecksumsSha256?: ReadonlySet<string> | null
-    pendingChecksumsSha256?: ReadonlySet<string> | null
+    jobs: JobSummary[]
     enabled?: boolean
     onUploadingChange?: (uploading: number) => void
 }
@@ -56,20 +56,18 @@ export const IngressWidget: React.FC<Props> = ({
     dirPermission,
     onPickDirectory,
     authorizedFetch,
-    knownChecksumsSha256 = null,
-    pendingChecksumsSha256 = null,
+    jobs,
     enabled = true,
     onUploadingChange,
 }) => {
     const { t } = useTranslation()
-    const scanner = useIngressScanner(dirHandle, authorizedFetch, knownChecksumsSha256, pendingChecksumsSha256, enabled)
+    const scanner = useIngressScanner(dirHandle, authorizedFetch, jobs, enabled)
     const [expanded, setExpanded] = React.useState(false)
     const [showQuotaModal, setShowQuotaModal] = React.useState(false)
     const [autoExpandedOnce, setAutoExpandedOnce] = React.useState<boolean>(false)
     const [showMultiVideoHint, setShowMultiVideoHint] = React.useState(false)
     const panelRef = React.useRef<HTMLDivElement | null>(null)
     const prevUploadingRef = React.useRef(0)
-    const hintTimerRef = React.useRef<number | null>(null)
 
     React.useEffect(() => {
         loadSetting<boolean>(WATCH_FOLDER_AUTO_EXPANDED_KEY).then(saved => {
@@ -87,19 +85,18 @@ export const IngressWidget: React.FC<Props> = ({
             return
         }
 
-        if (autoExpandedOnce) return
-        if (scanner.detectedFiles <= 0) return
-        setExpanded(true)
-        setAutoExpandedOnce(true)
-        void saveSetting(WATCH_FOLDER_AUTO_EXPANDED_KEY, true)
+        if (!autoExpandedOnce && scanner.detectedFiles > 0) {
+            setExpanded(true)
+            setAutoExpandedOnce(true)
+            void saveSetting(WATCH_FOLDER_AUTO_EXPANDED_KEY, true)
+        }
     }, [autoExpandedOnce, scanner.detectedFiles, scanner.lastError])
 
     React.useEffect(() => {
         if (!expanded) return
         const onPointerDown = (event: MouseEvent) => {
             const target = event.target as Node | null
-            if (!target) return
-            if (panelRef.current?.contains(target)) return
+            if (!target || panelRef.current?.contains(target)) return
             setExpanded(false)
         }
         document.addEventListener('mousedown', onPointerDown)
@@ -130,27 +127,11 @@ export const IngressWidget: React.FC<Props> = ({
         if (scanner.uploading <= 0) return
 
         setShowMultiVideoHint(true)
+        const timeout = window.setTimeout(() => setShowMultiVideoHint(false), 5000)
+        return () => window.clearTimeout(timeout)
     }, [scanner.uploading])
 
-    React.useEffect(() => {
-        if (!showMultiVideoHint) return
-        if (hintTimerRef.current) window.clearTimeout(hintTimerRef.current)
-        hintTimerRef.current = window.setTimeout(() => setShowMultiVideoHint(false), 5000)
-
-        return () => {
-            if (hintTimerRef.current) window.clearTimeout(hintTimerRef.current)
-            hintTimerRef.current = null
-        }
-    }, [showMultiVideoHint])
-
-    const uploading = scanner.uploading
-    const ringPercent = meanProgress(scanner.uploads)
     const hasIssues = !dirHandle || dirPermission !== 'granted' || !!scanner.lastError
-    const scanStatus = scanner.scanStatus
-    const processingLabel =
-        scanStatus?.phase === 'hashing' && scanStatus.total > 0
-            ? `Processing ${scanStatus.processed}/${scanStatus.total} files...`
-            : null
 
     const issue = React.useMemo(() => {
         if (!dirHandle) {
@@ -184,13 +165,22 @@ export const IngressWidget: React.FC<Props> = ({
         return null
     }, [dirHandle, dirPermission, scanner.lastError, t])
 
+    const processingLabel = React.useMemo(() => {
+        const status = scanner.scanStatus
+        if (status.phase === 'hashing' && status.total > 0)
+            // TODO i18n
+            return `Processing ${status.processed}/${status.total} files...`
+        return null
+    }, [scanner.scanStatus.phase, scanner.scanStatus.total, scanner.scanStatus.processed])
+
     const fabStatus = React.useMemo(() => {
-        if (uploading > 0) return t('components.ingressWidget.fab.status.uploading', { count: uploading })
+        if (scanner.uploading > 0)
+            return t('components.ingressWidget.fab.status.uploading', { count: scanner.uploading })
         if (processingLabel) return processingLabel
         if (issue?.kind === 'error') return t('components.ingressWidget.fab.status.error')
         if (dirHandle) return t('components.ingressWidget.fab.status.monitoring')
         return t('components.ingressWidget.fab.status.selectFolder')
-    }, [dirHandle, issue?.kind, t, uploading])
+    }, [t, dirHandle, issue?.kind, scanner.uploading, processingLabel])
 
     return (
         <>
@@ -233,16 +223,16 @@ export const IngressWidget: React.FC<Props> = ({
                         title={t('components.ingressWidget.fab.title')}
                         aria-label={t('components.ingressWidget.fab.aria')}
                     >
-                        {uploading > 0 ? <Ring percent={ringPercent} /> : <Ring percent={0} />}
+                        <Ring percent={meanProgress(scanner.uploads)} />
                         <div className="flex flex-col items-start leading-tight">
                             <div className="text-xs font-semibold text-slate-900">
                                 {t('components.ingressWidget.fab.title')}
                             </div>
                             <div className="text-[11px] text-slate-500">{fabStatus}</div>
                         </div>
-                        {uploading > 0 && (
+                        {scanner.uploading > 0 && (
                             <span className="ml-1 text-[11px] font-semibold text-brand-700 bg-brand-50 border border-brand-600/20 px-2 py-0.5 rounded-full">
-                                {uploading}
+                                {scanner.uploading}
                             </span>
                         )}
                     </Button>

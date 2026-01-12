@@ -2,7 +2,7 @@ import shajs from 'sha.js'
 
 const HASH_CHUNK_SIZE = 8 * 1024 * 1024 // 8 MiB
 
-export async function computeSha256(file: Blob): Promise<{ sha256: string }> {
+export async function computeSha256(file: Blob): Promise<string> {
     const sha = shajs('sha256')
     const total = file.size || 0
     let offset = 0
@@ -13,18 +13,18 @@ export async function computeSha256(file: Blob): Promise<{ sha256: string }> {
         offset = end
         if (offset % (HASH_CHUNK_SIZE * 2) === 0) await new Promise(resolve => window.setTimeout(resolve, 0))
     }
-    return { sha256: String(sha.digest('hex')).toLowerCase() }
+    return String(sha.digest('hex')).toLowerCase()
 }
 
 export type FileFingerprint = {
     path: string
     size: number
     mtimeMs: number
+    sha256: string
 }
 
 export type FileSnapshot = {
-    files: FileFingerprint[]
-    fingerprintToSha: Record<string, string>
+    fileFingerprints: FileFingerprint[]
     updatedAt: number
 }
 
@@ -34,42 +34,23 @@ export function normalizeRelativePath(path: string): string {
         .replace(/\\/g, '/')
 }
 
-export function fingerprintKey(fp: FileFingerprint): string {
-    const path = normalizeRelativePath(fp.path)
-    return `${path}|${fp.size}|${fp.mtimeMs}`
-}
-
-export function getFingerprintSha(snapshot: FileSnapshot, fp: FileFingerprint): string | null {
-    const key = fingerprintKey(fp)
-    return snapshot.fingerprintToSha[key] ?? null
-}
-
-export function getNewFingerprints(prev: FileSnapshot | null, next: FileSnapshot): FileFingerprint[] {
-    const prevKeys = new Set<string>()
-    if (prev) {
-        for (const fp of prev.files) prevKeys.add(fingerprintKey(fp))
-    }
-    return next.files.filter(fp => !prevKeys.has(fingerprintKey(fp)))
-}
-
 export function buildShaToPaths(snapshot: FileSnapshot | null): Map<string, string[]> {
-    const map = new Map<string, string[]>()
-    if (!snapshot) return map
+    const shaToPaths = new Map<string, string[]>()
+    if (!snapshot) return shaToPaths
 
-    for (const fp of snapshot.files) {
-        const sha = getFingerprintSha(snapshot, fp)
-        if (!sha) continue
-        const path = normalizeRelativePath(fp.path)
-        const existing = map.get(sha)
-        if (existing) existing.push(path)
-        else map.set(sha, [path])
+    for (const fingerprint of snapshot.fileFingerprints) {
+        const sha = fingerprint.sha256
+        const path = normalizeRelativePath(fingerprint.path)
+        const existingPaths = shaToPaths.get(sha)
+        if (existingPaths) existingPaths.push(path)
+        else shaToPaths.set(sha, [path])
     }
 
-    for (const [sha, paths] of map.entries()) {
-        const uniq = Array.from(new Set(paths.filter(Boolean)))
-        uniq.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
-        map.set(sha, uniq)
+    for (const [sha, paths] of shaToPaths.entries()) {
+        const unique = Array.from(new Set(paths.filter(Boolean)))
+        unique.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+        shaToPaths.set(sha, unique)
     }
 
-    return map
+    return shaToPaths
 }

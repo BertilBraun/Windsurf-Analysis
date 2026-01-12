@@ -15,7 +15,7 @@ export type JobSummary = {
     status: JobStatus
     created_at: string
     updated_at: string
-    original_checksum_sha256: string
+    sha256: string
     dominant_orientation: number
     local_relative_path?: string | null
     // One job can correspond to multiple local files (duplicate copies) with the same checksum.

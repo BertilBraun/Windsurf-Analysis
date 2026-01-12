@@ -19,14 +19,18 @@ class JobsRepo:
             return None
         return JobRecord.model_validate(snap.to_dict() or {})
 
-    def create_job(self, original_checksum_sha256: str) -> JobRecord:
+    def create_job(
+        self,
+        original_checksum_sha256: str,
+        original_file_size_bytes: int,
+        original_file_mime_type: str,
+    ) -> JobRecord:
         job_id = original_checksum_sha256
         job_record = JobRecord(
             job_id=job_id,
             original_checksum_sha256=original_checksum_sha256,
-            ac_checksum_sha256='PENDING',
-            size_bytes=-1,
-            mime_type='video/mp4',
+            size_bytes=original_file_size_bytes,
+            mime_type=original_file_mime_type,
             ac_storage_url='N/A',
             uploaded_at=None,
             last_accessed_at=now(),

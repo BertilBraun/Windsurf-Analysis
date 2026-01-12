@@ -39,7 +39,6 @@ class JobResults(_FirestoreModel):
 class JobRecord(_FirestoreModel):
     job_id: str
     original_checksum_sha256: str
-    ac_checksum_sha256: str
     size_bytes: int
     mime_type: str
     ac_storage_url: str
@@ -83,7 +82,6 @@ class JobPatch(_FirestoreModel):
 
     status: JobStatus | None = None
     error_message: str | None = None
-    ac_checksum_sha256: str | None = None
     size_bytes: int | None = None
     mime_type: str | None = None
     ac_storage_url: str | None = None

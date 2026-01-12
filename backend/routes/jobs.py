@@ -8,11 +8,12 @@ from pydantic import BaseModel, Field
 
 from auth.firebase_auth import User, get_current_user
 from config import settings
-from models import JobStatus
+from models import JobPatch, JobStatus
 from repos.jobs_repo import JobsRepo
 from repos.reports_repo import ReportType, ReportsRepo
 from repos.user_jobs_repo import UserJobsRepo
 from repos.user_repo import UserRepo
+from db.firestore_client import now
 
 
 router = APIRouter(prefix='/jobs', tags=['jobs'])
@@ -24,6 +25,8 @@ user_repo = UserRepo()
 
 class JobCreateRequest(BaseModel):
     original_checksum_sha256: str = Field(min_length=8)
+    original_file_size_bytes: int = Field(ge=0)
+    original_file_mime_type: str = Field(min_length=1)
 
 
 class JobCreateResponse(BaseModel):
@@ -83,7 +86,11 @@ def create_job(payload: JobCreateRequest, user: User = Depends(get_current_user)
     if user_record.processed_jobs_count >= user_record.max_jobs:
         raise HTTPException(status_code=403, detail={'code': 'quota_exceeded', 'message': 'Job quota exceeded'})
 
-    job_record = jobs_repo.create_job(payload.original_checksum_sha256)
+    job_record = jobs_repo.create_job(
+        original_checksum_sha256=payload.original_checksum_sha256,
+        original_file_size_bytes=payload.original_file_size_bytes,
+        original_file_mime_type=payload.original_file_mime_type,
+    )
     user_jobs_repo.create_user_job(user.uid, job_record.job_id)
     return JobCreateResponse(job_id=job_record.job_id, status=job_record.status)
 
@@ -124,36 +131,36 @@ def _trigger_modal_start(job_id: str, *, source_gs_uri: str, upright_gs_uri: str
 def upload_complete(job_id: str, payload: JobUploadCompleteRequest, user: User = Depends(get_current_user)):
     _require_owned(user, job_id)
 
-    bucket = settings.firebase_storage_bucket
-    if not bucket:
-        raise HTTPException(status_code=500, detail='FIREBASE_STORAGE_BUCKET is not configured')
-
     job = jobs_repo.get_job(job_id)
     if job.status != JobStatus.uploading:
         # Idempotent behavior: if the job already moved on, don't error.
         return {'ok': True, 'status': job.status.value}
 
-    expected_prefix = f'uploads/{user.uid}/{job_id}'
-    if not payload.object_path.startswith(expected_prefix):
+    if not payload.object_path.startswith(f'uploads/{user.uid}/{job_id}'):
         raise HTTPException(status_code=400, detail='Invalid object_path')
+    if job.size_bytes != payload.size_bytes:
+        raise HTTPException(status_code=400, detail='Size mismatch')
+    if job.mime_type != payload.mime_type:
+        raise HTTPException(status_code=400, detail='Mime type mismatch')
+
+    bucket = settings.firebase_storage_bucket
+    if not bucket:
+        raise HTTPException(status_code=500, detail='FIREBASE_STORAGE_BUCKET is not configured')
 
     source_gs_uri = _gs_uri(bucket, payload.object_path)
     upright_object_path = f'processed/{user.uid}/{job_id}_upright.mp4'
     upright_gs_uri = _gs_uri(bucket, upright_object_path)
 
     # Persist upload metadata and move to "starting" before triggering Modal.
-    from google.cloud import firestore
-    from models import JobPatch
-
     jobs_repo.update_job(
         job_id,
         JobPatch(
             size_bytes=payload.size_bytes,
             mime_type=payload.mime_type,
             ac_storage_url=source_gs_uri,
-            uploaded_at=firestore.SERVER_TIMESTAMP,
+            uploaded_at=now(),
             status=JobStatus.starting,
-            started_at=firestore.SERVER_TIMESTAMP,
+            started_at=now(),
             error_message=None,
         ),
     )

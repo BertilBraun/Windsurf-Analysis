@@ -71,8 +71,9 @@ export async function uploadVideoFile(params: {
     onProgress: (percent: number) => void
     onStarted: () => void
     sha256: string
+    existingJobId?: string
 }): Promise<'uploaded' | 'skipped'> {
-    const { file, quality, authorizedFetch, onProgress, onStarted, sha256 } = params
+    const { file, quality, authorizedFetch, onProgress, onStarted, sha256, existingJobId } = params
 
     // Step 1: Create job (also acts as duplicate/quota check)
     trackEvent('analysis_upload_start', {
@@ -84,13 +85,19 @@ export async function uploadVideoFile(params: {
     // Limit upload length by counting demuxed video samples.
     await assertVideoWithinMaxFrames(file, MAX_FRAMES)
 
-    const created = await createJobForChecksum(sha256, authorizedFetch)
-    if (created === 'skipped') {
-        trackEvent('analysis_upload_skipped', { reason: 'duplicate_or_already_processed' })
-        return 'skipped'
+    let job_id: string | null = null
+    if (existingJobId) {
+        job_id = existingJobId
+        trackEvent('analysis_upload_resume', { job_id })
+    } else {
+        const created = await createJob(sha256, file, authorizedFetch)
+        if (created === 'skipped') {
+            trackEvent('analysis_upload_skipped', { reason: 'duplicate_or_already_processed' })
+            return 'skipped'
+        }
+        trackEvent('analysis_job_created', { job_id: created.job_id })
+        job_id = created.job_id
     }
-    const job_id = created.job_id
-    trackEvent('analysis_job_created', { job_id })
 
     const releaseVideoSlot = await acquireVideoUploadSlot()
 
@@ -109,14 +116,19 @@ export async function uploadVideoFile(params: {
     }
 }
 
-export async function createJobForChecksum(
+export async function createJob(
     sha256: string,
+    file: File,
     authorizedFetch: AuthorizedFetch
 ): Promise<{ job_id: string } | 'skipped'> {
     const createRes = await authorizedFetch('/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ original_checksum_sha256: sha256 }),
+        body: JSON.stringify({
+            original_checksum_sha256: sha256,
+            original_file_size_bytes: file.size,
+            original_file_mime_type: file.type || 'video/mp4',
+        }),
     })
     if (createRes.status === 409) return 'skipped'
     if (createRes.status === 403) {
