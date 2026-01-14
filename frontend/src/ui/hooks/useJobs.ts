@@ -27,7 +27,6 @@ export function useJobs(): UseJobsReturn {
     const [initialSyncComplete, setInitialSyncComplete] = React.useState<boolean>(false)
     const { shaToPaths } = useLocalFileIndex(null) // NOTE: automatically refreshed once the ingress scanner refreshes
     const readyRef = React.useRef<boolean>(false)
-    const jobDetailCacheRef = React.useRef<Map<string, Promise<JobDetail>>>(new Map())
     const userJobsUnsubRef = React.useRef<Unsubscribe | null>(null)
     const jobUnsubsRef = React.useRef<Map<string, Unsubscribe>>(new Map())
     const jobsByIdRef = React.useRef<Map<string, JobSummary>>(new Map())
@@ -201,7 +200,6 @@ export function useJobs(): UseJobsReturn {
                     jobUnsubsRef.current.get(existingId)?.()
                     jobUnsubsRef.current.delete(existingId)
                     jobsByIdRef.current.delete(existingId)
-                    jobDetailCacheRef.current.delete(existingId)
                     void deleteSetting(`jobDetail:${existingId}`)
                     removedAny = true
                 }
@@ -246,58 +244,39 @@ export function useJobs(): UseJobsReturn {
 
     const refreshJobDetail = React.useCallback(
         async (id: string): Promise<JobDetail> => {
-            const cache = jobDetailCacheRef.current
-            const inFlight = cache.get(id)
-            if (inFlight) return inFlight
-
             const key = `jobDetail:${id}`
-            const fetchPromise = (async () => {
-                // 1) Try persistent cache first
-                const persisted = await loadSetting<JobDetail>(key)
-                if (persisted) {
-                    const { local_relative_paths, local_relative_path, last_known_local_path } = await getPathsForSha(
-                        persisted.sha256
-                    )
-                    return { ...persisted, local_relative_path, local_relative_paths, last_known_local_path }
-                }
+            // 1) Try persistent cache first
+            const persisted = await loadSetting<JobDetail>(key)
+            if (persisted) {
+                return { ...persisted, ...(await getPathsForSha(id)) }
+            }
 
-                // 2) Fetch from network, validate, persist, and return
-                const res = await authorizedFetch(`/jobs/${id}`)
-                const data = (await res.json()) as JobDetail
-                assert(data.status === 'succeeded')
+            // 2) Fetch from network, validate, persist, and return
+            const res = await authorizedFetch(`/jobs/${id}`)
+            const data = (await res.json()) as JobDetail
+            assert(data.status === 'succeeded')
 
-                for (const track of data.tracks) {
-                    _assertIsPercentage(track.start_percent)
-                    _assertIsPercentage(track.end_percent)
-                    for (const detection of track.detections) {
-                        _assertIsPercentage(detection.time_percent)
-                        for (const b of detection.bbox) {
-                            _assertIsPercentage(b)
-                        }
+            for (const track of data.tracks) {
+                _assertIsPercentage(track.start_percent)
+                _assertIsPercentage(track.end_percent)
+                for (const detection of track.detections) {
+                    _assertIsPercentage(detection.time_percent)
+                    for (const b of detection.bbox) {
+                        _assertIsPercentage(b)
                     }
                 }
-                for (const transform of data.stabilization_transforms) {
-                    _assertIsPercentage(transform.time_percent)
-                    assert(Number.isFinite(transform.dx))
-                    assert(Number.isFinite(transform.dy))
-                    assert(Number.isFinite(transform.da))
-                }
-
-                // Persist the canonical server response (without derived path)
-                await saveSetting(key, data)
-
-                return { ...data, ...(await getPathsForSha(data.sha256)) }
-            })()
-
-            cache.set(id, fetchPromise)
-
-            try {
-                return await fetchPromise
-            } catch (err) {
-                // Remove failed promise from cache to allow retry
-                cache.delete(id)
-                throw err
             }
+            for (const transform of data.stabilization_transforms) {
+                _assertIsPercentage(transform.time_percent)
+                assert(Number.isFinite(transform.dx))
+                assert(Number.isFinite(transform.dy))
+                assert(Number.isFinite(transform.da))
+            }
+
+            // Persist the canonical server response (without derived path)
+            await saveSetting(key, data)
+
+            return { ...data, ...(await getPathsForSha(id)) }
         },
         [authorizedFetch, getPathsForSha]
     )
@@ -317,7 +296,6 @@ export function useJobs(): UseJobsReturn {
 
             setJobs(prev => prev.filter(job => !job_ids.includes(job.id)))
             for (const id of job_ids) {
-                jobDetailCacheRef.current.delete(id)
                 await deleteSetting(`jobDetail:${id}`)
             }
             return Number(data.deleted || 0)

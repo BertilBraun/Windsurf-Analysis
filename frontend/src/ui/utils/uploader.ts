@@ -165,9 +165,11 @@ async function uploadVideoToFirebaseStorage(params: {
         task.on(
             'state_changed',
             snap => {
-                const total = snap.totalBytes || file.size || 1
                 onProgress(
-                    Math.min(PERCENT_UPLOAD, (snap.bytesTransferred / total) * PERCENT_UPLOAD + PERCENT_PREPROCESS)
+                    Math.min(
+                        PERCENT_UPLOAD,
+                        (snap.bytesTransferred / snap.totalBytes) * PERCENT_UPLOAD + PERCENT_PREPROCESS
+                    )
                 )
             },
             err => reject(err),

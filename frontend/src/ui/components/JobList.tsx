@@ -537,7 +537,7 @@ export const JobList: React.FC<{
     sortKey: JobListSortKey
     sortDir: JobListSortDir
     onToggleSort: (key: JobListSortKey) => void
-    onOpen: (id: string, localRelativePath?: string | null) => void
+    onOpen: (id: string) => void
     onDeleteJobs: (ids: string[]) => Promise<number>
     openingId?: string | null
     dirHandle?: FileSystemDirectoryHandle | null
@@ -652,15 +652,14 @@ export const JobList: React.FC<{
                                                         job.status === 'succeeded' ? 'cursor-pointer' : 'cursor-default'
                                                     } ${openingId === job.id ? 'opacity-60' : ''}`}
                                                     onClick={() => {
-                                                        if (job.status === 'succeeded' && job.local_relative_path)
-                                                            onOpen(job.id, job.local_relative_path)
+                                                        if (job.status === 'succeeded') onOpen(job.id)
                                                     }}
                                                     role="button"
                                                     tabIndex={0}
                                                     onKeyDown={e =>
                                                         job.status === 'succeeded' &&
                                                         (e.key === 'Enter' || e.key === ' ') &&
-                                                        onOpen(job.id, job.local_relative_path)
+                                                        onOpen(job.id)
                                                     }
                                                 >
                                                     <JobThumbnail

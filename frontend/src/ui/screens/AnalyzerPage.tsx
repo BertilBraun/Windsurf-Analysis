@@ -16,6 +16,7 @@ import { trackEvent } from '../utils/analytics'
 import { AnalyzerTutorialModal } from '../components/AnalyzerTutorialModal'
 import { useTutorialController } from '../hooks/useTutorialController'
 import settingsIcon from '../assets/settings.svg'
+import { assert } from '../utils/assert'
 
 const FEEDBACK_PROMPT_SEEN_KEY = 'feedbackPromptSeen.v1'
 const PLAYER_OPENED_ONCE_KEY = 'player.openedOnce.v1'
@@ -87,12 +88,13 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     }
 
     const [openingId, setOpeningId] = React.useState<string | null>(null)
-    const onOpen = async (id: string, localRelativePath?: string | null) => {
+    const onOpen = async (id: string) => {
         setOpeningId(id)
         try {
             trackEvent('job_open', { job_id: id })
             const detail = await refreshJobDetail(id)
-            setSelectedJob(localRelativePath ? { ...detail, local_relative_path: localRelativePath } : detail)
+            assert(!!detail.local_relative_path, 'Job must have a local relative path')
+            setSelectedJob(detail)
         } finally {
             setOpeningId(null)
         }
