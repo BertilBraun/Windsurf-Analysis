@@ -120,6 +120,10 @@ def _pose_label_path(out_dir: Path, *, split: str, key: str) -> Path:
     return out_dir / 'labels_pose' / split / f'{key}.txt'
 
 
+def _pseudo_label_path(out_dir: Path, *, split: str, key: str) -> Path:
+    return out_dir / 'labels_pose_pseudo' / split / f'{key}.txt'
+
+
 def _load_existing_kps(label_path: Path, *, n_boxes: int) -> list[list[Kp]]:
     out: list[list[Kp]] = [[Kp(), Kp()] for _ in range(n_boxes)]
     if not label_path.exists():
@@ -292,6 +296,26 @@ def _parse_args() -> argparse.Namespace:
         action='store_true',
         help='Include already-annotated samples in navigation (default: only unlabeled).',
     )
+    p.add_argument(
+        '--only-labeled',
+        action='store_true',
+        help='Only show samples that already have labels (according to --label-source).',
+    )
+    p.add_argument(
+        '--label-source',
+        choices=['manual', 'pseudo', 'auto'],
+        default='manual',
+        help=(
+            'Which labels to load: manual=labels_pose, pseudo=labels_pose_pseudo, '
+            'auto=prefer manual else pseudo.'
+        ),
+    )
+    p.add_argument(
+        '--write-target',
+        choices=['manual', 'pseudo'],
+        default='manual',
+        help='Where to write when finishing an image (default: manual, so fixes override pseudo labels).',
+    )
     return p.parse_args()
 
 
@@ -380,6 +404,7 @@ def main() -> int:
 
     for sp in ('train', 'val'):
         (out_dir / 'labels_pose' / sp).mkdir(parents=True, exist_ok=True)
+        (out_dir / 'labels_pose_pseudo' / sp).mkdir(parents=True, exist_ok=True)
 
     win = 'keypoints-fullframe'
     cv2.namedWindow(win)
@@ -417,15 +442,47 @@ def main() -> int:
     def pose_path_for(it: dict) -> Path:
         return _pose_label_path(out_dir, split=str(it.get('split', 'train')), key=str(it.get('key', '')))
 
+    def pseudo_path_for(it: dict) -> Path:
+        return _pseudo_label_path(out_dir, split=str(it.get('split', 'train')), key=str(it.get('key', '')))
+
+    def load_path_for(it: dict) -> Path:
+        src = str(args.label_source)
+        if src == 'manual':
+            return pose_path_for(it)
+        if src == 'pseudo':
+            return pseudo_path_for(it)
+        # auto: prefer manual
+        mp = pose_path_for(it)
+        return mp if mp.exists() else pseudo_path_for(it)
+
+    def save_path_for(it: dict) -> Path:
+        tgt = str(args.write_target)
+        if tgt == 'manual':
+            return pose_path_for(it)
+        return pseudo_path_for(it)
+
     def is_annotated(it: dict) -> bool:
         try:
-            return pose_path_for(it).exists()
+            src = str(args.label_source)
+            if src == 'manual':
+                return pose_path_for(it).exists()
+            if src == 'pseudo':
+                return pseudo_path_for(it).exists()
+            return pose_path_for(it).exists() or pseudo_path_for(it).exists()
         except Exception:
             return False
 
     def seek_index(start: int, direction: int) -> Optional[int]:
         start = int(start)
         direction = 1 if int(direction) >= 0 else -1
+        if bool(args.only_labeled):
+            i = start
+            while 0 <= i < len(items) and not is_annotated(items[i]):
+                i += direction
+            if 0 <= i < len(items):
+                return i
+            return None
+
         if bool(args.show_annotated):
             return max(0, min(start, len(items) - 1))
         i = start
@@ -437,7 +494,9 @@ def main() -> int:
 
     first = seek_index(0, 1)
     if first is None:
-        raise SystemExit('No unlabeled samples found (everything already has pose labels).')
+        if bool(args.only_labeled):
+            raise SystemExit('No labeled samples found for the chosen --label-source.')
+        raise SystemExit('No unlabeled samples found for the chosen --label-source.')
     state['idx'] = int(first)
 
     while True:
@@ -445,11 +504,20 @@ def main() -> int:
         idx = max(0, min(idx, len(items) - 1))
         state['idx'] = idx
         item = items[idx]
+        if bool(args.only_labeled) and not is_annotated(item):
+            nxt = seek_index(idx + 1, 1)
+            if nxt is None:
+                break
+            state['idx'] = int(nxt)
+            cached['key'] = None
+            state['bbox_idx'] = 0
+            continue
         key = str(item.get('key', ''))
         split = str(item.get('split', 'train'))
         rel = str(item.get('src_rel', ''))
         src_path = src_dir / Path(rel)
-        pose_path = _pose_label_path(out_dir, split=split, key=key)
+        load_path = load_path_for(item)
+        save_path = save_path_for(item)
 
         if cached['key'] != key:
             img = cv2.imread(str(src_path))
@@ -470,7 +538,7 @@ def main() -> int:
                 cached['key'] = None
                 continue
 
-            kps_by_box = _load_existing_kps(pose_path, n_boxes=len(bboxes))
+            kps_by_box = _load_existing_kps(load_path, n_boxes=len(bboxes))
             state['bbox_idx'] = max(0, min(int(state['bbox_idx']), len(bboxes) - 1))
 
             cached.update(
@@ -481,7 +549,7 @@ def main() -> int:
                     'img_h': int(img_h),
                     'bboxes': bboxes,
                     'kps_by_box': kps_by_box,
-                    'pose_path': pose_path,
+                    'pose_path': save_path,
                     'split': split,
                     'src_path': src_path,
                 }
@@ -562,7 +630,7 @@ def main() -> int:
 
         # Draw UI
         canvas = disp.copy()
-        labeled = pose_path.exists()
+        labeled = load_path.exists()
         title = (
             f'{split.upper()}  {"LABELED" if labeled else "UNLABELED"}  '
             f'{idx + 1}/{len(items)}  {src_path.name}   bbox {bbox_idx + 1}/{len(bboxes)}'
@@ -689,7 +757,7 @@ def main() -> int:
                     state['bbox_idx'] = int(incomplete)
                     continue
 
-                _write_pose_labels(pose_path, bboxes=bboxes, kps_by_box=kps_by_box)
+                _write_pose_labels(save_path, bboxes=bboxes, kps_by_box=kps_by_box)
                 nxt = seek_index(idx + 1, 1)
                 if nxt is None:
                     break
@@ -697,8 +765,8 @@ def main() -> int:
                 cached['key'] = None
                 state['bbox_idx'] = 0
         elif keycode == 8:  # Backspace delete pose label
-            if pose_path.exists():
-                pose_path.unlink()
+            if save_path.exists():
+                save_path.unlink()
                 cached['key'] = None
             # Reset in-memory kps for this image
             for i in range(len(kps_by_box)):

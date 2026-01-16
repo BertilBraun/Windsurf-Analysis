@@ -98,6 +98,11 @@ python annotator_keypoints_fullframe.py --src ./windsurf_dataset --out ./pose_pr
 python annotator_keypoints_fullframe.py --src ./windsurf_dataset --out ./pose_projects/boom_mast_v1 --show-annotated
 ```
 
+Review pseudo labels (written via `pseudo_label_pose.py --mode write`) and convert/fix them into manual labels:
+```bash
+python annotator_keypoints_fullframe.py --src ./windsurf_dataset --out ./pose_projects/boom_mast_v1 --label-source pseudo --only-labeled --write-target manual
+```
+
 Quick viewer (bbox + keypoints overlay on the original frame):
 ```bash
 python view_pose_labels.py --src ./windsurf_dataset --pose ./pose_projects/boom_mast_v1 --split val --only-labeled

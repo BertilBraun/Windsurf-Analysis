@@ -81,6 +81,12 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--overwrite", action="store_true", help="Overwrite existing pseudo labels (does not touch manual).")
     p.add_argument("--max-images", type=int, default=0, help="Limit number of images processed (0 = no limit).")
+    p.add_argument(
+        "--predict-batch",
+        type=int,
+        default=8,
+        help="Inference batch size in number of images (keeps memory bounded; lower this if you hit OOM).",
+    )
     p.add_argument("--device", type=str, default="auto")
     return p.parse_args()
 
@@ -194,6 +200,13 @@ def _as_float(x) -> float:
     except Exception:
         return float("nan")
 
+def _iter_batches(items: list[dict], batch_size: int) -> list[list[dict]]:
+    batch_size = max(1, int(batch_size))
+    out: list[list[dict]] = []
+    for i in range(0, len(items), batch_size):
+        out.append(items[i : i + batch_size])
+    return out
+
 
 def main() -> int:
     args = _parse_args()
@@ -280,153 +293,153 @@ def main() -> int:
         "out_pose_dir": str(out_pose_dir),
     }
 
-    # Map paths for quick lookup
-    by_path: dict[str, dict] = {str(c["img_path"].resolve()): c for c in candidates}
-    sources = [str(c["img_path"]) for c in candidates]
+    # Predict in small batches to avoid large allocations when passing a huge list of sources.
+    for batch in _iter_batches(candidates, int(args.predict_batch)):
+        batch_by_path: dict[str, dict] = {str(Path(c["img_path"]).resolve()): c for c in batch}
+        batch_sources = [str(c["img_path"]) for c in batch]
 
-    results_iter = model.predict(
-        source=sources,
-        conf=float(args.conf),
-        device=str(args.device),
-        stream=True,
-        verbose=False,
-        save=False,
-        save_txt=False,
-    )
+        results = model.predict(
+            source=batch_sources,
+            conf=float(args.conf),
+            device=str(args.device),
+            verbose=False,
+            save=False,
+            save_txt=False,
+        )
 
-    for res in results_iter:
-        img_path = Path(getattr(res, "path", "")).resolve()
-        c = by_path.get(str(img_path))
-        if c is None:
-            continue
-        key = str(c["key"])
-        split = str(c["split"])
+        for res in results:
+            img_path = Path(getattr(res, "path", "")).resolve()
+            c = batch_by_path.get(str(img_path))
+            if c is None:
+                continue
+            key = str(c["key"])
+            split = str(c["split"])
 
-        orig_shape = getattr(res, "orig_shape", None)
-        if not (isinstance(orig_shape, (list, tuple)) and len(orig_shape) >= 2):
-            counts["images_skipped"] += 1
-            continue
-        img_h, img_w = int(orig_shape[0]), int(orig_shape[1])
-        if img_h <= 0 or img_w <= 0:
-            counts["images_skipped"] += 1
-            continue
+            orig_shape = getattr(res, "orig_shape", None)
+            if not (isinstance(orig_shape, (list, tuple)) and len(orig_shape) >= 2):
+                counts["images_skipped"] += 1
+                continue
+            img_h, img_w = int(orig_shape[0]), int(orig_shape[1])
+            if img_h <= 0 or img_w <= 0:
+                counts["images_skipped"] += 1
+                continue
 
-        gt_bboxes = _read_bboxes(img_path.with_suffix(".txt"))
-        if not gt_bboxes:
-            counts["images_skipped"] += 1
-            continue
-        gt_xyxy = [b.to_xyxy_abs(img_w=img_w, img_h=img_h) for b in gt_bboxes]
-        counts["images_seen"] += 1
-        counts["boxes_total"] += len(gt_bboxes)
+            gt_bboxes = _read_bboxes(img_path.with_suffix(".txt"))
+            if not gt_bboxes:
+                counts["images_skipped"] += 1
+                continue
+            gt_xyxy = [b.to_xyxy_abs(img_w=img_w, img_h=img_h) for b in gt_bboxes]
+            counts["images_seen"] += 1
+            counts["boxes_total"] += len(gt_bboxes)
 
-        boxes = getattr(res, "boxes", None)
-        kps = getattr(res, "keypoints", None)
-        if boxes is None or kps is None:
-            counts["images_skipped"] += 1
-            continue
+            boxes = getattr(res, "boxes", None)
+            kps = getattr(res, "keypoints", None)
+            if boxes is None or kps is None:
+                counts["images_skipped"] += 1
+                continue
 
-        xyxy_t = getattr(boxes, "xyxy", None)
-        conf_t = getattr(boxes, "conf", None)
-        cls_t = getattr(boxes, "cls", None)
-        kxy_t = getattr(kps, "xy", None)
-        kconf_t = getattr(kps, "conf", None)
-        if xyxy_t is None or conf_t is None or cls_t is None or kxy_t is None:
-            counts["images_skipped"] += 1
-            continue
+            xyxy_t = getattr(boxes, "xyxy", None)
+            conf_t = getattr(boxes, "conf", None)
+            cls_t = getattr(boxes, "cls", None)
+            kxy_t = getattr(kps, "xy", None)
+            kconf_t = getattr(kps, "conf", None)
+            if xyxy_t is None or conf_t is None or cls_t is None or kxy_t is None:
+                counts["images_skipped"] += 1
+                continue
 
-        try:
-            pred_xyxy = xyxy_t.cpu().numpy().tolist()
-            pred_conf = conf_t.cpu().numpy().tolist()
-            pred_cls = cls_t.cpu().numpy().tolist()
-            pred_kxy = kxy_t.cpu().numpy().tolist()
-            pred_kconf = kconf_t.cpu().numpy().tolist() if kconf_t is not None else None
-        except Exception:
-            counts["images_skipped"] += 1
-            continue
+            try:
+                pred_xyxy = xyxy_t.cpu().numpy().tolist()
+                pred_conf = conf_t.cpu().numpy().tolist()
+                pred_cls = cls_t.cpu().numpy().tolist()
+                pred_kxy = kxy_t.cpu().numpy().tolist()
+                pred_kconf = kconf_t.cpu().numpy().tolist() if kconf_t is not None else None
+            except Exception:
+                counts["images_skipped"] += 1
+                continue
 
-        # Greedy match GT boxes to predictions by IoU (one prediction per GT)
-        used_preds: set[int] = set()
-        accepted_flags = [False] * len(gt_bboxes)
-        out_kps: list[list[tuple[float, float, int]]] = [[(0.0, 0.0, 0), (0.0, 0.0, 0)] for _ in gt_bboxes]
+            # Greedy match GT boxes to predictions by IoU (one prediction per GT)
+            used_preds: set[int] = set()
+            accepted_flags = [False] * len(gt_bboxes)
+            out_kps: list[list[tuple[float, float, int]]] = [[(0.0, 0.0, 0), (0.0, 0.0, 0)] for _ in gt_bboxes]
 
-        for gi, gbox in enumerate(gt_xyxy):
-            best_pi = None
-            best_iou = 0.0
-            for pi, pbox in enumerate(pred_xyxy):
-                if pi in used_preds:
+            for gi, gbox in enumerate(gt_xyxy):
+                best_pi = None
+                best_iou = 0.0
+                for pi, pbox in enumerate(pred_xyxy):
+                    if pi in used_preds:
+                        continue
+                    iou_val = _iou(gbox, (float(pbox[0]), float(pbox[1]), float(pbox[2]), float(pbox[3])))
+                    if iou_val > best_iou:
+                        best_iou = iou_val
+                        best_pi = pi
+                if best_pi is None:
                     continue
-                iou_val = _iou(gbox, (float(pbox[0]), float(pbox[1]), float(pbox[2]), float(pbox[3])))
-                if iou_val > best_iou:
-                    best_iou = iou_val
-                    best_pi = pi
-            if best_pi is None:
-                continue
 
-            if best_iou < float(args.iou):
-                continue
-            if float(pred_conf[best_pi]) < float(args.conf):
-                continue
+                if best_iou < float(args.iou):
+                    continue
+                if float(pred_conf[best_pi]) < float(args.conf):
+                    continue
 
-            # Extract keypoints 0..1, normalize, and run checks.
-            kxy = pred_kxy[best_pi]
-            if not (isinstance(kxy, list) and len(kxy) >= 2):
-                continue
+                # Extract keypoints 0..1, normalize, and run checks.
+                kxy = pred_kxy[best_pi]
+                if not (isinstance(kxy, list) and len(kxy) >= 2):
+                    continue
 
-            kp_out: list[tuple[float, float, int]] = []
-            ok = True
-            for kpi in range(2):
-                try:
-                    px = float(kxy[kpi][0])
-                    py = float(kxy[kpi][1])
-                except Exception:
-                    ok = False
-                    break
-                nx = max(0.0, min(1.0, px / float(img_w)))
-                ny = max(0.0, min(1.0, py / float(img_h)))
-                v = 1
-                if pred_kconf is not None:
-                    kc = _as_float(pred_kconf[best_pi][kpi])
-                    if not (kc == kc) or kc < float(args.kp_conf):
-                        v = 0
-                        nx, ny = 0.0, 0.0
-                if v > 0:
-                    if not _kp_in_expanded_bbox((px, py), gbox, margin=float(args.bbox_margin)):
+                kp_out: list[tuple[float, float, int]] = []
+                ok = True
+                for kpi in range(2):
+                    try:
+                        px = float(kxy[kpi][0])
+                        py = float(kxy[kpi][1])
+                    except Exception:
                         ok = False
                         break
-                kp_out.append((nx, ny, v))
+                    nx = max(0.0, min(1.0, px / float(img_w)))
+                    ny = max(0.0, min(1.0, py / float(img_h)))
+                    v = 1
+                    if pred_kconf is not None:
+                        kc = _as_float(pred_kconf[best_pi][kpi])
+                        if not (kc == kc) or kc < float(args.kp_conf):
+                            v = 0
+                            nx, ny = 0.0, 0.0
+                    if v > 0:
+                        if not _kp_in_expanded_bbox((px, py), gbox, margin=float(args.bbox_margin)):
+                            ok = False
+                            break
+                    kp_out.append((nx, ny, v))
 
-            if not ok:
-                continue
-
-            if bool(args.require_mast_above):
-                boom = kp_out[0]
-                tip = kp_out[1]
-                if boom[2] > 0 and tip[2] > 0 and not (tip[1] < boom[1]):
+                if not ok:
                     continue
 
-            # Accept if both keypoints are visible (v=1)
-            if not (kp_out[0][2] > 0 and kp_out[1][2] > 0):
+                if bool(args.require_mast_above):
+                    boom = kp_out[0]
+                    tip = kp_out[1]
+                    if boom[2] > 0 and tip[2] > 0 and not (tip[1] < boom[1]):
+                        continue
+
+                # Accept if both keypoints are visible (v=1)
+                if not (kp_out[0][2] > 0 and kp_out[1][2] > 0):
+                    continue
+
+                used_preds.add(best_pi)
+                accepted_flags[gi] = True
+                out_kps[gi] = kp_out
+
+            if bool(args.require_all_boxes) and not all(accepted_flags):
+                counts["images_skipped"] += 1
                 continue
 
-            used_preds.add(best_pi)
-            accepted_flags[gi] = True
-            out_kps[gi] = kp_out
+            if not any(accepted_flags):
+                counts["images_skipped"] += 1
+                continue
 
-        if bool(args.require_all_boxes) and not all(accepted_flags):
-            counts["images_skipped"] += 1
-            continue
-
-        if not any(accepted_flags):
-            counts["images_skipped"] += 1
-            continue
-
-        counts["boxes_accepted"] += sum(1 for f in accepted_flags if f)
-        if mode == "dryrun":
-            out_path = _pose_label_path(out_pose_dir, split=split, key=key)
-        else:
-            out_path = _pseudo_label_path(out_pose_dir, split=split, key=key, subdir=write_subdir)
-        counts["images_written"] += 1
-        _write_pose_label(out_path, gt_bboxes=gt_bboxes, kps_by_box=out_kps)
+            counts["boxes_accepted"] += sum(1 for f in accepted_flags if f)
+            if mode == "dryrun":
+                out_path = _pose_label_path(out_pose_dir, split=split, key=key)
+            else:
+                out_path = _pseudo_label_path(out_pose_dir, split=split, key=key, subdir=write_subdir)
+            counts["images_written"] += 1
+            _write_pose_label(out_path, gt_bboxes=gt_bboxes, kps_by_box=out_kps)
 
     print(yaml.safe_dump(counts, sort_keys=False).strip())
     return 0
