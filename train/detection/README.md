@@ -84,6 +84,67 @@ Details:
 - The script prepares the Ultralytics dataset structure, sanitizes labels, writes a YAML, and launches training.
 - After training completes, the temporary dataset folder at `--dst` is removed. Training results are written by Ultralytics under `runs/detect/train*`.
 
+## 5) Pose (2-keypoint) annotation + training (optional)
+This trains a single YOLO-pose model that predicts both bbox + 2 keypoints per detection:
+1) `boom_mast` (boom-mast intersection)
+2) `mast_tip`
+
+### 5.1) Annotate keypoints (full frames, multi-box)
+This reads your existing bbox labels from `--src` and stores pose labels separately (only for images you annotate).
+
+```bash
+python annotator_keypoints_fullframe.py --src ./windsurf_dataset --out ./pose_projects/boom_mast_v1
+# to review already-annotated samples too:
+python annotator_keypoints_fullframe.py --src ./windsurf_dataset --out ./pose_projects/boom_mast_v1 --show-annotated
+```
+
+Quick viewer (bbox + keypoints overlay on the original frame):
+```bash
+python view_pose_labels.py --src ./windsurf_dataset --pose ./pose_projects/boom_mast_v1 --split val --only-labeled
+```
+
+### 5.2) Train pose model
+```bash
+python train_pose.py --src ./windsurf_dataset --pose ./pose_projects/boom_mast_v1 --base-model yolo11n-pose.pt --device auto
+```
+
+### 5.3) Active learning (pseudo-label the remaining samples)
+Workflow:
+1) Manually label a small seed set (e.g. ~200) with `annotator_keypoints_fullframe.py`.
+2) Train a first pose model with `train_pose.py`.
+3) Run pseudo-labeling to auto-accept keypoints on the rest where predictions match the GT bboxes well.
+4) Inspect/correct with `annotator_keypoints_fullframe.py`, then retrain.
+
+Pseudo-labeling writes pose labels for samples that pass gates (IoU vs GT bbox + keypoint checks):
+```bash
+python pseudo_label_pose.py ^
+  --src ./windsurf_dataset ^
+  --pose ./pose_projects/boom_mast_v1 ^
+  --model train/detection/runs/pose/weights/best.pt ^
+  --iou 0.75 ^
+  --conf 0.25 ^
+  --kp-conf 0.30 ^
+  --require-all-boxes ^
+  --require-mast-above
+```
+
+Inspect a dryrun output with the viewer:
+```bash
+python pseudo_label_pose.py --src ./windsurf_dataset --pose ./pose_projects/boom_mast_v1 --model <best.pt>
+python view_pose_labels.py --src ./windsurf_dataset --pose ./pose_projects/boom_mast_v1/dryruns/run_<timestamp> --split train --only-labeled
+```
+
+Persist pseudo labels into the pose project (stored separately as `labels_pose_pseudo/`):
+```bash
+python pseudo_label_pose.py --src ./windsurf_dataset --pose ./pose_projects/boom_mast_v1 --model <best.pt> --mode write
+python view_pose_labels.py --src ./windsurf_dataset --pose ./pose_projects/boom_mast_v1 --split train --only-labeled --label-source pseudo
+```
+
+Train including pseudo labels (copied into the temp dataset with filename prefix `pseudo_`):
+```bash
+python train_pose.py --src ./windsurf_dataset --pose ./pose_projects/boom_mast_v1 --include-pseudo --pseudo-frac 0.5 --seed 0
+```
+
 ## Quickstart
 You can copy and run the helper script from this folder:
 ```bash
@@ -96,5 +157,3 @@ bash quickstart_train.sh
 - **Clean negatives.** Include representative backgrounds with empty labels.
 
 With a clean, consistent dataset, the final model yields precise and reliable bounding boxes.
-
-
