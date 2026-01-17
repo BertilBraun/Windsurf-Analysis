@@ -27,6 +27,12 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--project", type=str, default="train/detection/runs")
     p.add_argument("--name", type=str, default="pose")
     p.add_argument(
+        "--save-period",
+        type=int,
+        default=50,
+        help="Save a checkpoint every N epochs (Ultralytics save_period). Set 0 to disable.",
+    )
+    p.add_argument(
         "--include-pseudo",
         action="store_true",
         help="Include pseudo labels from <pose>/labels_pose_pseudo/{train,val}/ (copied with filename prefix pseudo_).",
@@ -205,6 +211,7 @@ def main() -> int:
         single_cls=True,
         project=str(args.project),
         name=str(args.name),
+        save_period=int(args.save_period),
     )
 
     print(

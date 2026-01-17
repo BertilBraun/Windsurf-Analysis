@@ -181,6 +181,7 @@ def train_model(
     device: str,
     degrees: float,
     shear: float,
+    save_period: int,
 ):
     logger = logging.getLogger(__name__)
 
@@ -200,6 +201,7 @@ def train_model(
         single_cls=True,
         degrees=degrees,
         shear=shear,
+        save_period=int(save_period),
     )
     logger.info('✓ Training finished')
 
@@ -240,6 +242,12 @@ def main():
         default=0.0,
         help='Random shear degrees for augmentation (NOTE: These did not work well for me - increased training time a lot and the resulting BBoxes were far from the tight labels)',
     )
+    parser.add_argument(
+        '--save-period',
+        type=int,
+        default=50,
+        help='Save a checkpoint every N epochs (Ultralytics save_period). Set 0 to disable.',
+    )
 
     args = parser.parse_args()
 
@@ -254,6 +262,7 @@ def main():
         args.device,
         args.degrees,
         args.shear,
+        args.save_period,
     )
     shutil.rmtree(args.dst)
 
