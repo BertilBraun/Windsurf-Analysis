@@ -175,6 +175,7 @@ def train_model(
     base_model: str,
     yaml_file: Path,
     epochs: int,
+    patience: int,
     imgsz: int,
     batch: float,
     device: str,
@@ -192,6 +193,7 @@ def train_model(
     model.train(
         data=str(yaml_file),
         epochs=epochs,
+        patience=patience,
         imgsz=imgsz,
         batch=batch,
         device=device,
@@ -222,6 +224,7 @@ def main():
 
     # training hyper-parameters
     parser.add_argument('--epochs', type=int, default=200, help='Training epochs')
+    parser.add_argument('--patience', type=int, default=50, help='Early stopping patience (0 disables)')
     parser.add_argument('--imgsz', type=int, default=640, help='Image size')
     parser.add_argument('--batch', type=float, default=0.85, help='Batch-size fraction (0 = auto)')
     parser.add_argument('--device', default='auto', help='GPU id, -1 for CPU, or "auto"')
@@ -245,6 +248,7 @@ def main():
         args.base_model,
         yaml_path,
         args.epochs,
+        args.patience,
         args.imgsz,
         args.batch,
         args.device,

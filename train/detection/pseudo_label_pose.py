@@ -4,14 +4,14 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from tqdm import tqdm
 
 import yaml
 from ultralytics import YOLO
 
 
-KP_NAMES = ["boom_mast", "mast_tip"]
-SUPPORTED_IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+KP_NAMES = ['boom_mast', 'mast_tip']
+SUPPORTED_IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
 
 
 @dataclass(frozen=True)
@@ -37,74 +37,76 @@ class YoloBBox:
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description=(
-            "Active-learning helper: run a trained YOLO-pose model over the dataset and write pose labels for samples\n"
-            "whose predicted boxes match the existing GT boxes well (IoU gate) and whose keypoints pass simple checks.\n"
-            "Default behavior is a DRYRUN that writes to a separate pose-project folder you can inspect with view_pose_labels.py.\n"
-            "To persist pseudo labels into the pose project, use --mode write (writes to labels_pose_pseudo/...)."
+            'Active-learning helper: run a trained YOLO-pose model over the dataset and write pose labels for samples\n'
+            'whose predicted boxes match the existing GT boxes well (IoU gate) and whose keypoints pass simple checks.\n'
+            'Default behavior is a DRYRUN that writes to a separate pose-project folder you can inspect with view_pose_labels.py.\n'
+            'To persist pseudo labels into the pose project, use --mode write (writes to labels_pose_pseudo/...).'
         )
     )
-    p.add_argument("--src", type=Path, required=True, help="Detection dataset root (images + bbox labels).")
-    p.add_argument("--pose", type=Path, required=True, help="Pose project directory created by annotator.")
-    p.add_argument("--model", type=Path, required=True, help="Trained pose model weights (e.g. .../weights/best.pt).")
+    p.add_argument('--src', type=Path, required=True, help='Detection dataset root (images + bbox labels).')
+    p.add_argument('--pose', type=Path, required=True, help='Pose project directory created by annotator.')
+    p.add_argument('--model', type=Path, required=True, help='Trained pose model weights (e.g. .../weights/best.pt).')
     p.add_argument(
-        "--mode",
-        choices=["dryrun", "write"],
-        default="dryrun",
-        help="dryrun: write labels into a new dryrun pose-project folder; write: write into labels_pose_pseudo/ in --pose",
+        '--mode',
+        choices=['dryrun', 'write'],
+        default='dryrun',
+        help='dryrun: write labels into a new dryrun pose-project folder; write: write into labels_pose_pseudo/ in --pose',
     )
     p.add_argument(
-        "--dryrun-out",
+        '--dryrun-out',
         type=Path,
         default=None,
-        help="Optional explicit output pose-project folder for dryrun mode (default: <pose>/dryruns/<timestamp>).",
+        help='Optional explicit output pose-project folder for dryrun mode (default: <pose>/dryruns/<timestamp>).',
     )
     p.add_argument(
-        "--write-subdir",
+        '--write-subdir',
         type=str,
-        default="labels_pose_pseudo",
-        help="Subdir under --pose to store pseudo labels when --mode write (default: labels_pose_pseudo).",
+        default='labels_pose_pseudo',
+        help='Subdir under --pose to store pseudo labels when --mode write (default: labels_pose_pseudo).',
     )
-    p.add_argument("--conf", type=float, default=0.25, help="Detector confidence threshold for predictions.")
-    p.add_argument("--iou", type=float, default=0.75, help="Min IoU between predicted box and GT box to accept.")
-    p.add_argument("--kp-conf", type=float, default=0.30, help="Min keypoint confidence (if available) to accept.")
-    p.add_argument("--require-mast-above", action="store_true", help="Require mast_tip to be above boom_mast (y smaller).")
+    p.add_argument('--conf', type=float, default=0.25, help='Detector confidence threshold for predictions.')
+    p.add_argument('--iou', type=float, default=0.75, help='Min IoU between predicted box and GT box to accept.')
+    p.add_argument('--kp-conf', type=float, default=0.30, help='Min keypoint confidence (if available) to accept.')
     p.add_argument(
-        "--bbox-margin",
+        '--require-mast-above', action='store_true', help='Require mast_tip to be above boom_mast (y smaller).'
+    )
+    p.add_argument(
+        '--bbox-margin',
         type=float,
         default=0.05,
-        help="Keypoints must lie within GT bbox expanded by this margin (fraction of bbox size).",
+        help='Keypoints must lie within GT bbox expanded by this margin (fraction of bbox size).',
     )
     p.add_argument(
-        "--require-all-boxes",
-        action="store_true",
-        help="Only write a label if ALL GT boxes in the image are confidently pseudo-labeled.",
+        '--require-all-boxes',
+        action='store_true',
+        help='Only write a label if ALL GT boxes in the image are confidently pseudo-labeled.',
     )
-    p.add_argument("--overwrite", action="store_true", help="Overwrite existing pseudo labels (does not touch manual).")
-    p.add_argument("--max-images", type=int, default=0, help="Limit number of images processed (0 = no limit).")
+    p.add_argument('--overwrite', action='store_true', help='Overwrite existing pseudo labels (does not touch manual).')
+    p.add_argument('--max-images', type=int, default=0, help='Limit number of images processed (0 = no limit).')
     p.add_argument(
-        "--predict-batch",
+        '--predict-batch',
         type=int,
         default=8,
-        help="Inference batch size in number of images (keeps memory bounded; lower this if you hit OOM).",
+        help='Inference batch size in number of images (keeps memory bounded; lower this if you hit OOM).',
     )
-    p.add_argument("--device", type=str, default="auto")
+    p.add_argument('--device', type=str, default='auto')
     return p.parse_args()
 
 
 def _index_path(pose_dir: Path) -> Path:
-    return pose_dir / "pose_index.yaml"
+    return pose_dir / 'pose_index.yaml'
 
 
 def _load_index(pose_dir: Path) -> dict:
     idx_path = _index_path(pose_dir)
     if not idx_path.exists():
-        raise SystemExit(f"Missing pose index: {idx_path}")
-    payload = yaml.safe_load(idx_path.read_text(encoding="utf-8")) or {}
+        raise SystemExit(f'Missing pose index: {idx_path}')
+    payload = yaml.safe_load(idx_path.read_text(encoding='utf-8')) or {}
     if not isinstance(payload, dict):
-        raise SystemExit(f"Invalid pose index (expected YAML dict): {idx_path}")
-    items = payload.get("items", [])
+        raise SystemExit(f'Invalid pose index (expected YAML dict): {idx_path}')
+    items = payload.get('items', [])
     if not isinstance(items, list) or not items:
-        raise SystemExit(f"No items found in pose index: {idx_path}")
+        raise SystemExit(f'No items found in pose index: {idx_path}')
     return payload
 
 
@@ -112,7 +114,7 @@ def _read_bboxes(label_path: Path) -> list[YoloBBox]:
     if not label_path.exists():
         return []
     out: list[YoloBBox] = []
-    for line in label_path.read_text(encoding="utf-8").splitlines():
+    for line in label_path.read_text(encoding='utf-8').splitlines():
         parts = line.strip().split()
         if len(parts) != 5:
             continue
@@ -163,10 +165,11 @@ def _kp_in_expanded_bbox(
 
 
 def _pose_label_path(pose_dir: Path, *, split: str, key: str) -> Path:
-    return pose_dir / "labels_pose" / split / f"{key}.txt"
+    return pose_dir / 'labels_pose' / split / f'{key}.txt'
+
 
 def _pseudo_label_path(pose_dir: Path, *, split: str, key: str, subdir: str) -> Path:
-    return pose_dir / subdir / split / f"{key}.txt"
+    return pose_dir / subdir / split / f'{key}.txt'
 
 
 def _write_pose_label(
@@ -180,25 +183,26 @@ def _write_pose_label(
     for i, b in enumerate(gt_bboxes):
         parts = [
             str(int(b.cls_id)),
-            f"{float(b.cx):.6f}",
-            f"{float(b.cy):.6f}",
-            f"{float(b.w):.6f}",
-            f"{float(b.h):.6f}",
+            f'{float(b.cx):.6f}',
+            f'{float(b.cy):.6f}',
+            f'{float(b.w):.6f}',
+            f'{float(b.h):.6f}',
         ]
-        for (x, y, v) in kps_by_box[i][:2]:
+        for x, y, v in kps_by_box[i][:2]:
             vv = 1 if int(v) > 0 else 0
             xx = float(x) if vv > 0 else 0.0
             yy = float(y) if vv > 0 else 0.0
-            parts.extend([f"{xx:.6f}", f"{yy:.6f}", str(vv)])
-        lines.append(" ".join(parts))
-    out_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+            parts.extend([f'{xx:.6f}', f'{yy:.6f}', str(vv)])
+        lines.append(' '.join(parts))
+    out_path.write_text('\n'.join(lines) + ('\n' if lines else ''), encoding='utf-8')
 
 
 def _as_float(x) -> float:
     try:
         return float(x)
     except Exception:
-        return float("nan")
+        return float('nan')
+
 
 def _iter_batches(items: list[dict], batch_size: int) -> list[list[dict]]:
     batch_size = max(1, int(batch_size))
@@ -213,69 +217,80 @@ def main() -> int:
     src_dir = Path(args.src)
     pose_dir = Path(args.pose)
     if not src_dir.exists():
-        raise SystemExit(f"--src does not exist: {src_dir}")
+        raise SystemExit(f'--src does not exist: {src_dir}')
     if not pose_dir.exists():
-        raise SystemExit(f"--pose does not exist: {pose_dir}")
+        raise SystemExit(f'--pose does not exist: {pose_dir}')
     if not Path(args.model).exists():
-        raise SystemExit(f"--model does not exist: {args.model}")
+        raise SystemExit(f'--model does not exist: {args.model}')
 
     index = _load_index(pose_dir)
-    items = index.get("items", [])
+    items = index.get('items', [])
     assert isinstance(items, list)
 
     mode = str(args.mode)
     write_subdir = str(args.write_subdir)
 
     out_pose_dir: Path
-    if mode == "dryrun":
+    if mode == 'dryrun':
         if args.dryrun_out is not None:
             out_pose_dir = Path(args.dryrun_out)
         else:
             import datetime
 
-            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            out_pose_dir = pose_dir / "dryruns" / f"run_{ts}"
+            ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            out_pose_dir = pose_dir / 'dryruns' / f'run_{ts}'
         out_pose_dir.mkdir(parents=True, exist_ok=True)
         # Copy pose_index.yaml so the viewer can navigate consistently.
-        (out_pose_dir / "pose_index.yaml").write_text(_index_path(pose_dir).read_text(encoding="utf-8"), encoding="utf-8")
-        for sp in ("train", "val"):
-            (out_pose_dir / "labels_pose" / sp).mkdir(parents=True, exist_ok=True)
-    elif mode == "write":
+        (out_pose_dir / 'pose_index.yaml').write_text(
+            _index_path(pose_dir).read_text(encoding='utf-8'), encoding='utf-8'
+        )
+        for sp in ('train', 'val'):
+            (out_pose_dir / 'labels_pose' / sp).mkdir(parents=True, exist_ok=True)
+    elif mode == 'write':
         out_pose_dir = pose_dir
-        for sp in ("train", "val"):
+        for sp in ('train', 'val'):
             (out_pose_dir / write_subdir / sp).mkdir(parents=True, exist_ok=True)
     else:
-        raise SystemExit(f"Unknown --mode: {mode}")
+        raise SystemExit(f'Unknown --mode: {mode}')
 
-    # Build list of candidates (only those with GT bbox labels, and without pseudo labels unless --overwrite)
+    # Build list of candidates:
+    # - must have GT bbox labels
+    # - must NOT already have a manual pose label in <pose>/labels_pose/<split>/<key>.txt
+    # - must NOT already have an output label unless --overwrite
     candidates: list[dict] = []
-    for it in items:
+    for it in tqdm(items, desc='Preparing'):
         if not isinstance(it, dict):
             continue
-        key = str(it.get("key", ""))
-        split = str(it.get("split", "train"))
-        rel = str(it.get("src_rel", ""))
-        if not key or split not in ("train", "val") or not rel:
+        key = str(it.get('key', ''))
+        split = str(it.get('split', 'train'))
+        rel = str(it.get('src_rel', ''))
+        if not key or split not in ('train', 'val') or not rel:
             continue
+
+        # If a manual pose label exists, always skip pseudo-labeling this sample.
+        manual_existing = _pose_label_path(pose_dir, split=split, key=key)
+        if manual_existing.exists():
+            continue
+
         img_path = src_dir / Path(rel)
         if not img_path.exists() or img_path.suffix.lower() not in SUPPORTED_IMG_EXTS:
             continue
-        gt_label = img_path.with_suffix(".txt")
+        gt_label = img_path.with_suffix('.txt')
         if not gt_label.exists():
             continue
         if not _read_bboxes(gt_label):
             continue
-        if mode == "dryrun":
+        if mode == 'dryrun':
             out_pose = _pose_label_path(out_pose_dir, split=split, key=key)
         else:
             out_pose = _pseudo_label_path(out_pose_dir, split=split, key=key, subdir=write_subdir)
 
         if out_pose.exists() and not bool(args.overwrite):
             continue
-        candidates.append({"key": key, "split": split, "img_path": img_path})
+        candidates.append({'key': key, 'split': split, 'img_path': img_path})
 
     if not candidates:
-        raise SystemExit("No pseudo-label candidates found (maybe everything is already labeled?).")
+        raise SystemExit('No pseudo-label candidates found (maybe everything is already labeled?).')
 
     max_images = int(args.max_images)
     if max_images > 0:
@@ -284,19 +299,23 @@ def main() -> int:
     model = YOLO(str(args.model))
 
     counts = {
-        "images_seen": 0,
-        "images_written": 0,
-        "images_skipped": 0,
-        "boxes_total": 0,
-        "boxes_accepted": 0,
-        "mode": mode,
-        "out_pose_dir": str(out_pose_dir),
+        'images_seen': 0,
+        'images_written': 0,
+        'images_skipped': 0,
+        'boxes_total': 0,
+        'boxes_accepted': 0,
+        'mode': mode,
+        'out_pose_dir': str(out_pose_dir),
     }
 
     # Predict in small batches to avoid large allocations when passing a huge list of sources.
-    for batch in _iter_batches(candidates, int(args.predict_batch)):
-        batch_by_path: dict[str, dict] = {str(Path(c["img_path"]).resolve()): c for c in batch}
-        batch_sources = [str(c["img_path"]) for c in batch]
+    for batch in tqdm(
+        _iter_batches(candidates, int(args.predict_batch)),
+        desc='Prediction',
+        total=len(candidates) / int(args.predict_batch),
+    ):
+        batch_by_path: dict[str, dict] = {str(Path(c['img_path']).resolve()): c for c in batch}
+        batch_sources = [str(c['img_path']) for c in batch]
 
         results = model.predict(
             source=batch_sources,
@@ -308,53 +327,52 @@ def main() -> int:
         )
 
         for res in results:
-            img_path = Path(getattr(res, "path", "")).resolve()
+            img_path = Path(getattr(res, 'path', '')).resolve()
             c = batch_by_path.get(str(img_path))
             if c is None:
                 continue
-            key = str(c["key"])
-            split = str(c["split"])
+            key = str(c['key'])
+            split = str(c['split'])
 
-            orig_shape = getattr(res, "orig_shape", None)
+            orig_shape = getattr(res, 'orig_shape', None)
             if not (isinstance(orig_shape, (list, tuple)) and len(orig_shape) >= 2):
-                counts["images_skipped"] += 1
+                counts['images_skipped'] += 1
                 continue
             img_h, img_w = int(orig_shape[0]), int(orig_shape[1])
             if img_h <= 0 or img_w <= 0:
-                counts["images_skipped"] += 1
+                counts['images_skipped'] += 1
                 continue
 
-            gt_bboxes = _read_bboxes(img_path.with_suffix(".txt"))
+            gt_bboxes = _read_bboxes(img_path.with_suffix('.txt'))
             if not gt_bboxes:
-                counts["images_skipped"] += 1
+                counts['images_skipped'] += 1
                 continue
             gt_xyxy = [b.to_xyxy_abs(img_w=img_w, img_h=img_h) for b in gt_bboxes]
-            counts["images_seen"] += 1
-            counts["boxes_total"] += len(gt_bboxes)
+            counts['images_seen'] += 1
+            counts['boxes_total'] += len(gt_bboxes)
 
-            boxes = getattr(res, "boxes", None)
-            kps = getattr(res, "keypoints", None)
+            boxes = getattr(res, 'boxes', None)
+            kps = getattr(res, 'keypoints', None)
             if boxes is None or kps is None:
-                counts["images_skipped"] += 1
+                counts['images_skipped'] += 1
                 continue
 
-            xyxy_t = getattr(boxes, "xyxy", None)
-            conf_t = getattr(boxes, "conf", None)
-            cls_t = getattr(boxes, "cls", None)
-            kxy_t = getattr(kps, "xy", None)
-            kconf_t = getattr(kps, "conf", None)
+            xyxy_t = getattr(boxes, 'xyxy', None)
+            conf_t = getattr(boxes, 'conf', None)
+            cls_t = getattr(boxes, 'cls', None)
+            kxy_t = getattr(kps, 'xy', None)
+            kconf_t = getattr(kps, 'conf', None)
             if xyxy_t is None or conf_t is None or cls_t is None or kxy_t is None:
-                counts["images_skipped"] += 1
+                counts['images_skipped'] += 1
                 continue
 
             try:
                 pred_xyxy = xyxy_t.cpu().numpy().tolist()
                 pred_conf = conf_t.cpu().numpy().tolist()
-                pred_cls = cls_t.cpu().numpy().tolist()
                 pred_kxy = kxy_t.cpu().numpy().tolist()
                 pred_kconf = kconf_t.cpu().numpy().tolist() if kconf_t is not None else None
             except Exception:
-                counts["images_skipped"] += 1
+                counts['images_skipped'] += 1
                 continue
 
             # Greedy match GT boxes to predictions by IoU (one prediction per GT)
@@ -426,24 +444,24 @@ def main() -> int:
                 out_kps[gi] = kp_out
 
             if bool(args.require_all_boxes) and not all(accepted_flags):
-                counts["images_skipped"] += 1
+                counts['images_skipped'] += 1
                 continue
 
             if not any(accepted_flags):
-                counts["images_skipped"] += 1
+                counts['images_skipped'] += 1
                 continue
 
-            counts["boxes_accepted"] += sum(1 for f in accepted_flags if f)
-            if mode == "dryrun":
+            counts['boxes_accepted'] += sum(1 for f in accepted_flags if f)
+            if mode == 'dryrun':
                 out_path = _pose_label_path(out_pose_dir, split=split, key=key)
             else:
                 out_path = _pseudo_label_path(out_pose_dir, split=split, key=key, subdir=write_subdir)
-            counts["images_written"] += 1
+            counts['images_written'] += 1
             _write_pose_label(out_path, gt_bboxes=gt_bboxes, kps_by_box=out_kps)
 
     print(yaml.safe_dump(counts, sort_keys=False).strip())
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     raise SystemExit(main())
