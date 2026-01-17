@@ -7,7 +7,6 @@ import numpy as np
 
 from ..motion.cmc import CMC
 from ..util.algebra import NLL_from_prob, lerp, probability_from_dist
-from ..visualization.debug.session import DebugSession
 
 
 from ..util.video_io import VideoInfo
@@ -17,8 +16,9 @@ from .ILP_graph_solver import FragmentGraph, ILPGraphSolver
 from ..motion.kalman_filter import KFState
 from ..visualization.stabilize import Transform
 from ..visualization.debug import get_debug_session
-from ..visualization.debug.graph import EdgeRecord, show_graph_interactive
 from ..visualization.debug.draw import draw_bounding_box, draw_heatmap
+from ..visualization.debug.graph import EdgeRecord, show_graph_interactive
+from ..visualization.debug.session import DebugSession
 from ..visualization.debug.overlays import EdgeMetrics, compose_fragment_pair_view
 
 
@@ -55,6 +55,8 @@ class ILPTracker:
         use_position_only: bool = True,  # gating_distance on (cx,cy) or (cx,cy,w,h)
         # Appearance similarity
         appearance_similarity_gamma: float = 11.535947876483421,
+        # Graph pruning / solver settings
+        max_outgoing_links: int = 10,
     ) -> None:
         self.video_path = video_path
         self.w_start = w_start
@@ -70,6 +72,8 @@ class ILPTracker:
         self.use_position_only = bool(use_position_only)
         # Appearance similarity
         self.appearance_similarity_gamma = appearance_similarity_gamma
+        # Graph pruning / solver settings
+        self.max_outgoing_links = int(max(1, max_outgoing_links))
 
         # TODO remove
         # Debugging/visualization
@@ -87,6 +91,11 @@ class ILPTracker:
         cmc = CMC(transforms)
         max_frame_gap = int(round(MAX_OVERLAP_LENGTH_SECONDS * video_properties.fps))
 
+        # Ensure a consistent fragment order for:
+        # - graph indices
+        # - start/end costs passed into ILP (must match graph.fragments)
+        fragments = sorted(tracks, key=lambda t: t.start_frame)
+
         # Initialize debug session if any debug feature is enabled
         debug_enabled = bool(self.enable_edge_logging or self.enable_graph_viz)
         debug = get_debug_session(self.video_path or '', enabled=debug_enabled)
@@ -94,17 +103,26 @@ class ILPTracker:
         # Reset debug edge storage per run (prevents cross-run accumulation)
         self._edge_debug_records = []
 
-        graph = self._build_fragment_graph(tracks, max_frame_gap, cmc)
+        # Solve with spatial start/end costs (aligned to `fragments`)
+        start_costs, end_costs = self._compute_spatial_costs(fragments, video_properties)
+
+        graph = self._build_fragment_graph(
+            fragments,
+            max_frame_gap,
+            cmc,
+            start_costs=start_costs,
+            end_costs=end_costs,
+        )
 
         self._debug_display(debug, graph, 0, cmc)
 
-        # Solve with scheduled start cost
-        start_costs, end_costs = self._compute_spatial_costs(tracks, video_properties)
+        # Edges are additionally pruned in `_build_fragment_graph` using per-edge
+        # (end_i + start_j) dominance, but keep a generous global cap as a backstop.
+        max_cost_limit = float(max(start_costs) + max(end_costs))
 
-        # Pass max_cost_limit as the max of start and end costs to allow pruning
-        max_cost_limit = max(self.w_start, self.w_end)
-
-        new_tracks, new_cost = ILPGraphSolver().optimize_graph(graph, start_costs, end_costs, max_cost_limit)
+        new_tracks, new_cost = ILPGraphSolver(max_outgoing_links=self.max_outgoing_links).optimize_graph(
+            graph, start_costs, end_costs, max_cost_limit
+        )
 
         debug.close()
 
@@ -114,12 +132,21 @@ class ILPTracker:
 
     # ─────────────────────────────── graph building ────────────────────────────── #
 
-    def _build_fragment_graph(self, fragments: List[Track], max_frame_gap: int, cmc: CMC) -> FragmentGraph:
+    def _build_fragment_graph(
+        self,
+        fragments: List[Track],
+        max_frame_gap: int,
+        cmc: CMC,
+        *,
+        start_costs: List[float],
+        end_costs: List[float],
+    ) -> FragmentGraph:
         """Build forward edges with costs. Logs one line per edge if enabled.
         If `enable_edge_logging` is True, also displays a debug visualization for each edge candidate
         right before adding the connection to the graph.
         """
-        fragments = sorted(fragments, key=lambda t: t.start_frame)
+        if len(start_costs) != len(fragments) or len(end_costs) != len(fragments):
+            raise ValueError('start_costs/end_costs must be aligned 1:1 with fragments')
         graph = FragmentGraph(fragments)
 
         # KF cache: fit once per fragment (end state after all its detections)
@@ -145,6 +172,11 @@ class ILPTracker:
             # Weighted sum of costs
             total = self.w_motion * motion_nll + self.w_appearance * appearance_nll + self.w_gap * gap_nll
 
+            # Dominance pruning:
+            # If linking i->j is not cheaper than ending i and starting j, it can never be optimal in this ILP.
+            if float(total) >= float(end_costs[i] + start_costs[j]):
+                continue
+
             graph.add_connection(i, j, total)
 
             # Collect per-edge debug data for interactive visualization
@@ -168,16 +200,14 @@ class ILPTracker:
 
         return graph
 
-    def _compute_spatial_costs(
-        self, tracks: List[Track], video_properties: VideoInfo
-    ) -> Tuple[List[float], List[float]]:
+    def _compute_spatial_costs(self, fragments: List[Track], video_properties: VideoInfo) -> Tuple[List[float], List[float]]:
         """Compute start and end costs for each track based on spatial position (border proximity).
         We want to encourage tracks to start and end near the border of the image, not in the image center."""
         start_costs = []
         end_costs = []
         W = video_properties.width
         H = video_properties.height
-        margin = 0.1  # 20% of the width or height
+        margin = 0.1  # 10% of the width or height
 
         def interpolation_factor(center: Point) -> float:
             # interpolate from 1 all the way at the border to 0 at a box in the center of the image of size (1-margin*2)x(1-margin*2)
@@ -192,7 +222,7 @@ class ILPTracker:
         low_cost_start = self.w_start / 2.0
         low_cost_end = self.w_end / 2.0
 
-        for track in tracks:
+        for track in fragments:
             # Start cost
             factor = interpolation_factor(track.start.bbox.center)
             start_costs.append(lerp(self.w_start, low_cost_start, factor))
@@ -225,6 +255,10 @@ class ILPTracker:
 
         # Optional interactive graph visualization (source/sink + edges with costs)
         if self.enable_graph_viz:
+
+            def _prob_from_cost(cost: float) -> float:
+                # Inverse of NLL_from_prob(p) = -log(p).
+                return math.exp(-float(cost))
 
             def _show_node_candidate_heatmaps(*, node_idx: int, direction: str) -> None:
                 """
@@ -260,11 +294,11 @@ class ILPTracker:
                 # One-row matrices (like greedy stitcher's "tracks x detections" grid, but for one node)
                 row_label = f'{direction}:{graph.fragments[node_idx].track_id}'
                 # Convert costs back to probabilities for interpretation.
-                # Motion/appearance use NLL_from_prob(p) = -logit(p) => p = 1 / (1 + exp(nll)).
+                # Motion/appearance invert NLL_from_prob (debug-only; not a calibrated probability).
                 # Gap uses gap_nll = -log(p_miss^gap) => p_gap = exp(-gap_nll).
-                motion_prob = np.array([[1.0 / (1.0 + math.exp(float(e.motion_nll))) for e in edges]], dtype=np.float32)
+                motion_prob = np.array([[_prob_from_cost(float(e.motion_nll)) for e in edges]], dtype=np.float32)
                 appearance_prob = np.array(
-                    [[1.0 / (1.0 + math.exp(float(e.appearance_nll))) for e in edges]], dtype=np.float32
+                    [[_prob_from_cost(float(e.appearance_nll)) for e in edges]], dtype=np.float32
                 )
                 gap_prob = np.array([[math.exp(-float(e.gap_nll)) for e in edges]], dtype=np.float32)
 
@@ -418,10 +452,11 @@ class ILPTracker:
 
 
 def _appearance_nll(a: Track, b: Track, gamma: float) -> float:
-    """Lab χ² distance between fragment prototypes → Platt → NLLR."""
+    """Appearance cost from fragment prototypes (mapped from a heuristic similarity probability)."""
     a_mean = a.mean_embedding(ema=0.6)
     b_mean = b.mean_embedding_reverse(ema=0.6)
-    return NLL_from_prob(a_mean.probability(b_mean, gamma))
+    p = a_mean.probability(b_mean, gamma)
+    return NLL_from_prob(p)
 
 
 def _motion_nll(A: KFState, B: Track, cmc: CMC, max_detections_to_compare: int, use_position_only: bool) -> float:

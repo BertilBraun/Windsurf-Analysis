@@ -64,6 +64,17 @@ def clamp_prob(p: float) -> float:
 
 
 def NLL_from_prob(p: float) -> float:
-    """Negative log-likelihood ratio cost: -logit(p)."""
+    """
+    True negative log-likelihood (NLL): -log(p).
+
+    This is always non-negative for p in (0, 1] and composes naturally when summing
+    independent likelihood terms.
+    """
+    p = clamp_prob(p)
+    return float(-np.log(p))
+
+
+def log_odds_cost_from_prob(p: float) -> float:
+    """Log-odds (LLR-style) cost: -logit(p) = log((1-p)/p). Can be negative if p>0.5."""
     p = clamp_prob(p)
     return float(-np.log(p / (1.0 - p)))
