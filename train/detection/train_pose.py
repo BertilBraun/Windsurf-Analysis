@@ -21,6 +21,12 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--dst", type=Path, default=Path("train/detection/datasets/windsurfer_pose"), help="Temp dataset root.")
     p.add_argument("--base-model", type=str, default="yolo11n-pose.pt", help="Base pose model weights.")
     p.add_argument("--epochs", type=int, default=200)
+    p.add_argument(
+        "--patience",
+        type=int,
+        default=50,
+        help="Early stopping patience (0 disables). If unset, Ultralytics default is used.",
+    )
     p.add_argument("--imgsz", type=int, default=640)
     p.add_argument("--batch", type=float, default=0.85)
     p.add_argument("--device", type=str, default="auto")
@@ -205,6 +211,7 @@ def main() -> int:
     model.train(
         data=str(data_yaml),
         epochs=int(args.epochs),
+        patience=int(args.patience),
         imgsz=int(args.imgsz),
         batch=batch,
         device=device,
