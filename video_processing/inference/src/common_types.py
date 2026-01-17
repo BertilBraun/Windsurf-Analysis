@@ -28,6 +28,27 @@ class Point:
     def interpolate(self, other: Point, alpha: float) -> Point:
         return Point(int(interpolate(self.x, other.x, alpha)), int(interpolate(self.y, other.y, alpha)))
 
+    def __mul__(self, other: float) -> Point:
+        return Point(int(self.x * other), int(self.y * other))
+
+    def __truediv__(self, other: float) -> Point:
+        return Point(int(self.x / other), int(self.y / other))
+
+    def __add__(self, other: Point) -> Point:
+        return Point(self.x + other.x, self.y + other.y)
+
+    def __sub__(self, other: Point) -> Point:
+        return Point(self.x - other.x, self.y - other.y)
+
+    def __neg__(self) -> Point:
+        return Point(-self.x, -self.y)
+
+    def __abs__(self) -> Point:
+        return Point(abs(self.x), abs(self.y))
+
+    def __bool__(self) -> bool:
+        return self.x != 0 or self.y != 0
+
 
 @dataclass(frozen=True)
 class BoundingBox:

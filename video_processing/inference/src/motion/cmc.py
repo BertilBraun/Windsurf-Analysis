@@ -1,6 +1,7 @@
 # Camera motion compensation
 
 import math
+import warnings
 import numpy as np
 
 NDArrayF = np.ndarray
@@ -18,9 +19,17 @@ class CMC:
         #     p_curr = R(da) * p_prev + [dx, dy]
         # - We store it keyed by prev_frame_idx, so a transform with frame_idx==k maps (k-1) -> k.
         self._transforms_dict: dict[FrameIndex, Transform] = {t.frame_idx - 1: t for t in transforms}
+        if transforms and min(t.frame_idx for t in transforms) == 0:
+            warnings.warn(
+                'CMC received a Transform with frame_idx==0; expected prev->curr deltas with frame_idx starting at 1 '
+                '(where frame_idx==k maps k-1 -> k). If your transforms are indexed by prev-frame instead, CMC will be off by one.',
+                RuntimeWarning,
+                stacklevel=2,
+            )
 
     def apply_forward(self, mean: NDArrayF, cov: NDArrayF, frame_idx: FrameIndex) -> tuple[NDArrayF, NDArrayF]:
         """Apply one prev->curr delta to KF state and covariance. Advances from frame_idx to frame_idx+1."""
+        assert frame_idx in self._transforms_dict, f'Frame Index {frame_idx} is required! There is a bug somewhere!'
         transform = self._transforms_dict[frame_idx]
         A, T = self._build_A_T(transform)
         m = A @ mean

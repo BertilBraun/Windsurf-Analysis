@@ -22,7 +22,7 @@ from ..settings import (
     TRACK_RTS_PROC_STD_WEIGHT_VEL,
 )
 from ..util.video_io import VideoInfo
-from ..common_types import Detection, Track, BoundingBox, FrameIndex
+from ..common_types import Detection, Track, BoundingBox, FrameIndex, Point
 from ..motion.kalman_filter import KFState, _KalmanFilter, KF
 from ..motion.cmc import CMC
 
@@ -149,6 +149,7 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
 
     # Map frame indices to detections for quick lookup
     detection_dict = {d.frame_idx: d for d in detections}
+    assert len(detection_dict) == len(detections), 'Mapping had duplicate frame index'
 
     # Forward pass: Kalman filter with camera motion compensation
     for i, frame_idx in enumerate(range(start_frame, end_frame + 1)):
@@ -212,16 +213,43 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
         # Use original detection if available, otherwise create interpolated one
         if frame_idx in detection_dict:
             original_det = detection_dict[frame_idx]
-            neighborhood = [
+            neighborhood: list[tuple[Detection | None, float]] = [
                 (detection_dict[frame_idx - 2] if frame_idx - 2 in detection_dict else None, 0),
                 (detection_dict[frame_idx - 1] if frame_idx - 1 in detection_dict else None, 1),
                 (original_det, 4),
                 (detection_dict[frame_idx + 1] if frame_idx + 1 in detection_dict else None, 0.5),
                 (detection_dict[frame_idx + 2] if frame_idx + 2 in detection_dict else None, 0),
             ]
-            neighborhood_bbox = sum(
+
+            # Baseline: weighted average in image coordinates (as floats).
+            img_centers: list[tuple[Point, float]] = []
+            for det, weight in neighborhood:
+                if det is None or weight <= 0:
+                    continue
+                img_centers.append((det.bbox.center, float(weight)))
+
+            neighborhood_center = sum((xy * w for xy, w in img_centers), start=Point(0, 0)) / sum(
+                w for _xy, w in img_centers
+            )
+
+            neighborhood_bbox_width_list = [
+                detection_dict[frame_idx + i].bbox.width for i in range(-15, 16) if frame_idx + i in detection_dict
+            ]
+            neighborhood_bbox_width = sum(neighborhood_bbox_width_list) / len(neighborhood_bbox_width_list)
+            neighborhood_bbox_height_list = [
+                detection_dict[frame_idx + i].bbox.height for i in range(-15, 16) if frame_idx + i in detection_dict
+            ]
+            neighborhood_bbox_height = sum(neighborhood_bbox_height_list) / len(neighborhood_bbox_height_list)
+            neighborhood_bbox = BoundingBox.from_center_wh(
+                neighborhood_center.x,
+                neighborhood_center.y,
+                neighborhood_bbox_width,
+                neighborhood_bbox_height,
+            )
+            neighborhood_bbox_1 = sum(
                 (d.bbox * weight for d, weight in neighborhood if d is not None), start=BoundingBox(0, 0, 0, 0)
             ) / sum(weight for d, weight in neighborhood if d is not None)
+
             smoothed_det = Detection(
                 bbox=neighborhood_bbox,
                 embedding=original_det.embedding,
