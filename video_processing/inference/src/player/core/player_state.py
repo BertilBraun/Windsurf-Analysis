@@ -18,6 +18,12 @@ class DetectionLite:
     bbox: list[int]  # [x1, y1, x2, y2]
     confidence: float
     interpolated: bool
+    # Pose keypoints (pixel coords + confidence)
+    boom: list[float]  # [x, y, conf]
+    mast_tip: list[float]  # [x, y, conf]
+    # Derived render-time fields (precomputed in Python pipeline)
+    anchor: list[int]  # [x, y]
+    scale: float
 
 
 @dataclass

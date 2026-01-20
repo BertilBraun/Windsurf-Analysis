@@ -17,7 +17,7 @@ from .visualization.annotation_drawer import Annotation, AnnotationDrawer
 
 from .tracking.detector import SurferDetector
 from .tracking.tracking import Tracker
-from .tracking.track_processing import TrackPostProcessing
+from .tracking.track_processing import TrackPostProcessing, prepare_renderable_tracks
 from .tracking.preprocessing.preprocessor import TrackPreProcessor
 from .tracking.iterative_ilp_tracker import IterativeILPTracker
 from .tracking.ilp_tracker import ILPTracker
@@ -221,6 +221,8 @@ def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Pat
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    render_tracks = prepare_renderable_tracks(tracks)
+
     metadata = Metadata(
         input_video_path=input_path.absolute().as_posix(),
         video_properties=VideoProperties(
@@ -243,11 +245,15 @@ def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Pat
                         bbox=[int(det.bbox.x1), int(det.bbox.y1), int(det.bbox.x2), int(det.bbox.y2)],
                         confidence=float(det.confidence),
                         interpolated=bool(det.interpolated),
+                        boom=[float(det.boom.point.x), float(det.boom.point.y), float(det.boom.conf)],
+                        mast_tip=[float(det.mast_tip.point.x), float(det.mast_tip.point.y), float(det.mast_tip.conf)],
+                        anchor=[int(det.anchor.x), int(det.anchor.y)],
+                        scale=float(det.scale),
                     )
-                    for det in track.sorted_detections
+                    for det in rtrack.sorted_detections
                 ],
             )
-            for track in tracks
+            for track, rtrack in zip(tracks, render_tracks)
         ],
     )
 

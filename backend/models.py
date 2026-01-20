@@ -29,11 +29,35 @@ class _FirestoreModel(BaseModel):
 
     model_config = ConfigDict(extra='ignore', frozen=True)
 
+class TrackDetection(_FirestoreModel):
+    time_percent: float
+    bbox: list[float]  # [x1,y1,x2,y2] normalized 0..1
+    anchor: list[float]  # [x,y] normalized 0..1
+    scale: float
+    confidence: float
+    interpolated: bool
+
+
+class TrackResult(_FirestoreModel):
+    track_id: int
+    start_percent: float
+    end_percent: float
+    start_time_seconds: float
+    duration_seconds: float
+    detections: list[TrackDetection]
+
+
+class StabilizationTransform(_FirestoreModel):
+    time_percent: float
+    dx: float
+    dy: float
+    da: float  # radians
+
 
 class JobResults(_FirestoreModel):
-    tracks: list[Any]
+    tracks: list[TrackResult]
     dominant_orientation: int
-    stabilization_transforms: list[Any]
+    stabilization_transforms: list[StabilizationTransform]
 
 
 class JobRecord(_FirestoreModel):

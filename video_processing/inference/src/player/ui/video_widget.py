@@ -1,21 +1,15 @@
 from __future__ import annotations
 
 import math
-from typing import Optional, Callable, Tuple
+from typing import Optional, Callable
 
 import numpy as np
-import cv2
 from PySide6.QtCore import Qt, QRect, QRectF, QSize, QTimer
 from PySide6.QtGui import QImage, QPainter, QPen, QColor
 from PySide6.QtWidgets import QWidget
 
 from ..core.player_state import PlayerState
 from ...settings import (
-    OUTPUT_WIDTH,
-    OUTPUT_HEIGHT,
-    TARGET_BBOX_HEIGHT_RATIO,
-    TARGET_BBOX_WIDTH_RATIO,
-    SMOOTHING_ALPHA,
     MIN_SCALE,
     MAX_SCALE,
 )
@@ -46,7 +40,6 @@ class VideoWidget(QWidget):
         super().__init__(parent)
         self.state = state
         self.current_frame_image: Optional[QImage] = None
-        self.current_frame_np: Optional[np.ndarray] = None
         self.setMinimumSize(640, 360)
         self.on_track_selected = on_track_selected
         # Hint to Qt that we fully paint the widget to avoid unnecessary clears
@@ -63,7 +56,6 @@ class VideoWidget(QWidget):
         self._pan_last_y: float = 0.0
 
         self._hud_text: Optional[str] = None
-        self._prev_scale_by_track_id: dict[int, float] = {}
         self._color_cache: dict[int, QColor] = {}
 
     def sizeHint(self) -> QSize:
@@ -71,7 +63,6 @@ class VideoWidget(QWidget):
 
     def set_frame(self, frame: np.ndarray) -> None:
         self.current_frame_image = _to_qimage(frame)
-        self.current_frame_np = frame
         self.update()
 
     def paintEvent(self, event):  # type: ignore[override]
@@ -89,11 +80,9 @@ class VideoWidget(QWidget):
             if det is not None:
                 # Render directly at target_rect size using high-quality OpenCV interpolation
                 painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-                x1, y1, x2, y2 = det.bbox
                 self._draw_detailed_with_padding(
                     painter,
-                    (int(x1), int(y1), int(x2), int(y2)),
-                    bool(getattr(det, 'interpolated', False)),
+                    det,
                     target_rect,
                 )
 
@@ -315,7 +304,6 @@ class VideoWidget(QWidget):
         self.ov_offset_x = 0.0
         self.ov_offset_y = 0.0
         self._hud_text = None
-        self._prev_scale_by_track_id.clear()
         self.hovered_track_id = None
         self.update()
 
@@ -401,53 +389,6 @@ class VideoWidget(QWidget):
 
         return QRect(int(x), int(y), int(new_w), int(new_h))
 
-    def _compute_detailed_source_rect(
-        self,
-        det_bbox: Tuple[int, int, int, int],
-        img_w: int,
-        img_h: int,
-        out_w: int,
-        out_h: int,
-    ) -> QRect:
-        x1, y1, x2, y2 = det_bbox
-        bbox_w = max(1, x2 - x1)
-        bbox_h = max(1, y2 - y1)
-        s_height = (TARGET_BBOX_HEIGHT_RATIO * out_h) / bbox_h
-        s_width = (TARGET_BBOX_WIDTH_RATIO * out_w) / bbox_w
-        s_inst = min(s_height, s_width)
-        s_inst = float(np.clip(s_inst, MIN_SCALE, MAX_SCALE))
-
-        track_id = self.state.current_track_id
-        if track_id is not None and 0.0 < SMOOTHING_ALPHA < 1.0:
-            prev = self._prev_scale_by_track_id.get(track_id)
-        else:
-            prev = None
-        if prev is not None and 0.0 < SMOOTHING_ALPHA < 1.0:
-            s = SMOOTHING_ALPHA * prev + (1.0 - SMOOTHING_ALPHA) * s_inst
-        else:
-            s = s_inst
-        if track_id is not None:
-            self._prev_scale_by_track_id[track_id] = s
-
-        # bbox centre in original image coords
-        cx = (x1 + x2) * 0.5
-        cy = (y1 + y2) * 0.5
-        # crop window in scaled-image coordinates
-        scx = cx * s
-        scy = cy * s
-        sx1 = scx - out_w * 0.5
-        sy1 = scy - out_h * 0.5
-        sx2 = sx1 + out_w
-        sy2 = sy1 + out_h
-        # map back to original image coords
-        ox1 = int(max(0, min(img_w, sx1 / s)))
-        oy1 = int(max(0, min(img_h, sy1 / s)))
-        ox2 = int(max(0, min(img_w, sx2 / s)))
-        oy2 = int(max(0, min(img_h, sy2 / s)))
-        rect = QRect(ox1, oy1, max(1, ox2 - ox1), max(1, oy2 - oy1))
-        # Ensure fully within image bounds while preserving aspect ratio
-        return self._clamp_rect_to_bounds_preserve_aspect(rect, QRect(0, 0, img_w, img_h))
-
     def _color_for_track(self, track_id: int) -> QColor:
         if track_id in self._color_cache:
             return self._color_cache[track_id]
@@ -467,79 +408,71 @@ class VideoWidget(QWidget):
     def _draw_detailed_with_padding(
         self,
         painter: QPainter,
-        det_bbox: Tuple[int, int, int, int],
-        det_interpolated: bool,
+        det,
         target_rect: QRect,
     ) -> None:
         if self.current_frame_image is None or self.current_frame_image.isNull():
             return
-        if self.current_frame_np is None:
-            return
-        frame = self.current_frame_np
-        img_h, img_w = frame.shape[:2]
-        out_w = max(1, int(target_rect.width()))
-        out_h = max(1, int(target_rect.height()))
 
-        x1, y1, x2, y2 = det_bbox
-        bbox_w = max(1, x2 - x1)
-        bbox_h = max(1, y2 - y1)
-        # Choose scale to respect height and width target ratios (match TS frontend logic)
-        s_height = (TARGET_BBOX_HEIGHT_RATIO * out_h) / bbox_h
-        s_width = (TARGET_BBOX_WIDTH_RATIO * out_w) / bbox_w
-        s_inst = min(s_height, s_width)
-        s_inst = float(np.clip(s_inst, MIN_SCALE, MAX_SCALE))
+        x1, y1, x2, y2 = det.bbox
+        det_interpolated = bool(getattr(det, 'interpolated', False))
+        # Scale/anchor are precomputed in the Python pipeline to make mast length constant per track.
+        s = float(np.clip(float(getattr(det, 'scale', 1.0)), MIN_SCALE, MAX_SCALE))
+        ax, ay = det.anchor
+        boom = getattr(det, 'boom', None)
+        mast_tip = getattr(det, 'mast_tip', None)
 
-        track_id = self.state.current_track_id
-        prev = self._prev_scale_by_track_id.get(track_id, None) if track_id is not None else None
-        if prev is not None and 0.0 < SMOOTHING_ALPHA < 1.0:
-            s = SMOOTHING_ALPHA * prev + (1.0 - SMOOTHING_ALPHA) * s_inst
-        else:
-            s = s_inst
-        if track_id is not None:
-            self._prev_scale_by_track_id[track_id] = s
+        # Detailed mode is purely track-relative: center on the precomputed anchor, and do not apply
+        # stabilization transforms (zoom amplifies residual stabilization noise too much).
+        vid_w = float(self.current_frame_image.width())
+        vid_h = float(self.current_frame_image.height())
 
-        # Compute crop in original image coords directly (avoid scaling full frame)
-        cx = (x1 + x2) * 0.5
-        cy = (y1 + y2) * 0.5
-        crop_w = out_w / s
-        crop_h = out_h / s
-        win_x1 = cx - crop_w / 2.0
-        win_y1 = cy - crop_h / 2.0
-        win_x2 = win_x1 + crop_w
-        win_y2 = win_y1 + crop_h
-        # Intersection with original image
-        src_x1 = int(max(0, np.floor(win_x1)))
-        src_y1 = int(max(0, np.floor(win_y1)))
-        src_x2 = int(min(img_w, np.ceil(win_x2)))
-        src_y2 = int(min(img_h, np.ceil(win_y2)))
-        # Destination placement within output, preserving scale s
-        dst_x1 = int(max(0, np.floor((src_x1 - win_x1) * s)))
-        dst_y1 = int(max(0, np.floor((src_y1 - win_y1) * s)))
-        dst_x2 = int(min(out_w, np.ceil((src_x2 - win_x1) * s)))
-        dst_y2 = int(min(out_h, np.ceil((src_y2 - win_y1) * s)))
-        copy_w = max(0, dst_x2 - dst_x1)
-        copy_h = max(0, dst_y2 - dst_y1)
+        # Anchor in centered image coords.
+        ax_c = float(ax) - vid_w * 0.5
+        ay_c = float(ay) - vid_h * 0.5
 
-        out_np = np.zeros((out_h, out_w, 3), dtype=np.uint8)
-        if copy_w > 0 and copy_h > 0:
-            src_roi = frame[src_y1:src_y2, src_x1:src_x2]
-            # Resize source ROI to destination size (copy_w x copy_h)
-            interp = cv2.INTER_LANCZOS4 if s > 1.0 else cv2.INTER_AREA
-            resized = cv2.resize(src_roi, (copy_w, copy_h), interpolation=interp)
-            out_np[dst_y1:dst_y2, dst_x1:dst_x2] = resized
+        painter.save()
+        painter.setClipRect(target_rect)
+        painter.fillRect(target_rect, QColor(0, 0, 0))
 
-        # Draw directly with no additional scaling
-        composed = _to_qimage(out_np)
-        painter.drawImage(target_rect, composed)
+        # Move origin to the center of the target rect.
+        painter.translate(
+            float(target_rect.x()) + float(target_rect.width()) * 0.5,
+            float(target_rect.y()) + float(target_rect.height()) * 0.5,
+        )
+        painter.scale(float(s), float(s))
+        painter.translate(-float(ax_c), -float(ay_c))
 
-        # Draw bbox overlay (in the composed output coordinate system)
-        rx1 = int((x1 - win_x1) * s)
-        ry1 = int((y1 - win_y1) * s)
-        rx2 = int((x2 - win_x1) * s)
-        ry2 = int((y2 - win_y1) * s)
-        w = max(1, rx2 - rx1)
-        h = max(1, ry2 - ry1)
+        is_upscale = float(s) > 1.0
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, is_upscale)
+        painter.drawImage(QRectF(-vid_w * 0.5, -vid_h * 0.5, vid_w, vid_h), self.current_frame_image)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+
+        # Draw bbox overlay (same coordinate system as the image).
+        rx1 = float(x1) - vid_w * 0.5
+        ry1 = float(y1) - vid_h * 0.5
+        rw = max(1.0, float(x2) - float(x1))
+        rh = max(1.0, float(y2) - float(y1))
         pen = QPen(QColor(249, 115, 22) if det_interpolated else QColor(16, 185, 129))
-        pen.setWidth(2)
+        pen.setWidthF(2.0 / max(1e-6, float(s)))
         painter.setPen(pen)
-        painter.drawRect(QRect(target_rect.x() + rx1, target_rect.y() + ry1, w, h))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(QRectF(rx1, ry1, rw, rh))
+
+        # Draw keypoints (for debugging/verification).
+        def _draw_kp(kp: list[float] | None, color_ok: QColor, color_low: QColor) -> None:
+            if not (isinstance(kp, list) and len(kp) >= 3):
+                return
+            px, py, conf = float(kp[0]), float(kp[1]), float(kp[2])
+            col = color_ok if conf >= 0.3 else color_low
+            cx = px - vid_w * 0.5
+            cy = py - vid_h * 0.5
+            r = 4.0 / max(1e-6, float(s))
+            painter.setPen(QPen(col))
+            painter.setBrush(col)
+            painter.drawEllipse(QRectF(cx - r, cy - r, 2.0 * r, 2.0 * r))
+
+        _draw_kp(boom if isinstance(boom, list) else getattr(det, 'boom', None), QColor(59, 130, 246), QColor(148, 163, 184))
+        _draw_kp(mast_tip if isinstance(mast_tip, list) else getattr(det, 'mast_tip', None), QColor(239, 68, 68), QColor(148, 163, 184))
+
+        painter.restore()

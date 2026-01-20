@@ -143,6 +143,15 @@ def ensure_tracks_pkl(
     tracks: list[TrackLite] = []
     for i, det in enumerate(raw_detections):
         frame_idx = int(det.frame_idx)
+        x1, y1, x2, y2 = (int(det.bbox.x1), int(det.bbox.y1), int(det.bbox.x2), int(det.bbox.y2))
+        cx = int((x1 + x2) * 0.5)
+        cy = int((y1 + y2) * 0.5)
+        boom = [float(det.boom.point.x), float(det.boom.point.y), float(det.boom.conf)]
+        mast_tip = [float(det.mast_tip.point.x), float(det.mast_tip.point.y), float(det.mast_tip.conf)]
+        if float(det.boom.conf) >= 0.3:
+            anchor = [int(det.boom.point.x), int(det.boom.point.y)]
+        else:
+            anchor = [int(cx), int(cy)]
         tracks.append(
             TrackLite(
                 track_id=int(i),
@@ -154,9 +163,13 @@ def ensure_tracks_pkl(
                 detections=[
                     DetectionLite(
                         frame_idx=frame_idx,
-                        bbox=[int(det.bbox.x1), int(det.bbox.y1), int(det.bbox.x2), int(det.bbox.y2)],
+                        bbox=[x1, y1, x2, y2],
                         confidence=float(det.confidence),
                         interpolated=False,
+                        boom=boom,
+                        mast_tip=mast_tip,
+                        anchor=anchor,
+                        scale=1.0,
                     )
                 ],
             )

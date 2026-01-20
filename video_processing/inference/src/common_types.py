@@ -51,6 +51,16 @@ class Point:
 
 
 @dataclass(frozen=True)
+class Keypoint:
+    point: Point
+    conf: float
+
+    @property
+    def is_visible(self) -> bool:
+        return float(self.conf) >= 0.3
+
+
+@dataclass(frozen=True)
 class BoundingBox:
     x1: int
     y1: int
@@ -190,6 +200,8 @@ class Detection:
     embedding: Embedding
     confidence: float
     frame_idx: FrameIndex
+    boom: Keypoint
+    mast_tip: Keypoint
     interpolated: bool = False
 
     def copy(self) -> Detection:
@@ -198,6 +210,8 @@ class Detection:
             embedding=self.embedding,
             confidence=self.confidence,
             frame_idx=self.frame_idx,
+            boom=self.boom,
+            mast_tip=self.mast_tip,
             interpolated=self.interpolated,
         )
 
@@ -205,12 +219,16 @@ class Detection:
         new_bbox = self.bbox.interpolate(other.bbox, alpha)
         new_embedding = self.embedding.interpolate(other.embedding, alpha)
         new_confidence = interpolate(self.confidence, other.confidence, alpha)
+        boom_pt = self.boom.point.interpolate(other.boom.point, alpha)
+        mast_tip_pt = self.mast_tip.point.interpolate(other.mast_tip.point, alpha)
 
         return Detection(
             bbox=new_bbox,
             embedding=new_embedding,
             confidence=new_confidence,
             frame_idx=frame_idx,
+            boom=Keypoint(point=boom_pt, conf=0.0),
+            mast_tip=Keypoint(point=mast_tip_pt, conf=0.0),
             interpolated=True,
         )
 
@@ -311,3 +329,49 @@ class Track:
 
     def __hash__(self) -> int:
         return hash((self.track_id, tuple(self.sorted_detections)))
+
+
+@dataclass(frozen=True)
+class RenderableDetection:
+    bbox: BoundingBox
+    confidence: float
+    frame_idx: FrameIndex
+    interpolated: bool
+    boom: Keypoint
+    mast_tip: Keypoint
+    anchor: Point
+    scale: float
+
+
+@dataclass
+class RenderableTrack:
+    track_id: TrackId
+    sorted_detections: list[RenderableDetection]
+
+    def __init__(self, track_id: TrackId, sorted_detections: list[RenderableDetection]):
+        self.track_id = track_id
+        self.sorted_detections = sorted(sorted_detections, key=lambda d: d.frame_idx)
+
+    @property
+    def start(self) -> RenderableDetection:
+        if not self.sorted_detections:
+            raise ValueError('Track has no detections.')
+        return self.sorted_detections[0]
+
+    @property
+    def end(self) -> RenderableDetection:
+        if not self.sorted_detections:
+            raise ValueError('Track has no detections.')
+        return self.sorted_detections[-1]
+
+    @property
+    def start_frame(self) -> FrameIndex:
+        return self.start.frame_idx
+
+    @property
+    def end_frame(self) -> FrameIndex:
+        return self.end.frame_idx
+
+    @property
+    def duration_frames(self) -> int:
+        return self.end_frame - self.start_frame

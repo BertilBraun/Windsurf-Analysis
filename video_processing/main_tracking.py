@@ -5,12 +5,12 @@ from typing import Sequence
 
 import modal
 
-from inference.src.common_types import BoundingBox, Track
+from inference.src.common_types import BoundingBox, Track, Keypoint, Point
 from inference.src.settings import REID_MODEL_TYPE
 from inference.src.tracking.detector import EmbeddingExtractor, RawDetection
 from inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
 from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
-from inference.src.tracking.track_processing import TrackPostProcessing
+from inference.src.tracking.track_processing import TrackPostProcessing, prepare_renderable_tracks
 from inference.src.tracking.tracking import Tracker
 from inference.src.util.video_io import VideoReader, get_video_properties
 from inference.src.util.timing import timeit
@@ -92,6 +92,7 @@ def embedding_extraction_and_tracking(
 
         print(f'{job_id}: Found {len(processed_tracks)} tracks')
 
+        render_tracks = prepare_renderable_tracks(processed_tracks)
         tracks = [
             {
                 'track_id': t.track_id,
@@ -108,13 +109,18 @@ def embedding_extraction_and_tracking(
                             clamp_percentage(d.bbox.x2 / props.width),
                             clamp_percentage(d.bbox.y2 / props.height),
                         ],
+                        'anchor': [
+                            clamp_percentage(d.anchor.x / props.width),
+                            clamp_percentage(d.anchor.y / props.height),
+                        ],
+                        'scale': float(d.scale),
                         'confidence': clamp_percentage(d.confidence),
                         'interpolated': d.interpolated,
                     }
                     for d in t.sorted_detections
                 ],
             }
-            for t in processed_tracks
+            for t in render_tracks
         ]
 
         with timeit(f'{job_id}: Stabilization Optimization'):
@@ -155,17 +161,17 @@ def _compute_masked_vidstab_transforms_and_crop_detections(
     *,
     mask_margin_px: int,
 ) -> tuple[list[Transform], list[RawDetection]]:
-    detections_by_frame: dict[int, list[tuple[BoundingBox, float]]] = defaultdict(list)
+    detections_by_frame: dict[int, list[tuple[BoundingBox, float, Keypoint, Keypoint]]] = defaultdict(list)
     for detection in raw_detections:
+        boom = detection['boom']
+        mast_tip = detection['mast_tip']
+        bbox = detection['bbox']
         detections_by_frame[int(detection['frame_idx'])].append(
             (
-                BoundingBox(
-                    x1=int(detection['bbox'][0]),
-                    y1=int(detection['bbox'][1]),
-                    x2=int(detection['bbox'][2]),
-                    y2=int(detection['bbox'][3]),
-                ),
+                BoundingBox(x1=int(bbox[0]), y1=int(bbox[1]), x2=int(bbox[2]), y2=int(bbox[3])),
                 float(detection['confidence']),
+                Keypoint(point=Point(int(boom[0]), int(boom[1])), conf=float(boom[2])),
+                Keypoint(point=Point(int(mast_tip[0]), int(mast_tip[1])), conf=float(mast_tip[2])),
             )
         )
 
@@ -178,7 +184,7 @@ def _compute_masked_vidstab_transforms_and_crop_detections(
             frame_idx = int(frame_idx)
             per_frame_dets = detections_by_frame.get(frame_idx, [])
 
-            excluded_bboxes = [([bbox.x1, bbox.y1, bbox.x2, bbox.y2]) for bbox, _ in per_frame_dets]
+            excluded_bboxes = [([bbox.x1, bbox.y1, bbox.x2, bbox.y2]) for bbox, _conf, _boom, _tip in per_frame_dets]
             transform = estimator.apply(
                 frame_idx=frame_idx,
                 frame_bgr=frame,
@@ -189,7 +195,7 @@ def _compute_masked_vidstab_transforms_and_crop_detections(
                 transforms.append(transform)
 
             # Extract crops for embedding in the same pass.
-            for bbox, confidence in per_frame_dets:
+            for bbox, confidence, boom_kp, tip_kp in per_frame_dets:
                 x1 = max(0, min(frame.shape[1], int(bbox.x1)))
                 y1 = max(0, min(frame.shape[0], int(bbox.y1)))
                 x2 = max(0, min(frame.shape[1], int(bbox.x2)))
@@ -202,6 +208,8 @@ def _compute_masked_vidstab_transforms_and_crop_detections(
                         confidence=confidence,
                         frame_idx=frame_idx,
                         crop=frame[y1:y2, x1:x2],
+                        boom=boom_kp,
+                        mast_tip=tip_kp,
                     )
                 )
 

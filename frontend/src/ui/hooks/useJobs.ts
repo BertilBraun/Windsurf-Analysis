@@ -264,6 +264,10 @@ export function useJobs(): UseJobsReturn {
                     for (const b of detection.bbox) {
                         _assertIsPercentage(b)
                     }
+                    for (const a of detection.anchor) {
+                        _assertIsPercentage(a)
+                    }
+                    assert(Number.isFinite(detection.scale))
                 }
             }
             for (const transform of data.stabilization_transforms) {

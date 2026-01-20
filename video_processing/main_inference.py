@@ -144,6 +144,8 @@ class InferenceModel:
                         'bbox': [d.bbox.x1, d.bbox.y1, d.bbox.x2, d.bbox.y2],
                         'confidence': d.confidence,
                         'frame_idx': d.frame_idx,
+                        'boom': [d.boom.point.x, d.boom.point.y, float(d.boom.conf)],
+                        'mast_tip': [d.mast_tip.point.x, d.mast_tip.point.y, float(d.mast_tip.conf)],
                     }
                     for d in raw_detections
                 ],

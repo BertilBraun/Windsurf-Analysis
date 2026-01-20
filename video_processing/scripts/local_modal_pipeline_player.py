@@ -22,14 +22,14 @@ def _add_video_processing_to_path() -> None:
 
 _add_video_processing_to_path()
 
-from inference.src.common_types import BoundingBox, Detection, Track  # noqa: E402
+from inference.src.common_types import BoundingBox, Detection, Keypoint, RenderableTrack, Track  # noqa: E402
 from inference.src.orientation_fixer import OrientationFixer  # noqa: E402
 from inference.src.player.core.player_state import DetectionLite, Metadata, TrackLite, VideoProperties  # noqa: E402
 from inference.src.settings import REID_MODEL_TYPE, YOLO_MODEL_PATH  # noqa: E402
 from inference.src.tracking.detector import EmbeddingExtractor, ObjectDetector, RawDetection  # noqa: E402
 from inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker  # noqa: E402
 from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor  # noqa: E402
-from inference.src.tracking.track_processing import TrackPostProcessing  # noqa: E402
+from inference.src.tracking.track_processing import TrackPostProcessing, prepare_renderable_tracks  # noqa: E402
 from inference.src.util.timing import timeit  # noqa: E402
 from inference.src.util.video_io import VideoReader, get_video_properties  # noqa: E402
 from inference.src.visualization.stabilize import (  # noqa: E402
@@ -146,9 +146,9 @@ def _crop_detections_from_video(
     *,
     limit_frames: int | None,
 ) -> list[RawDetection]:
-    dets_by_frame: dict[int, list[tuple[BoundingBox, float]]] = defaultdict(list)
+    dets_by_frame: dict[int, list[tuple[BoundingBox, float, Keypoint, Keypoint]]] = defaultdict(list)
     for d in raw_detections:
-        dets_by_frame[int(d.frame_idx)].append((d.bbox, float(d.confidence)))
+        dets_by_frame[int(d.frame_idx)].append((d.bbox, float(d.confidence), d.boom, d.mast_tip))
 
     out: list[RawDetection] = []
     with VideoReader(video_path) as reader:
@@ -156,7 +156,7 @@ def _crop_detections_from_video(
             frame_idx = int(frame_idx)
             if limit_frames is not None and frame_idx >= int(limit_frames):
                 break
-            for bbox, confidence in dets_by_frame.get(frame_idx, []):
+            for bbox, confidence, boom, mast_tip in dets_by_frame.get(frame_idx, []):
                 x1 = max(0, min(frame.shape[1], int(bbox.x1)))
                 y1 = max(0, min(frame.shape[0], int(bbox.y1)))
                 x2 = max(0, min(frame.shape[1], int(bbox.x2)))
@@ -169,6 +169,8 @@ def _crop_detections_from_video(
                         confidence=float(confidence),
                         frame_idx=frame_idx,
                         crop=frame[y1:y2, x1:x2],
+                        boom=boom,
+                        mast_tip=mast_tip,
                     )
                 )
     return out
@@ -192,7 +194,8 @@ def _compute_transforms(
     masked_block_size: int = int(STABLE_GFTT_BLOCK_SIZE),
 ) -> list[Transform]:
     if stabilizer == 'none':
-        return []
+        frames = get_video_properties(video_path).total_frames
+        return [Transform(0, 0, 0, i) for i in range(frames + 1)]
 
     if stabilizer == 'vidstab':
         # VidStab reads the full video file; we don't currently truncate to `limit_frames`.
@@ -242,7 +245,7 @@ def _compute_transforms(
     raise ValueError(f'Unknown stabilizer: {stabilizer}')
 
 
-def _save_tracks_metadata(tracks: list[Track], video_path: Path, output_dir: Path) -> Path:
+def _save_tracks_metadata(tracks: list[RenderableTrack], video_path: Path, output_dir: Path) -> Path:
     props = get_video_properties(video_path)
 
     metadata = Metadata(
@@ -267,6 +270,10 @@ def _save_tracks_metadata(tracks: list[Track], video_path: Path, output_dir: Pat
                         bbox=[int(det.bbox.x1), int(det.bbox.y1), int(det.bbox.x2), int(det.bbox.y2)],
                         confidence=float(det.confidence),
                         interpolated=bool(det.interpolated),
+                        boom=[float(det.boom.point.x), float(det.boom.point.y), float(det.boom.conf)],
+                        mast_tip=[float(det.mast_tip.point.x), float(det.mast_tip.point.y), float(det.mast_tip.conf)],
+                        anchor=[int(det.anchor.x), int(det.anchor.y)],
+                        scale=float(det.scale),
                     )
                     for det in track.sorted_detections
                 ],
@@ -495,7 +502,8 @@ def run_local_pipeline(
 
     # 6) Write metadata for local Qt player
     with timeit('output: write metadata'):
-        metadata_path = _save_tracks_metadata(tracks, upright_video, output_dir)
+        renderable_tracks = prepare_renderable_tracks(tracks)
+        metadata_path = _save_tracks_metadata(renderable_tracks, upright_video, output_dir)
         stabilization_transforms_path = _save_stabilization_transforms(
             transforms_by_frame,
             frame_count=frame_count,

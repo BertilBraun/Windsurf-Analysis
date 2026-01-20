@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from auth.firebase_auth import User, get_current_user
 from config import settings
-from models import JobPatch, JobStatus
+from models import JobPatch, JobStatus, TrackResult, StabilizationTransform
 from repos.jobs_repo import JobsRepo
 from repos.reports_repo import ReportType, ReportsRepo
 from repos.user_jobs_repo import UserJobsRepo
@@ -59,8 +58,8 @@ class JobListResponse(BaseModel):
 
 
 class JobDetail(JobSummaryItem):
-    tracks: list[Any]
-    stabilization_transforms: list[Any]
+    tracks: list[TrackResult]
+    stabilization_transforms: list[StabilizationTransform]
 
 
 class ReportRequest(BaseModel):

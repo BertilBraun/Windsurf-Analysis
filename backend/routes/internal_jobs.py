@@ -3,10 +3,10 @@ from __future__ import annotations
 from google.cloud import firestore
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from typing import Any, Literal
+from typing import Literal
 
 from auth.internal_auth import require_modal_secret
-from models import JobPatch, JobResults, JobStatus
+from models import JobPatch, JobResults, JobStatus, TrackResult, StabilizationTransform
 from repos.jobs_repo import JobsRepo
 from repos.user_repo import UserRepo
 from repos.user_jobs_repo import UserJobsRepo
@@ -24,9 +24,9 @@ class InternalStatusRequest(BaseModel):
 
 
 class JobsCompleteResults(BaseModel):
-    tracks: list[Any]
+    tracks: list[TrackResult]
     dominant_orientation: int
-    stabilization_transforms: list[Any]
+    stabilization_transforms: list[StabilizationTransform]
 
 
 class InternalResultsRequest(BaseModel):

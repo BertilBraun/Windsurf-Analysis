@@ -1,5 +1,5 @@
 import { clamp } from '../utils/clamp'
-import { MAX_SCALE, MIN_SCALE, TARGET_BBOX_HEIGHT_RATIO, TARGET_BBOX_WIDTH_RATIO } from './constants'
+import { MAX_SCALE, MIN_SCALE } from './constants'
 import { computeBaseRect } from './renderMath'
 import { drawRotatedToCanvas, getRotatedDimensions } from './rotation'
 import { PlayerState } from './state'
@@ -14,7 +14,13 @@ export type OverviewView = {
 }
 
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
-export type TimedBBox = { time_percent: number; bbox: [number, number, number, number]; interpolated: boolean }
+export type TimedBBox = {
+    time_percent: number
+    bbox: [number, number, number, number]
+    anchor: [number, number]
+    scale: number
+    interpolated: boolean
+}
 export type AnnotationPoint = { x: number; y: number }
 export type AnnotationStroke = {
     id: string
@@ -70,21 +76,12 @@ function getDetailedCropParams(
     det: TimedBBox,
     zoomMul: number = 1
 ): DetailedCropParams {
-    const [x1p, y1p, x2p, y2p] = det.bbox
-    const x1 = x1p * srcWidth
-    const y1 = y1p * srcHeight
-    const x2 = x2p * srcWidth
-    const y2 = y2p * srcHeight
-    const bboxW = Math.max(1, x2 - x1)
-    const bboxH = Math.max(1, y2 - y1)
+    // New pipeline: crop is centered on the pose-derived anchor and zoomed by the precomputed scale.
+    // BBox is kept only for overlays/hit-testing.
+    const s = clamp(det.scale * Math.max(1e-6, zoomMul), MIN_SCALE, MAX_SCALE)
 
-    const sHeight = (TARGET_BBOX_HEIGHT_RATIO * outputHeight) / bboxH
-    const sWidth = (TARGET_BBOX_WIDTH_RATIO * outputWidth) / bboxW
-    const sBase = clamp(Math.min(sHeight, sWidth), MIN_SCALE, MAX_SCALE)
-    const s = clamp(sBase * Math.max(1e-6, zoomMul), MIN_SCALE, MAX_SCALE)
-
-    const cx = (x1 + x2) * 0.5
-    const cy = (y1 + y2) * 0.5
+    const cx = det.anchor[0] * srcWidth
+    const cy = det.anchor[1] * srcHeight
     const cropW = outputWidth / s
     const cropH = outputHeight / s
     const winX1 = cx - cropW / 2

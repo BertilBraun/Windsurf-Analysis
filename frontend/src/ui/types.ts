@@ -32,6 +32,8 @@ export type JobDetail = JobSummary & {
 export type TrackDetection = {
     time_percent: number
     bbox: [number, number, number, number]
+    anchor: [number, number]
+    scale: number
     confidence: number
     interpolated: boolean
 }

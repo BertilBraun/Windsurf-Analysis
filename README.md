@@ -150,8 +150,8 @@ MIN_FRAME_PERCENTAGE = 20
 BATCH_SIZE = 32
 
 # Player detailed-view rendering
-TARGET_BBOX_HEIGHT_RATIO = 0.5
-SMOOTHING_ALPHA = 0.2
+# Detailed mode is centered by pose-derived `anchor` and zoomed by `scale`
+# (both are emitted per-detection in job results).
 MIN_SCALE = 0.5
 MAX_SCALE = 3.0
 ```
