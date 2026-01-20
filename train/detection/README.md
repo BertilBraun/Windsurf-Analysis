@@ -150,6 +150,22 @@ Train including pseudo labels (copied into the temp dataset with filename prefix
 python train_pose.py --src ./windsurf_dataset --pose ./pose_projects/boom_mast_v1 --include-pseudo --pseudo-frac 0.5 --seed 0
 ```
 
+Checkpoint saving (every 50 epochs by default):
+- Detection trainer: `python train.py ... --save-period 50`
+- Pose trainer (full-frame): `python train_pose.py ... --save-period 50`
+- Pose trainer (crops): `python train/pose/train.py ... --save-period 50`
+
+Compare multiple pose checkpoints (renders only predicted crops in a grid):
+```bash
+python compare_pose_checkpoints_grid.py --run train/detection/runs/pose_seed200 --epochs 50 100 150 200 --images ./windsurf_dataset --out ./tmp/checkpoint_grids
+python compare_pose_checkpoints_grid.py --run train/detection/runs/pose_seed200 --epochs 50 100 150 200 --video ../../tmp/ingress/some_video.mp4 --out ./tmp/checkpoint_grids
+```
+
+Sanity-check that pose labels reuse the original bbox labels (confirms pseudo labeling is not writing predicted bboxes):
+```bash
+python check_pose_label_consistency.py --src ./windsurf_dataset --pose ./pose_projects/boom_mast_v1 --label-source both
+```
+
 ## Quickstart
 You can copy and run the helper script from this folder:
 ```bash
