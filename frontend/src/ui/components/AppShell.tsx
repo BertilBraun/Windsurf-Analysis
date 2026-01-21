@@ -21,6 +21,7 @@ export const AppShellLayout: React.FC = () => {
                             <TopNav to="/analyzer" label={t('components.appShell.nav.analyzer')} />
                             <TopNav to="/pricing" label={t('components.appShell.nav.pricing')} />
                             <TopNav to="/faq" label={t('components.appShell.nav.faq')} />
+                            <TopNav to="/technical" label={t('components.appShell.nav.technical')} />
                         </nav>
                         <LanguageSwitcher />
                     </div>

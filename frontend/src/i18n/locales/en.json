@@ -119,7 +119,8 @@
                 "ariaLabel": "Primary navigation",
                 "faq": "FAQ",
                 "home": "Home",
-                "pricing": "Pricing"
+                "pricing": "Pricing",
+                "technical": "Technical"
             }
         },
         "ingressWidget": {
@@ -663,6 +664,15 @@
             "intro": "GybeLock is currently in an early testing phase — simple and free while we improve tracking quality.",
             "lede": "GybeLock is built for <strong>beach-shot / shore-shot</strong> windsurf videos (tele/zoom from land). It is <strong>not</strong> designed for GoPro/action-cam POV footage.",
             "title": "Pricing"
+        },
+        "technical": {
+            "actions": {
+                "github": "GitHub repo"
+            },
+            "error": "Failed to load technical doc: {{message}}",
+            "loading": "Loading…",
+            "subtitle": "Implementation notes, algorithms, and system architecture for this project.",
+            "title": "Technical deep dive"
         },
         "signup": {
             "actions": {
