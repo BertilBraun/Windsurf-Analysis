@@ -49,7 +49,7 @@ def _detections_to_initial_tracks(detections: list[Detection]) -> list[Track]:
 
 
 def _build_metadata(tracks: list[Track], input_path: Path, video_props: VideoInfo) -> Metadata:
-    render_tracks = prepare_renderable_tracks(tracks)
+    render_tracks = prepare_renderable_tracks(tracks, video_height=props.height)
     return Metadata(
         input_video_path=input_path.absolute().as_posix(),
         video_properties=VideoProperties(
@@ -99,7 +99,7 @@ def _save_golden_metadata(
 
 
 def _to_tracklites(tracks: list[Track], video_props: VideoInfo) -> list[TrackLite]:
-    render_tracks = prepare_renderable_tracks(tracks)
+    render_tracks = prepare_renderable_tracks(tracks, video_height=props.height)
     out: list[TrackLite] = []
     for t, rt in zip(tracks, render_tracks):
         out.append(

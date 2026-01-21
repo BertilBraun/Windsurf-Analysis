@@ -1,5 +1,5 @@
 import { clamp } from '../utils/clamp'
-import { MAX_SCALE, MIN_SCALE } from './constants'
+import { MAX_CROP_NORM, MIN_CROP_NORM } from './constants'
 import { computeBaseRect } from './renderMath'
 import { drawRotatedToCanvas, getRotatedDimensions } from './rotation'
 import { PlayerState } from './state'
@@ -76,14 +76,25 @@ function getDetailedCropParams(
     det: TimedBBox,
     zoomMul: number = 1
 ): DetailedCropParams {
-    // New pipeline: crop is centered on the pose-derived anchor and zoomed by the precomputed scale.
+    // Crop is centered on the pose-derived anchor. `det.scale` is the normalized crop height (0..1)
+    // relative to the rotated source video height, so the crop can be derived without knowing the viewport.
     // BBox is kept only for overlays/hit-testing.
-    const s = clamp(det.scale * Math.max(1e-6, zoomMul), MIN_SCALE, MAX_SCALE)
+
+    const cropHNorm = clamp(det.scale, MIN_CROP_NORM, MAX_CROP_NORM)
+    const z = Math.max(1e-6, zoomMul)
+
+    // Apply user zoom as an additional "zoom in/out" on the crop window.
+    let cropH = (cropHNorm * srcHeight) / z
+
+    // Keep crop within source bounds while maintaining viewport aspect ratio.
+    const maxCropHFromWidth = (srcWidth * outputHeight) / Math.max(1, outputWidth)
+    cropH = clamp(cropH, 1, Math.min(srcHeight, maxCropHFromWidth))
+
+    const s = outputHeight / cropH
 
     const cx = det.anchor[0] * srcWidth
     const cy = det.anchor[1] * srcHeight
     const cropW = outputWidth / s
-    const cropH = outputHeight / s
     const winX1 = cx - cropW / 2
     const winY1 = cy - cropH / 2
     const winX2 = winX1 + cropW

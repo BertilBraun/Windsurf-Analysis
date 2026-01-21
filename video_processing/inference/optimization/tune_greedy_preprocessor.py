@@ -39,7 +39,7 @@ def _detections_to_initial_tracks(dets: list[Detection]) -> list[Track]:
 
 
 def _to_tracklites(tracks: list[Track], video_props: VideoInfo) -> list[TrackLite]:
-    render_tracks = prepare_renderable_tracks(tracks)
+    render_tracks = prepare_renderable_tracks(tracks, video_height=props.height)
     out: list[TrackLite] = []
     for t, rt in zip(tracks, render_tracks):
         out.append(

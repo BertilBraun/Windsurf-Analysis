@@ -92,7 +92,7 @@ def embedding_extraction_and_tracking(
 
         print(f'{job_id}: Found {len(processed_tracks)} tracks')
 
-        render_tracks = prepare_renderable_tracks(processed_tracks)
+        render_tracks = prepare_renderable_tracks(processed_tracks, video_height=props.height)
         tracks = [
             {
                 'track_id': t.track_id,

@@ -68,7 +68,7 @@ def calculate_anchors(detections: list[Detection], *, missing_grace_frames: int)
     Compute per-frame anchors for a dense, per-frame list of detections.
 
     Behavior:
-      - Prefer boom keypoint when visible.
+      - Prefer a point along the mast segment when boom is visible.
       - Short gaps (<= missing_grace_frames) between two visible boom keypoints are interpolated (anchor->anchor).
       - Longer missing spans blend to/from bbox centers over missing_grace_frames to avoid snapping.
       - Final anchors are smoothed with a fixed weighted window [prev:1, curr:4, next:0.5].
@@ -77,7 +77,109 @@ def calculate_anchors(detections: list[Detection], *, missing_grace_frames: int)
 
     bbox_centers = [d.bbox.center for d in detections]
     boom_vis = [d.boom.is_visible for d in detections]
+    mast_vis = [d.mast_tip.is_visible for d in detections]
     visible_indices = [i for i, v in enumerate(boom_vis) if v]
+
+    bbox_top_y = [int(d.bbox.y1) for d in detections]
+    boom_or_center_x = [
+        int(d.boom.point.x) if boom_vis[i] else int(bbox_centers[i].x) for i, d in enumerate(detections)
+    ]
+
+    def proxy_mast_tip(i: int) -> Point:
+        # Proxy when the mast tip keypoint isn't visible: use bbox top edge with a reasonable X.
+        return Point(int(boom_or_center_x[i]), int(bbox_top_y[i]))
+
+    def fill_mast_tip_points() -> list[Point]:
+        """
+        Build a dense per-frame mast-tip point series, using:
+          - visible mast tips when available,
+          - interpolation for short gaps,
+          - bbox-top proxy for long gaps, with interpolation into/out of proxy around re-appearance.
+        """
+        grace = int(missing_grace_frames)
+        tip_vis = [bool(v) for v in mast_vis]
+        visible_tip_indices = [i for i, v in enumerate(tip_vis) if v]
+
+        # Default: proxy everywhere.
+        tip: list[Point] = [proxy_mast_tip(i) for i in range(len(detections))]
+        if not visible_tip_indices:
+            return tip
+
+        # Place visible tips.
+        for i in visible_tip_indices:
+            tip[i] = detections[i].mast_tip.point
+
+        # Interpolate short gaps between visible tips.
+        for a_i, b_i in zip(visible_tip_indices[:-1], visible_tip_indices[1:]):
+            gap = b_i - a_i - 1
+            if 0 < gap <= grace:
+                p0 = detections[a_i].mast_tip.point
+                p1 = detections[b_i].mast_tip.point
+                for k in range(1, gap + 1):
+                    t = float(k) / float(gap + 1)
+                    tip[a_i + k] = p0.interpolate(p1, t)
+
+        # Leading: if first visible is far away, interpolate proxy->tip over the last `grace` frames before it.
+        first = visible_tip_indices[0]
+        if first > grace:
+            start_idx = first - grace
+            p0 = proxy_mast_tip(start_idx)
+            p1 = detections[first].mast_tip.point
+            for idx in range(start_idx, first):
+                t = float(idx - start_idx) / float(grace)
+                tip[idx] = p0.interpolate(p1, t)
+
+        # Trailing: if last visible is far away from the end, interpolate tip->proxy over the next `grace` frames.
+        last = visible_tip_indices[-1]
+        trailing = (len(detections) - 1) - last
+        if trailing > grace:
+            end_idx = last + grace
+            p0 = detections[last].mast_tip.point
+            p1 = proxy_mast_tip(end_idx)
+            for idx in range(last + 1, end_idx + 1):
+                t = float(idx - last) / float(grace)
+                tip[idx] = p0.interpolate(p1, t)
+
+        # Internal long gaps: ease out to proxy and back in from proxy.
+        for a_i, b_i in zip(visible_tip_indices[:-1], visible_tip_indices[1:]):
+            gap = b_i - a_i - 1
+            if gap <= grace:
+                continue
+
+            out_end = min(len(detections) - 1, a_i + grace)
+            in_start = max(0, b_i - grace)
+
+            # Ease tip[a_i] -> proxy(out_end)
+            p0 = detections[a_i].mast_tip.point
+            p1 = proxy_mast_tip(out_end)
+            for idx in range(a_i + 1, out_end + 1):
+                t = float(idx - a_i) / float(grace)
+                tip[idx] = p0.interpolate(p1, t)
+
+            # Middle: proxy (already default).
+
+            # Ease proxy(in_start) -> tip[b_i]
+            p0 = proxy_mast_tip(in_start)
+            p1 = detections[b_i].mast_tip.point
+            for idx in range(in_start, b_i):
+                t = float(idx - in_start) / float(grace)
+                tip[idx] = p0.interpolate(p1, t)
+
+        return tip
+
+    filled_mast_tip = fill_mast_tip_points()
+
+    def preferred_anchor(i: int) -> Point:
+        # With a centered crop, anchoring on the boom can cut off the mast tip (boom is close to one end of the mast).
+        # Use a point along the mast segment; when the true mast tip isn't visible, `filled_mast_tip` eases into a
+        # bbox-top proxy and back out, avoiding large jumps when the mast reappears.
+        if boom_vis[i]:
+            tip = filled_mast_tip[i]
+            boom = detections[i].boom.point
+            # Bias strongly towards the boom so the anchor stays close to the rider/boom while
+            # still leaving headroom for the mast tip in the crop.
+            return tip.interpolate(boom, 0.85)
+        return bbox_centers[i]
 
     if not visible_indices:
         return _anchor_weighted(bbox_centers)
@@ -85,14 +187,14 @@ def calculate_anchors(detections: list[Detection], *, missing_grace_frames: int)
     anchors = list(bbox_centers)
     visible_set = set(visible_indices)
     for i in visible_indices:
-        anchors[i] = detections[i].boom.point
+        anchors[i] = preferred_anchor(i)
 
     short_gap_indices: set[int] = set()
     for a_i, b_i in zip(visible_indices[:-1], visible_indices[1:]):
         gap = b_i - a_i - 1
         if 0 < gap <= missing_grace_frames:
-            p0 = detections[a_i].boom.point
-            p1 = detections[b_i].boom.point
+            p0 = preferred_anchor(a_i)
+            p1 = preferred_anchor(b_i)
             for k in range(1, gap + 1):
                 t = float(k) / float(gap + 1)
                 idx = a_i + k
@@ -119,7 +221,7 @@ def calculate_anchors(detections: list[Detection], *, missing_grace_frames: int)
     if first > missing_grace_frames:
         start_idx = first - missing_grace_frames
         start_pt = bbox_centers[start_idx]
-        end_pt = detections[first].boom.point
+        end_pt = preferred_anchor(first)
         for idx in range(start_idx, first):
             if idx in visible_set or idx in short_gap_indices:
                 continue
@@ -141,7 +243,7 @@ def calculate_anchors(detections: list[Detection], *, missing_grace_frames: int)
             t = float(idx - a_i) / float(missing_grace_frames)
             set_out(
                 idx,
-                detections[a_i].boom.point.interpolate(out_target, t),
+                preferred_anchor(a_i).interpolate(out_target, t),
                 w=float(missing_grace_frames - (idx - a_i) + 1),
             )
 
@@ -154,7 +256,7 @@ def calculate_anchors(detections: list[Detection], *, missing_grace_frames: int)
             t = float(idx - in_start_idx) / float(missing_grace_frames)
             set_in(
                 idx,
-                in_start.interpolate(detections[b_i].boom.point, t),
+                in_start.interpolate(preferred_anchor(b_i), t),
                 w=float(missing_grace_frames - (b_i - idx) + 1),
             )
 
@@ -175,7 +277,7 @@ def calculate_anchors(detections: list[Detection], *, missing_grace_frames: int)
             t = float(idx - last) / float(missing_grace_frames)
             set_out(
                 idx,
-                detections[last].boom.point.interpolate(out_target, t),
+                preferred_anchor(last).interpolate(out_target, t),
                 w=float(missing_grace_frames - (idx - last) + 1),
             )
         # Beyond out_target_idx stays at bbox centers (default).
@@ -205,16 +307,22 @@ def calculate_scales(
     *,
     missing_grace_frames: int,
     mast_smooth_radius: int,
+    video_height: int,
+    target_mast_fill: float = 0.75,
+    target_bbox_fill: float = 0.9,
 ) -> list[float]:
     """
-    Compute per-frame scaling factors for a dense, per-frame list of detections.
+    Compute per-frame normalized crop height fractions (0..1) for a dense, per-frame list of detections.
 
     The "length" signal is preferred as dist(boom, mast_tip) when both keypoints are visible.
     Missing spans are filled with a fallback using bbox top edge and anchors; then smoothed.
-    Scales are normalized per-track so the reference mast length is constant across frames.
+    The resulting crop height is chosen so the mast occupies ~target_mast_fill of the crop height.
     """
     assert missing_grace_frames > 0
     assert mast_smooth_radius > 0
+    assert video_height > 0
+    assert 0.0 < float(target_mast_fill) < 1.0
+    assert 0.0 < float(target_bbox_fill) <= 1.0
     grace = int(missing_grace_frames)
 
     boom_vis = [d.boom.is_visible for d in detections]
@@ -230,52 +338,53 @@ def calculate_scales(
         return float(abs(int(anchors[i].y) - int(detections[i].bbox.y1)))
 
     visible_len_indices = [i for i, v in enumerate(len_vis) if v]
-    if not visible_len_indices:
-        filled_len = [bbox_fallback_len(i) for i in range(len(detections))]
-    else:
-        filled_len: list[float] = [bbox_fallback_len(i) for i in range(len(detections))]
+    filled_len = [bbox_fallback_len(i) for i in range(len(detections))]
+    if visible_len_indices:
         for i in visible_len_indices:
-            assert raw_len[i] is not None
-            filled_len[i] = float(raw_len[i])
+            length = raw_len[i]
+            assert length is not None
+            filled_len[i] = length
 
         # interpolate short gaps between visible lengths
         for a_i, b_i in zip(visible_len_indices[:-1], visible_len_indices[1:]):
-            gap = b_i - a_i - 1
+            gap = b_i - a_i
             if 0 < gap <= grace:
-                v0 = float(filled_len[a_i])
-                v1 = float(filled_len[b_i])
-                for k in range(1, gap + 1):
-                    t = float(k) / float(gap + 1)
-                    filled_len[a_i + k] = float(interpolate(v0, v1, t))
+                v0 = filled_len[a_i]
+                v1 = filled_len[b_i]
+                for k in range(1, gap):
+                    t = float(k) / float(gap)
+                    filled_len[a_i + k] = interpolate(v0, v1, t)
 
         # trailing missing: hold last visible up to grace, then bbox fallback
         last = visible_len_indices[-1]
         for i in range(last + 1, len(detections)):
             if (i - last) <= grace:
-                filled_len[i] = float(filled_len[last])
+                filled_len[i] = filled_len[last]
             else:
                 filled_len[i] = bbox_fallback_len(i)
 
     smoothed_len = _smooth_mean(filled_len, int(mast_smooth_radius))
-    ref_candidates = [smoothed_len[i] for i in range(len(detections)) if len_vis[i]]
-    ref_len = _median(ref_candidates if ref_candidates else smoothed_len)
-    ref_len = max(1.0, float(ref_len))
-
-    return [float(ref_len / max(1.0, float(length))) for length in smoothed_len]
+    crop_h_px_mast = [float(length) / target_mast_fill for length in smoothed_len]
+    crop_h_px_bbox = [float(d.bbox.height) / target_bbox_fill for d in detections]
+    crop_h_px = [max(hm, hb, 1.0) for hm, hb in zip(crop_h_px_mast, crop_h_px_bbox)]
+    crop_h_norm = [float(h) / float(video_height) for h in crop_h_px]
+    return [max(1e-6, min(1.0, v)) for v in crop_h_norm]
 
 
 def prepare_renderable_tracks(
     tracks: list[Track],
     *,
+    video_height: int,
     missing_grace_frames: int = 5,
     mast_smooth_radius: int = 15,
+    target_mast_fill: float = 0.75,
 ) -> list[RenderableTrack]:
     """
     Post-processing step for the rendering pipeline.
 
     Produces RenderableTrack/RenderableDetection objects with stable per-frame:
       - anchor (Point)
-      - scale (float)  (normalized so mast length is constant per track)
+      - scale (float)  (normalized crop height fraction, 0..1)
     """
     out_tracks: list[RenderableTrack] = []
     for track in tracks:
@@ -291,6 +400,8 @@ def prepare_renderable_tracks(
             anchors,
             missing_grace_frames=missing_grace_frames,
             mast_smooth_radius=mast_smooth_radius,
+            video_height=video_height,
+            target_mast_fill=target_mast_fill,
         )
 
         out_tracks.append(

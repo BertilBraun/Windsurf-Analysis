@@ -502,7 +502,7 @@ def run_local_pipeline(
 
     # 6) Write metadata for local Qt player
     with timeit('output: write metadata'):
-        renderable_tracks = prepare_renderable_tracks(tracks)
+        renderable_tracks = prepare_renderable_tracks(tracks, video_height=props.height)
         metadata_path = _save_tracks_metadata(renderable_tracks, upright_video, output_dir)
         stabilization_transforms_path = _save_stabilization_transforms(
             transforms_by_frame,

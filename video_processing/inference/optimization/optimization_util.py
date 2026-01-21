@@ -333,7 +333,7 @@ class SharedQueueWorkerPool(Generic[T]):
     def __init__(self, *, worker_fn: Callable[[str, Dict[str, object]], T], workers: int) -> None:
         self._ctx = mp.get_context('spawn')
         self._out_q = self._ctx.Queue()
-        self._procs: list[mp.Process] = []
+        self._processes: list[mp.Process] = []
         self._in_qs: list[Any] = []
         self._closed = False
 
@@ -343,7 +343,7 @@ class SharedQueueWorkerPool(Generic[T]):
             self._in_qs.append(in_q)
             p = self._ctx.Process(target=_queue_worker_loop, args=(in_q, self._out_q, worker_fn), daemon=True)
             p.start()
-            self._procs.append(p)
+            self._processes.append(p)  # type: ignore
 
     def _worker_index_for_path(self, path: str) -> int:
         # Deterministic routing to preserve per-process caches (independent of Python's hash randomization).
@@ -359,12 +359,12 @@ class SharedQueueWorkerPool(Generic[T]):
                 q.put(None)
             except Exception:
                 pass
-        for p in self._procs:
+        for p in self._processes:
             try:
                 p.join(timeout=5)
             except Exception:
                 pass
-        for p in self._procs:
+        for p in self._processes:
             if p.is_alive():
                 try:
                     p.kill()

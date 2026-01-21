@@ -9,10 +9,9 @@ from PySide6.QtGui import QImage, QPainter, QPen, QColor
 from PySide6.QtWidgets import QWidget
 
 from ..core.player_state import PlayerState
-from ...settings import (
-    MIN_SCALE,
-    MAX_SCALE,
-)
+
+MIN_CROP_NORM = 0.05
+MAX_CROP_NORM = 1.0
 
 
 def _to_qimage(frame: np.ndarray) -> QImage:
@@ -416,8 +415,7 @@ class VideoWidget(QWidget):
 
         x1, y1, x2, y2 = det.bbox
         det_interpolated = bool(getattr(det, 'interpolated', False))
-        # Scale/anchor are precomputed in the Python pipeline to make mast length constant per track.
-        s = float(np.clip(float(getattr(det, 'scale', 1.0)), MIN_SCALE, MAX_SCALE))
+        # `det.scale` is the normalized crop height (0..1) relative to the source video height.
         ax, ay = det.anchor
         boom = getattr(det, 'boom', None)
         mast_tip = getattr(det, 'mast_tip', None)
@@ -426,6 +424,13 @@ class VideoWidget(QWidget):
         # stabilization transforms (zoom amplifies residual stabilization noise too much).
         vid_w = float(self.current_frame_image.width())
         vid_h = float(self.current_frame_image.height())
+
+        crop_h_norm = float(np.clip(float(getattr(det, 'scale', 1.0)), MIN_CROP_NORM, MAX_CROP_NORM))
+        crop_h = float(crop_h_norm * vid_h)
+        # Ensure crop fits source bounds while maintaining target aspect ratio.
+        max_crop_h_from_width = float(vid_w * float(target_rect.height()) / max(1.0, float(target_rect.width())))
+        crop_h = float(np.clip(crop_h, 1.0, min(vid_h, max_crop_h_from_width)))
+        s = float(float(target_rect.height()) / max(1e-6, crop_h))
 
         # Anchor in centered image coords.
         ax_c = float(ax) - vid_w * 0.5
@@ -458,6 +463,14 @@ class VideoWidget(QWidget):
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRect(QRectF(rx1, ry1, rw, rh))
+
+        # Anchor indicator (amber): draw at anchor position in *image-centered* coords.
+        # The current transform maps (ax_c, ay_c) to the center of `target_rect`.
+        r_anchor = 5.0 / max(1e-6, float(s))
+        col_anchor = QColor(234, 179, 8)  # amber
+        painter.setPen(QPen(col_anchor))
+        painter.setBrush(col_anchor)
+        painter.drawEllipse(QRectF(ax_c - r_anchor, ay_c - r_anchor, 2.0 * r_anchor, 2.0 * r_anchor))
 
         # Draw keypoints (for debugging/verification).
         def _draw_kp(kp: list[float] | None, color_ok: QColor, color_low: QColor) -> None:
