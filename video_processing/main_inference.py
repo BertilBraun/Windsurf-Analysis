@@ -75,11 +75,12 @@ def send_complete(
         ).raise_for_status()
     except Exception as e:
         print(f'Error posting complete webhook: {e}')
+        send_progress(job_id, 'failed')
 
 
 def send_progress(
     job_id: str,
-    status: Literal['orientation', 'stabilization', 'detection', 'appearance', 'tracking'],
+    status: Literal['orientation', 'stabilization', 'detection', 'appearance', 'tracking', 'failed'],
 ):
     try:
         requests.post(
