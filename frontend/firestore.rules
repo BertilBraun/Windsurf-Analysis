@@ -37,11 +37,6 @@ service cloud.firestore {
     match /jobs/{jobId} {
       allow read: if hasActiveUserJob(jobId) && jobNotDeleted();
       allow create, update, delete: if false;
-
-      // Results are fetched via your protected API, not directly from the client.
-      match /results/{docId} {
-        allow read, write: if false;
-      }
     }
 
     // Users are accessed via your protected API (backend/routes/users.py).

@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-from db.firestore_client import jobs, now, results
+from config import settings
+from db.firestore_client import jobs, now
 from models import JobPatch, JobRecord, JobResults, JobStatus
 from google.cloud import firestore
 from fastapi import HTTPException
+from storage.gcs_json import download_json, upload_json
 
 
 class JobsRepo:
+    def _results_object_name(self, job_id: str) -> str:
+        # Keep deterministic and non-user-specific because jobs are keyed by content checksum.
+        if '/' in job_id or '\\' in job_id:
+            raise ValueError(f'Invalid job id: {job_id!r}')
+        return f'results/{job_id}.json'
+
     def get_job(self, job_id: str) -> JobRecord:
         snap = jobs.document(job_id).get()
         if not snap.exists:
@@ -56,10 +64,22 @@ class JobsRepo:
 
     # Results
     def set_results(self, job_id: str, job_results: JobResults) -> None:
-        results(job_id).set(job_results.model_dump(mode='json'))
+        bucket = settings.firebase_storage_bucket
+        if not bucket:
+            raise HTTPException(status_code=500, detail='FIREBASE_STORAGE_BUCKET is not configured')
+
+        upload_json(
+            bucket=bucket,
+            object_name=self._results_object_name(job_id),
+            payload=job_results.model_dump(mode='json'),
+        )
 
     def get_results(self, job_id: str) -> JobResults | None:
-        snap = results(job_id).get()
-        if not snap.exists:
+        bucket = settings.firebase_storage_bucket
+        if not bucket:
+            raise HTTPException(status_code=500, detail='FIREBASE_STORAGE_BUCKET is not configured')
+
+        payload = download_json(bucket=bucket, object_name=self._results_object_name(job_id))
+        if payload is None:
             return None
-        return JobResults.model_validate(snap.to_dict() or {})
+        return JobResults.model_validate(payload)

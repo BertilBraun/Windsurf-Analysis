@@ -1,0 +1,28 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Default: deny everything unless explicitly allowed below.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Client uploads (browser -> Firebase Storage).
+    match /uploads/{uid}/{fileName} {
+      allow write: if signedIn() && request.auth.uid == uid;
+      allow read: if false;
+    }
+
+    // Backend-only artifacts (Admin SDK / service accounts bypass Storage Rules).
+    match /processed/{path=**} {
+      allow read, write: if false;
+    }
+
+    match /results/{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

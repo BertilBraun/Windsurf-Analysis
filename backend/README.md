@@ -39,6 +39,10 @@ gcloud run deploy backend \
 - `MODAL_TRIGGER_BASE_URL`: Modal trigger web endpoint base URL (used to start processing).
 - `FIREBASE_STORAGE_BUCKET`: bucket name, e.g. `gybelock-00.appspot.com` (used to build `gs://...` URIs).
 
+### Job results storage
+Job results are written to Firebase Storage / GCS as JSON (instead of Firestore subcollections) to avoid Firestore document size limits.
+By default the backend uses `gs://$FIREBASE_STORAGE_BUCKET/results/{job_id}.json`.
+
 ### CORS (calling from Firebase Hosting)
 If your frontend is hosted on Firebase (e.g. `https://gybelock-00.web.app`) and you call this backend from the browser,
 the backend must allow that origin via CORS. Configure `allowed_origins` in `main.py` and redeploy.
