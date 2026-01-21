@@ -6,61 +6,61 @@
         {
             "label": "evaluate_tracker",
             "type": "shell",
-            "command": "python server/inference/optimization/evaluate_tracker.py --golden-dir ${input:golden-dir} --tracker ${input:tracker}",
+            "command": "python video_processing/inference/optimization/evaluate_tracker.py --golden-dir ${input:golden-dir} --tracker ${input:tracker}",
             "problemMatcher": []
         },
         {
             "label": "annotate_tracklets",
             "type": "shell",
-            "command": "python server/inference/optimization/annotate_tracklets.py ${input:video-dir} --output-dir ${input:golden-dir}",
+            "command": "python video_processing/inference/optimization/annotate_tracklets.py ${input:video-dir} --output-dir ${input:golden-dir}",
             "problemMatcher": []
         },
         {
             "label": "optimize_ILP",
             "type": "shell",
-            "command": "python server/inference/optimization/optimize_tracker.py --golden-dir ${input:golden-dir} --mode ilp",
+            "command": "python video_processing/inference/optimization/optimize_tracker.py --golden-dir ${input:golden-dir} --mode ilp",
             "problemMatcher": []
         },
         {
             "label": "optimize_BoTSort",
             "type": "shell",
-            "command": "python server/inference/optimization/optimize_tracker.py --golden-dir ${input:golden-dir} --mode botsort",
+            "command": "python video_processing/inference/optimization/optimize_tracker.py --golden-dir ${input:golden-dir} --mode botsort",
             "problemMatcher": []
         },
         {
             "label": "optimize_preprocessor",
             "type": "shell",
-            "command": "python server/inference/optimization/optimize_tracker.py --golden-dir ${input:golden-dir} --mode preprocessor",
+            "command": "python video_processing/inference/optimization/optimize_tracker.py --golden-dir ${input:golden-dir} --mode preprocessor",
             "problemMatcher": []
         },
         {
             "label": "optimize_iter_ilp",
             "type": "shell",
-            "command": "python server/inference/optimization/optimize_tracker.py --golden-dir ${input:golden-dir} --mode iter_ilp",
+            "command": "python video_processing/inference/optimization/optimize_tracker.py --golden-dir ${input:golden-dir} --mode iter_ilp",
             "problemMatcher": []
         },
         {
             "label": "optimize_detection_thresholds",
             "type": "shell",
-            "command": "python server/inference/optimization/optimize_detection_thresholds.py --golden-dir ${input:golden-dir}",
+            "command": "python video_processing/inference/optimization/optimize_detection_thresholds.py --golden-dir ${input:golden-dir}",
             "problemMatcher": []
         },
         {
             "label": "optimize_pairwise_association",
             "type": "shell",
-            "command": "python server/inference/optimization/optimize_pairwise_association.py --golden-dir ${input:golden-dir}",
+            "command": "python video_processing/inference/optimization/optimize_pairwise_association.py --golden-dir ${input:golden-dir}",
             "problemMatcher": []
         },
         {
             "label": "compare_trackers",
             "type": "shell",
-            "command": "python server/inference/optimization/compare_trackers.py --golden-dir ${input:golden-dir} --tracker iter_ilp",
+            "command": "python video_processing/inference/optimization/compare_trackers.py --golden-dir ${input:golden-dir} --tracker iter_ilp",
             "problemMatcher": []
         },
         {
             "label": "compare_preprocessor",
             "type": "shell",
-            "command": "python server/inference/optimization/compare_trackers.py --golden-dir ${input:golden-dir} --tracker preprocessor",
+            "command": "python video_processing/inference/optimization/compare_trackers.py --golden-dir ${input:golden-dir} --tracker preprocessor",
             "problemMatcher": []
         },
         {
@@ -78,7 +78,7 @@
         {
             "label": "serve",
             "type": "shell",
-            "command": "cd server/frontend && npm run build && npm run preview",
+            "command": "cd video_processing/frontend && npm run build && npm run preview",
             "problemMatcher": []
         },
         {
