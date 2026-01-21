@@ -26,13 +26,13 @@ class Point:
         return math.sqrt((self.x - other.x) ** 2 + (self.y - other.y) ** 2)
 
     def interpolate(self, other: Point, alpha: float) -> Point:
-        return Point(int(interpolate(self.x, other.x, alpha)), int(interpolate(self.y, other.y, alpha)))
+        return Point(round(interpolate(self.x, other.x, alpha)), round(interpolate(self.y, other.y, alpha)))
 
     def __mul__(self, other: float) -> Point:
-        return Point(int(self.x * other), int(self.y * other))
+        return Point(round(self.x * other), round(self.y * other))
 
     def __truediv__(self, other: float) -> Point:
-        return Point(int(self.x / other), int(self.y / other))
+        return Point(round(self.x / other), round(self.y / other))
 
     def __add__(self, other: Point) -> Point:
         return Point(self.x + other.x, self.y + other.y)
@@ -57,7 +57,10 @@ class Keypoint:
 
     @property
     def is_visible(self) -> bool:
-        return float(self.conf) >= 0.3
+        return float(self.conf) >= 0.15
+
+    def interpolate(self, other: Keypoint, alpha: float) -> Keypoint:
+        return Keypoint(self.point.interpolate(other.point, alpha), interpolate(self.conf, other.conf, alpha))
 
 
 @dataclass(frozen=True)

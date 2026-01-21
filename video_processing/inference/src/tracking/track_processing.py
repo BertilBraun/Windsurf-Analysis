@@ -29,12 +29,10 @@ from ..common_types import (
     FrameIndex,
     Point,
     Keypoint,
-    RenderableDetection,
-    RenderableTrack,
-    interpolate,
 )
 from ..motion.kalman_filter import KFState, _KalmanFilter, KF
 from ..motion.cmc import CMC
+from .renderable_tracks import prepare_renderable_tracks
 
 
 class TrackPostProcessing:
@@ -351,22 +349,12 @@ def _interpolate_detection_attributes(frame_idx: FrameIndex, detections: list[De
     if idx == 0:
         # Before all detections: use first
         first = detections[0]
-        return (
-            first.embedding,
-            first.confidence,
-            Keypoint(point=first.boom.point, conf=0.0),
-            Keypoint(point=first.mast_tip.point, conf=0.0),
-        )
+        return (first.embedding, first.confidence, first.boom, first.mast_tip)
 
     if idx >= len(detections):
         # After all detections: use last
         last = detections[-1]
-        return (
-            last.embedding,
-            last.confidence,
-            Keypoint(point=last.boom.point, conf=0.0),
-            Keypoint(point=last.mast_tip.point, conf=0.0),
-        )
+        return (last.embedding, last.confidence, last.boom, last.mast_tip)
 
     # Normal case: interpolate between detections[idx-1] and detections[idx]
     before_det = detections[idx - 1]
@@ -382,190 +370,7 @@ def _interpolate_detection_attributes(frame_idx: FrameIndex, detections: list[De
     # Interpolate confidence
     confidence = before_det.confidence * (1 - alpha) + after_det.confidence * alpha
 
-    boom_pt = before_det.boom.point.interpolate(after_det.boom.point, alpha)
-    mast_tip_pt = before_det.mast_tip.point.interpolate(after_det.mast_tip.point, alpha)
+    boom_pt = before_det.boom.interpolate(after_det.boom, alpha)
+    mast_tip_pt = before_det.mast_tip.interpolate(after_det.mast_tip, alpha)
 
-    return embedding, confidence, Keypoint(point=boom_pt, conf=0.0), Keypoint(point=mast_tip_pt, conf=0.0)
-
-
-def prepare_renderable_tracks(
-    tracks: list[Track],
-    *,
-    kp_conf_thresh: float = 0.3,
-    missing_grace_frames: int = 5,
-    mast_smooth_radius: int = 15,
-) -> list[RenderableTrack]:
-    """
-    Post-processing step for the rendering pipeline.
-
-    Produces RenderableTrack/RenderableDetection objects with stable per-frame:
-      - anchor (Point)
-      - scale (float)  (normalized so mast length is constant per track)
-
-    Rules:
-      - Anchor prefers boom keypoint when confidence >= kp_conf_thresh.
-      - If boom is missing for >missing_grace_frames, fallback to bbox.center.
-      - Short gaps (<=missing_grace_frames) between two visible boom keypoints are linearly interpolated.
-      - Mast length prefers dist(boom, mast_tip) when both are confident; after long gaps fallback uses bbox top edge.
-      - Anchor smoothing: fixed weighted window [prev:1, curr:4, next:0.5].
-      - Mast smoothing: mean over a +/- mast_smooth_radius window.
-    """
-
-    def _dist(a: Point, b: Point) -> float:
-        return float(((a.x - b.x) ** 2 + (a.y - b.y) ** 2) ** 0.5)
-
-    def _anchor_weighted(points: list[Point]) -> list[Point]:
-        out: list[Point] = []
-        for i in range(len(points)):
-            acc_x = 0.0
-            acc_y = 0.0
-            acc_w = 0.0
-            if i - 1 >= 0:
-                acc_x += points[i - 1].x * 1.0
-                acc_y += points[i - 1].y * 1.0
-                acc_w += 1.0
-            acc_x += points[i].x * 4.0
-            acc_y += points[i].y * 4.0
-            acc_w += 4.0
-            if i + 1 < len(points):
-                acc_x += points[i + 1].x * 0.5
-                acc_y += points[i + 1].y * 0.5
-                acc_w += 0.5
-            if acc_w <= 0.0:
-                out.append(points[i])
-            else:
-                out.append(Point(int(round(acc_x / acc_w)), int(round(acc_y / acc_w))))
-        return out
-
-    def _smooth_mean(values: list[float], radius: int) -> list[float]:
-        r = max(0, int(radius))
-        out: list[float] = []
-        for i in range(len(values)):
-            lo = max(0, i - r)
-            hi = min(len(values) - 1, i + r)
-            window = values[lo : hi + 1]
-            out.append(float(sum(window) / max(1, len(window))))
-        return out
-
-    def _median(values: list[float]) -> float:
-        if not values:
-            return 1.0
-        s = sorted(values)
-        mid = len(s) // 2
-        if len(s) % 2 == 1:
-            return float(s[mid])
-        return float((s[mid - 1] + s[mid]) / 2.0)
-
-    out_tracks: list[RenderableTrack] = []
-    for track in tracks:
-        dets = track.sorted_detections
-        if not dets:
-            out_tracks.append(RenderableTrack(track_id=track.track_id, sorted_detections=[]))
-            continue
-
-        bbox_centers = [d.bbox.center for d in dets]
-        boom_vis = [float(d.boom.conf) >= float(kp_conf_thresh) for d in dets]
-        mast_vis = [float(d.mast_tip.conf) >= float(kp_conf_thresh) for d in dets]
-
-        # -------------------- Anchor fill --------------------
-        visible_idxs = [i for i, v in enumerate(boom_vis) if v]
-        if not visible_idxs:
-            anchors = bbox_centers
-        else:
-            anchors: list[Point] = [Point(0, 0) for _ in dets]
-
-            # default to bbox center
-            for i in range(len(dets)):
-                anchors[i] = bbox_centers[i]
-
-            # place visible
-            for i in visible_idxs:
-                anchors[i] = dets[i].boom.point
-
-            # interpolate short gaps between visible anchors
-            for a_i, b_i in zip(visible_idxs[:-1], visible_idxs[1:]):
-                gap = b_i - a_i - 1
-                if gap <= 0:
-                    continue
-                if gap <= int(missing_grace_frames):
-                    p0 = dets[a_i].boom.point
-                    p1 = dets[b_i].boom.point
-                    for k in range(1, gap + 1):
-                        t = float(k) / float(gap + 1)
-                        anchors[a_i + k] = p0.interpolate(p1, t)
-
-            # trailing missing: hold last visible up to grace, then bbox center
-            last = visible_idxs[-1]
-            for i in range(last + 1, len(dets)):
-                if (i - last) <= int(missing_grace_frames):
-                    anchors[i] = anchors[last]
-                else:
-                    anchors[i] = bbox_centers[i]
-
-            # leading missing: keep bbox centers (no previous anchor)
-
-        anchors = _anchor_weighted(anchors)
-
-        # -------------------- Mast length fill --------------------
-        len_vis = [boom_vis[i] and mast_vis[i] for i in range(len(dets))]
-        raw_len: list[Optional[float]] = [
-            _dist(dets[i].boom.point, dets[i].mast_tip.point) if len_vis[i] else None for i in range(len(dets))
-        ]
-
-        def bbox_fallback_len(i: int) -> float:
-            return float(abs(int(anchors[i].y) - int(dets[i].bbox.y1)))
-
-        visible_len_idxs = [i for i, v in enumerate(len_vis) if v]
-        if not visible_len_idxs:
-            filled_len = [bbox_fallback_len(i) for i in range(len(dets))]
-        else:
-            filled_len: list[float] = [bbox_fallback_len(i) for i in range(len(dets))]
-            for i in visible_len_idxs:
-                assert raw_len[i] is not None
-                filled_len[i] = float(raw_len[i])
-
-            # interpolate short gaps between visible lengths
-            for a_i, b_i in zip(visible_len_idxs[:-1], visible_len_idxs[1:]):
-                gap = b_i - a_i - 1
-                if gap <= 0:
-                    continue
-                if gap <= int(missing_grace_frames):
-                    v0 = float(filled_len[a_i])
-                    v1 = float(filled_len[b_i])
-                    for k in range(1, gap + 1):
-                        t = float(k) / float(gap + 1)
-                        filled_len[a_i + k] = float(interpolate(v0, v1, t))
-
-            # trailing missing: hold last visible up to grace, then bbox fallback
-            last = visible_len_idxs[-1]
-            for i in range(last + 1, len(dets)):
-                if (i - last) <= int(missing_grace_frames):
-                    filled_len[i] = float(filled_len[last])
-                else:
-                    filled_len[i] = bbox_fallback_len(i)
-
-        smoothed_len = _smooth_mean(filled_len, int(mast_smooth_radius))
-        ref_candidates = [smoothed_len[i] for i in range(len(dets)) if len_vis[i]]
-        ref_len = _median(ref_candidates if ref_candidates else smoothed_len)
-        ref_len = max(1.0, float(ref_len))
-
-        scales = [float(ref_len / max(1.0, float(l))) for l in smoothed_len]
-
-        render_dets: list[RenderableDetection] = []
-        for i, d in enumerate(dets):
-            render_dets.append(
-                RenderableDetection(
-                    bbox=d.bbox,
-                    confidence=float(d.confidence),
-                    frame_idx=int(d.frame_idx),
-                    interpolated=bool(d.interpolated),
-                    boom=d.boom,
-                    mast_tip=d.mast_tip,
-                    anchor=anchors[i],
-                    scale=float(scales[i]),
-                )
-            )
-
-        out_tracks.append(RenderableTrack(track_id=track.track_id, sorted_detections=render_dets))
-
-    return out_tracks
+    return embedding, confidence, boom_pt, mast_tip_pt
