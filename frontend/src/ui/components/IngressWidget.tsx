@@ -4,12 +4,13 @@ import { useIngressScanner } from '../hooks/useIngressScanner'
 import type { IngressUploadItem, IngressUploadStatus } from '../hooks/useIngressScanner'
 import type { AuthorizedFetch } from '../utils/uploader'
 import { clamp } from '../utils/clamp'
-import { loadSetting, saveSetting } from '../utils/idb'
+import { useOnce } from '../hooks/useOnce'
 import { Modal } from './Modal'
 import { Button } from './Button'
 import type { JobSummary } from '../types'
 
 const WATCH_FOLDER_AUTO_EXPANDED_KEY = 'watchFolder.widget.autoExpandedOnFirstVideo.v1'
+const WATCH_FOLDER_MULTI_VIDEO_HINT_SHOWN_KEY = 'watchFolder.widget.multiVideoHintShown.v1'
 
 type Props = {
     dirHandle: FileSystemDirectoryHandle | null
@@ -64,16 +65,13 @@ export const IngressWidget: React.FC<Props> = ({
     const scanner = useIngressScanner(dirHandle, authorizedFetch, jobs, enabled)
     const [expanded, setExpanded] = React.useState(false)
     const [showQuotaModal, setShowQuotaModal] = React.useState(false)
-    const [autoExpandedOnce, setAutoExpandedOnce] = React.useState<boolean>(false)
+    const { used: autoExpandedOnce, ready: autoExpandedReady, mark: markAutoExpanded } =
+        useOnce(WATCH_FOLDER_AUTO_EXPANDED_KEY)
+    const { used: multiVideoHintShownOnce, ready: multiVideoHintReady, mark: markMultiVideoHintShown } =
+        useOnce(WATCH_FOLDER_MULTI_VIDEO_HINT_SHOWN_KEY)
     const [showMultiVideoHint, setShowMultiVideoHint] = React.useState(false)
     const panelRef = React.useRef<HTMLDivElement | null>(null)
     const prevUploadingRef = React.useRef(0)
-
-    React.useEffect(() => {
-        loadSetting<boolean>(WATCH_FOLDER_AUTO_EXPANDED_KEY).then(saved => {
-            setAutoExpandedOnce(!!saved)
-        })
-    }, [])
 
     React.useEffect(() => {
         if (scanner.lastError?.toLowerCase().includes('quota')) setShowQuotaModal(true)
@@ -85,12 +83,13 @@ export const IngressWidget: React.FC<Props> = ({
             return
         }
 
+        if (!autoExpandedReady) return
+
         if (!autoExpandedOnce && scanner.detectedFiles > 0) {
             setExpanded(true)
-            setAutoExpandedOnce(true)
-            void saveSetting(WATCH_FOLDER_AUTO_EXPANDED_KEY, true)
+            markAutoExpanded()
         }
-    }, [autoExpandedOnce, scanner.detectedFiles, scanner.lastError])
+    }, [autoExpandedOnce, autoExpandedReady, markAutoExpanded, scanner.detectedFiles, scanner.lastError])
 
     React.useEffect(() => {
         if (!expanded) return
@@ -125,11 +124,12 @@ export const IngressWidget: React.FC<Props> = ({
 
         if (prev > 0) return
         if (scanner.uploading <= 0) return
+        if (!multiVideoHintReady) return
+        if (multiVideoHintShownOnce) return
 
         setShowMultiVideoHint(true)
-        const timeout = window.setTimeout(() => setShowMultiVideoHint(false), 5000)
-        return () => window.clearTimeout(timeout)
-    }, [scanner.uploading])
+        markMultiVideoHintShown()
+    }, [markMultiVideoHintShown, multiVideoHintReady, multiVideoHintShownOnce, scanner.uploading])
 
     const hasIssues = !dirHandle || dirPermission !== 'granted' || !!scanner.lastError
 
@@ -194,6 +194,7 @@ export const IngressWidget: React.FC<Props> = ({
                     }}
                     role="status"
                     aria-live="polite"
+                    onClick={() => setShowMultiVideoHint(false)}
                 >
                     <div className="mt-0.5 h-2 w-2 rounded-full bg-brand-600 shrink-0" aria-hidden="true" />
                     <div className="text-xs leading-snug text-slate-700">

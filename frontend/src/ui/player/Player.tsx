@@ -9,7 +9,7 @@ import { useCappedValue } from '../hooks/useCappedValue'
 import { usePlaybackSpeed } from '../hooks/usePlaybackSpeed'
 import { clamp } from '../utils/clamp'
 import { trackEvent } from '../utils/analytics'
-import { loadSetting, saveSetting } from '../utils/idb'
+import { useOnce } from '../hooks/useOnce'
 import { buildExportFilename, downloadExport, exportTrackMp4 } from './export'
 import { useJobVideoSource } from './useJobVideoSource'
 import { drawFrame, pickTrackAtScreenPoint, screenPointToVideoNorm } from './rendering'
@@ -56,7 +56,9 @@ export const Player: React.FC<Props> = ({
     const [hoveredTrackId, setHoveredTrackId] = React.useState<number | null>(null)
     const [isExporting, setIsExporting] = React.useState<boolean>(false)
     const [exportProgressPct, setExportProgressPct] = React.useState<number | null>(null)
-    const [focusedClickHintDismissed, setFocusedClickHintDismissed] = React.useState<boolean>(false)
+    const { used: focusedClickHintDismissed, ready: focusedClickHintReady, mark: dismissFocusedClickHint } =
+        useOnce(PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY)
+    const { mark: markPlayerOpenedOnce } = useOnce(PLAYER_OPENED_ONCE_KEY)
 
     const { sourceFile, fileMissing, error } = useJobVideoSource({ job, dirHandle })
     const errorText = error ? t(error.key, { message: error.detail }) : null
@@ -123,14 +125,8 @@ export const Player: React.FC<Props> = ({
     })
 
     React.useEffect(() => {
-        loadSetting<boolean>(PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY).then(saved => {
-            setFocusedClickHintDismissed(!!saved)
-        })
-    }, [])
-
-    React.useEffect(() => {
-        void saveSetting(PLAYER_OPENED_ONCE_KEY, true)
-    }, [])
+        markPlayerOpenedOnce()
+    }, [markPlayerOpenedOnce])
 
     React.useEffect(() => {
         trackEvent('player_open', { job_id: job.id })
@@ -504,16 +500,14 @@ export const Player: React.FC<Props> = ({
         trackEvent('surfer_clicked', { track_id: hoveredTrackId })
         const active = player.isTrackActiveAtFrame(hoveredTrackId, webPlayer.currentFrameIndex)
         if (active) {
-            if (!focusedClickHintDismissed) {
-                setFocusedClickHintDismissed(true)
-                void saveSetting(PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY, true)
-            }
+            if (!focusedClickHintDismissed) dismissFocusedClickHint()
             setPlayer(p => (p ? p.copy({ mode: 'detailed', currentTrackId: hoveredTrackId }) : p))
         } else {
             setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
         }
     }, [
         drawMode,
+        dismissFocusedClickHint,
         focusedClickHintDismissed,
         hoveredTrackId,
         player,
@@ -588,7 +582,8 @@ export const Player: React.FC<Props> = ({
         return t('player.canvas.modeIndicator.overview')
     }, [drawMode, player?.mode, t])
 
-    const showFocusedClickHint = !drawMode && player?.mode === 'overview' && !focusedClickHintDismissed
+    const showFocusedClickHint =
+        focusedClickHintReady && !drawMode && player?.mode === 'overview' && !focusedClickHintDismissed
 
     const canvasCursorClass = drawMode
         ? 'cursor-crosshair'

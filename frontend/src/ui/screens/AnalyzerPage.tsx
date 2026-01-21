@@ -5,7 +5,7 @@ import { useJobs } from '../hooks/useJobs'
 import { JobDetail } from '../types'
 import { JobList, getJobListOrderedJobIds, type JobListSortDir, type JobListSortKey } from '../components/JobList'
 import { IngressWidget } from '../components/IngressWidget'
-import { loadDirectoryHandle, loadSetting, saveDirectoryHandle, saveSetting } from '../utils/idb'
+import { loadDirectoryHandle, saveDirectoryHandle } from '../utils/idb'
 import { Button } from '../components/Button'
 import { SettingsModal } from '../components/SettingsModal'
 import { PlayerModal } from '../components/PlayerModal'
@@ -15,6 +15,7 @@ import { FeedbackModal } from '../components/FeedbackModal'
 import { trackEvent } from '../utils/analytics'
 import { AnalyzerTutorialModal } from '../components/AnalyzerTutorialModal'
 import { useTutorialController } from '../hooks/useTutorialController'
+import { useOnce } from '../hooks/useOnce'
 import settingsIcon from '../assets/settings.svg'
 import { assert } from '../utils/assert'
 
@@ -34,8 +35,9 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const [sortKey, setSortKey] = React.useState<JobListSortKey>('date')
     const [sortDir, setSortDir] = React.useState<JobListSortDir>('desc')
     const [showFeedback, setShowFeedback] = React.useState<boolean>(false)
-    const [feedbackPromptSeen, setFeedbackPromptSeen] = React.useState<boolean | null>(null)
-    const [playerOpenedOnce, setPlayerOpenedOnce] = React.useState<boolean | null>(null)
+    const { used: feedbackPromptSeen, ready: feedbackPromptReady, mark: markFeedbackPromptSeen } =
+        useOnce(FEEDBACK_PROMPT_SEEN_KEY)
+    const { used: playerOpenedOnce, ready: playerOpenedOnceReady } = useOnce(PLAYER_OPENED_ONCE_KEY)
     const [ingressUploading, setIngressUploading] = React.useState<number>(0)
 
     // Ingress folder handle stored at the page level for the whole session
@@ -57,18 +59,6 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
         return () => {
             cancelled = true
         }
-    }, [])
-
-    React.useEffect(() => {
-        loadSetting<boolean>(FEEDBACK_PROMPT_SEEN_KEY).then(seen => {
-            setFeedbackPromptSeen(!!seen)
-        })
-    }, [])
-
-    React.useEffect(() => {
-        loadSetting<boolean>(PLAYER_OPENED_ONCE_KEY).then(opened => {
-            setPlayerOpenedOnce(!!opened)
-        })
     }, [])
 
     const pickDirectory = async () => {
@@ -121,11 +111,19 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
 
     React.useEffect(() => {
         if (!jobsInitialSyncComplete) return
-        if (feedbackPromptSeen !== false) return
-        if (playerOpenedOnce !== true) return
+        if (!feedbackPromptReady || !playerOpenedOnceReady) return
+        if (feedbackPromptSeen) return
+        if (!playerOpenedOnce) return
         if (succeededJobs.length <= 3) return
         setShowFeedback(true)
-    }, [feedbackPromptSeen, jobsInitialSyncComplete, playerOpenedOnce, succeededJobs.length])
+    }, [
+        feedbackPromptReady,
+        feedbackPromptSeen,
+        jobsInitialSyncComplete,
+        playerOpenedOnce,
+        playerOpenedOnceReady,
+        succeededJobs.length,
+    ])
 
     const { showTutorial, openTutorial, tutorialModalProps } = useTutorialController({
         dirHandle,
@@ -135,9 +133,8 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
 
     const handleFeedbackClose = React.useCallback(() => {
         setShowFeedback(false)
-        setFeedbackPromptSeen(true)
-        void saveSetting(FEEDBACK_PROMPT_SEEN_KEY, true)
-    }, [])
+        markFeedbackPromptSeen()
+    }, [markFeedbackPromptSeen])
 
     const userLabel = user?.displayName ?? (user?.email ? user.email.split('@')[0] : '')
     const headerText = userLabel
