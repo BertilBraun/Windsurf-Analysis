@@ -14,16 +14,17 @@ project_root = this_file.parents[3]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from inference.src.util.video_io import get_video_properties, VideoInfo
-from inference.src.tracking.detector import SurferDetector
-from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
-from inference.src.common_types import Detection, Track
-from inference.src.player.core.player_state import Metadata, VideoProperties, TrackLite, DetectionLite
-from inference.src.settings import YOLO_MODEL_PATH
-from inference.src.player.core.video_manager import VideoManager
-from inference.src.player.ui.video_widget import VideoWidget
+from video_processing.inference.src.util.video_io import get_video_properties, VideoInfo
+from video_processing.inference.src.tracking.detector import SurferDetector
+from video_processing.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
+from video_processing.inference.src.common_types import Detection, Track
+from video_processing.inference.src.player.core.player_state import Metadata, VideoProperties, TrackLite, DetectionLite
+from video_processing.inference.src.settings import YOLO_MODEL_PATH
+from video_processing.inference.src.player.core.video_manager import VideoManager
+from video_processing.inference.src.player.ui.video_widget import VideoWidget
+from video_processing.inference.src.tracking.track_processing import prepare_renderable_tracks
 
-from inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
+from video_processing.inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QMainWindow
@@ -48,6 +49,7 @@ def _detections_to_initial_tracks(detections: list[Detection]) -> list[Track]:
 
 
 def _build_metadata(tracks: list[Track], input_path: Path, video_props: VideoInfo) -> Metadata:
+    render_tracks = prepare_renderable_tracks(tracks)
     return Metadata(
         input_video_path=input_path.absolute().as_posix(),
         video_properties=VideoProperties(
@@ -70,11 +72,15 @@ def _build_metadata(tracks: list[Track], input_path: Path, video_props: VideoInf
                         bbox=[int(det.bbox.x1), int(det.bbox.y1), int(det.bbox.x2), int(det.bbox.y2)],
                         confidence=float(det.confidence),
                         interpolated=det.interpolated,
+                        boom=[float(det.boom.point.x), float(det.boom.point.y), float(det.boom.conf)],
+                        mast_tip=[float(det.mast_tip.point.x), float(det.mast_tip.point.y), float(det.mast_tip.conf)],
+                        anchor=[int(det.anchor.x), int(det.anchor.y)],
+                        scale=float(det.scale),
                     )
-                    for det in t.sorted_detections
+                    for det in rt.sorted_detections
                 ],
             )
-            for t in tracks
+            for t, rt in zip(tracks, render_tracks)
         ],
     )
 
@@ -93,8 +99,9 @@ def _save_golden_metadata(
 
 
 def _to_tracklites(tracks: list[Track], video_props: VideoInfo) -> list[TrackLite]:
+    render_tracks = prepare_renderable_tracks(tracks)
     out: list[TrackLite] = []
-    for t in tracks:
+    for t, rt in zip(tracks, render_tracks):
         out.append(
             TrackLite(
                 # Initialize with negative IDs so labels are hidden until assigned
@@ -110,8 +117,12 @@ def _to_tracklites(tracks: list[Track], video_props: VideoInfo) -> list[TrackLit
                         bbox=[int(d.bbox.x1), int(d.bbox.y1), int(d.bbox.x2), int(d.bbox.y2)],
                         confidence=float(d.confidence),
                         interpolated=d.interpolated,
+                        boom=[float(d.boom.point.x), float(d.boom.point.y), float(d.boom.conf)],
+                        mast_tip=[float(d.mast_tip.point.x), float(d.mast_tip.point.y), float(d.mast_tip.conf)],
+                        anchor=[int(d.anchor.x), int(d.anchor.y)],
+                        scale=float(d.scale),
                     )
-                    for d in t.sorted_detections
+                    for d in rt.sorted_detections
                 ],
             )
         )
@@ -130,7 +141,7 @@ class TrackAnnotatorWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle('Windsurf Tracklet Annotator')
 
-        from inference.src.player.core.player_state import PlayerState
+        from video_processing.inference.src.player.core.player_state import PlayerState
 
         self.state = PlayerState()
         self.state.reset(

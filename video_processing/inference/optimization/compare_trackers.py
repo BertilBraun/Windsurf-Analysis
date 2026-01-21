@@ -13,17 +13,17 @@ project_root = this_file.parents[3]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from inference.src.tracking.tracking import Tracker
-from inference.src.common_types import Track
-from inference.src.util.video_io import get_video_properties
-from inference.src.settings import REID_MODEL_TYPE
-from inference.src.tracking.discrete_opt_tracker import DiscreteOptTracker
-from inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
-from inference.src.tracking.oc_sort import OCSortEmbedTracker
-from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
-from inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
+from video_processing.inference.src.tracking.tracking import Tracker
+from video_processing.inference.src.common_types import Track
+from video_processing.inference.src.util.video_io import get_video_properties
+from video_processing.inference.src.settings import REID_MODEL_TYPE
+from video_processing.inference.src.tracking.discrete_opt_tracker import DiscreteOptTracker
+from video_processing.inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
+from video_processing.inference.src.tracking.oc_sort import OCSortEmbedTracker
+from video_processing.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
+from video_processing.inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
 
-from inference.optimization.optimization_util import (
+from video_processing.inference.optimization.optimization_util import (
     PairwiseScores,
     each_golden,
     build_assignment_from_metadata,

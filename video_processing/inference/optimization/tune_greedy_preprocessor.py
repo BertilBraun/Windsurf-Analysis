@@ -17,14 +17,15 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QMainWindow, QToolBar, QMessageBox
 from PySide6.QtGui import QAction
 
-from inference.src.player.core.player_state import PlayerState, VideoProperties, TrackLite, DetectionLite
-from inference.src.player.core.video_manager import VideoManager
-from inference.src.player.ui.video_widget import VideoWidget
-from inference.src.util.video_io import get_video_properties, VideoInfo
-from inference.src.tracking.detector import SurferDetector
-from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
-from inference.src.common_types import Detection, Track
-from inference.src.settings import (
+from video_processing.inference.src.player.core.player_state import PlayerState, VideoProperties, TrackLite, DetectionLite
+from video_processing.inference.src.player.core.video_manager import VideoManager
+from video_processing.inference.src.player.ui.video_widget import VideoWidget
+from video_processing.inference.src.util.video_io import get_video_properties, VideoInfo
+from video_processing.inference.src.tracking.detector import SurferDetector
+from video_processing.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
+from video_processing.inference.src.common_types import Detection, Track
+from video_processing.inference.src.tracking.track_processing import prepare_renderable_tracks
+from video_processing.inference.src.settings import (
     YOLO_MODEL_PATH,
     GREEDY_PREPROCESSOR_MIN_IOU,
     GREEDY_PREPROCESSOR_MIN_COSINE_SIMILARITY,
@@ -38,8 +39,9 @@ def _detections_to_initial_tracks(dets: list[Detection]) -> list[Track]:
 
 
 def _to_tracklites(tracks: list[Track], video_props: VideoInfo) -> list[TrackLite]:
+    render_tracks = prepare_renderable_tracks(tracks)
     out: list[TrackLite] = []
-    for t in tracks:
+    for t, rt in zip(tracks, render_tracks):
         out.append(
             TrackLite(
                 track_id=int(t.track_id),
@@ -54,8 +56,12 @@ def _to_tracklites(tracks: list[Track], video_props: VideoInfo) -> list[TrackLit
                         bbox=[int(d.bbox.x1), int(d.bbox.y1), int(d.bbox.x2), int(d.bbox.y2)],
                         confidence=float(d.confidence),
                         interpolated=d.interpolated,
+                        boom=[float(d.boom.point.x), float(d.boom.point.y), float(d.boom.conf)],
+                        mast_tip=[float(d.mast_tip.point.x), float(d.mast_tip.point.y), float(d.mast_tip.conf)],
+                        anchor=[int(d.anchor.x), int(d.anchor.y)],
+                        scale=float(d.scale),
                     )
-                    for d in t.sorted_detections
+                    for d in rt.sorted_detections
                 ],
             )
         )

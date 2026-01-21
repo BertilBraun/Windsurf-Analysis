@@ -9,12 +9,10 @@ Usage:
 from __future__ import annotations
 
 import sys
-import math
 import optuna
 import argparse
-import numpy as np
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 # Ensure project imports work when executed as a script
 this_file = Path(__file__).resolve()
@@ -22,11 +20,12 @@ project_root = this_file.parents[3]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from inference.src.motion.kalman_filter import _KalmanFilter, KFState
-from inference.src.motion.cmc import CMC
-from inference.src.common_types import Track, BoundingBox
-from inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
-from inference.optimization.optimization_util import each_golden, optimize
+
+from video_processing.inference.src.motion.kalman_filter import _KalmanFilter, KFState
+from video_processing.inference.src.motion.cmc import CMC
+from video_processing.inference.src.common_types import BoundingBox
+from video_processing.inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
+from video_processing.inference.optimization.optimization_util import optimize, list_golden_paths, load_full_tracks
 
 
 def _evaluate_kalman(params: Dict[str, Any], data_cache: List[Dict[str, Any]]) -> float:
@@ -94,7 +93,8 @@ def main() -> None:
     # Load all data and pre-compute transforms
     print('Loading data and computing transforms...')
     data_cache = []
-    for tracks, meta in each_golden(args.golden_dir):
+    for path in list_golden_paths(args.golden_dir):
+        tracks, meta = load_full_tracks(path)
         video_path = Path(meta.input_video_path)
         if not video_path.exists():
             print(f'Warning: Video file not found: {video_path}')

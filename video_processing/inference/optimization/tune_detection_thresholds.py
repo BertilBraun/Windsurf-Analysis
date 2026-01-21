@@ -27,10 +27,10 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QMainWindow, QToolBar, QMessageBox
 from PySide6.QtGui import QAction
 
-from inference.src.player.core.player_state import PlayerState, VideoProperties, TrackLite, DetectionLite
-from inference.src.player.core.video_manager import VideoManager
-from inference.src.player.ui.video_widget import VideoWidget
-from inference.src.settings import YOLO_MODEL_PATH, DETECTOR_IOU_THRESHOLD, DETECTOR_CONFIDENCE_THRESHOLD
+from video_processing.inference.src.player.core.player_state import PlayerState, VideoProperties, TrackLite, DetectionLite
+from video_processing.inference.src.player.core.video_manager import VideoManager
+from video_processing.inference.src.player.ui.video_widget import VideoWidget
+from video_processing.inference.src.settings import YOLO_MODEL_PATH, DETECTOR_IOU_THRESHOLD, DETECTOR_CONFIDENCE_THRESHOLD
 
 
 @dataclass
@@ -356,6 +356,8 @@ class DetectionTunerWindow(QMainWindow):
         tracks: List[TrackLite] = []
         for i in range(len(boxes)):
             x1, y1, x2, y2 = [int(v) for v in boxes[i]]
+            cx = int((x1 + x2) * 0.5)
+            cy = int((y1 + y2) * 0.5)
             tl = TrackLite(
                 track_id=i + 1,
                 start_frame=frame_idx,
@@ -369,6 +371,10 @@ class DetectionTunerWindow(QMainWindow):
                         bbox=[x1, y1, x2, y2],
                         confidence=float(confs[i]),
                         interpolated=False,
+                        boom=[float(cx), float(cy), 0.0],
+                        mast_tip=[float(cx), float(y1), 0.0],
+                        anchor=[int(cx), int(cy)],
+                        scale=1.0,
                     )
                 ],
             )

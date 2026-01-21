@@ -15,12 +15,13 @@ project_root = this_file.parents[3]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from inference.src.motion.cmc import CMC
-from inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
-from inference.src.motion.kalman_filter import KFState
-from inference.src.util.algebra import platt_prob_from_dist
-from inference.optimization.optimization_util import each_golden, optimize
-from inference.src.common_types import Track
+
+from video_processing.inference.src.motion.cmc import CMC
+from video_processing.inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
+from video_processing.inference.src.motion.kalman_filter import KFState
+from video_processing.inference.src.util.algebra import platt_prob_from_dist
+from video_processing.inference.optimization.optimization_util import optimize, list_golden_paths, load_full_tracks
+from video_processing.inference.src.common_types import Track
 
 
 # ----------------------------- Built-in configuration ----------------------------- #
@@ -117,7 +118,8 @@ def _build_dataset(golden_dir: str) -> Tuple[List[Track], List[Tuple[int, int, i
     dataset_tracks: List[Track] = []
     dataset_pairs: List[Tuple[int, int, int, str]] = []  # (i,j,label,video_path) with label 0=pos, 1=neg
 
-    for tracks, meta in each_golden(golden_dir):
+    for path in list_golden_paths(golden_dir):
+        tracks, meta = load_full_tracks(path)
         video_path = meta.input_video_path
 
         pos_pairs: List[Tuple[Track, Track]] = []

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-import pickle
 import argparse
 from pathlib import Path
 
@@ -12,14 +11,15 @@ project_root = this_file.parents[3]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from inference.src.util.video_io import get_video_properties
-from inference.src.tracking.detector import SurferDetector
-from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
-from inference.src.tracking.greedy_tracker import GreedyTracker
-from inference.src.tracking.discrete_opt_tracker import DiscreteILPTracker
-from inference.src.common_types import Detection, Track
-from inference.src.player.core.player_state import Metadata, TrackLite, DetectionLite
-from inference.src.settings import YOLO_MODEL_PATH
+from video_processing.inference.src.util.video_io import get_video_properties
+from video_processing.inference.src.tracking.detector import SurferDetector
+from video_processing.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
+from video_processing.inference.src.tracking.greedy_tracker import GreedyTracker
+from video_processing.inference.src.tracking.discrete_opt_tracker import DiscreteILPTracker
+from video_processing.inference.src.common_types import Detection, Track
+from video_processing.inference.src.player.core.player_state import Metadata, TrackLite, DetectionLite
+from video_processing.inference.src.settings import YOLO_MODEL_PATH
+from video_processing.inference.optimization.optimization_util import load_pickle_compat
 
 
 def _detections_to_initial_tracks(detections: list[Detection]) -> list[Track]:
@@ -46,8 +46,7 @@ def _run_pipeline(video_path: Path, tracker_name: str) -> list[Track]:
 
 
 def _load_golden(path: Path) -> Metadata:
-    with open(path, 'rb') as f:
-        data = pickle.load(f)
+    data = load_pickle_compat(path)
     if not isinstance(data, Metadata):
         raise TypeError('Golden file does not contain Metadata')
     return data

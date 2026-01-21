@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import sys
+import pickle
 import optuna
 import argparse
 import numpy as np
 
 from pathlib import Path
 from functools import cache
-from typing import Callable, Dict, Generator, List, Literal, Tuple, Optional
+from typing import Any, Callable, Dict, Generator, Generic, List, Literal, Tuple, Optional, TypeVar
+import multiprocessing as mp
+import traceback
 
 
 # Ensure project imports work when executed as a script
@@ -17,12 +21,12 @@ project_root = this_file.parents[3]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from inference.src.util.similarity_helpers import Embedding
-from inference.src.player.core.player_state import Metadata, TrackLite
-from inference.src.common_types import BoundingBox, Detection, Track
-from inference.src.util.video_io import VideoReader
-from inference.src.tracking.detector import init_reid_model
-from inference.src.settings import REID_MODEL_TYPE
+from video_processing.inference.src.util.similarity_helpers import Embedding
+from video_processing.inference.src.player.core.player_state import Metadata, TrackLite
+from video_processing.inference.src.common_types import BoundingBox, Detection, Track, Keypoint, Point
+from video_processing.inference.src.util.video_io import VideoReader
+from video_processing.inference.src.tracking.detector import init_reid_model
+from video_processing.inference.src.settings import REID_MODEL_TYPE
 
 
 # ----------------------------- Built-in configuration ----------------------------- #
@@ -32,11 +36,30 @@ TRIALS: int = 200
 RANDOM_SEED: int = 42
 
 
-def _load_golden(path: Path) -> Metadata:
-    import pickle
+class _CompatUnpickler(pickle.Unpickler):
+    """
+    Allows loading old golden pickle files after project/module refactors.
 
+    Common historical module prefixes:
+      - server.inference.*  (backend layout)
+    """
+
+    def find_class(self, module: str, name: str):  # type: ignore[override]
+        # Handle historical backend prefix (e.g. server.inference.*).
+        if module.startswith('server.inference.'):
+            suffix = module[len('server.inference.') :]
+            return super().find_class(f'video_processing.inference.{suffix}', name)
+
+        return super().find_class(module, name)
+
+
+def load_pickle_compat(path: Path) -> object:
     with open(path, 'rb') as f:
-        data = pickle.load(f)
+        return _CompatUnpickler(f).load()
+
+
+def _load_golden(path: Path) -> Metadata:
+    data = load_pickle_compat(path)
     if not isinstance(data, Metadata):
         raise TypeError('Golden file does not contain Metadata')
     return data
@@ -108,6 +131,8 @@ def _to_track_with_embeddings(tl: TrackLite, embeddings: List[Embedding]) -> Tra
                 embedding=emb,
                 confidence=float(det_lite.confidence),
                 frame_idx=int(det_lite.frame_idx),
+                boom=Keypoint(point=Point(0, 0), conf=0.0),
+                mast_tip=Keypoint(point=Point(0, 0), conf=0.0),
             )
         )
     return Track(track_id=int(tl.track_id), sorted_detections=dets)
@@ -130,6 +155,11 @@ def each_golden(golden_dir: Path | str) -> Generator[Tuple[List[Track], Metadata
 
     for golden_path in golden_paths:
         yield load_full_tracks(golden_path)
+
+
+def list_golden_paths(golden_dir: Path | str) -> List[Path]:
+    """Sorted list of `*.golden.tracks.pkl` paths."""
+    return sorted(Path(golden_dir).glob('*.golden.tracks.pkl'))
 
 
 @dataclass(frozen=True)
@@ -248,6 +278,135 @@ def pairwise_scores(gold: Dict[AssignmentKey, int], pred: Dict[AssignmentKey, in
         rand_index=float(rand),
         jaccard_same=float(jaccard_same),
     )
+
+
+@dataclass(frozen=True)
+class _WorkItem:
+    task_id: int
+    path: str
+    params: Dict[str, object]
+
+
+@dataclass(frozen=True)
+class _WorkResult:
+    task_id: int
+    ok: bool
+    value: object | None
+    error: str | None
+
+
+def _queue_worker_loop(
+    in_q: Any,
+    out_q: Any,
+    worker_fn: Callable[[str, Dict[str, object]], object],
+) -> None:
+    while True:
+        item = in_q.get()
+        if item is None:
+            return
+        if not isinstance(item, _WorkItem):
+            out_q.put(_WorkResult(task_id=-1, ok=False, value=None, error=f'Invalid work item: {type(item)}'))
+            continue
+        try:
+            value = worker_fn(str(item.path), dict(item.params))
+            out_q.put(_WorkResult(task_id=int(item.task_id), ok=True, value=value, error=None))
+        except BaseException:
+            out_q.put(
+                _WorkResult(
+                    task_id=int(item.task_id),
+                    ok=False,
+                    value=None,
+                    error=traceback.format_exc(),
+                )
+            )
+
+
+T = TypeVar('T')
+
+
+class SharedQueueWorkerPool(Generic[T]):
+    """Persistent multiprocessing pool using per-worker pinned queues.
+
+    Designed for Optuna-style loops where the same (path, params) worker is called repeatedly.
+    """
+
+    def __init__(self, *, worker_fn: Callable[[str, Dict[str, object]], T], workers: int) -> None:
+        self._ctx = mp.get_context('spawn')
+        self._out_q = self._ctx.Queue()
+        self._procs: list[mp.Process] = []
+        self._in_qs: list[Any] = []
+        self._closed = False
+
+        self._workers = max(1, int(workers))
+        for _ in range(self._workers):
+            in_q = self._ctx.Queue()
+            self._in_qs.append(in_q)
+            p = self._ctx.Process(target=_queue_worker_loop, args=(in_q, self._out_q, worker_fn), daemon=True)
+            p.start()
+            self._procs.append(p)
+
+    def _worker_index_for_path(self, path: str) -> int:
+        # Deterministic routing to preserve per-process caches (independent of Python's hash randomization).
+        digest = hashlib.md5(path.encode('utf-8')).digest()
+        return int.from_bytes(digest[:4], byteorder='little', signed=False) % self._workers
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        for q in self._in_qs:
+            try:
+                q.put(None)
+            except Exception:
+                pass
+        for p in self._procs:
+            try:
+                p.join(timeout=5)
+            except Exception:
+                pass
+        for p in self._procs:
+            if p.is_alive():
+                try:
+                    p.kill()
+                except Exception:
+                    pass
+
+    def __enter__(self) -> 'SharedQueueWorkerPool':
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    def map_paths(self, paths: List[str], params: Dict[str, object]) -> List[T]:
+        if not paths:
+            return []
+        # Enqueue all work for this batch.
+        for task_id, p in enumerate(paths):
+            idx = self._worker_index_for_path(str(p))
+            self._in_qs[idx].put(_WorkItem(task_id=int(task_id), path=str(p), params=dict(params)))
+
+        # Collect exactly one result per task_id.
+        results: list[T | None] = [None for _ in range(len(paths))]
+        first_error: tuple[int, str] | None = None
+        for _ in range(len(paths)):
+            res = self._out_q.get()
+            if not isinstance(res, _WorkResult):
+                first_error = first_error or (-1, f'Invalid work result: {type(res)}')
+                continue
+            if not res.ok:
+                first_error = first_error or (int(res.task_id), str(res.error or 'unknown error'))
+                continue
+            if 0 <= int(res.task_id) < len(results):
+                results[int(res.task_id)] = res.value  # type: ignore
+
+        if first_error is not None:
+            task_id, err = first_error
+            path_hint = paths[task_id] if 0 <= task_id < len(paths) else '<unknown>'
+            raise RuntimeError(f'Worker failed for task_id={task_id} path={path_hint}:\n{err}')
+
+        # At this point all slots should be filled.
+        assert all(r is not None for r in results)
+        return [r for r in results if r is not None]
 
 
 def optimize(

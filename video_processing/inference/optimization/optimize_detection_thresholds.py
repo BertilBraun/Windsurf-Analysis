@@ -25,7 +25,7 @@ os.environ.setdefault('YOLO_CONFIG_DIR', str(server_root / 'ultralytics'))
 
 from ultralytics import YOLO  # type: ignore
 
-from inference.src.settings import YOLO_MODEL_PATH, DETECTOR_BATCH_SIZE
+from video_processing.inference.src.settings import YOLO_MODEL_PATH, DETECTOR_BATCH_SIZE
 
 
 IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp'}
