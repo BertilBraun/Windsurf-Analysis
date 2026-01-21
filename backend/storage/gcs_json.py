@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import json
 import os
-from functools import lru_cache
+from functools import cache
 from typing import Any
 
 from google.cloud import storage
 from google.oauth2 import service_account
 
 
-@lru_cache(maxsize=1)
+@cache
 def get_gcs_client() -> storage.Client:
     raw = os.environ.get('GCP_SERVICE_ACCOUNT_JSON')
     if raw:
@@ -45,4 +45,3 @@ def download_json(*, bucket: str, object_name: str) -> dict[str, Any] | None:
         return None
     data = blob.download_as_bytes()
     return json.loads(data.decode('utf-8'))
-
