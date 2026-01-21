@@ -1,4 +1,5 @@
 import os
+import os
 import logging
 import numpy as np
 
@@ -31,7 +32,7 @@ from ..settings import (
 )
 from ..util.cache import cache_to_file
 from ..util.video_io import get_video_properties
-from ..common_types import BoundingBox, Detection, FrameIndex
+from ..common_types import BoundingBox, Detection, FrameIndex, Keypoint, Point
 
 
 @dataclass
@@ -40,6 +41,8 @@ class RawDetection:
     confidence: float
     frame_idx: FrameIndex
     crop: np.ndarray
+    boom: Keypoint
+    mast_tip: Keypoint
 
 
 class SurferDetector:
@@ -100,13 +103,25 @@ class ObjectDetector:
             frame_idx = frame_index * skip_frames
             if result.boxes is None or len(result.boxes) == 0:
                 continue
+            if result.keypoints is None or result.keypoints.xy is None:
+                raise RuntimeError('Pose model did not return keypoints; expected YOLO-pose model.')
 
             boxes = _to_numpy(result.boxes.xyxy)
             confidences = _to_numpy(result.boxes.conf)
+            kpts_xy = _to_numpy(result.keypoints.xy)
+            kpts_conf = _to_numpy(result.keypoints.conf) if getattr(result.keypoints, 'conf', None) is not None else None
             orig_img = result.orig_img
 
             # Prepare crops and metadata
             for i in range(len(boxes)):
+                # Expected 2 typed keypoints: [boom_mast, mast_tip]
+                if kpts_xy is None or len(kpts_xy) <= i or len(kpts_xy[i]) < 2:
+                    raise RuntimeError('Keypoints shape mismatch; expected [N,2,2].')
+                boom_x, boom_y = kpts_xy[i][0]
+                tip_x, tip_y = kpts_xy[i][1]
+                boom_c = float(kpts_conf[i][0]) if kpts_conf is not None else 1.0
+                tip_c = float(kpts_conf[i][1]) if kpts_conf is not None else 1.0
+
                 bbox = BoundingBox(
                     x1=int(boxes[i][0]),
                     y1=int(boxes[i][1]),
@@ -126,6 +141,8 @@ class ObjectDetector:
                         confidence=float(confidences[i]),
                         crop=orig_img[bbox.y1 : bbox.y2, bbox.x1 : bbox.x2],
                         frame_idx=frame_idx,
+                        boom=Keypoint(point=Point(int(boom_x), int(boom_y)), conf=boom_c),
+                        mast_tip=Keypoint(point=Point(int(tip_x), int(tip_y)), conf=tip_c),
                     )
                 )
 
@@ -190,6 +207,8 @@ def _flush_reid_batch(reid_model: ReID, pending_detections: list[RawDetection]) 
             embedding=feature,
             confidence=detection.confidence,
             frame_idx=detection.frame_idx,
+            boom=detection.boom,
+            mast_tip=detection.mast_tip,
         )
         for feature, detection in zip(features, pending_detections)
     ]
