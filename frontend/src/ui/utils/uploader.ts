@@ -199,7 +199,7 @@ export async function uploadVideoFileToJob(
             object_path,
             size_bytes: file.size,
             mime_type: file.type || 'video/mp4',
-            yolo_model: 'windsurfing/best.pt',
+            yolo_model: 'windsurfing_pose/best.pt',
         }),
     })
     if (!completeRes.ok) throw new Error(await completeRes.text())

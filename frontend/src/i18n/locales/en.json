@@ -151,7 +151,7 @@
                 }
             },
             "hints": {
-                "multiVideo": "You can add more videos — they’ll process automatically."
+                "multiVideo": "You can add multiple videos at once — they’ll process automatically."
             },
             "leaveWarning": "Uploads are still running. If you leave now, your videos may not finish uploading.",
             "panel": {

@@ -7,7 +7,7 @@ USE_GPU = torch.cuda.is_available()
 EPS = 1e-9
 
 STANDARD_OUTPUT_DIR = 'tmp/standard'
-NUM_PARALLEL_VIDEO_WORKERS = 4
+NUM_PARALLEL_VIDEO_WORKERS = 1
 
 # YOLO settings
 inference_root_folder = Path(__file__).parent.parent
