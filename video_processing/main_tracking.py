@@ -8,7 +8,7 @@ import modal
 from inference.src.common_types import BoundingBox, Track, Keypoint, Point
 from inference.src.settings import REID_MODEL_TYPE
 from inference.src.tracking.detector import EmbeddingExtractor, RawDetection
-from inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
+from inference.src.tracking.ilp_tracker import ILPTracker
 from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
 from inference.src.tracking.track_processing import TrackPostProcessing, prepare_renderable_tracks
 from inference.src.tracking.tracking import Tracker
@@ -81,7 +81,7 @@ def embedding_extraction_and_tracking(
         with timeit(f'{job_id}: Trackers'):
             trackers: Sequence[Tracker] = [
                 TrackPreProcessor(),
-                IterativeILPTracker(),
+                ILPTracker(),
                 TrackPostProcessing(),
             ]
             processed_tracks = [
