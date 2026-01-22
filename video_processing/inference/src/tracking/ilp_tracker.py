@@ -57,6 +57,11 @@ class ILPTracker:
         appearance_similarity_gamma: float = 6.836338900098075,
         # Graph pruning / solver settings
         max_outgoing_links: int = 10,
+        # Optional: allow discarding tiny tracklets (faulty detections)
+        allow_discard_short_tracklets: bool = True,
+        discard_max_detections: int = 5,
+        discard_cost_first: float = 10.0,
+        discard_cost_growth: float = 1.5,
     ) -> None:
         """Recommendation:
         w_motion: 2.0
@@ -86,6 +91,12 @@ class ILPTracker:
         self.appearance_similarity_gamma = appearance_similarity_gamma
         # Graph pruning / solver settings
         self.max_outgoing_links = int(max(1, max_outgoing_links))
+
+        # Optional discard behavior
+        self.allow_discard_short_tracklets = bool(allow_discard_short_tracklets)
+        self.discard_max_detections = int(max(1, discard_max_detections))
+        self.discard_cost_first = float(discard_cost_first)
+        self.discard_cost_growth = float(discard_cost_growth)
 
         # TODO remove
         # Debugging/visualization
@@ -132,8 +143,9 @@ class ILPTracker:
         # (end_i + start_j) dominance, but keep a generous global cap as a backstop.
         max_cost_limit = float(max(start_costs) + max(end_costs))
 
+        discard_costs = self._compute_discard_costs(fragments)
         new_tracks, new_cost = ILPGraphSolver(max_outgoing_links=self.max_outgoing_links).optimize_graph(
-            graph, start_costs, end_costs, max_cost_limit
+            graph, start_costs, end_costs, max_cost_limit, discard_costs=discard_costs
         )
 
         debug.close()
@@ -246,6 +258,34 @@ class ILPTracker:
             end_costs.append(lerp(self.w_end, low_cost_end, factor))
 
         return start_costs, end_costs
+
+    def _compute_discard_costs(self, fragments: List[Track]) -> Optional[List[float]]:
+        """
+        Optional per-fragment discard costs.
+
+        If enabled, the ILP can choose to discard a fragment by paying a cost (instead of forcing it
+        to be a standalone start/end, or forcing a dubious link). This is intended to drop noisy
+        1-5 frame tracklets produced by false detections.
+
+        Policy:
+        - Only allow discarding fragments with <= `discard_max_detections` detections.
+        - Cost grows exponentially with fragment length:
+            cost(L) = discard_cost_first * discard_cost_growth^(L-1)
+        """
+        if not self.allow_discard_short_tracklets:
+            return None
+
+        costs: List[float] = []
+        for t in fragments:
+            L = int(len(t.sorted_detections))
+            if L <= 0:
+                costs.append(float('inf'))
+                continue
+            if L > self.discard_max_detections:
+                costs.append(float('inf'))  # disallowed
+                continue
+            costs.append(float(self.discard_cost_first * (self.discard_cost_growth ** (L - 1))))
+        return costs
 
     def _log(self, *args, **kwargs) -> None:
         if self.enable_edge_logging:

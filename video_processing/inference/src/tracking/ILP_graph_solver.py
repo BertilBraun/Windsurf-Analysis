@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pulp
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional, Set
 
 from ..common_types import Detection, Track
 
@@ -77,6 +77,7 @@ class ILPGraphSolver:
         start_costs: List[float],
         end_costs: List[float],
         max_cost_limit: float,
+        discard_costs: Optional[List[float]] = None,
     ) -> Tuple[List[Track], float]:
         """Solve the fragment linking optimization problem using ILP."""
         # Create the ILP problem
@@ -88,16 +89,27 @@ class ILPGraphSolver:
         link_vars = self._create_link_variables(simplified_graph)
         start_vars = self._create_start_variables(simplified_graph.N)
         end_vars = self._create_end_variables(simplified_graph.N)
+        discard_vars = self._create_discard_variables(simplified_graph.N, discard_costs=discard_costs)
 
         # Add constraints
-        self._add_outgoing_constraints(problem, simplified_graph, link_vars, end_vars)
-        self._add_incoming_constraints(problem, simplified_graph, link_vars, start_vars)
+        self._add_outgoing_constraints(problem, simplified_graph, link_vars, end_vars, discard_vars)
+        self._add_incoming_constraints(problem, simplified_graph, link_vars, start_vars, discard_vars)
 
         # Set objective function
-        self._set_objective_function(problem, simplified_graph, link_vars, start_vars, end_vars, start_costs, end_costs)
+        self._set_objective_function(
+            problem,
+            simplified_graph,
+            link_vars,
+            start_vars,
+            end_vars,
+            start_costs,
+            end_costs,
+            discard_vars,
+            discard_costs,
+        )
 
         # Solve and return solution
-        return self._solve_and_extract_solution(problem, simplified_graph, link_vars)
+        return self._solve_and_extract_solution(problem, simplified_graph, link_vars, discard_vars)
 
     def _simplify_graph(self, graph: FragmentGraph, max_cost: float) -> FragmentGraph:
         """Simplify the graph by removing edges with cost greater than max_cost and limiting the number of outgoing links."""
@@ -127,12 +139,27 @@ class ILPGraphSolver:
             end_vars.append(pulp.LpVariable(var_name, cat='Binary'))
         return end_vars
 
+    def _create_discard_variables(
+        self, num_fragments: int, *, discard_costs: Optional[List[float]]
+    ) -> Optional[List[pulp.LpVariable]]:
+        """Create binary variables for discarding fragments (optional)."""
+        if discard_costs is None:
+            return None
+        if len(discard_costs) != num_fragments:
+            raise ValueError('discard_costs must be None or aligned 1:1 with fragments')
+        discard_vars: List[pulp.LpVariable] = []
+        for i in range(num_fragments):
+            var_name = f'discard_{i}'
+            discard_vars.append(pulp.LpVariable(var_name, cat='Binary'))
+        return discard_vars
+
     def _add_outgoing_constraints(
         self,
         problem: pulp.LpProblem,
         graph: FragmentGraph,
         link_vars: Dict[Tuple[int, int], pulp.LpVariable],
         end_vars: List[pulp.LpVariable],
+        discard_vars: Optional[List[pulp.LpVariable]],
     ) -> None:
         """Add constraints ensuring each fragment has exactly one outgoing path (link or end)."""
         for i in range(graph.N):
@@ -141,11 +168,17 @@ class ILPGraphSolver:
             if outgoing_connections:
                 outgoing_vars = [link_vars[(i, j)] for j in outgoing_connections]
                 constraint_name = f'outgoing_{i}'
-                problem += end_vars[i] + pulp.lpSum(outgoing_vars) == 1, constraint_name
+                if discard_vars is None:
+                    problem += end_vars[i] + pulp.lpSum(outgoing_vars) == 1, constraint_name
+                else:
+                    problem += end_vars[i] + pulp.lpSum(outgoing_vars) + discard_vars[i] == 1, constraint_name
             else:
                 # No outgoing links, so must be an end
                 constraint_name = f'end_forced_{i}'
-                problem += end_vars[i] == 1, constraint_name
+                if discard_vars is None:
+                    problem += end_vars[i] == 1, constraint_name
+                else:
+                    problem += end_vars[i] + discard_vars[i] == 1, constraint_name
 
     def _add_incoming_constraints(
         self,
@@ -153,6 +186,7 @@ class ILPGraphSolver:
         graph: FragmentGraph,
         link_vars: Dict[Tuple[int, int], pulp.LpVariable],
         start_vars: List[pulp.LpVariable],
+        discard_vars: Optional[List[pulp.LpVariable]],
     ) -> None:
         """Add constraints ensuring each fragment has exactly one incoming path (start or link)."""
         # Build incoming connections mapping
@@ -165,11 +199,17 @@ class ILPGraphSolver:
             # start_j + sum(incoming_links_to_j) == 1
             if incoming[j]:
                 constraint_name = f'incoming_{j}'
-                problem += start_vars[j] + pulp.lpSum(incoming[j]) == 1, constraint_name
+                if discard_vars is None:
+                    problem += start_vars[j] + pulp.lpSum(incoming[j]) == 1, constraint_name
+                else:
+                    problem += start_vars[j] + pulp.lpSum(incoming[j]) + discard_vars[j] == 1, constraint_name
             else:
                 # No incoming links, so must be a start
                 constraint_name = f'start_forced_{j}'
-                problem += start_vars[j] == 1, constraint_name
+                if discard_vars is None:
+                    problem += start_vars[j] == 1, constraint_name
+                else:
+                    problem += start_vars[j] + discard_vars[j] == 1, constraint_name
 
     def _set_objective_function(
         self,
@@ -180,6 +220,8 @@ class ILPGraphSolver:
         end_vars: List[pulp.LpVariable],
         start_costs: List[float],
         end_costs: List[float],
+        discard_vars: Optional[List[pulp.LpVariable]],
+        discard_costs: Optional[List[float]],
     ) -> None:
         """Set the objective function to minimize total cost."""
         objective_terms = []
@@ -197,11 +239,25 @@ class ILPGraphSolver:
         for i, var in enumerate(end_vars):
             objective_terms.append(end_costs[i] * var)
 
+        # Discard costs (optional)
+        if discard_vars is not None:
+            assert discard_costs is not None
+            for i, var in enumerate(discard_vars):
+                c = float(discard_costs[i])
+                if c == float('inf') or c != c:  # inf or NaN => disallowed
+                    problem += var == 0, f'discard_forced_off_{i}'
+                else:
+                    objective_terms.append(c * var)
+
         # Set objective
         problem += pulp.lpSum(objective_terms)
 
     def _solve_and_extract_solution(
-        self, problem: pulp.LpProblem, graph: FragmentGraph, link_vars: Dict[Tuple[int, int], pulp.LpVariable]
+        self,
+        problem: pulp.LpProblem,
+        graph: FragmentGraph,
+        link_vars: Dict[Tuple[int, int], pulp.LpVariable],
+        discard_vars: Optional[List[pulp.LpVariable]],
     ) -> Tuple[List[Track], float]:
         """Solve the optimization problem and extract the solution."""
         # Get solver
@@ -229,6 +285,12 @@ class ILPGraphSolver:
 
         # Extract solution
         successor_of: Dict[int, int | None] = {i: None for i in range(graph.N)}
+        discarded: Set[int] = set()
+
+        if discard_vars is not None:
+            for i, var in enumerate(discard_vars):
+                if var.varValue is not None and var.varValue > 0.5:
+                    discarded.add(i)
 
         for (i, j), var in link_vars.items():
             if var.varValue is not None and var.varValue > 0.5:  # Binary variable is 1
@@ -236,10 +298,10 @@ class ILPGraphSolver:
 
         assert isinstance(solution_cost, float), f'Solution cost is not a float: {solution_cost}'
 
-        return self._reconstruct_tracks_from_solution(graph.fragments, successor_of), solution_cost
+        return self._reconstruct_tracks_from_solution(graph.fragments, successor_of, discarded), solution_cost
 
     def _reconstruct_tracks_from_solution(
-        self, fragments: List[Track], successor_of: Dict[int, int | None]
+        self, fragments: List[Track], successor_of: Dict[int, int | None], discarded: Set[int]
     ) -> List[Track]:
         """Reconstruct final tracks from the optimization solution."""
         # Find track starts (fragments with no predecessors)
@@ -248,7 +310,7 @@ class ILPGraphSolver:
             if successor is not None:
                 has_predecessor[successor] = True
 
-        starts = [i for i in range(len(fragments)) if not has_predecessor[i]]
+        starts = [i for i in range(len(fragments)) if i not in discarded and not has_predecessor[i]]
 
         # Build final tracks
         final_tracks: List[Track] = []
@@ -258,11 +320,14 @@ class ILPGraphSolver:
             # Follow the chain of fragments
             current_idx = start_idx
             while current_idx is not None:
+                if current_idx in discarded:
+                    break
                 detections.extend(fragments[current_idx].sorted_detections)
                 current_idx = successor_of[current_idx]
 
             # Create final track
             sorted_detections = sorted(detections, key=lambda d: d.frame_idx)
-            final_tracks.append(Track(track_id=track_id, sorted_detections=sorted_detections))
+            if sorted_detections:
+                final_tracks.append(Track(track_id=track_id, sorted_detections=sorted_detections))
 
         return final_tracks

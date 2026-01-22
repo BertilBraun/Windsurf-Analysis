@@ -22,17 +22,18 @@ def _add_video_processing_to_path() -> None:
 
 _add_video_processing_to_path()
 
-from inference.src.common_types import BoundingBox, Detection, Keypoint, RenderableTrack, Track  # noqa: E402
-from inference.src.orientation_fixer import OrientationFixer  # noqa: E402
-from inference.src.player.core.player_state import DetectionLite, Metadata, TrackLite, VideoProperties  # noqa: E402
-from inference.src.settings import REID_MODEL_TYPE, YOLO_MODEL_PATH  # noqa: E402
-from inference.src.tracking.detector import EmbeddingExtractor, ObjectDetector, RawDetection  # noqa: E402
-from inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker  # noqa: E402
-from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor  # noqa: E402
-from inference.src.tracking.track_processing import TrackPostProcessing, prepare_renderable_tracks  # noqa: E402
-from inference.src.util.timing import timeit  # noqa: E402
-from inference.src.util.video_io import VideoReader, get_video_properties  # noqa: E402
-from inference.src.visualization.stabilize import (  # noqa: E402
+from inference.src.common_types import BoundingBox, Detection, Keypoint, RenderableTrack, Track
+from inference.src.orientation_fixer import OrientationFixer
+from inference.src.player.core.player_state import DetectionLite, Metadata, TrackLite, VideoProperties
+from inference.src.settings import REID_MODEL_TYPE, YOLO_MODEL_PATH
+from inference.src.tracking.detector import EmbeddingExtractor, ObjectDetector, RawDetection
+from inference.src.tracking.ilp_tracker import ILPTracker
+from inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
+from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
+from inference.src.tracking.track_processing import TrackPostProcessing, prepare_renderable_tracks
+from inference.src.util.timing import timeit
+from inference.src.util.video_io import VideoReader, get_video_properties
+from inference.src.visualization.stabilize import (
     STABLE_GFTT_BLOCK_SIZE,
     STABLE_GFTT_MAX_CORNERS,
     STABLE_GFTT_MIN_DISTANCE,
@@ -44,7 +45,7 @@ from inference.src.visualization.stabilize import (  # noqa: E402
     compute_stabilization_transforms_gmc,
     gmc_transform_from_frame,
 )
-from inference.src.motion.gmc import GMC  # noqa: E402
+from inference.src.motion.gmc import GMC
 from inference.src.util.cache import cache_to_file
 
 
@@ -496,7 +497,11 @@ def run_local_pipeline(
     # 5) Tracking + post-processing
     with timeit('tracking: trackers'):
         tracks: list[Track] = [Track(track_id=i, sorted_detections=[d]) for i, d in enumerate(detections)]
-        trackers: Sequence = [TrackPreProcessor(), IterativeILPTracker(), TrackPostProcessing()]
+        trackers: Sequence = [
+            TrackPreProcessor(),
+            ILPTracker(video_path=upright_video.as_posix()),
+            TrackPostProcessing(),
+        ]
         for tracker in trackers:
             tracks = tracker.track(tracks, props, raw_motion_transforms)
 

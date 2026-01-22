@@ -150,7 +150,9 @@ class GreedyTrackStitcher:
             # Restart from the last detection
             active_tracks.append(create_new_track(last_det))
 
-        for frame_idx, frame_detections in detections_by_frame.items():
+        # Ensure deterministic, causal processing order even if detections arrive out-of-order.
+        for frame_idx in sorted(detections_by_frame.keys()):
+            frame_detections = detections_by_frame[frame_idx]
             track_by_id: Dict[int, Track] = {t.track_id: t for t in active_tracks}
 
             valid_proposals, detections_to_create_new_tracks, fade_track_ids = self._generate_tentative_proposals(
