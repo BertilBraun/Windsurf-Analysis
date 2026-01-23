@@ -85,13 +85,14 @@ See:
 - Masked estimator: [`video_processing/inference/src/visualization/stabilize.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/visualization/stabilize.py) (`MaskedVidStabEstimator`)
 - Usage in Modal: `_compute_masked_vidstab_transforms_and_crop_detections()` in [`video_processing/main_tracking.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/main_tracking.py)
 
-The frontend expects a **per-frame delta transform** (prev->curr). To reduce jitter, the pipeline applies a VidStab-like smoothing rule:
+The frontend expects **per-frame stabilization corrections** `(dx, dy, da)` anchored at frame `k` that are applied *directly* when rendering frame `k`.
+To reduce jitter, the pipeline follows a VidStab-like smoothing rule:
 
-- build cumulative trajectory,
-- smooth trajectory with rolling mean,
-- correct raw deltas by `(smoothed - raw)`.
+- build cumulative trajectory from raw prev->curr deltas,
+- smooth the trajectory with a rolling mean,
+- compute the correction as `(smoothed_trajectory - trajectory)` per frame.
 
-See `vidstab_like_transforms()` in [`video_processing/inference/src/visualization/stabilize.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/visualization/stabilize.py).
+See `vidstab_like_correction_by_frame()` in [`video_processing/inference/src/visualization/stabilize.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/visualization/stabilize.py).
 
 ### Step D — Appearance features (ReID / descriptors)
 

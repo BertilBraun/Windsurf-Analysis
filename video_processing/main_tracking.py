@@ -19,7 +19,7 @@ from inference.src.visualization.stabilize import (
     STABLE_SMOOTHING_WINDOW,
     Transform,
     stable_processing_max_dim_half,
-    vidstab_like_transforms,
+    vidstab_like_correction_by_frame,
 )
 
 from main_inference import (
@@ -124,20 +124,17 @@ def embedding_extraction_and_tracking(
         ]
 
         with timeit(f'{job_id}: Stabilization Optimization'):
-            # Compute the transforms which the frontend should use as per frame warps for stabilization
-            # stabilized_transforms = optimize_trajectory_world(transforms, properties.width, properties.height)
+            # Compute per-frame stabilization correction values for rendering (dx,dy,da anchored at frame k).
             smoothing_window = min(int(STABLE_SMOOTHING_WINDOW), props.total_frames - 1)
-            stabilized_transforms = vidstab_like_transforms(parsed_transforms, smoothing_window)
-
-        # Frontend convenience: emit an explicit identity transform for frame 0.
-        # The rest are prev->curr deltas anchored at their `frame_idx` (e.g. 0->1 has frame_idx==1).
-        stabilized_transforms_for_output = [Transform(dx=0.0, dy=0.0, da=0.0, frame_idx=0), *stabilized_transforms]
+            stabilized_transforms_for_output = vidstab_like_correction_by_frame(
+                parsed_transforms,
+                frame_count=int(props.total_frames),
+                smoothing_window=int(smoothing_window),
+            )
 
         # Convert transforms payload into result with time_percent
         stabilization_transforms = [
             {
-                # `Transform.frame_idx` is the CURRENT frame index for the prev->curr delta (e.g. 0->1 has frame_idx=1),
-                # so we anchor the transform at the current frame timestamp (avoids an off-by-one in visualization).
                 'time_percent': clamp_percentage(t.frame_idx / props.total_frames),
                 'dx': t.dx,
                 'dy': t.dy,

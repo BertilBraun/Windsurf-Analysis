@@ -61,9 +61,7 @@ export class PlayerState {
 
     getStabilizationAtFrame(frameIndex: number): { dx: number; dy: number; da: number } {
         assert(frameIndex >= 0 && frameIndex < this.frameCount, 'Invalid frame index')
-        const DEBUG_STABILIZATION_FRAME_INDEX_OFFSET = 1
-        const idx = Math.max(0, Math.min(this.frameCount - 1, frameIndex + DEBUG_STABILIZATION_FRAME_INDEX_OFFSET))
-        return this.stabilizationByFrame[idx]
+        return this.stabilizationByFrame[frameIndex]!
     }
 
     getDetectionAtFrame(trackId: number, frameIndex: number): TrackDetection | null {

@@ -14,7 +14,12 @@ from ..util.video_io import get_video_properties
 
 Transform = NamedTuple(
     'Transform', [('dx', float), ('dy', float), ('da', float), ('frame_idx', int)]
-)  # dx, dy, da for each frame relative to the previous frame (frame[i] - frame[i-1]) -> frame[i] = frame[i-1] + dx, dy, da
+)
+# NOTE:
+# - For *raw motion estimation*, `Transform(dx,dy,da,frame_idx=k)` represents the estimated prev->curr delta
+#   between frames k-1 and k.
+# - For *stabilization rendering*, some call sites use per-frame *absolute correction/warp* values anchored at
+#   `frame_idx=k` to apply directly when drawing frame k.
 
 
 STABLE_GFTT_MAX_CORNERS = 200
@@ -331,6 +336,57 @@ def vidstab_like_transforms(transforms: list[Transform], smoothing_window: int =
         Transform(dx=float(dx), dy=float(dy), da=float(da), frame_idx=int(frame_idx))
         for frame_idx, (dx, dy, da) in zip(frame_idxs, stab)
     ]
+
+
+def vidstab_like_correction_by_frame(
+    raw_motion_transforms: list[Transform],
+    *,
+    frame_count: int,
+    smoothing_window: int = 30,
+) -> list[Transform]:
+    """
+    Compute per-frame *absolute* stabilization corrections suitable for direct rendering.
+
+    The input `raw_motion_transforms` are prev->curr motion deltas for frames 1..N-1 (frame 0 has no delta).
+
+    Returns a dense list of length `frame_count` with:
+      - frame 0: identity (0,0,0)
+      - frame k (k>=1): correction[k] = smoothed_trajectory[k] - trajectory[k]
+        where trajectories are cumulative sums of raw motion deltas.
+
+    This matches the convention used by the Qt/web players (apply correction directly to frame k when drawing).
+    """
+    frame_count = int(frame_count)
+    if frame_count <= 0:
+        return []
+
+    if frame_count == 1:
+        return [Transform(dx=0.0, dy=0.0, da=0.0, frame_idx=0)]
+
+    raw_by_frame: dict[int, Transform] = {int(t.frame_idx): t for t in raw_motion_transforms}
+
+    raw_deltas: list[list[float]] = []
+    for frame_idx in range(1, frame_count):
+        t = raw_by_frame.get(int(frame_idx))
+        if t is None:
+            raw_deltas.append([0.0, 0.0, 0.0])
+        else:
+            raw_deltas.append([float(t.dx), float(t.dy), float(t.da)])
+
+    raw = np.asarray(raw_deltas, dtype=np.float64)  # shape (frame_count-1,3)
+    if raw.shape[0] == 0:
+        return [Transform(dx=0.0, dy=0.0, da=0.0, frame_idx=i) for i in range(frame_count)]
+
+    traj = np.cumsum(raw, axis=0)  # shape (frame_count-1,3)
+    n = max(1, min(int(smoothing_window), int(traj.shape[0])))
+    traj_s = _bfill_rolling_mean(traj, n=n)  # shape (frame_count-1,3)
+    corr = traj_s - traj  # shape (frame_count-1,3)
+
+    out: list[Transform] = [Transform(dx=0.0, dy=0.0, da=0.0, frame_idx=0)]
+    for frame_idx in range(1, frame_count):
+        dx, dy, da = corr[frame_idx - 1]
+        out.append(Transform(dx=float(dx), dy=float(dy), da=float(da), frame_idx=int(frame_idx)))
+    return out
 
 
 def _bfill_rolling_mean(arr: np.ndarray, n: int = 30) -> np.ndarray:
