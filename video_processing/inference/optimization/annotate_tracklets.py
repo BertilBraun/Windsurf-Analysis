@@ -35,6 +35,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow
 "spacebar" : next golden id
 "backspace" : undo last assignment
 "escape" : finalize and save
+"d" : mark selected tracklet as discard (golden id 0)
 "left arrow" : previous unassigned tracklet start
 "right arrow" : next unassigned tracklet start
 "control + left arrow" : previous 30 frames
@@ -42,6 +43,8 @@ from PySide6.QtWidgets import QApplication, QMainWindow
 "shift + left arrow" : previous 5 frames
 "shift + right arrow" : next 5 frames
 """
+
+DISCARD_GOLDEN_ID = 0
 
 
 def _detections_to_initial_tracks(detections: list[Detection]) -> list[Track]:
@@ -172,6 +175,7 @@ class TrackAnnotatorWindow(QMainWindow):
         self.assignments: dict[int, int] = {}
         self.history: list[tuple[int, int | None]] = []  # (pre_id, prev_golden_or_None)
         self.current_golden_id: int = 1
+        self.selected_pre_id: int | None = None
 
         self.video_widget = VideoWidget(self.state, on_track_selected=self._on_track_clicked)
         self.setCentralWidget(self.video_widget)
@@ -210,17 +214,35 @@ class TrackAnnotatorWindow(QMainWindow):
             self._update_hud(brief=f'Already assigned (golden {track_id})')
             return
         pre_id = int(-track_id)
+        self.selected_pre_id = int(pre_id)
 
         # Check temporal overlap with existing assignments for this golden id
         if not self._can_assign_without_overlap(pre_id, self.current_golden_id):
             self._update_hud(brief='Overlap conflict: cannot assign to this golden id')
             return
-        prev = self.assignments.get(pre_id)
-        self.history.append((pre_id, prev))
-        self.assignments[pre_id] = self.current_golden_id
-        # Update displayed IDs for this preprocessed tracklet to the golden ID
-        self._apply_display_id(pre_id, self.current_golden_id)
-        self._update_hud(brief=f'Assigned pre {pre_id} -> golden {self.current_golden_id}')
+        self._set_assignment(pre_id, self.current_golden_id, brief=f'Assigned pre {pre_id} -> golden {self.current_golden_id}')
+
+    def _set_assignment(self, pre_id: int, golden_id: int, *, brief: str | None = None) -> None:
+        prev = self.assignments.get(int(pre_id))
+        self.history.append((int(pre_id), prev))
+        self.assignments[int(pre_id)] = int(golden_id)
+        self._apply_display_id(int(pre_id), int(golden_id))
+        self._update_hud(brief=brief)
+
+    def _discard_selected(self) -> None:
+        # Prefer hovered tracklet in overview (works even before clicking).
+        hovered = self.video_widget.hovered_track_id
+        if hovered is not None and int(hovered) < 0:
+            pre_id = int(-hovered)
+        else:
+            pre_id = self.selected_pre_id if self.selected_pre_id is not None else None
+
+        if pre_id is None:
+            self._update_hud(brief='No tracklet selected/hovered')
+            return
+
+        self.selected_pre_id = int(pre_id)
+        self._set_assignment(int(pre_id), int(DISCARD_GOLDEN_ID), brief=f'Discard pre {int(pre_id)} (golden 0)')
 
     def _undo(self) -> None:
         if not self.history:
@@ -261,6 +283,9 @@ class TrackAnnotatorWindow(QMainWindow):
             return
         if key == Qt.Key.Key_Backspace:
             self._undo()
+            return
+        if key == Qt.Key.Key_D:
+            self._discard_selected()
             return
         if key == Qt.Key.Key_Escape:
             self._finalize_and_save()
@@ -310,6 +335,8 @@ class TrackAnnotatorWindow(QMainWindow):
         self.video_widget.update()
 
     def _can_assign_without_overlap(self, pre_id: int, golden_id: int) -> bool:
+        if int(golden_id) == int(DISCARD_GOLDEN_ID):
+            return True
         # Frames of the candidate preprocessed track
         frames_candidate: set[int] = set()
         for t in self.pre_tracks:

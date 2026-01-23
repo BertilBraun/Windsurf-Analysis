@@ -10,7 +10,7 @@ import numpy as np
 
 from pathlib import Path
 from functools import cache
-from typing import Any, Callable, Dict, Generator, Generic, List, Literal, Tuple, Optional, TypeVar
+from typing import Any, Callable, Dict, Generator, Generic, Iterable, List, Literal, Tuple, Optional, TypeVar
 import multiprocessing as mp
 import traceback
 
@@ -34,6 +34,9 @@ from video_processing.inference.src.settings import REID_MODEL_TYPE
 # Global constants for optimization and sampling. Adjust here as needed.
 TRIALS: int = 200
 RANDOM_SEED: int = 42
+
+# Special track id used in golden metadata to mark detections/tracklets that should be discarded/ignored.
+DISCARD_TRACK_ID: int = 0
 
 
 class _CompatUnpickler(pickle.Unpickler):
@@ -218,6 +221,125 @@ def build_assignment_from_metadata(meta: Metadata) -> Dict[AssignmentKey, int]:
             assignment[k] = int(t.track_id)
     return assignment
 
+
+def _check_no_extra_pred_keys(gold: Dict[AssignmentKey, int], pred: Dict[AssignmentKey, int]) -> None:
+    extra = set(pred.keys()) - set(gold.keys())
+    if extra:
+        # If a tracker changes bbox coordinates, the assignment identity breaks and scoring becomes invalid.
+        raise ValueError(f'Pred has {len(extra)} extra detection keys not in gold')
+
+
+def _fill_missing_keys(
+    pred: Dict[AssignmentKey, int],
+    *,
+    universe: Iterable[AssignmentKey],
+    default_track_id: int,
+) -> Dict[AssignmentKey, int]:
+    filled: Dict[AssignmentKey, int] = dict(pred)
+    for k in universe:
+        filled.setdefault(k, int(default_track_id))
+    return filled
+
+
+def align_for_pairwise_scores(
+    gold: Dict[AssignmentKey, int],
+    pred: Dict[AssignmentKey, int],
+    *,
+    discard_track_id: int = DISCARD_TRACK_ID,
+    ignore_gold_discard: bool = True,
+    missing_pred_policy: Literal['unique', 'discard'] = 'unique',
+) -> Tuple[Dict[AssignmentKey, int], Dict[AssignmentKey, int]]:
+    """
+    Align gold/pred maps for pairwise clustering metrics.
+
+    - If `ignore_gold_discard`, detections with gold label == discard_track_id are removed from scoring.
+    - Missing predicted detections are handled by:
+        - 'unique': assign unique singleton ids (does not accidentally reward grouping missing detections together)
+        - 'discard': assign discard_track_id
+
+    Raises if pred contains keys not present in gold (bbox identity mismatch).
+    """
+    _check_no_extra_pred_keys(gold, pred)
+
+    if ignore_gold_discard:
+        keys = [k for k, gid in gold.items() if int(gid) != int(discard_track_id)]
+    else:
+        keys = list(gold.keys())
+
+    gold_aligned: Dict[AssignmentKey, int] = {k: int(gold[k]) for k in keys}
+
+    if missing_pred_policy == 'discard':
+        pred_filled = _fill_missing_keys(pred, universe=keys, default_track_id=int(discard_track_id))
+        pred_aligned = {k: int(pred_filled[k]) for k in keys}
+        return gold_aligned, pred_aligned
+
+    # missing_pred_policy == 'unique'
+    pred_aligned: Dict[AssignmentKey, int] = {}
+    next_tid = (max(pred.values()) + 1) if pred else 1
+    for k in keys:
+        if k in pred:
+            pred_aligned[k] = int(pred[k])
+        else:
+            pred_aligned[k] = int(next_tid)
+            next_tid += 1
+    return gold_aligned, pred_aligned
+
+
+@dataclass(frozen=True)
+class DiscardScores:
+    num_detections: float
+    num_gold_discard: float
+    num_pred_discard: float
+    precision: float
+    recall: float
+    f1: float
+
+
+def discard_scores(
+    gold: Dict[AssignmentKey, int],
+    pred: Dict[AssignmentKey, int],
+    *,
+    discard_track_id: int = DISCARD_TRACK_ID,
+) -> DiscardScores:
+    """
+    Binary classification metrics for the decision "discard this detection?"
+
+    Convention:
+    - Positive class: discard (track_id == discard_track_id).
+    - Missing predictions are treated as discarded.
+
+    Raises if pred contains keys not present in gold.
+    """
+    _check_no_extra_pred_keys(gold, pred)
+    pred_filled = _fill_missing_keys(pred, universe=gold.keys(), default_track_id=int(discard_track_id))
+
+    tp = fp = fn = 0
+    gold_pos = pred_pos = 0
+    for k, gid in gold.items():
+        g_discard = int(gid) == int(discard_track_id)
+        p_discard = int(pred_filled[k]) == int(discard_track_id)
+        if g_discard:
+            gold_pos += 1
+        if p_discard:
+            pred_pos += 1
+        if g_discard and p_discard:
+            tp += 1
+        elif (not g_discard) and p_discard:
+            fp += 1
+        elif g_discard and (not p_discard):
+            fn += 1
+
+    prec = tp / (tp + fp) if (tp + fp) else 1.0
+    rec = tp / (tp + fn) if (tp + fn) else 1.0
+    f1 = (2 * prec * rec / (prec + rec)) if (prec + rec) else 1.0
+    return DiscardScores(
+        num_detections=float(len(gold)),
+        num_gold_discard=float(gold_pos),
+        num_pred_discard=float(pred_pos),
+        precision=float(prec),
+        recall=float(rec),
+        f1=float(f1),
+    )
 
 @dataclass(frozen=True)
 class PairwiseScores:

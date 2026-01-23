@@ -27,7 +27,11 @@ from video_processing.inference.src.tracking.discrete_opt_tracker import Discret
 from video_processing.inference.src.common_types import Track
 from video_processing.inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
 from video_processing.inference.optimization.optimization_util import (
+    DISCARD_TRACK_ID,
+    DiscardScores,
     PairwiseScores,
+    align_for_pairwise_scores,
+    discard_scores,
     optimize,
     build_assignment_from_tracks,
     build_assignment_from_metadata,
@@ -69,12 +73,21 @@ def _preprocessor_one(golden_path: str, params: Dict[str, Any]) -> tuple[int, in
     initial_tracks = _flatten_tracks(tracks)
     pred_tracks = pre.track(initial_tracks, props, transforms)
 
-    gold_assign = build_assignment_from_metadata(meta)
-    pred_assign = build_assignment_from_tracks(pred_tracks)
+    gold_assign_all = build_assignment_from_metadata(meta)
+    pred_assign_all = build_assignment_from_tracks(pred_tracks)
 
-    if set(gold_assign.keys()) != set(pred_assign.keys()):
+    # Preprocessor shouldn't change detection identity. Ignore any gold-discard detections for purity scoring.
+    gold_keep_keys = {k for k, gid in gold_assign_all.items() if int(gid) != int(DISCARD_TRACK_ID)}
+    pred_keys = set(pred_assign_all.keys())
+
+    missing_required = gold_keep_keys - pred_keys
+    extra_not_in_gold = pred_keys - set(gold_assign_all.keys())
+    if missing_required or extra_not_in_gold:
         # Count as impure and use predicted track count for fragmentation term.
         return 1, int(len(pred_tracks))
+
+    gold_assign = {k: int(gold_assign_all[k]) for k in gold_keep_keys}
+    pred_assign = {k: int(pred_assign_all[k]) for k in gold_keep_keys}
 
     gold_ids_by_pred: Dict[int, set[int]] = defaultdict(set)
     for det_key, pred_tid in pred_assign.items():
@@ -165,7 +178,25 @@ def _discrete_one(golden_path: str, params: Dict[str, Any]) -> tuple[str, Pairwi
     pred_tracks = tracker.track(input_tracks, video_props, transforms)
     gold_assign = build_assignment_from_metadata(meta)
     pred_assign = build_assignment_from_tracks(pred_tracks)
-    s = pairwise_scores(gold_assign, pred_assign)
+    try:
+        gold_pw, pred_pw = align_for_pairwise_scores(
+            gold_assign,
+            pred_assign,
+            discard_track_id=DISCARD_TRACK_ID,
+            ignore_gold_discard=True,
+            missing_pred_policy='unique',
+        )
+        s = pairwise_scores(gold_pw, pred_pw)
+    except ValueError:
+        s = PairwiseScores(
+            num_detections=0.0,
+            pairs=0.0,
+            precision=0.0,
+            recall=0.0,
+            f1=0.0,
+            rand_index=0.0,
+            jaccard_same=0.0,
+        )
     return str(video_path.name), s
 
 
@@ -226,8 +257,36 @@ def _iter_ilp_one(golden_path: str, params: Dict[str, Any]) -> tuple[PairwiseSco
     tracker = ILPTracker(video_path, **params)
     pred_tracks = tracker.track(preprocessed_tracks, video_props, transforms)
     pred_assign = build_assignment_from_tracks(pred_tracks)
-    s = pairwise_scores(gold_assign, pred_assign)
-    return s, 0.0
+    try:
+        gold_pw, pred_pw = align_for_pairwise_scores(
+            gold_assign,
+            pred_assign,
+            discard_track_id=DISCARD_TRACK_ID,
+            ignore_gold_discard=True,
+            missing_pred_policy='unique',
+        )
+        s = pairwise_scores(gold_pw, pred_pw)
+        d = discard_scores(gold_assign, pred_assign, discard_track_id=DISCARD_TRACK_ID)
+    except ValueError:
+        s = PairwiseScores(
+            num_detections=0.0,
+            pairs=0.0,
+            precision=0.0,
+            recall=0.0,
+            f1=0.0,
+            rand_index=0.0,
+            jaccard_same=0.0,
+        )
+        d = DiscardScores(
+            num_detections=float(len(gold_assign)),
+            num_gold_discard=float(sum(1 for v in gold_assign.values() if int(v) == int(DISCARD_TRACK_ID))),
+            num_pred_discard=0.0,
+            precision=0.0,
+            recall=0.0,
+            f1=0.0,
+        )
+
+    return s, float(d.f1)
 
 
 @cache
@@ -258,9 +317,18 @@ def _evaluate_iter_ilp(
         return float('nan')
 
     metrics = pool.map_paths([p.as_posix() for p in golden_paths], params)
-    average_iterations = sum(iterations for _, iterations in metrics) / len(metrics)
-    weighted_avg_f1 = sum(s.f1 * s.num_detections for s, _ in metrics) / sum(s.num_detections for s, _ in metrics)
-    return float(weighted_avg_f1 - average_iterations / 100)
+    average_discard_f1 = sum(discard_f1 for _, discard_f1 in metrics) / len(metrics)
+
+    denom = sum(s.num_detections for s, _ in metrics)
+    if denom <= 0:
+        return float('nan')
+
+    weighted_avg_pairwise_f1 = sum(s.f1 * s.num_detections for s, _ in metrics) / denom
+
+    # Combine clustering quality (on non-discard gold detections) with discard-decision accuracy.
+    discard_weight = 0.25
+    combined = (1.0 - discard_weight) * float(weighted_avg_pairwise_f1) + discard_weight * float(average_discard_f1)
+    return float(combined)
 
 
 def _run_iter_ilp(args) -> Tuple[float, Dict[str, Any]]:
@@ -277,6 +345,13 @@ def _run_iter_ilp(args) -> Tuple[float, Dict[str, Any]]:
                 'w_gap': trial.suggest_float('w_gap', 0.0, 10.0),
                 'p_miss': trial.suggest_float('p_miss', 0.8, 1.0),
                 'appearance_similarity_gamma': trial.suggest_float('appearance_similarity_gamma', 2.0, 15.0),
+                # Optional discard behavior (newer tracker versions)
+                'allow_discard_short_tracklets': trial.suggest_categorical(
+                    'allow_discard_short_tracklets', [True, False]
+                ),
+                'discard_max_detections': trial.suggest_int('discard_max_detections', 1, 10),
+                'discard_cost_first': trial.suggest_float('discard_cost_first', 0.25, 50.0, log=True),
+                'discard_cost_growth': trial.suggest_float('discard_cost_growth', 1.0, 3.0),
             }
             score = _evaluate_iter_ilp(params, golden_paths, pool=pool)
             return -1.0 if math.isnan(score) else float(score)
