@@ -74,6 +74,7 @@ export function useWebCodexPlayer(params: {
     const opIdRef = React.useRef(0)
     const readyRef = React.useRef(false)
     const playingRef = React.useRef(false)
+    const resumeAfterVisibilityRef = React.useRef(false)
 
     const frameCountRef = React.useRef(0)
     const currentFrameRef = React.useRef(0)
@@ -85,13 +86,11 @@ export function useWebCodexPlayer(params: {
     const inputRef = React.useRef<Input | null>(null)
     const videoTrackRef = React.useRef<any | null>(null)
     const sinkRef = React.useRef<CanvasSink | null>(null)
-    const iterRef = React.useRef<AsyncGenerator<WrappedCanvas, void, unknown> | null>(null)
+    const iterRef = React.useRef<AsyncGenerator<WrappedCanvas | null, void, unknown> | null>(null)
 
     const ptsRef = React.useRef<number[]>([])
     const durRef = React.useRef<number[]>([])
     const isKeyRef = React.useRef<boolean[]>([])
-    const firstPtsRef = React.useRef<number>(0)
-    const lastEndRef = React.useRef<number>(0)
 
     const behindFramesRef = React.useRef<number>(0)
     const aheadFramesRef = React.useRef<number>(0)
@@ -99,6 +98,18 @@ export function useWebCodexPlayer(params: {
     const cacheRef = React.useRef<Map<number, WrappedCanvas>>(new Map())
     const cacheStartRef = React.useRef<number>(0)
     const cacheEndRef = React.useRef<number>(-1)
+
+    const resetDecodeState = React.useCallback(async () => {
+        const it = iterRef.current
+        iterRef.current = null
+        try {
+            await it?.return?.()
+        } catch {}
+
+        cacheRef.current.clear()
+        cacheStartRef.current = 0
+        cacheEndRef.current = -1
+    }, [])
 
     const dispose = React.useCallback(async () => {
         opIdRef.current++
@@ -120,15 +131,7 @@ export function useWebCodexPlayer(params: {
         setHeight(0)
         sizeRef.current = { width: 0, height: 0 }
 
-        const it = iterRef.current
-        iterRef.current = null
-        try {
-            await it?.return?.()
-        } catch {}
-
-        cacheRef.current.clear()
-        cacheStartRef.current = 0
-        cacheEndRef.current = -1
+        await resetDecodeState()
 
         sinkRef.current = null
         videoTrackRef.current = null
@@ -142,9 +145,7 @@ export function useWebCodexPlayer(params: {
         ptsRef.current = []
         durRef.current = []
         isKeyRef.current = []
-        firstPtsRef.current = 0
-        lastEndRef.current = 0
-    }, [])
+    }, [resetDecodeState])
 
     const evictOutsideWindow = React.useCallback((centerIndex: number) => {
         const n = frameCountRef.current
@@ -191,6 +192,7 @@ export function useWebCodexPlayer(params: {
         if (!sink) throw new Error('Video sink not initialized.')
         if (opId !== opIdRef.current) return
 
+        // Use range iterator (never yields "null" placeholders for missing exact timestamps).
         iterRef.current = sink.canvases(startPts)
     }, [])
 
@@ -244,7 +246,7 @@ export function useWebCodexPlayer(params: {
             cacheStartRef.current = startIdx
             cacheEndRef.current = startIdx - 1
 
-            await startIteratorAt(ptsRef.current[startIdx], opId)
+            await startIteratorAt(ptsRef.current[startIdx]!, opId)
             await pumpUntil(clamp(idx + ahead, 0, n - 1), opId, idx)
         },
         [pumpUntil, prevKeyframeIndex, startIteratorAt]
@@ -396,13 +398,9 @@ export function useWebCodexPlayer(params: {
                 const dur = packets.map(p => p.dur)
                 const isKey = packets.map(p => p.key)
 
-                const firstPts = pts[0]
-                const lastEnd = Math.max(...packets.map(p => p.ts + p.dur))
                 ptsRef.current = pts
                 durRef.current = dur
                 isKeyRef.current = isKey
-                firstPtsRef.current = firstPts
-                lastEndRef.current = lastEnd
 
                 frameCountRef.current = pts.length
                 setFrameCount(pts.length)
@@ -439,6 +437,24 @@ export function useWebCodexPlayer(params: {
             void dispose()
         }
     }, [dispose])
+
+    React.useEffect(() => {
+        const onVisibilityChange = () => {
+            if (!readyRef.current) return
+            if (document.visibilityState === 'hidden') {
+                resumeAfterVisibilityRef.current = playingRef.current
+                pause()
+                return
+            }
+
+            const playAfter = resumeAfterVisibilityRef.current
+            resumeAfterVisibilityRef.current = false
+            void resetDecodeState().then(() => seekFrame(currentFrameRef.current, playAfter))
+        }
+
+        document.addEventListener('visibilitychange', onVisibilityChange)
+        return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+    }, [pause, resetDecodeState, seekFrame])
 
     const ended = React.useMemo(
         () => frameCount > 0 && currentFrameIndex >= frameCount - 1,
