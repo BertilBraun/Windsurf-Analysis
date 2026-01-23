@@ -60,6 +60,8 @@ Each detection becomes a `RawDetection` containing:
 - crop (image region for appearance extraction),
 - the two keypoints (with per-kp confidence).
 
+![Example training sample (bbox + 2 keypoints).](Training-Sample.png)
+
 See `video_processing/inference/src/tracking/detector.py`.
 
 Important implementation details:
@@ -108,7 +110,11 @@ See:
 - Color AB stripe descriptor: `video_processing/inference/src/tracking/reid/ReIDColorABStripeHistogram.py`
 - Distance/probability helpers: `video_processing/inference/src/util/similarity_helpers.py`
 
-### Step E — Multi-stage tracking (association)
+![Embedding distance signal used for appearance matching.](Embedding.png)
+
+*Embedding-based appearance signal (used by tracker gating and ILP costs).*
+
+### Step E - Multi-stage tracking (association)
 
 Tracking is explicitly designed as **progressive refinement**:
 
@@ -156,7 +162,11 @@ Each candidate edge is assigned a cost that is the sum of negative log-likelihoo
 
 - **motion**: Kalman-based consistency under camera motion compensation
 - **appearance**: distance between track prototypes mapped to probability, then to NLL
-- **gap**: per-frame “miss” penalty (`p_miss`)
+- **gap**: per-frame "miss" penalty (`p_miss`)
+
+![Fragment-linking graph for ILP association.](ILP-Fragment-Graph.png)
+
+*Fragments (tracklets) are nodes; candidate links are directed edges scored by motion, appearance, and gap penalties.*
 
 The ILP formulation chooses:
 
@@ -171,7 +181,11 @@ See:
 - Solver: `video_processing/inference/src/tracking/ILP_graph_solver.py` (PuLP + CBC)
 - Camera motion compensation applied to the Kalman model: `video_processing/inference/src/motion/cmc.py`
 
-Why “iterative”?
+![Candidate edge scoring heatmap.](Candidate-Heatmap.png)
+
+*Example of candidate link scoring between fragment endpoints (used to prune and cost edges before solving).*
+
+Why "iterative"?
 
 The ILP can be biased by how strongly it discourages starting new tracks. The iterative tracker starts with a permissive start cost and can ramp it up across iterations, trading off:
 
@@ -316,6 +330,17 @@ See:
 - builds a YOLO-pose dataset (`kpt_shape: [2,3]`) aligned with the detection images,
 - supports mixing manual and pseudo pose labels,
 - trains a YOLO pose model used by the main pipeline.
+
+### Active learning loop (keypoints)
+
+Keypoints are expensive to label, so I used a lightweight active-learning workflow to keep annotation effort manageable:
+
+1) Fully annotate ~200 frames (bbox + 2 keypoints).
+2) Train a first-pass pose model.
+3) Run that model to predict keypoints on new frames, then use the annotator to fix only the mistakes.
+4) Retrain and repeat ~3 iterations.
+
+In practice, this produces a fully-annotated dataset with far less manual work than labeling everything from scratch, while still reaching strong model performance.
 
 ### Annotation tools
 
