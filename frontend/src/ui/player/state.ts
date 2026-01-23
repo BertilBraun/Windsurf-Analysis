@@ -1,4 +1,4 @@
-import { JobDetail, Track, TrackDetection, StabilizationTransform } from '../types'
+import { JobDetail, Track, TrackDetection } from '../types'
 import { assert } from '../utils/assert'
 
 export type PlayerMode = 'overview' | 'detailed'
@@ -46,18 +46,24 @@ export class PlayerState {
             detections: [...track.detections].sort((a, b) => a.time_percent - b.time_percent),
         }))
 
+        const stabilizationByFrame = [...job.stabilization_transforms].sort((a, b) => a.time_percent - b.time_percent).map(t => ({ dx: t.dx, dy: t.dy, da: t.da }))
+
+        assert(stabilizationByFrame.length === frameCount, 'Missing Stabilization!!!')
+
         return new PlayerState({
             mode: 'overview',
             currentTrackId: null,
             frameCount,
             tracks,
-            stabilizationByFrame: materializeStabilization(job.stabilization_transforms, frameCount),
+            stabilizationByFrame
         })
     }
 
     getStabilizationAtFrame(frameIndex: number): { dx: number; dy: number; da: number } {
         assert(frameIndex >= 0 && frameIndex < this.frameCount, 'Invalid frame index')
-        return this.stabilizationByFrame[frameIndex]
+        const DEBUG_STABILIZATION_FRAME_INDEX_OFFSET = 1
+        const idx = Math.max(0, Math.min(this.frameCount - 1, frameIndex + DEBUG_STABILIZATION_FRAME_INDEX_OFFSET))
+        return this.stabilizationByFrame[idx]
     }
 
     getDetectionAtFrame(trackId: number, frameIndex: number): TrackDetection | null {
@@ -115,37 +121,8 @@ export class PlayerState {
 
     frameIndexForPercent(percent: number): number {
         assert(percent >= 0 && percent <= 1, 'Invalid percent')
-        return clampInt(Math.round(percent * this.frameCount), 0, this.frameCount - 1)
-    }
-}
-
-function clampInt(x: number, lo: number, hi: number) {
-    const xi = x | 0
-    return Math.max(lo, Math.min(hi, xi))
-}
-
-function materializeStabilization(
-    transforms: StabilizationTransform[],
-    frameCount: number
-): Array<{ dx: number; dy: number; da: number }> {
-    if (frameCount <= 0) return []
-    if (transforms.length === 0) return new Array(frameCount).fill(0).map(() => ({ dx: 0, dy: 0, da: 0 }))
-
-    const sorted = [...transforms].sort((a, b) => a.time_percent - b.time_percent)
-
-    if (sorted.length === frameCount) {
-        return sorted.map(t => ({ dx: t.dx, dy: t.dy, da: t.da }))
+        const frameIndex = Math.round(percent * this.frameCount)
+        return Math.max(0, Math.min(this.frameCount - 1, frameIndex))
     }
 
-    const out: Array<{ dx: number; dy: number; da: number } | null> = new Array(frameCount).fill(null)
-    for (const t of sorted) {
-        const idx = clampInt(Math.round(t.time_percent * frameCount), 0, frameCount - 1)
-        out[idx] = { dx: t.dx, dy: t.dy, da: t.da }
-    }
-
-    for (const t of out) {
-        assert(t !== null, 'Missing stabilization!!!')
-    }
-
-    return out as Array<{ dx: number; dy: number; da: number }>
 }
