@@ -16,6 +16,7 @@ export const HomePage: React.FC = () => {
             // { mp4: '/Surfer2.mp4', av1: '/Surfer2.av1.mp4' },
             { mp4: '/SurferA.encoded.mp4', av1: '/SurferA.av1.mp4' },
             { mp4: '/SurferB.encoded.mp4', av1: '/SurferB.av1.mp4' },
+            { mp4: '/SurferC.encoded.mp4', av1: '/SurferC.av1.mp4' },
         ]
         return videos[Math.floor(Math.random() * videos.length)]
     }, [])

@@ -56,7 +56,7 @@ def _parse_args() -> argparse.Namespace:
         )
     )
     p.add_argument('--input-video', type=str, required=True)
-    p.add_argument('--output-video', type=str, default='tmp/homepage_demo.mp4')
+    p.add_argument('--output-video', type=str, default=None)
     p.add_argument('--track-id', type=int, required=True)
 
     p.add_argument('--pipeline-output-dir', type=str, default='tmp/homepage_demo_run')
@@ -95,11 +95,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument('--masked-min-distance', type=float, default=float(STABLE_GFTT_MIN_DISTANCE))
     p.add_argument('--masked-block-size', type=int, default=int(STABLE_GFTT_BLOCK_SIZE))
 
-    p.add_argument('--left-zoom', type=float, default=1.08, help='Zoom-in for shaky warp to avoid borders.')
+    p.add_argument('--left-zoom', type=float, default=1.0, help='Zoom-in for shaky warp to avoid borders.')
     p.add_argument('--trail-length', type=int, default=30, help='Number of bbox-center points in the trail.')
     p.add_argument('--output-width', type=int, default=None)
     p.add_argument('--output-height', type=int, default=None)
-    p.add_argument('--right-zoom-mul', type=float, default=1.0, help='Extra zoom multiplier for detailed crop.')
+    p.add_argument('--right-zoom-mul', type=float, default=0.85, help='Extra zoom multiplier for detailed crop.')
     p.add_argument(
         '--with-stabilization',
         action='store_true',
@@ -397,7 +397,7 @@ def _main() -> int:
     left_zoom = float(max(1.0, args.left_zoom))
     trail_len = max(2, int(args.trail_length))
 
-    out_path = Path(args.output_video)
+    out_path = Path(args.output_video) if args.output_video else run_dir / f'{input_video.stem}.mp4'
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     with VideoReader(upright_video) as reader, VideoWriter(out_path, out_w, out_h, int(props.fps)) as writer:
