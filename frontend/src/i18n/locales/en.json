@@ -176,6 +176,7 @@
                 "justNow": "just now",
                 "label": "Status: {{status}}",
                 "monitoring": "Waiting for videos — last scan {{time}}",
+                "monitoringElsewhere": "Monitoring in another tab",
                 "permissionDenied": "Permission denied",
                 "uploading": "Uploading {{count}} file(s)…"
             },

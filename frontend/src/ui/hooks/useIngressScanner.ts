@@ -5,6 +5,14 @@ import { useLocalFileIndex } from './useLocalFileIndex'
 import { type FileFingerprint } from '../utils/localFileIndex'
 import { assert } from '../utils/assert'
 import type { JobSummary } from '../types'
+import { useTabLeader } from './useTabLeader'
+import {
+    publishIngressScannerState,
+    requestIngressRetryFailed,
+    subscribeIngressScannerCommands,
+    subscribeIngressScannerState,
+    type IngressScannerSharedState,
+} from '../utils/ingressScannerSync'
 
 export type IngressUploadStatus = 'queued' | 'uploading' | 'done' | 'error' | 'skipped'
 
@@ -42,6 +50,7 @@ export function useIngressScanner(
     uploadsEnabled: boolean = true,
     intervalMs: number = 5000
 ) {
+    const { isLeader: isIngressLeader, tabId } = useTabLeader('windsurf:ingressScanner:lock')
     const [active, setActive] = React.useState(false)
     const [lastRunAt, setLastRunAt] = React.useState<number | null>(null)
     const [lastError, setLastError] = React.useState<string | null>(null)
@@ -69,6 +78,7 @@ export function useIngressScanner(
     const scanGenRef = React.useRef<number>(0)
     const scanInFlightRef = React.useRef<boolean>(false)
     const { refresh, loaded: fileIndexLoaded, scanStatus, snapshot } = useLocalFileIndex(dirHandle)
+    const [remoteState, setRemoteState] = React.useState<IngressScannerSharedState | null>(null)
 
     const shouldStartNewUpload = React.useCallback(
         (sha: string) => {
@@ -149,7 +159,7 @@ export function useIngressScanner(
 
         // Prevent overlapping scans; without this it's easy to end up with multiple concurrent
         // loops scheduling timers with different captured props/sets.
-        if (scanInFlightRef.current || !fileIndexLoaded || document.hidden) {
+        if (scanInFlightRef.current || !fileIndexLoaded) {
             if (scanGenRef.current !== myGen) return
             timerRef.current = window.setTimeout(scanContinuously, intervalMs)
             return
@@ -219,7 +229,7 @@ export function useIngressScanner(
 
     React.useEffect(() => {
         if (timerRef.current) window.clearTimeout(timerRef.current)
-        if (!dirHandle) {
+        if (!dirHandle || !uploadsEnabled || !isIngressLeader) {
             setActive(false)
             return
         }
@@ -232,9 +242,13 @@ export function useIngressScanner(
             if (timerRef.current) window.clearTimeout(timerRef.current)
             timerRef.current = null
         }
-    }, [dirHandle, intervalMs, scanContinuously])
+    }, [dirHandle, intervalMs, isIngressLeader, scanContinuously, uploadsEnabled])
 
     const retryFailed = React.useCallback(() => {
+        if (!isIngressLeader) {
+            requestIngressRetryFailed()
+            return
+        }
         failedRef.current = new Set()
         retryAfterRef.current = new Map()
         setLastError(null)
@@ -242,7 +256,7 @@ export function useIngressScanner(
             prev.map(u => (u.status === 'error' ? { ...u, status: 'queued', progress: 0, error: null } : u))
         )
         setSuspended(false) // This will trigger a new scan
-    }, [scanContinuously])
+    }, [isIngressLeader])
 
     const uploading = React.useMemo(
         () => uploads.filter(u => u.status === 'uploading' || u.status === 'queued').length,
@@ -251,5 +265,82 @@ export function useIngressScanner(
 
     const detectedFiles = React.useMemo(() => snapshot?.fileFingerprints.length ?? 0, [snapshot])
 
-    return { active, lastRunAt, lastError, uploading, uploads, suspended, retryFailed, scanStatus, detectedFiles }
+    // Share ingress state cross-tab so non-leader tabs can show progress and results.
+    React.useEffect(() => {
+        if (!isIngressLeader) return
+        const disposer = subscribeIngressScannerCommands(() => retryFailed())
+        return disposer
+    }, [isIngressLeader, retryFailed])
+
+    React.useEffect(() => {
+        if (isIngressLeader) return
+        const disposer = subscribeIngressScannerState(next => setRemoteState(next))
+        return disposer
+    }, [isIngressLeader])
+
+    React.useEffect(() => {
+        if (!isIngressLeader) return
+
+        let timeoutId: number | null = null
+        timeoutId = window.setTimeout(() => {
+            publishIngressScannerState({
+                leaderTabId: tabId,
+                active,
+                lastRunAt,
+                lastError,
+                uploading,
+                uploads,
+                suspended,
+                detectedFiles,
+                scanStatus,
+            })
+        }, 200)
+
+        return () => {
+            if (timeoutId) window.clearTimeout(timeoutId)
+        }
+    }, [
+        active,
+        detectedFiles,
+        isIngressLeader,
+        lastError,
+        lastRunAt,
+        scanStatus,
+        suspended,
+        tabId,
+        uploading,
+        uploads,
+    ])
+
+    const effective = React.useMemo(() => {
+        if (isIngressLeader) {
+            return { active, lastRunAt, lastError, uploading, uploads, suspended, detectedFiles, scanStatus }
+        }
+        if (remoteState) {
+            return {
+                active: remoteState.active,
+                lastRunAt: remoteState.lastRunAt,
+                lastError: remoteState.lastError,
+                uploading: remoteState.uploading,
+                uploads: remoteState.uploads,
+                suspended: remoteState.suspended,
+                detectedFiles: remoteState.detectedFiles,
+                scanStatus: remoteState.scanStatus,
+            }
+        }
+        return { active: false, lastRunAt: null, lastError: null, uploading: 0, uploads: [], suspended: false, detectedFiles: 0, scanStatus: { phase: 'idle', total: 0, processed: 0 } }
+    }, [active, detectedFiles, isIngressLeader, lastError, lastRunAt, remoteState, scanStatus, suspended, uploading, uploads])
+
+    return {
+        active: effective.active,
+        isIngressLeader,
+        lastRunAt: effective.lastRunAt,
+        lastError: effective.lastError,
+        uploading: effective.uploading,
+        uploads: effective.uploads,
+        suspended: effective.suspended,
+        retryFailed,
+        scanStatus: effective.scanStatus,
+        detectedFiles: effective.detectedFiles,
+    }
 }

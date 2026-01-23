@@ -10,6 +10,7 @@ import {
 } from '../utils/localFileIndex'
 import { mapLimit } from '../utils/concurrency'
 import { assert } from '../utils/assert'
+import { notifyLocalFileSnapshotChanged, subscribeLocalFileSnapshotChanged } from '../utils/localFileSnapshotSync'
 
 const PENDING_SHA256 = 'PENDING'
 const FILE_EXTENSIONS = ['.mp4']
@@ -124,17 +125,28 @@ export function useLocalFileIndex(dirHandle: FileSystemDirectoryHandle | null) {
 
     React.useEffect(() => {
         let cancelled = false
-        ;(async () => {
-            const loaded = await loadFileSnapshot()
+        loadFileSnapshot().then(loaded => {
             if (cancelled) return
             snapshotRef.current = loaded
             setSnapshot(loaded)
             emitSnapshotUpdate(loaded)
             setLoaded(true)
-        })()
+        })
         return () => {
             cancelled = true
         }
+    }, [])
+
+    // Keep snapshot in sync across tabs (used by useJobs for derived local paths).
+    React.useEffect(() => {
+        return subscribeLocalFileSnapshotChanged(() => {
+            loadFileSnapshot().then(next => {
+                if (next?.updatedAt && snapshotRef.current?.updatedAt === next.updatedAt) return
+                snapshotRef.current = next
+                setSnapshot(next)
+                emitSnapshotUpdate(next)
+            })
+        })
     }, [])
 
     React.useEffect(() => {
@@ -160,6 +172,7 @@ export function useLocalFileIndex(dirHandle: FileSystemDirectoryHandle | null) {
         snapshotRef.current = snapshot
         setSnapshot(snapshot)
         emitSnapshotUpdate(snapshot)
+        notifyLocalFileSnapshotChanged()
         setScanStatus({ phase: 'idle', total: 0, processed: 0 })
         return { snapshot, getFileForFingerprint }
     }, [dirHandle, loaded])

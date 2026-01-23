@@ -9,7 +9,6 @@ import { PricingPage } from '../screens/PricingPage'
 import { LegalPage } from '../screens/LegalPage'
 import { TechnicalPage } from '../screens/TechnicalPage'
 import { AppShellLayout } from '../components/AppShell'
-import { SingleInstanceGuard } from '../components/SingleInstanceGuard'
 import { LoginPage } from '../screens/LoginPage'
 import { SignupPage } from '../screens/SignupPage'
 import { LogoButton } from '../components/LogoButton'
@@ -304,9 +303,7 @@ export const Router: React.FC = () => {
             <Route
                 path="/analyzer"
                 element={
-                    <SingleInstanceGuard>
-                        <AnalyzerRoute />
-                    </SingleInstanceGuard>
+                    <AnalyzerRoute />
                 }
             />
 

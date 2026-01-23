@@ -304,6 +304,7 @@ export const IngressWidget: React.FC<Props> = ({
                                 dirHandle={dirHandle}
                                 dirPermission={dirPermission}
                                 active={scanner.active}
+                                isIngressLeader={scanner.isIngressLeader}
                                 uploading={scanner.uploading}
                                 lastRunAt={scanner.lastRunAt}
                                 lastError={scanner.lastError}
@@ -394,6 +395,7 @@ type StatusLineProps = {
     dirHandle: FileSystemDirectoryHandle | null
     dirPermission: 'granted' | 'denied' | 'prompt' | null
     active: boolean
+    isIngressLeader: boolean
     uploading: number
     lastRunAt: number | null
     lastError: string | null
@@ -403,6 +405,7 @@ const StatusLine: React.FC<StatusLineProps> = ({
     dirHandle,
     dirPermission,
     active,
+    isIngressLeader,
     uploading,
     lastRunAt,
     lastError,
@@ -419,6 +422,11 @@ const StatusLine: React.FC<StatusLineProps> = ({
                 text: t('components.ingressWidget.statusLine.uploading', { count: uploading }),
                 color: 'var(--brand-600)',
             }
+        if (!isIngressLeader)
+            return {
+                text: t('components.ingressWidget.statusLine.monitoringElsewhere'),
+                color: '#64748b',
+            }
         if (active) {
             const lastScanLabel = lastRunAt
                 ? new Date(lastRunAt).toLocaleTimeString()
@@ -429,7 +437,7 @@ const StatusLine: React.FC<StatusLineProps> = ({
             }
         }
         return { text: t('components.ingressWidget.statusLine.idle'), color: '#64748b' }
-    }, [active, dirHandle, dirPermission, lastError, lastRunAt, t, uploading])
+    }, [active, dirHandle, dirPermission, isIngressLeader, lastError, lastRunAt, t, uploading])
 
     return (
         <div className="flex items-center gap-2">

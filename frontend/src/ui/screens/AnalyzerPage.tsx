@@ -18,6 +18,7 @@ import { useTutorialController } from '../hooks/useTutorialController'
 import { useOnce } from '../hooks/useOnce'
 import settingsIcon from '../assets/settings.svg'
 import { assert } from '../utils/assert'
+import { notifyIngressDirectoryChanged, subscribeIngressDirectoryChanged } from '../utils/ingressDirectorySync'
 
 const FEEDBACK_PROMPT_SEEN_KEY = 'feedbackPromptSeen.v1'
 const PLAYER_OPENED_ONCE_KEY = 'player.openedOnce.v1'
@@ -44,22 +45,32 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const [dirHandle, setDirHandle] = React.useState<FileSystemDirectoryHandle | null>(null)
     const [dirPermission, setDirPermission] = React.useState<'granted' | 'denied' | 'prompt' | null>(null)
 
-    // Try to restore directory handle from IndexedDB on mount
-    React.useEffect(() => {
-        let cancelled = false
-        ;(async () => {
-            const stored = await loadDirectoryHandle()
-            if (!stored || cancelled) return
-            try {
-                const p = await stored.queryPermission({ mode: 'read' })
-                setDirPermission(p || null)
-                if (p === 'granted') setDirHandle(stored)
-            } catch {}
-        })()
-        return () => {
-            cancelled = true
+    const reloadStoredDirectoryHandle = React.useCallback(async () => {
+        const stored = await loadDirectoryHandle()
+        if (!stored) {
+            setDirPermission(null)
+            setDirHandle(null)
+            return
+        }
+        try {
+            const p = await stored.queryPermission({ mode: 'read' })
+            setDirPermission(p || null)
+            if (p === 'granted') setDirHandle(stored)
+            else setDirHandle(null)
+        } catch {
+            setDirPermission(null)
+            setDirHandle(null)
         }
     }, [])
+
+    React.useEffect(() => {
+        // Try to restore directory handle from IndexedDB on mount
+        void reloadStoredDirectoryHandle()
+
+        // Keep directory handle in sync across tabs.
+        return subscribeIngressDirectoryChanged(() => reloadStoredDirectoryHandle())
+    }, [reloadStoredDirectoryHandle])
+
 
     const pickDirectory = async () => {
         try {
@@ -69,6 +80,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
             setDirPermission(perm || null)
             setDirHandle(handle)
             await saveDirectoryHandle(handle)
+            notifyIngressDirectoryChanged()
             trackEvent('ingress_folder_selected', { permission: perm || null })
         } catch (e) {
             // user cancelled or unsupported
