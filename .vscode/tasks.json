@@ -117,6 +117,12 @@
             // "command": "python video_processing/scripts/local_modal_pipeline_player.py --input-video \"C:\\Users\\berti\\Downloads\\2026_01_19 Cabezo Marco Matieck\\MVI_5333.MP4\" --skip-orientation",
             "command": "python video_processing/scripts/local_modal_pipeline_player.py --input-video \"C:\\Projects\\Windsurf-Analysis\\tmp\\ingress\\small test\\test folder\\another sub folder\\test\\New folder\\New folder\\F_J.mp4\" --skip-orientation",
             "problemMatcher": []
+        },
+        {
+            "label": "render_homepage",
+            "type": "shell",
+            "command": "python video_processing/scripts/render_homepage_demo.py --input-video \"${input:video-file}\" --skip-orientation --track-id ${input:track-id}",
+            "problemMatcher": []
         }
     ],
     "inputs": [
@@ -137,6 +143,18 @@
             "default": "ilp",
             "type": "promptString",
             "description": "Tracker"
+        },
+        {
+            "id": "video-file",
+            "default": "tmp/test/input3.mp4",
+            "type": "promptString",
+            "description": "Single Video File"
+        },
+        {
+            "id": "track-id",
+            "default": "1",
+            "type": "promptString",
+            "description": "Track ID"
         }
     ]
 }
