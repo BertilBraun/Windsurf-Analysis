@@ -1,1 +1,710 @@
-{}
+{
+    "common": {
+        "actions": {
+            "changeFolder": "Cambia cartella video",
+            "retry": "Riprova",
+            "selectFolder": "Scegli cartella video"
+        },
+        "back": "Indietro",
+        "cancel": "Annulla",
+        "close": "Chiudi",
+        "done": "Fatto",
+        "next": "Avanti",
+        "or": "Oppure",
+        "notAvailable": "n/d"
+    },
+    "components": {
+        "analyticsConsentBanner": {
+            "accept": "Accetta",
+            "decline": "Rifiuta",
+            "title": "Aiutaci a migliorare GybeLock",
+            "message": "Usiamo Google Analytics per raccogliere dati di utilizzo anonimi (niente annunci, niente cross-site tracking). Vedi la nostra <privacyLink>Informativa sulla privacy</privacyLink> per i dettagli."
+        },
+        "consentModal": {
+            "accept": "Continua",
+            "marketing": "Puoi inviarmi aggiornamenti sul prodotto e richieste di feedback via email (opzionale).",
+            "subtitle": "Per continuare, leggi e accetta i Termini e l’Informativa sulla privacy.",
+            "terms": "Accetto i <termsLink>Termini di utilizzo</termsLink> e l’<privacyLink>Informativa sulla privacy</privacyLink>.",
+            "title": "Termini e privacy"
+        },
+        "analyzerTutorialModal": {
+            "actions": {
+                "startAddingVideos": "Inizio ad aggiungere video",
+                "startSetup": "Avvia setup"
+            },
+            "restart": "Ricomincia",
+            "restartTitle": "Ricomincia il tutorial",
+            "stepLabel": "Passo {{current}} di {{total}}",
+            "steps": {
+                "what": {
+                    "body": "GybeLock ti permette di <b>mettere video di windsurf in una cartella sul tuo computer</b>, li <b>carica e processa in background</b> automaticamente e ti fa <b>rivedere tutto più tardi in un player fluido</b>.",
+                    "bodyMuted": "Aggiungi semplicemente MP4 alla tua cartella — GybeLock fa il resto.",
+                    "footageNote": "Pensato per shore-shot, long-zoom footage — non è pensato per GoPro o video POV da action-cam.",
+                    "title": "Cosa fa GybeLock"
+                },
+                "watchFolder": {
+                    "body": "Scegli una <b>cartella sul tuo computer</b> dove stanno i tuoi video di windsurf. GybeLock <b>tiene d’occhio questa cartella per nuovi video</b> e processa automaticamente qualsiasi nuovo MP4 che aggiungi.",
+                    "button": "Scegli cartella video",
+                    "currentFolder": "Cartella attuale: {{name}}",
+                    "nextDisabledTooltip": "Seleziona una cartella video per continuare.",
+                    "permissions": "Il browser <b>ti chiederà il permesso di accedere a questa cartella</b> così GybeLock può continuare a processare i tuoi video.",
+                    "safety": "<b>I tuoi file non vengono mai cambiati, spostati o modificati.</b> GybeLock legge solo questa cartella.",
+                    "uploadNotice": "Quando aggiungi video, GybeLock <b>li carica in modo sicuro sui nostri server</b> per stabilizzazione e analisi. <b>I tuoi file originali non vengono mai modificati.</b>",
+                    "status": "Stato: In attesa di video",
+                    "tip": "Tip: spesso è più semplice <b>creare una cartella nuova vuota</b> (ad esempio “Windsurf Videos”) e usare quella.",
+                    "title": "Scegli una cartella video"
+                },
+                "addVideos": {
+                    "body": "Trascina <b>video MP4</b> in questa cartella (oppure copiali dentro).",
+                    "folderSelected": "Cartella video selezionata: {{name}}",
+                    "muted": "I video compaiono qui automaticamente man mano che vengono processati.",
+                    "processingTime": "La maggior parte dei video richiede 1–3 minuti per essere processata.",
+                    "statusWaiting": "Stato: In attesa di video",
+                    "subfolders": "Tip: <b>Le sottocartelle sono supportate</b> — GybeLock rispecchia esattamente la struttura della tua cartella.",
+                    "title": "Aggiungi video"
+                },
+                "reviewRiding": {
+                    "focused": "<b>Passa il mouse su un rider e clicca</b> per passare alla <b>Focused view</b>, dove quel rider rimane centrato e stabile.",
+                    "overview": "I video si aprono in <b>Overview</b>, dove la scena è stabilizzata e tutti i rider restano visibili.",
+                    "tip": "Tip: clicca ovunque o premi Esc per tornare a Overview.",
+                    "title": "Rivedi il tuo riding"
+                },
+                "reviewTools": {
+                    "labels": {
+                        "draw": "Disegno",
+                        "export": "Export",
+                        "zoom": "Zoom",
+                        "timeline": "Timeline"
+                    },
+                    "bullets": {
+                        "draw": "Disegna linee e forme per il coaching",
+                        "export": "Esporta il rider in focus come clip",
+                        "slow": "Scrub nella Timeline, rallenta il playback o vai frame per frame con le frecce",
+                        "zoom": "Zoom con la rotella del mouse"
+                    },
+                    "title": "Tools"
+                },
+                "feedbackReports": {
+                    "body": "Hai trovato un problema o hai un’idea?",
+                    "bullets": {
+                        "feedback": "Usa <b>Feedback</b> per pensieri generali, idee o feature mancanti",
+                        "report": "Usa <b>Report</b> per segnalare problemi di tracking o detection in un video"
+                    },
+                    "muted": "Anche note brevi sono molto utili durante la beta.",
+                    "title": "Feedback & reports"
+                },
+                "open": {
+                    "troubleshoot": {
+                        "bullets": {
+                            "folder": "Ricontrolla di aver selezionato la cartella video locale corretta",
+                            "path": "Assicurati che il video esista ancora nel percorso previsto"
+                        },
+                        "title": "Troubleshooting:"
+                    }
+                }
+            },
+            "title": "Analyzer Tutorial"
+        },
+        "appShell": {
+            "footer": {
+                "contact": "Contatto",
+                "copyright": "© {{year}} GybeLock",
+                "impressum": "Impressum",
+                "privacy": "Informativa sulla privacy",
+                "specialThanks": "Un ringraziamento speciale a Felix per tutto il supporto e le idee.",
+                "terms": "Termini di utilizzo"
+            },
+            "nav": {
+                "analyzer": "Analyzer",
+                "ariaLabel": "Navigazione principale",
+                "faq": "FAQ",
+                "home": "Home",
+                "pricing": "Pricing",
+                "technical": "Technical"
+            }
+        },
+        "ingressWidget": {
+            "fab": {
+                "aria": "Apri cartella video",
+                "status": {
+                    "error": "Errore — serve un’azione",
+                    "monitoring": "Cerco nuovi video",
+                    "selectFolder": "Scegli cartella video (obbligatorio)",
+                    "uploading": "Caricamento {{count}}…"
+                },
+                "title": "Cartella video"
+            },
+            "issue": {
+                "ingressError": {
+                    "title": "Errore cartella video locale"
+                },
+                "noFolder": {
+                    "message": "Seleziona una cartella così GybeLock può monitorarla e caricare automaticamente i nuovi video.",
+                    "title": "Nessuna cartella video locale selezionata"
+                },
+                "permissionDenied": {
+                    "message": "Seleziona di nuovo la cartella e assicurati di concedere l’accesso.",
+                    "title": "Permesso cartella negato"
+                },
+                "permissionNeeded": {
+                    "message": "Concedi il permesso così GybeLock può monitorare la cartella.",
+                    "title": "Permesso cartella richiesto"
+                }
+            },
+            "hints": {
+                "multiVideo": "Puoi aggiungere più video in una volta — verranno processati automaticamente."
+            },
+            "leaveWarning": "I caricamenti sono ancora in corso. Se esci ora, i tuoi video potrebbero non finire di caricarsi.",
+            "panel": {
+                "description": "GybeLock aspetta nuovi video in questa cartella e li processa automaticamente.",
+                "folderLabel": "Cartella video",
+                "noFolder": "Nessuna cartella selezionata",
+                "noUploads": "Nessun upload in questo momento.",
+                "permissionPending": "(permesso in attesa)",
+                "title": "Cartella video",
+                "uploadsTitle": "Uploads"
+            },
+            "quota": {
+                "body1": "Il processing è gratuito durante la beta. Ci farebbe piacere ricevere il tuo feedback — cosa ti è piaciuto e cosa potremmo migliorare.",
+                "body2": "Contattaci a",
+                "title": "Grazie per aver testato la beta"
+            },
+            "statusLine": {
+                "error": "Errore — {{message}}",
+                "idle": "Inattivo",
+                "idleNoFolder": "Inattivo — nessuna cartella selezionata",
+                "justNow": "proprio ora",
+                "label": "Stato: {{status}}",
+                "monitoring": "In attesa di video — ultimo scan {{time}}",
+                "monitoringElsewhere": "Monitoraggio in un’altra scheda",
+                "permissionDenied": "Permesso negato",
+                "uploading": "Caricamento {{count}} file…"
+            },
+            "suspended": {
+                "message": "Uploads in pausa a causa di un errore. Puoi riprovare quelli falliti.",
+                "retry": "Riprova falliti"
+            },
+            "uploadItem": {
+                "status": {
+                    "error": "Errore",
+                    "skipped": "Saltato"
+                }
+            }
+        },
+        "jobList": {
+            "actions": {
+                "collapse": "Comprimi tutto",
+                "collapseTitle": "Comprimi tutte le cartelle",
+                "expand": "Espandi tutto",
+                "expandTitle": "Espandi tutte le cartelle"
+            },
+            "emptyTip": "Tip: la maggior parte delle persone aggiunge più video nella Cartella video, li lascia processare e li rivede più tardi.",
+            "folder": {
+                "closedIcon": "▸",
+                "inProgress": "{{count}} in corso",
+                "openIcon": "▾"
+            },
+            "loading": "Sto ancora cercando jobs",
+            "waiting": "In attesa di video",
+            "opening": "Apertura…",
+            "sort": {
+                "ascSymbol": "▲",
+                "date": "Data",
+                "descSymbol": "▼",
+                "label": "Ordina per",
+                "name": "Nome",
+                "noneSymbol": "↕"
+            },
+            "unmapped": {
+                "title": "Jobs non mappati (nessuna mappatura del percorso locale) {{count}} jobs",
+                "collapsedLabel": "Jobs non mappati ({{count}})",
+                "toggleTitle": "Mostra jobs non mappati",
+                "collapseTitle": "Nascondi jobs non mappati",
+                "delete": {
+                    "title": "Elimina risultati (non il video). Clicca due volte per confermare.",
+                    "confirmTitle": "Clicca di nuovo per eliminare i risultati."
+                },
+                "deleteAll": {
+                    "label": "Rimuovi tutti",
+                    "title": "Rimuovi tutti i jobs non mappati",
+                    "modalTitle": "Rimuovere tutti i jobs non mappati?",
+                    "modalBody": "Questo elimina i risultati dell’analisi per {{count}} job(s) non mappati. Non elimina i file video locali.",
+                    "confirm": "Rimuovi tutti"
+                }
+            }
+        },
+        "jobThumbnail": {
+            "fileNotFound": "VIDEO FILE NOT FOUND",
+            "openAnalysisTooltip": "Clicca per aprire l’analisi del video.",
+            "generating": "Generazione miniatura…",
+            "status": {
+                "appearance": "Identificazione surfers",
+                "canceled": "Annullato",
+                "detection": "Detection surfers",
+                "failed": "Fallito",
+                "orientation": "Orientamento video",
+                "uploading": "Caricamento",
+                "stabilization": "Stabilizzazione video",
+                "starting": "Avvio",
+                "succeeded": "Completato",
+                "tracking": "Tracking surfers"
+            },
+            "statusTooltip": {
+                "appearance": "Identifica ogni surfer così GybeLock può tracciarli.",
+                "canceled": "Il processing è stato annullato.",
+                "detection": "Detecting surfers nel video.",
+                "failed": "Il processing è fallito. Riprova più tardi o scegli un altro video.",
+                "orientation": "Capire la rotazione e l’orientamento del video.",
+                "starting": "Preparazione del video per il processing.",
+                "stabilization": "Stabilizzazione del video per una visione più fluida.",
+                "tracking": "Tracking dei movimenti frame per frame.",
+                "uploading": "Caricamento del video su GybeLock per il processing."
+            }
+        },
+        "keyboardShortcutsModal": {
+            "shortcuts": {
+                "back": "Back: esci dal dettaglio; in overview chiudi player",
+                "nextFrame": "Frame successivo",
+                "nextTrack": "Track successivo",
+                "nextVideo": "Apri video successivo",
+                "playPause": "Play/Pause (riavvia se alla fine)",
+                "prevFrame": "Frame precedente",
+                "prevTrack": "Track precedente",
+                "prevVideo": "Apri video precedente",
+                "seekMinus30": "Seek -30s",
+                "seekMinus5": "Seek -5s",
+                "seekPlus30": "Seek +30s",
+                "seekPlus5": "Seek +5s",
+                "slowDown": "Rallenta",
+                "speedUp": "Accelera",
+                "toggleDraw": "Toggle modalità disegno",
+                "undoDraw": "Annulla disegno"
+            },
+            "tip": "Tip: usa la rotella del mouse per lo zoom in overview.",
+            "title": "Scorciatoie da tastiera"
+        },
+        "languageSwitcher": {
+            "ariaLabel": "Lingua: {{language}}",
+            "menuLabel": "Scegli lingua"
+        },
+        "logoButton": {
+            "alt": "GybeLock",
+            "ariaLabel": "Home GybeLock",
+            "title": "GybeLock"
+        },
+        "modal": {
+            "close": "Chiudi"
+        },
+        "playerModal": {
+            "actions": {
+                "draw": {
+                    "label": "Disegna",
+                    "title": "Toggle modalità disegno"
+                },
+                "report": {
+                    "label": "Report",
+                    "title": "Segnala un problema in questo video"
+                },
+                "shortcuts": {
+                    "label": "Shortcuts",
+                    "title": "Scorciatoie da tastiera"
+                },
+                "overviewStabilization": {
+                    "labelOn": "Stabilizzazione: On",
+                    "labelOff": "Stabilizzazione: Off",
+                    "title": "Toggle stabilizzazione in overview"
+                }
+            },
+            "report": {
+                "descriptionLabel": "Descrivi — cosa è andato storto?",
+                "issueOptions": {
+                    "falseAssociation": "Associazione errata",
+                    "missedDetection": "Detection mancata",
+                    "other": "Altro",
+                    "visualProblems": "Problemi visivi (video tremolante, frame saltati)"
+                },
+                "issueType": "Tipo di problema",
+                "placeholder": "Esempio: rider mancato intorno a 00:12–00:18, oppure il track cambia rider a ~00:43.",
+                "processingBody": "Stiamo processando il tuo report.",
+                "processingTitle": "Invio report…",
+                "send": "Invia report",
+                "sending": "Invio report…",
+                "subtitle": "Aiutaci a migliorare tracking e detection per questo video.",
+                "thanksBody": "Grazie per il feedback. Lo useremo per migliorare l’analyzer.",
+                "thanksTitle": "Grazie per il feedback!",
+                "tip": "Tip: se puoi, includi un timestamp approssimativo.",
+                "title": "Segnala un problema in questo video"
+            }
+        },
+        "settingsModal": {
+            "confirmDelete": "Eliminare l’account? Questo eliminerà in modo permanente il tuo utente e le mappature dei jobs. Non può essere annullato.",
+            "deleteAccount": "Elimina account",
+            "deletingAccount": "Eliminazione account…",
+            "logout": "Logout",
+            "title": "Impostazioni"
+        },
+        "singleInstanceGuard": {
+            "body": "Questa app è già aperta in un’altra scheda o finestra. Usa una sola scheda per evitare upload duplicati. Chiudi l’altra scheda o clicca Riprova se è stata chiusa di recente.",
+            "retry": "Riprova",
+            "title": "App già aperta"
+        },
+        "supportProjectSection": {
+            "body": "Se GybeLock ti aiuta, puoi supportarne lo sviluppo. Qualsiasi aiuto è davvero apprezzato!",
+            "linkText": "Offrimi un caffè (PayPal)",
+            "linkTitle": "Offrimi un caffè (PayPal)",
+            "title": "Vuoi supportare il progetto?"
+        },
+        "unsupportedBrowser": {
+            "body": "GybeLock ha bisogno di WebCodecs e della folder picker API, che non sono disponibili in questo browser. Usa un browser basato su Chromium come Chrome o Edge.",
+            "title": "Browser non supportato"
+        }
+    },
+    "player": {
+        "canvas": {
+            "draw": {
+                "clearFrame": "Pulisci frame",
+                "color": "Colore",
+                "colorLabel": "Colore {{value}}",
+                "freehand": "Mano libera",
+                "line": "Linea",
+                "tool": "Strumento",
+                "width": "Spessore",
+                "widthLabel": "Spessore {{value}}"
+            },
+            "modeIndicator": {
+                "draw": "Modalità disegno",
+                "focused": "Focused view",
+                "overview": "Overview"
+            },
+            "hints": {
+                "clickRiderFocused": "Clicca su un rider per passare a Focused view"
+            },
+            "export": {
+                "errorLabel": "Export: {{message}}",
+                "errors": {
+                    "failed": "Export fallito",
+                    "notReady": "Non pronto",
+                    "selectTrack": "Seleziona un track",
+                    "trackNotFound": "Track non trovato",
+                    "trackTooShort": "Track troppo corto"
+                },
+                "overlay": {
+                    "note": "Attendi — i controlli di playback sono temporaneamente disabilitati.",
+                    "starting": "Avvio…",
+                    "title": "Export track…"
+                }
+            },
+            "fileNotFound": "VIDEO FILE NOT FOUND"
+        },
+        "controlsBar": {
+            "export": "Export",
+            "pause": "Pausa",
+            "play": "Play",
+            "speed": "Speed: {{value}}x",
+            "speedDown": "- Speed",
+            "speedUp": "+ Speed",
+            "zoom": "Zoom: {{value}}x"
+        }
+    },
+    "routes": {
+        "analyzer": {
+            "loadingSession": "Caricamento session…",
+            "verify": {
+                "body": "Il backend richiede un indirizzo email verificato. Verifica <b>{{email}}</b> (controlla inbox/spam) e poi clicca “Ho verificato”.",
+                "resend": "Invia di nuovo email di verifica",
+                "signOut": "Logout",
+                "title": "Verifica la tua email per continuare",
+                "verified": "Ho verificato",
+                "yourEmail": "la tua email"
+            }
+        }
+    },
+    "screens": {
+        "analyzer": {
+            "actions": {
+                "feedback": "Feedback",
+                "help": "Aiuto",
+                "settings": "Impostazioni",
+                "tutorial": "Tutorial"
+            },
+            "beta": {
+                "action": "Leggi di più",
+                "label": "Beta",
+                "title": "Beta — leggi di più"
+            },
+            "emptyState": {
+                "body": "Seleziona una cartella video locale, aggiungi MP4 e poi apri un job quando è <b>Completato</b>.",
+                "openTutorial": "Apri tutorial",
+                "title": "Primi passi"
+            },
+            "header": {
+                "tagline": "Carica, processa e rivedi il tuo riding.",
+                "taglineWithName": "Carica, processa e rivedi il tuo riding — {{name}}."
+            },
+            "feedback": {
+                "body": "Grazie per aver testato la beta. Ci piacerebbe sapere cosa ne pensi per poterla migliorare.",
+                "placeholder": "Cosa ha funzionato bene?\nCosa era confuso o mancava?",
+                "send": "Invia feedback",
+                "title": "Ci farebbe piacere il tuo feedback"
+            },
+            "help": {
+                "body": "Se hai feedback o ti serve aiuto per iniziare o per qualcosa di specifico, contattaci a",
+                "title": "Hai bisogno di aiuto?"
+            }
+        },
+        "faq": {
+            "cta": "Apri Analyzer",
+            "items": {
+                "cannotOpen": {
+                    "answer": "Solo i jobs con stato “Completato” possono essere aperti. Se è ancora in processing, aspetta un attimo e aggiorna.",
+                    "question": "Perché non posso ancora aprire un video?"
+                },
+                "deleteAccount": {
+                    "answer": "Apri l’Analyzer, clicca <strong>Impostazioni</strong> e poi <strong>Elimina account</strong>.",
+                    "question": "Come elimino il mio account?"
+                },
+                "fileNotFound": {
+                    "answer": "Il player apre i video dalla tua cartella video locale. Se non riesce a trovare il file, seleziona di nuovo la cartella corretta (Cartella video → <strong>Cambia cartella video</strong>) e assicurati che il video esista ancora in quella cartella.",
+                    "question": "Perché il player mostra “VIDEO FILE NOT FOUND”?"
+                },
+                "formats": {
+                    "answer": "Si consiglia MP4. Se hai problemi, prova a riesportare in H.264 MP4.",
+                    "question": "Quali formati sono supportati?"
+                },
+                "ingressFolder": {
+                    "answer": "È una cartella sul tuo computer che GybeLock monitora per nuovi video. Quando ci metti un nuovo video, GybeLock lo carica automaticamente per il processing.",
+                    "question": "Cos’è la cartella video locale?"
+                },
+                "movedVideo": {
+                    "answer": "Se il file spostato/rinominato non viene trovato, il player può mostrare <strong>VIDEO FILE NOT FOUND</strong>. Rimetti il video nella cartella video locale (o nella sottocartella prevista) e assicurati che sia selezionata la cartella video locale corretta.",
+                    "question": "Ho spostato o rinominato un video. Cosa devo fare?"
+                },
+                "processedVideos": {
+                    "answer": "Appaiono nella griglia dell’Analyzer appena un job è finito. Clicca una tile per aprire il player.",
+                    "question": "Dove appaiono i video processati?"
+                },
+                "shortcuts": {
+                    "answer": "Nell’Analyzer / Player, clicca <strong>Shortcuts</strong> per aprire il modal delle scorciatoie da tastiera.",
+                    "question": "Come vedo tutti i controlli da tastiera?"
+                },
+                "supportedFootage": {
+                    "answer": "GybeLock è pensato per video <strong>shore / beach-shot</strong> (tele/zoom da terra). Si consiglia <strong>MP4</strong>. Footage POV da GoPro/action-cam non è supportato / non è il caso d’uso.",
+                    "question": "Che tipo di footage è supportato?"
+                },
+                "uploadSkipped": {
+                    "answer": "GybeLock deduplica i video tramite checksum. Se quel video esatto è già stato caricato/processato, potrebbe essere saltato.",
+                    "question": "Perché il mio upload è stato saltato?"
+                },
+                "uploadsPaused": {
+                    "answer": "Apri <strong>Cartella video</strong> e controlla il messaggio di errore. Se gli upload sono in pausa dopo un fallimento, usa <strong>Riprova falliti</strong>. Se vedi un messaggio che richiede feedback sulla beta, contattaci.",
+                    "question": "Gli upload sono in pausa / bloccati. Cosa posso fare?"
+                },
+                "videoTooLong": {
+                    "answer": "C’è una lunghezza massima supportata. Se l’upload fallisce con “Video too long”, dividi la registrazione in clip più brevi e caricale.",
+                    "question": "Perché l’upload dice “Video too long”?"
+                },
+                "whatDoes": {
+                    "answer": "GybeLock ti aiuta a rivedere footage di windsurf <strong>ripreso dalla riva</strong> (camera da terra, long zoom) stabilizzando il video, facendo detection/tracking dei rider e permettendoti di cliccare un rider per una vista fluida e in focus per il review.",
+                    "question": "Cosa dovrebbe fare GybeLock?"
+                }
+            },
+            "subtitle": "Cosa fa GybeLock, che footage supporta e troubleshooting comune.",
+            "title": "FAQ"
+        },
+        "home": {
+            "built": {
+                "bullets": {
+                    "conditions": "Condizioni difficili come spray, chop e oclusioni parziali",
+                    "distance": "Riprese a lunga distanza dalla riva",
+                    "multiple": "Più rider nello stesso video"
+                },
+                "intro": "GybeLock è progettato specificamente per:",
+                "notDesigned": "Non è <strong>pensato per footage GoPro/action-cam</strong>.",
+                "outro": "Tu scegli chi seguire. GybeLock gestisce il movimento.",
+                "title": "Pensato per windsurf reale"
+            },
+            "comparison": {
+                "afterLabel": "Dopo (GybeLock)",
+                "beforeLabel": "Prima (raw)"
+            },
+            "ctaSection": {
+                "body": "Il processing è gratuito durante la beta. Ci farebbe piacere il tuo feedback.",
+                "cta": "Inizia gratis",
+                "headline": "Processing gratuito durante la beta",
+                "note": "Gratis durante la beta · Login richiesto per processare i video",
+                "title": "Inizia"
+            },
+            "hero": {
+                "brand": "GybeLock",
+                "cta": "Inizia",
+                "freeVideos": "Gratis durante la beta · Login richiesto per processare i video",
+                "disclaimer": "Solo windsurf. Meglio con shore-shot/long-zoom. No GoPro/POV.",
+                "lede1": "<strong>GybeLock</strong> trasforma clip instabili riprese dalla spiaggia in una vista fluida e centrata di ogni rider — così timing e posizione del corpo sono facili da vedere.",
+                "lede2": "Tu fai il coaching. Noi togliamo la distrazione.",
+                "lede3": "Da speed runs a wave riding, jumps e gybes — GybeLock mantiene il rider centrato.",
+                "title": "Rendi ogni session facile da rivedere."
+            },
+            "images": {
+                "builtAlt": "Linea di partenza in acqua",
+                "problemAlt": "Camera che riprende dalla spiaggia",
+                "whatAlt": "Windsurfer a metà salto",
+                "whoAlt": "Sessione clinic di windsurf"
+            },
+            "how": {
+                "stepLabel": "Passo {{n}}",
+                "steps": {
+                    "drop": {
+                        "body": "I nuovi file vengono caricati automaticamente per il processing in background — puoi aggiungere decine di video insieme e lasciare che GybeLock li processi.",
+                        "title": "<strong>Metti video MP4 nella cartella</strong>"
+                    },
+                    "ingress": {
+                        "body": "Scegli una cartella sul tuo computer. GybeLock la monitora per nuovi video.",
+                        "title": "<strong>Scegli una cartella video</strong>"
+                    },
+                    "process": {
+                        "body": "Dagli qualche minuto. I tuoi video saranno pronti da rivedere.",
+                        "title": "<strong>Lascia lavorare GybeLock</strong>"
+                    },
+                    "review": {
+                        "body": "Apri un video e scegli il rider che vuoi seguire.",
+                        "title": "<strong>Apri e rivedi</strong>"
+                    }
+                },
+                "tip": "Tip: dopo la session, metti tutti i video in una volta. Lascia che GybeLock li processi per qualche minuto e poi inizia a rivedere — non serve aspettare ogni singolo video.",
+                "title": "Come funziona"
+            },
+            "problem": {
+                "bullets": {
+                    "moments": "I momenti chiave succedono in fretta — e si perdono altrettanto in fretta",
+                    "riders": "I rider si muovono costantemente nell’inquadratura",
+                    "zoom": "Il long zoom amplifica ogni piccolo movimento della camera"
+                },
+                "intro": "Riprendere windsurf dalla spiaggia non è facile.",
+                "outro": "Il risultato: footage difficile da guardare, e ancora più difficile da cui imparare.",
+                "title": "Il problema"
+            },
+            "what": {
+                "bullets": {
+                    "centered": "<strong>Lo tiene centrato</strong> nell’inquadratura",
+                    "follows": "<strong>Segue in modo fluido</strong> movimenti rapidi e dinamici",
+                    "locksOnto": "<strong>Si aggancia</strong> a un rider selezionato",
+                    "stabilizes": "<strong>Stabilizza</strong> footage instabile dalla spiaggia"
+                },
+                "intro": "GybeLock automaticamente:",
+                "outro": "Che tu stia guardando speed runs, wave riding, big conditions, jumps e landings o transizioni tecniche — GybeLock ti aiuta a <em>vedere</em> davvero cosa sta succedendo.",
+                "title": "Cosa fa GybeLock"
+            },
+            "who": {
+                "bullets": {
+                    "anyone": "Chiunque sia stanco di video con zoom tremolante",
+                    "coaches": "Coaches che rivedono sessioni",
+                    "friends": "Amici che filmano dalla spiaggia",
+                    "windsurfers": "Windsurfers che vogliono capire il proprio riding"
+                },
+                "outro": "Principiante o avanzato — un footage più chiaro aiuta tutti a migliorare.",
+                "title": "Per chi è"
+            },
+            "why": {
+                "intro": "Perché un feedback migliore inizia da un footage migliore.",
+                "outro": "GybeLock rimuove la distrazione, così puoi concentrarti su tecnica, timing e flow.",
+                "title": "Perché GybeLock"
+            }
+        },
+        "login": {
+            "actions": {
+                "forgot": "Password dimenticata",
+                "google": "Continua con Google",
+                "login": "Login"
+            },
+            "errors": {
+                "googleFailed": "Accesso con Google non riuscito",
+                "loginFailed": "Login non riuscito",
+                "resetFailed": "Impossibile inviare l’email di reset password"
+            },
+            "footer": {
+                "noAccount": "Non hai un account?",
+                "signup": "Registrati"
+            },
+            "info": {
+                "resetSent": "Email di reset password inviata a {{email}}."
+            },
+            "labels": {
+                "email": "Indirizzo email",
+                "password": "Password"
+            },
+            "placeholders": {
+                "email": "email",
+                "password": "password"
+            },
+            "subtitle": "Usa Google o il tuo indirizzo email per continuare.",
+            "title": "Accedi a GybeLock"
+        },
+        "pricing": {
+            "after": {
+                "bullets": {
+                    "noCommitments": "Nessun impegno a lungo termine",
+                    "noSubscriptions": "Nessun abbonamento",
+                    "perVideo": "Paghi per video processato"
+                },
+                "intro": "Dopo la fase di test (prevista per <strong>marzo</strong>), GybeLock passerà a un modello di prezzi semplice basato sull’uso:",
+                "outro": "Prima di introdurre i prezzi, chiederemo feedback ai nostri utenti per assicurarci che sia giusto e accessibile.",
+                "title": "Cosa succede dopo la beta?"
+            },
+            "beta": {
+                "bullets": {
+                    "card": "Nessuna carta richiesta",
+                    "features": "Tutte le feature sono disponibili",
+                    "payment": "Nessun pagamento richiesto"
+                },
+                "during": "Durante questo periodo:",
+                "headline": "Gratis da usare",
+                "intro": "GybeLock è attualmente in una fase di test iniziale.",
+                "outro": "Stiamo migliorando qualità del tracking, usabilità e performance — e il tuo feedback aiuta a definire cosa viene dopo.",
+                "title": "Fase beta"
+            },
+            "intro": "GybeLock è attualmente in una fase iniziale di test — semplice e gratuito mentre miglioriamo la qualità del tracking.",
+            "lede": "GybeLock è pensato per video di windsurf <strong>beach-shot / shore-shot</strong> (tele/zoom da terra). <strong>Non</strong> è pensato per footage POV da GoPro/action-cam.",
+            "title": "Pricing"
+        },
+        "signup": {
+            "actions": {
+                "createAccount": "Crea account"
+            },
+            "consents": {
+                "marketing": "Puoi inviarmi aggiornamenti sul prodotto e richieste di feedback via email (opzionale).",
+                "terms": "Accetto i <termsLink>Termini di utilizzo</termsLink> e l’<privacyLink>Informativa sulla privacy</privacyLink>."
+            },
+            "errors": {
+                "failed": "Registrazione non riuscita"
+            },
+            "footer": {
+                "haveAccount": "Hai già un account?",
+                "login": "Accedi"
+            },
+            "info": {
+                "created": "Account creato. Verifica la tua email (controlla inbox/spam)."
+            },
+            "labels": {
+                "email": "Indirizzo email",
+                "password": "Password",
+                "repeatPassword": "Ripeti password"
+            },
+            "placeholders": {
+                "email": "email",
+                "password": "password",
+                "repeatPassword": "ripeti password"
+            },
+            "subtitle": "Crea il tuo account per iniziare ad analizzare i video.",
+            "title": "Registrati su GybeLock"
+        },
+        "technical": {
+            "actions": {
+                "github": "GitHub repo"
+            },
+            "error": "Impossibile caricare il doc tecnico: {{message}}",
+            "loading": "Caricamento…",
+            "subtitle": "Note di implementazione, algoritmi e architettura di sistema per questo progetto.",
+            "title": "Technical deep dive"
+        }
+    }
+}
