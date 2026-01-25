@@ -50,15 +50,14 @@ function stripMp4(name: string): string {
 
 type SortElement = {
     id: string
-    updated_at?: string | null
     created_at?: string | null
     local_relative_path?: string | null
 }
 
 function _sortCriteria(a: SortElement, b: SortElement, sortKey: JobListSortKey): number {
     if (sortKey === 'date') {
-        const ta = Date.parse(a.updated_at || a.created_at || '') || 0
-        const tb = Date.parse(b.updated_at || b.created_at || '') || 0
+        const ta = Date.parse(a.created_at || '') || 0
+        const tb = Date.parse(b.created_at || '') || 0
         return ta < tb ? -1 : ta > tb ? 1 : 0
     } else if (sortKey === 'name') {
         const aPath = a.local_relative_path || ''
