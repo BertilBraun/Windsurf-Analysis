@@ -31,5 +31,5 @@ export function useZoom(opts?: { minZoom?: number; maxZoom?: number; step?: numb
         [step, zoom, minZoom, maxZoom, offset.x, offset.y, setZoom]
     )
 
-    return { zoom, offset, onWheelZoom, reset }
+    return { zoom, offset, setOffset, onWheelZoom, reset }
 }

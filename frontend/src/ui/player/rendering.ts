@@ -86,9 +86,15 @@ function getDetailedCropParams(
     // Apply user zoom as an additional "zoom in/out" on the crop window.
     let cropH = (cropHNorm * srcHeight) / z
 
-    // Keep crop within source bounds while maintaining viewport aspect ratio.
-    const maxCropHFromWidth = (srcWidth * outputHeight) / Math.max(1, outputWidth)
-    cropH = clamp(cropH, 1, Math.min(srcHeight, maxCropHFromWidth))
+    // For the default/zoom-in path we keep a fill crop (no letterboxing). When the user zooms out
+    // (zoomMul < 1), allow the crop to exceed the "fill" limit which enables zoom-out even for
+    // tall/narrow sources (at the cost of letterboxing).
+    const maxCropHFill = (srcWidth * outputHeight) / Math.max(1, outputWidth)
+    if (zoomMul < 1) {
+        cropH = clamp(cropH, 1, srcHeight)
+    } else {
+        cropH = clamp(cropH, 1, Math.min(srcHeight, maxCropHFill))
+    }
 
     const s = outputHeight / cropH
 

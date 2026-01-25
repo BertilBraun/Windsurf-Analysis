@@ -15,6 +15,8 @@ import { useJobVideoSource } from './useJobVideoSource'
 import { drawFrame, pickTrackAtScreenPoint, screenPointToVideoNorm } from './rendering'
 import { useAnnotations } from './useAnnotations'
 import { useWebCodexPlayer } from './useWebCodexPlayer'
+import { useOverviewPan } from './useOverviewPan'
+import { DEFAULT_ZOOM_BASELINE } from './constants'
 
 const PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY = 'player.focusedClickHintDismissed.v1'
 const PLAYER_OPENED_ONCE_KEY = 'player.openedOnce.v1'
@@ -50,7 +52,7 @@ export const Player: React.FC<Props> = ({
     const [playerInitError, setPlayerInitError] = React.useState<string | null>(null)
     const containerRef = React.useRef<HTMLDivElement | null>(null)
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null)
-    const { zoom, offset, onWheelZoom } = useZoom({ minZoom: 0.5, maxZoom: 4 })
+    const { zoom, offset, setOffset, onWheelZoom } = useZoom({ minZoom: 0.5, maxZoom: 4 })
     const detailedZoom = useCappedValue(1, 0.5, 2.0)
     const { speed, bumpSpeed } = usePlaybackSpeed(1.0)
     const [hoveredTrackId, setHoveredTrackId] = React.useState<number | null>(null)
@@ -59,6 +61,10 @@ export const Player: React.FC<Props> = ({
     const { used: focusedClickHintDismissed, ready: focusedClickHintReady, mark: dismissFocusedClickHint } =
         useOnce(PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY)
     const { mark: markPlayerOpenedOnce } = useOnce(PLAYER_OPENED_ONCE_KEY)
+
+    // Rendering uses a slightly zoomed-out baseline, but UI still reports 1.0 as the "normal" level.
+    const renderZoom = zoom * DEFAULT_ZOOM_BASELINE
+    const renderDetailedZoom = detailedZoom.value * DEFAULT_ZOOM_BASELINE
 
     const { sourceFile, fileMissing, error } = useJobVideoSource({ job, dirHandle })
     const errorText = error ? t(error.key, { message: error.detail }) : null
@@ -94,8 +100,8 @@ export const Player: React.FC<Props> = ({
                 webPlayer.height,
                 webPlayer.currentFrameIndex,
                 {
-                    zoom,
-                    detailedZoom: detailedZoom.value,
+                    zoom: renderZoom,
+                    detailedZoom: renderDetailedZoom,
                     offsetX: offset.x,
                     offsetY: offset.y,
                     hoveredTrackId,
@@ -106,8 +112,8 @@ export const Player: React.FC<Props> = ({
         },
         [
             player,
-            zoom,
-            detailedZoom.value,
+            renderZoom,
+            renderDetailedZoom,
             offset.x,
             offset.y,
             hoveredTrackId,
@@ -123,6 +129,25 @@ export const Player: React.FC<Props> = ({
         isPlaying: webPlayer.playing,
         currentFrameIndex: webPlayer.currentFrameIndex,
     })
+
+    const overviewPan = useOverviewPan(
+        {
+            enabled: !drawMode && player?.mode === 'overview' && webPlayer.ready && !isExporting,
+            zoom,
+            offset,
+            setOffset,
+            containerRef,
+            videoSize: { width: webPlayer.width, height: webPlayer.height },
+            dominantOrientationDeg: job.dominant_orientation,
+            onPanStart: () => setHoveredTrackId(null),
+        },
+        {
+            onPointerDown: annotations.onPointerDown,
+            onPointerMove: annotations.onPointerMove,
+            onPointerUp: annotations.onPointerUp,
+            onPointerCancel: annotations.onPointerCancel,
+        }
+    )
 
     React.useEffect(() => {
         markPlayerOpenedOnce()
@@ -255,8 +280,8 @@ export const Player: React.FC<Props> = ({
             { width: webPlayer.width, height: webPlayer.height },
             player,
             {
-                zoom,
-                detailedZoom: detailedZoom.value,
+                zoom: renderZoom,
+                detailedZoom: renderDetailedZoom,
                 offsetX: offset.x,
                 offsetY: offset.y,
                 hoveredTrackId,
@@ -433,6 +458,7 @@ export const Player: React.FC<Props> = ({
         (e: React.MouseEvent<HTMLCanvasElement>) => {
             if (drawMode) return
             if (!player || player.mode !== 'overview') return
+            if (overviewPan.isPanning) return
             const c = canvasRef.current
             if (!c) return
             const container = containerRef.current
@@ -449,7 +475,7 @@ export const Player: React.FC<Props> = ({
                 webPlayer.height,
                 webPlayer.currentFrameIndex,
                 {
-                    zoom,
+                    zoom: renderZoom,
                     offsetX: offset.x,
                     offsetY: offset.y,
                     hoveredTrackId,
@@ -462,7 +488,8 @@ export const Player: React.FC<Props> = ({
         [
             drawMode,
             player,
-            zoom,
+            overviewPan.isPanning,
+            renderZoom,
             offset.x,
             offset.y,
             hoveredTrackId,
@@ -477,6 +504,7 @@ export const Player: React.FC<Props> = ({
     const onClick = React.useCallback(() => {
         if (drawMode) return
         if (!player) return
+        if (overviewPan.shouldSuppressClick()) return
 
         if (player.mode === 'overview' && hoveredTrackId == null) {
             if (webPlayer.playing) {
@@ -518,6 +546,7 @@ export const Player: React.FC<Props> = ({
         webPlayer.play,
         webPlayer.playing,
         webPlayer.seekFrame,
+        overviewPan.shouldSuppressClick,
     ])
 
     const exportVisible = !!player && player.mode === 'detailed' && player.currentTrackId != null
@@ -587,8 +616,12 @@ export const Player: React.FC<Props> = ({
 
     const canvasCursorClass = drawMode
         ? 'cursor-crosshair'
+        : overviewPan.isPanning
+        ? 'cursor-grabbing'
         : !drawMode && player?.mode === 'overview' && hoveredTrackId != null
         ? 'cursor-pointer'
+        : overviewPan.canPan
+        ? 'cursor-grab'
         : ''
 
     return (
@@ -635,15 +668,15 @@ export const Player: React.FC<Props> = ({
                 <div ref={containerRef} className="absolute inset-0">
                     <canvas
                         ref={canvasRef}
-                        className={`absolute inset-0 block ${canvasCursorClass}`}
+                        className={`absolute inset-0 block touch-none ${canvasCursorClass}`}
                         onWheel={onWheelCanvas}
                         onMouseMove={onMouseMove}
                         onMouseLeave={() => setHoveredTrackId(null)}
                         onClick={onClick}
-                        onPointerDown={annotations.onPointerDown}
-                        onPointerMove={annotations.onPointerMove}
-                        onPointerUp={annotations.onPointerUp}
-                        onPointerCancel={annotations.onPointerCancel}
+                        onPointerDown={overviewPan.onPointerDown}
+                        onPointerMove={overviewPan.onPointerMove}
+                        onPointerUp={overviewPan.onPointerUp}
+                        onPointerCancel={overviewPan.onPointerCancel}
                     />
                     {annotations.drawModal}
                 </div>

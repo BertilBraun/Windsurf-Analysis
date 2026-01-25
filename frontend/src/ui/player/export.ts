@@ -4,6 +4,7 @@ import { drawRotatedToCanvas } from './rotation'
 import { PlayerState } from './state'
 import { drawWatermark, getWatermarkAsset } from './watermark'
 import { drawDetailedCrop, getSharedOffscreenCanvas } from './rendering'
+import { DEFAULT_ZOOM_BASELINE } from './constants'
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
@@ -63,8 +64,9 @@ export async function exportTrackMp4(params: {
 }): Promise<Blob> {
     const { file, player, dominantOrientationDeg, trackId, startSec, endSec, onProgress } = params
 
+    // Always export in a wide format (16:9). We already rotate frames using `dominantOrientationDeg`.
     const outputWidth = 1920
-    const outputHeight = 1920
+    const outputHeight = 1080
 
     // Best-effort watermark; if it fails to load, we still export.
     const watermark = await getWatermarkAsset()
@@ -74,8 +76,17 @@ export async function exportTrackMp4(params: {
         const detection = player.getClosestDetectionAtFrame(trackId, frameIndex)
 
         const rotCanvas = getSharedOffscreenCanvas()
-        const rotated = drawRotatedToCanvas(current.frame, rotCanvas, dominantOrientationDeg)
-        drawDetailedCrop(ctx, outputWidth, outputHeight, rotCanvas, rotated.width, rotated.height, detection, 1)
+        const rotatedFrame = drawRotatedToCanvas(current.frame, rotCanvas, dominantOrientationDeg)
+        drawDetailedCrop(
+            ctx,
+            outputWidth,
+            outputHeight,
+            rotCanvas,
+            rotatedFrame.width,
+            rotatedFrame.height,
+            detection,
+            DEFAULT_ZOOM_BASELINE
+        )
         drawWatermark(ctx, outputWidth, outputHeight, watermark)
         return true
     }
