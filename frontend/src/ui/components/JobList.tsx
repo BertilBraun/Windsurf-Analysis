@@ -488,7 +488,11 @@ const UnmappedJobsSection: React.FC<{
                     return (
                         <div key={job.id} className="flex flex-col items-start">
                             <div className="relative">
-                                <JobThumbnail job={job} dirHandle={dirHandle} playable={!!job.local_relative_path} />
+                                <JobThumbnail
+                                    job={job}
+                                    videoSource={{ kind: 'ingress', dirHandle }}
+                                    playable={!!job.local_relative_path}
+                                />
                                 <Button
                                     type="button"
                                     variant="unstyled"
@@ -661,7 +665,7 @@ export const JobList: React.FC<{
                                                     >
                                                         <JobThumbnail
                                                             job={job}
-                                                            dirHandle={dirHandle}
+                                                            videoSource={{ kind: 'ingress', dirHandle }}
                                                             playable={!!job.local_relative_path}
                                                         />
                                                         {openingId === job.id && (

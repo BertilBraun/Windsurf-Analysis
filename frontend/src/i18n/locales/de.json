@@ -149,6 +149,17 @@
                 "terms": "Nutzungsbedingungen"
             },
             "nav": {
+                "app": "App",
+                "appItems": {
+                    "demo": {
+                        "title": "Demo ausprobieren (ohne Setup)",
+                        "subtitle": "Ein Video hochladen, kein Setup"
+                    },
+                    "analyzer": {
+                        "title": "Voller Analyzer",
+                        "subtitle": "Ordner einrichten und alles automatisch verarbeiten"
+                    }
+                },
                 "analyzer": "Analyzer",
                 "ariaLabel": "Hauptnavigation",
                 "faq": "FAQ",
@@ -454,6 +465,36 @@
         }
     },
     "screens": {
+        "demo": {
+            "title": "Demo",
+            "actions": {
+                "selectVideo": "Video auswählen",
+                "play": "Abspielen",
+                "sampleVideo": "Beispielvideo verwenden"
+            },
+            "hero": {
+                "title": "GybeLock ausprobieren",
+                "body": "Wähle ein MP4-Video aus, lade es hoch und sieh Live-Updates zur Verarbeitung."
+            },
+            "status": {
+                "hashing": "Upload wird vorbereitet",
+                "uploading": "Wird hochgeladen",
+                "waiting": "Warte auf Job",
+                "processing": "Verarbeitung: {{status}}"
+            },
+            "processingEta": "Die Verarbeitung dauert meistens ~1-3 Min.",
+            "leaveWarning": "Willst du die Seite wirklich verlassen? Dein Demo-Video ist nach einem Refresh weg.",
+            "skipped": "Dieses Video wurde bereits verarbeitet (Duplikat).",
+            "upgrade": {
+                "title": "Willst du das für deine ganze Session?",
+                "bullets": {
+                    "folder": "Ordner ablegen, jedes neue Video automatisch verarbeiten",
+                    "workflow": "Mehrere Rider und Sessions schneller reviewen"
+                },
+                "cta": "Vollen Analyzer einrichten (~2 Min) \u2192"
+            },
+            "failed": "Verarbeitung fehlgeschlagen."
+        },
         "analyzer": {
             "actions": {
                 "feedback": "Feedback",
@@ -562,15 +603,17 @@
                 "beforeLabel": "Vorher (raw)"
             },
             "ctaSection": {
-                "body": "Verarbeitung ist während der Beta kostenlos. Wir freuen uns über dein Feedback.",
-                "cta": "Kostenlos starten",
-                "headline": "Kostenlose Verarbeitung während der Beta",
+                "body": "Lade ein MP4 hoch und sieh GybeLock in Aktion. Kein Ordner-Setup nötig.",
+                "cta": "Demo jetzt ausprobieren",
+                "ctaSecondary": "Vollen Analyzer einrichten (~2 Min)",
+                "headline": "Demo ausprobieren",
                 "note": "Kostenlos während der Beta · Zum Verarbeiten ist ein Login erforderlich",
-                "title": "Loslegen"
+                "title": "Demo ausprobieren"
             },
             "hero": {
                 "brand": "GybeLock",
-                "cta": "Loslegen",
+                "cta": "Demo jetzt ausprobieren",
+                "ctaSecondary": "Voller Analyzer",
                 "freeVideos": "Kostenlos während der Beta · Zum Verarbeiten ist ein Login erforderlich",
                 "disclaimer": "Nur Windsurfen. Am besten mit shore-shot/long-zoom. Kein GoPro/POV.",
                 "lede1": "<strong>GybeLock</strong> macht aus verwackelten Strandaufnahmen eine glatte, zentrierte Ansicht pro Rider — so sieht man Timing und Körperposition klar.",

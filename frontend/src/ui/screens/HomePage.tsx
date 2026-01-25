@@ -42,12 +42,10 @@ export const HomePage: React.FC = () => {
                         <div className="mt-5 flex flex-col sm:flex-row gap-3 sm:items-center">
                             <Button
                                 variant="primary"
-                                onClick={() => navigate('/analyzer')}
+                                size="md"
+                                onClick={() => navigate('/demo')}
                                 text={t('screens.home.hero.cta')}
                             />
-                            <Text as="div" variant="support">
-                                {t('screens.home.hero.freeVideos')}
-                            </Text>
                         </div>
                         <br />
                         <Text as="div" variant="muted" className="mt-2">

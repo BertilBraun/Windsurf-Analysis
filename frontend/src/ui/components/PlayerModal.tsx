@@ -8,17 +8,18 @@ import type { PlayerState } from '../player/state'
 import { JobDetail, ReportType } from '../types'
 import { Spinner } from './Spinner'
 import { loadSetting, saveSetting } from '../utils/idb'
+import { VideoSource } from '../player/videoSource'
 
 const PLAYER_DISABLE_OVERVIEW_STABILIZATION_KEY = 'player.disableOverviewStabilization.v1'
 
 export const PlayerModal: React.FC<{
     job: JobDetail
-    dirHandle: FileSystemDirectoryHandle | null
+    videoSource: VideoSource
     onClose: () => void
     onReport: (id: string, type: ReportType, message: string) => void
     onOpenNextJob?: () => void
     onOpenPrevJob?: () => void
-}> = ({ job, dirHandle, onClose, onReport, onOpenNextJob, onOpenPrevJob }) => {
+}> = ({ job, videoSource, onClose, onReport, onOpenNextJob, onOpenPrevJob }) => {
     const { t } = useTranslation()
     const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
     const [showReport, setShowReport] = React.useState<boolean>(false)
@@ -50,13 +51,18 @@ export const PlayerModal: React.FC<{
         })
     }, [])
 
+    const title =
+        videoSource.kind === 'file'
+            ? videoSource.file.name.replace(/\.mp4$/i, '')
+            : job.local_relative_path?.replace(/\.mp4$/i, '') ?? job.id ?? t('common.notAvailable')
+
     return (
         <>
             <Modal
                 key={job.id}
                 onClose={onClose}
                 closeOnEscape={player?.mode !== 'detailed'}
-                title={job.local_relative_path?.replace(/\.mp4$/i, '') ?? t('common.notAvailable')}
+                title={title}
                 additionalHeader={
                     <>
                         <Button
@@ -93,7 +99,7 @@ export const PlayerModal: React.FC<{
                         <Player
                             key={job.id}
                             job={job}
-                            dirHandle={dirHandle}
+                            videoSource={videoSource}
                             onClose={onClose}
                             onReport={onReport}
                             onOpenNextJob={onOpenNextJob}

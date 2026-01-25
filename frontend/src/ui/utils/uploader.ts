@@ -55,7 +55,7 @@ async function assertVideoWithinMaxFrames(file: File, maxFrames: number): Promis
     } finally {
         try {
             input.dispose()
-        } catch {}
+        } catch { }
     }
 }
 
@@ -72,7 +72,7 @@ export async function uploadVideoFile(params: {
     onStarted: () => void
     sha256: string
     existingJobId?: string
-}): Promise<'uploaded' | 'skipped'> {
+}): Promise<string | 'skipped'> {
     const { file, quality, authorizedFetch, onProgress, onStarted, sha256, existingJobId } = params
 
     // Step 1: Create job (also acts as duplicate/quota check)
@@ -103,12 +103,12 @@ export async function uploadVideoFile(params: {
 
     try {
         onStarted?.()
-        const result = await uploadVideoFileToJob(file, quality, authorizedFetch, job_id, (percent: number) => {
+        await uploadVideoFileToJob(file, quality, authorizedFetch, job_id, (percent: number) => {
             onProgress(percent)
             if (percent >= PERCENT_UPLOAD) releaseVideoSlot()
         })
         trackEvent('analysis_upload_complete', { job_id })
-        return result
+        return job_id
     } catch (e: any) {
         trackEvent('analysis_upload_failed', { job_id, message: String(e?.message || e || 'upload failed') })
         releaseVideoSlot()
@@ -186,7 +186,7 @@ export async function uploadVideoFileToJob(
     authorizedFetch: AuthorizedFetch,
     job_id: string,
     onProgress: (percent: number) => void
-): Promise<'uploaded'> {
+): Promise<void> {
     // Step 2: Preprocess
     // TODO reenable: const processed = await preprocessVideo(file, quality, progress => onProgress(progress * PERCENT_PREPROCESS))
     const { object_path } = await uploadVideoToFirebaseStorage({ file, job_id, onProgress })
@@ -204,5 +204,4 @@ export async function uploadVideoFileToJob(
     })
     if (!completeRes.ok) throw new Error(await completeRes.text())
     onProgress(1)
-    return 'uploaded'
 }

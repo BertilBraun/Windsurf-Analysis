@@ -1,15 +1,16 @@
 import React from 'react'
 import { JobDetail } from '../types'
 import { getFileByRelativePath } from '../utils/fsAccess'
+import { VideoSource } from './videoSource'
 
 export type VideoSourceError = { key: string; detail?: string }
 
 export function useJobVideoSource(params: {
     job: JobDetail
-    dirHandle: FileSystemDirectoryHandle | null
+    videoSource: VideoSource
     onFileLoaded?: (file: File) => void
 }) {
-    const { job, dirHandle, onFileLoaded } = params
+    const { job, videoSource, onFileLoaded } = params
 
     const [error, setError] = React.useState<VideoSourceError | null>(null)
     const [fileMissing, setFileMissing] = React.useState<boolean>(false)
@@ -23,12 +24,19 @@ export function useJobVideoSource(params: {
         setFileMissing(false)
 
         const run = async () => {
-            if (!dirHandle) {
-                setError({ key: 'player.canvas.errors.noIngressFolder' })
+            if (videoSource.kind === 'file') {
+                setSourceFile(videoSource.file)
+                onFileLoaded?.(videoSource.file)
                 return
             }
 
             try {
+                const dirHandle = videoSource.dirHandle
+                if (!dirHandle) {
+                    setError({ key: 'player.canvas.errors.noIngressFolder' })
+                    return
+                }
+
                 if (!job.local_relative_paths) throw new Error('missing_local_paths')
                 const candidates = job.local_relative_paths
                 if (candidates.length === 0) throw new Error('missing_mapping')
@@ -73,7 +81,7 @@ export function useJobVideoSource(params: {
         return () => {
             cancelled = true
         }
-    }, [dirHandle, job.id, job.local_relative_paths, onFileLoaded])
+    }, [job.id, job.local_relative_paths, onFileLoaded, videoSource])
 
     return { sourceFile, fileMissing, error }
 }

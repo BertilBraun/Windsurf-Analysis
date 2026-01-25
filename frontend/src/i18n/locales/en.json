@@ -150,6 +150,17 @@
                 "terms": "Terms of Use"
             },
             "nav": {
+                "app": "App",
+                "appItems": {
+                    "demo": {
+                        "title": "Try demo (no setup)",
+                        "subtitle": "Upload one video, no setup"
+                    },
+                    "analyzer": {
+                        "title": "Full analyzer",
+                        "subtitle": "Set up a folder and auto-process everything"
+                    }
+                },
                 "analyzer": "Analyzer",
                 "ariaLabel": "Primary navigation",
                 "faq": "FAQ",
@@ -455,6 +466,36 @@
         }
     },
     "screens": {
+        "demo": {
+            "title": "Demo",
+            "actions": {
+                "selectVideo": "Select video",
+                "play": "Play",
+                "sampleVideo": "Use sample video"
+            },
+            "hero": {
+                "title": "Try GybeLock",
+                "body": "Select an MP4 video to upload and watch live processing updates."
+            },
+            "status": {
+                "hashing": "Preparing upload",
+                "uploading": "Uploading",
+                "waiting": "Waiting for job",
+                "processing": "Processing: {{status}}"
+            },
+            "processingEta": "Processing usually takes ~1-3 min.",
+            "leaveWarning": "Are you sure you want to leave? Your demo video will be gone after refresh.",
+            "skipped": "This video was already processed (duplicate).",
+            "upgrade": {
+                "title": "Want this for your whole session?",
+                "bullets": {
+                    "folder": "Drop a folder, auto-process every new clip",
+                    "workflow": "Review multiple riders, sessions, faster workflow"
+                },
+                "cta": "Set up Full Analyzer (~2 min) \u2192"
+            },
+            "failed": "Processing failed."
+        },
         "analyzer": {
             "actions": {
                 "feedback": "Feedback",
@@ -563,15 +604,17 @@
                 "beforeLabel": "Before (raw)"
             },
             "ctaSection": {
-                "body": "Processing is free during the beta. We'd love your feedback.",
-                "cta": "Get started for free",
-                "headline": "Free processing during the beta",
+                "body": "Upload one MP4 and see GybeLock in action. No folder setup required.",
+                "cta": "Try demo now",
+                "ctaSecondary": "Set up Full Analyzer (~2 min)",
+                "headline": "Try the demo",
                 "note": "Free during beta · Sign-in required to process videos",
-                "title": "Get started"
+                "title": "Try the demo"
             },
             "hero": {
                 "brand": "GybeLock",
-                "cta": "Get started",
+                "cta": "Try demo now",
+                "ctaSecondary": "Full analyzer",
                 "freeVideos": "Free during beta · Sign-in required to process videos",
                 "disclaimer": "Windsurfing only. Best with shore-shot/long-zoom footage. No GoPro/POV.",
                 "lede1": "<strong>GybeLock</strong> turns shaky beach-shot clips into a smooth, centered view of each rider — so timing and body position are easy to see.",

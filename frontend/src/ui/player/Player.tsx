@@ -17,13 +17,14 @@ import { useAnnotations } from './useAnnotations'
 import { useWebCodexPlayer } from './useWebCodexPlayer'
 import { useOverviewPan } from './useOverviewPan'
 import { DEFAULT_ZOOM_BASELINE } from './constants'
+import { VideoSource } from './videoSource'
 
 const PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY = 'player.focusedClickHintDismissed.v1'
 const PLAYER_OPENED_ONCE_KEY = 'player.openedOnce.v1'
 
 type Props = {
     job: JobDetail
-    dirHandle: FileSystemDirectoryHandle | null
+    videoSource: VideoSource
     onClose: () => void
     onReport: (id: string, type: ReportType, message: string) => void
     onOpenNextJob?: () => void
@@ -37,7 +38,7 @@ type Props = {
 
 export const Player: React.FC<Props> = ({
     job,
-    dirHandle,
+    videoSource,
     onClose,
     onOpenNextJob,
     onOpenPrevJob,
@@ -66,7 +67,7 @@ export const Player: React.FC<Props> = ({
     const renderZoom = zoom * DEFAULT_ZOOM_BASELINE
     const renderDetailedZoom = detailedZoom.value * DEFAULT_ZOOM_BASELINE
 
-    const { sourceFile, fileMissing, error } = useJobVideoSource({ job, dirHandle })
+    const { sourceFile, fileMissing, error } = useJobVideoSource({ job, videoSource })
     const errorText = error ? t(error.key, { message: error.detail }) : null
 
     const webPlayer = useWebCodexPlayer({ playbackRate: speed })

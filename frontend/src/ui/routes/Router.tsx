@@ -11,14 +11,92 @@ import { TechnicalPage } from '../screens/TechnicalPage'
 import { AppShellLayout } from '../components/AppShell'
 import { LoginPage } from '../screens/LoginPage'
 import { SignupPage } from '../screens/SignupPage'
+import { DemoPage } from '../screens/DemoPage'
 import { LogoButton } from '../components/LogoButton'
 import { Button } from '../components/Button'
 import { ConsentModal } from '../components/ConsentModal'
 import { trackPageView } from '../utils/analytics'
+import { auth } from '../../firebase'
+import { createUserWithEmailAndPassword, inMemoryPersistence, setPersistence, signInAnonymously } from 'firebase/auth'
+
+const DemoRoute: React.FC = () => {
+    const { t } = useTranslation()
+    const { isAuthReady, isSignedIn, authorizedFetch, uid } = useAuth()
+    const navigate = useNavigate()
+    const [authError, setAuthError] = React.useState<string | null>(null)
+
+    React.useEffect(() => {
+        if (!isAuthReady) return
+        if (isSignedIn) return
+
+        let cancelled = false
+            ; (async () => {
+                setAuthError(null)
+                try {
+                    // Demo sessions should be ephemeral: refresh wipes the session.
+                    await setPersistence(auth, inMemoryPersistence)
+                    await signInAnonymously(auth)
+                } catch (e: any) {
+                    if (cancelled) return
+                    setAuthError(e?.message || String(e))
+                }
+            })()
+
+        return () => {
+            cancelled = true
+        }
+    }, [isAuthReady, isSignedIn])
+
+    React.useEffect(() => {
+        if (!isAuthReady) return
+        if (!isSignedIn) return
+        if (!uid) return
+
+        let cancelled = false
+
+            ; (async () => {
+                try {
+                    // Demo does not require Terms/Privacy modal; just ensure backend user doc exists
+                    // so /jobs creation doesn't 404 for new anonymous sessions.
+                    const createRes = await authorizedFetch(`/users/${uid}`, { method: 'POST' })
+                    if (!createRes.ok && createRes.status !== 400) throw new Error(await createRes.text())
+                } catch (e) {
+                    if (cancelled) return
+                    const message = e instanceof Error ? e.message : String(e)
+                    console.warn('Failed to ensure demo user record', e)
+                    setAuthError(message)
+                }
+            })()
+
+        return () => {
+            cancelled = true
+        }
+    }, [authorizedFetch, isAuthReady, isSignedIn, uid])
+
+    if (!isAuthReady || !isSignedIn) {
+        return (
+            <div className="min-h-dvh bg-white text-slate-900">
+                <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
+                    <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3 flex items-center gap-3">
+                        <LogoButton onClick={() => navigate('/')} />
+                        <div className="flex-1" />
+                    </div>
+                </header>
+                <main className="mx-auto max-w-[1400px] px-4 sm:px-6 py-10 space-y-2">
+                    <div className="text-sm text-slate-600">{t('routes.analyzer.loadingSession')}</div>
+                    {authError && <div className="text-sm text-red-700 break-words">{authError}</div>}
+                </main>
+            </div>
+        )
+    }
+
+    return <DemoPage onGoHome={() => navigate('/')} />
+}
 
 const AnalyzerRoute: React.FC = () => {
     const { t } = useTranslation()
     const {
+        user,
         isAuthReady,
         isAuthenticated,
         isSignedIn,
@@ -33,11 +111,34 @@ const AnalyzerRoute: React.FC = () => {
     const navigate = useNavigate()
     const location = useLocation()
     const [authMode, setAuthMode] = React.useState<'login' | 'signup'>('login')
+    const [clearingDemoSession, setClearingDemoSession] = React.useState(false)
     const [consentState, setConsentState] = React.useState<
         'checking' | 'required' | 'ready' | { kind: 'error'; message: string }
     >('checking')
     const [consentSubmitting, setConsentSubmitting] = React.useState(false)
     const [consentReloadKey, setConsentReloadKey] = React.useState(0)
+
+    React.useEffect(() => {
+        if (!isAuthReady) return
+        if (!isSignedIn) return
+        if (!user) return
+
+        // NOTE/TODO: Demo uses anonymous or generated demo accounts. Those should not be carried into
+        // the full analyzer (it would trigger email verification). Sign out and show login/signup instead.
+        const isAnon = !!(user as any)?.isAnonymous
+        const emailStr = String(user.email || '')
+        const isGeneratedDemoEmail = emailStr.startsWith('demo+') && emailStr.endsWith('@example.com')
+        if (!isAnon && !isGeneratedDemoEmail) return
+
+        setClearingDemoSession(true)
+        logout()
+    }, [isAuthReady, isSignedIn, logout, user])
+
+    React.useEffect(() => {
+        if (!clearingDemoSession) return
+        if (isSignedIn) return
+        setClearingDemoSession(false)
+    }, [clearingDemoSession, isSignedIn])
 
     React.useEffect(() => {
         if (!isAuthReady) return
@@ -49,40 +150,40 @@ const AnalyzerRoute: React.FC = () => {
         let cancelled = false
         const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
-        ;(async () => {
-            setConsentState('checking')
-            for (let attempt = 0; attempt < 3; attempt++) {
-                try {
-                    const res = await authorizedFetch(`/users/${uid}`)
+            ; (async () => {
+                setConsentState('checking')
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        const res = await authorizedFetch(`/users/${uid}`)
 
-                    if (res.status === 404) {
-                        const createRes = await authorizedFetch(`/users/${uid}`, { method: 'POST' })
-                        if (!createRes.ok) throw new Error(await createRes.text())
-                        // Retry GET after creating the user record.
-                        continue
-                    }
+                        if (res.status === 404) {
+                            const createRes = await authorizedFetch(`/users/${uid}`, { method: 'POST' })
+                            if (!createRes.ok) throw new Error(await createRes.text())
+                            // Retry GET after creating the user record.
+                            continue
+                        }
 
-                    if (!res.ok) throw new Error(await res.text())
-                    const data = (await res.json()) as {
-                        terms_accepted_at?: string | null
-                        privacy_accepted_at?: string | null
+                        if (!res.ok) throw new Error(await res.text())
+                        const data = (await res.json()) as {
+                            terms_accepted_at?: string | null
+                            privacy_accepted_at?: string | null
+                        }
+                        if (cancelled) return
+                        const needsConsent = !data?.terms_accepted_at || !data?.privacy_accepted_at
+                        setConsentState(needsConsent ? 'required' : 'ready')
+                        return
+                    } catch (e) {
+                        if (attempt < 2) {
+                            await sleep(250 * Math.pow(2, attempt))
+                            continue
+                        }
+                        if (cancelled) return
+                        const message = e instanceof Error ? e.message : String(e)
+                        console.warn('Failed to load user consent state', e)
+                        setConsentState({ kind: 'error', message })
                     }
-                    if (cancelled) return
-                    const needsConsent = !data?.terms_accepted_at || !data?.privacy_accepted_at
-                    setConsentState(needsConsent ? 'required' : 'ready')
-                    return
-                } catch (e) {
-                    if (attempt < 2) {
-                        await sleep(250 * Math.pow(2, attempt))
-                        continue
-                    }
-                    if (cancelled) return
-                    const message = e instanceof Error ? e.message : String(e)
-                    console.warn('Failed to load user consent state', e)
-                    setConsentState({ kind: 'error', message })
                 }
-            }
-        })()
+            })()
 
         return () => {
             cancelled = true
@@ -91,6 +192,22 @@ const AnalyzerRoute: React.FC = () => {
 
     if (!isAuthReady) {
         // Avoid a flash of the logged-out UI while Firebase restores the persisted session.
+        return (
+            <div className="min-h-dvh bg-white text-slate-900">
+                <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
+                    <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3 flex items-center gap-3">
+                        <LogoButton onClick={() => navigate('/')} />
+                        <div className="flex-1" />
+                    </div>
+                </header>
+                <main className="mx-auto max-w-[1400px] px-4 sm:px-6 py-10">
+                    <div className="text-sm text-slate-600">{t('routes.analyzer.loadingSession')}</div>
+                </main>
+            </div>
+        )
+    }
+
+    if (clearingDemoSession) {
         return (
             <div className="min-h-dvh bg-white text-slate-900">
                 <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
@@ -300,6 +417,7 @@ export const Router: React.FC = () => {
 
     return (
         <Routes>
+            <Route path="/demo" element={<DemoRoute />} />
             <Route
                 path="/analyzer"
                 element={

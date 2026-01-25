@@ -272,7 +272,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
                 {selectedJob && (
                     <PlayerModal
                         job={selectedJob}
-                        dirHandle={dirHandle}
+                        videoSource={{ kind: 'ingress', dirHandle }}
                         onClose={() => setSelectedJob(null)}
                         onOpenNextJob={async () => {
                             if (!selectedJob || orderedSucceededJobIds.length === 0) return

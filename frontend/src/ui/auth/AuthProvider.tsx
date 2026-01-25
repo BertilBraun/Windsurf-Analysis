@@ -186,8 +186,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (res.status === 401) {
                 await signOut(auth)
                 await clearAuth()
-                // Login is handled inside the Analyzer route.
-                window.location.href = '/analyzer'
+                // Login is handled inside the Analyzer/Demo routes.
+                window.location.href = window.location.pathname.startsWith('/demo') ? '/demo' : '/analyzer'
                 throw new Error('Not authenticated')
             }
             return res

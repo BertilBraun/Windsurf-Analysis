@@ -5,8 +5,10 @@ import { JobSummary } from '../types'
 import { getFileByRelativePath } from '../utils/fsAccess'
 import { getThumbnailBlob, saveThumbnailBlob } from '../utils/idb'
 import { quantizeOrientation } from '../player/rotation'
+import { VideoSource } from '../player/videoSource'
 
-const THUMB_TARGET_W = 256
+const THUMB_TARGET_W_TILE = 256
+const THUMB_TARGET_W_WIDE = 960
 const THUMB_MIME = 'image/jpeg'
 const THUMB_QUALITY = 0.7
 
@@ -58,7 +60,11 @@ async function resolveFirstExistingFile(
     return null
 }
 
-async function generateThumbnailBlobFromVideo(file: File, dominantOrientation: number): Promise<Blob> {
+async function generateThumbnailBlobFromVideo(
+    file: File,
+    dominantOrientation: number,
+    targetWidth: number
+): Promise<Blob> {
     const input = new Input({
         formats: ALL_FORMATS,
         source: new BlobSource(file),
@@ -78,7 +84,7 @@ async function generateThumbnailBlobFromVideo(file: File, dominantOrientation: n
         const timestamp = safeStart + Math.min(0.1, Math.max(0, duration))
 
         const sink = new CanvasSink(videoTrack, {
-            width: THUMB_TARGET_W,
+            width: targetWidth,
             rotation: quantizeOrientation(dominantOrientation),
         })
 
@@ -103,21 +109,24 @@ const PlayOverlay: React.FC = () => (
 
 export const JobThumbnail: React.FC<{
     job: JobSummary
-    dirHandle: FileSystemDirectoryHandle | null
+    videoSource: VideoSource
     playable?: boolean
-}> = ({ job, dirHandle, playable = true }) => {
+    layout?: 'tile' | 'wide'
+}> = ({ job, videoSource, playable = true, layout = 'tile' }) => {
     const { t } = useTranslation()
     const [thumbUrl, setThumbUrl] = React.useState<string | null>(null)
     const [notFound, setNotFound] = React.useState<boolean>(false)
     const lastCacheKeyRef = React.useRef<string>('')
 
+    const targetWidth = layout === 'wide' ? THUMB_TARGET_W_WIDE : THUMB_TARGET_W_TILE
+
     const cacheKey = React.useMemo(() => {
         const sha = String(job.sha256 || '')
         const base = sha || `jobid:${job.id}`
-        return `${base}:ori:${Number(job.dominant_orientation || 0)}:w${THUMB_TARGET_W}:q${Math.round(
+        return `${base}:ori:${Number(job.dominant_orientation || 0)}:w${targetWidth}:q${Math.round(
             THUMB_QUALITY * 100
         )}`
-    }, [job.id, job.sha256, job.dominant_orientation])
+    }, [job.id, job.sha256, job.dominant_orientation, targetWidth])
 
     React.useEffect(() => {
         let revokedThumbUrl: string | null = null
@@ -132,7 +141,6 @@ export const JobThumbnail: React.FC<{
 
         if (job.status !== 'succeeded') return
         ;(async () => {
-            if (!job.local_relative_paths) throw new Error('missing_local_paths')
             try {
                 const cached = await getThumbnailBlob(cacheKey)
                 if (cancelled) return
@@ -145,6 +153,24 @@ export const JobThumbnail: React.FC<{
                     return
                 }
 
+                if (videoSource.kind === 'file') {
+                    const blob = await generateThumbnailBlobFromVideo(
+                        videoSource.file,
+                        job.dominant_orientation,
+                        targetWidth
+                    )
+                    if (cancelled) return
+
+                    await saveThumbnailBlob(cacheKey, blob)
+
+                    const url = URL.createObjectURL(blob)
+                    revokedThumbUrl = url
+                    setNotFound(false)
+                    setThumbUrl(url)
+                    return
+                }
+
+                const dirHandle = videoSource.dirHandle
                 if (!dirHandle) return
 
                 setNotFound(false)
@@ -152,6 +178,7 @@ export const JobThumbnail: React.FC<{
                 const canRead = await hasReadPermission(dirHandle)
                 if (cancelled || !canRead) return
 
+                if (!job.local_relative_paths) throw new Error('missing_local_paths')
                 const candidates = job.local_relative_paths
                 if (candidates.length === 0) {
                     setNotFound(true)
@@ -166,7 +193,7 @@ export const JobThumbnail: React.FC<{
                     return
                 }
 
-                const blob = await generateThumbnailBlobFromVideo(file, job.dominant_orientation)
+                const blob = await generateThumbnailBlobFromVideo(file, job.dominant_orientation, targetWidth)
                 if (cancelled) return
 
                 await saveThumbnailBlob(cacheKey, blob)
@@ -184,9 +211,12 @@ export const JobThumbnail: React.FC<{
             cancelled = true
             if (revokedThumbUrl) URL.revokeObjectURL(revokedThumbUrl)
         }
-    }, [cacheKey, dirHandle, job.id, job.status, job.local_relative_paths, job.dominant_orientation])
+    }, [cacheKey, job.id, job.status, job.local_relative_paths, job.dominant_orientation, targetWidth, videoSource])
 
-    const boxClasses = 'relative w-48 h-28 bg-gray-200 rounded-md overflow-hidden flex items-center justify-center'
+    const boxClasses =
+        layout === 'wide'
+            ? 'relative w-full aspect-video bg-gray-200 rounded-xl overflow-hidden flex items-center justify-center'
+            : 'relative w-48 h-28 bg-gray-200 rounded-md overflow-hidden flex items-center justify-center'
 
     if (notFound) {
         return (

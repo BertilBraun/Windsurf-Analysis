@@ -14,15 +14,19 @@ export const GetStartedSection: React.FC = () => {
                 <Text as="div" variant="muted" weight="semibold" tone="brand" className="mb-1">
                     {t('screens.home.ctaSection.title')}
                 </Text>
-                <Text as="div" variant="muted" className="mb-2">
-                    {t('screens.home.ctaSection.note')}
-                </Text>
                 <Heading level={3}>{t('screens.home.ctaSection.headline')}</Heading>
                 <Text as="div" variant="support">
                     {t('screens.home.ctaSection.body')}
                 </Text>
             </div>
-            <Button variant="primary" onClick={() => navigate('/analyzer')} text={t('screens.home.ctaSection.cta')} />
+            <div className="flex flex-col sm:flex-row gap-2">
+                <Button variant="primary" onClick={() => navigate('/demo')} text={t('screens.home.ctaSection.cta')} />
+                <Button
+                    variant="outline"
+                    onClick={() => navigate('/analyzer')}
+                    text={t('screens.home.ctaSection.ctaSecondary')}
+                />
+            </div>
         </section>
     )
 }

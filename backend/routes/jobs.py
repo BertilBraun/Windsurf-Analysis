@@ -5,7 +5,9 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from auth.firebase_auth import User, get_current_user
+# NOTE/TODO: Temporarily allow unverified-email / anonymous Firebase users for easier onboarding/demo.
+# Revert back to get_current_user (verified email) and add abuse protections before production hardening.
+from auth.firebase_auth import User, get_current_user_without_email_verification
 from config import settings
 from models import JobPatch, JobStatus, TrackResult, StabilizationTransform
 from repos.jobs_repo import JobsRepo
@@ -74,7 +76,7 @@ def _require_owned(user: User, job_id: str) -> None:
 
 
 @router.post('', response_model=JobCreateResponse)
-def create_job(payload: JobCreateRequest, user: User = Depends(get_current_user)):
+def create_job(payload: JobCreateRequest, user: User = Depends(get_current_user_without_email_verification)):
     existing = jobs_repo.get_job_by_checksum(payload.original_checksum_sha256)
     if existing is not None:
         user_jobs_repo.create_user_job(user.uid, existing.job_id)
@@ -127,7 +129,9 @@ def _trigger_modal_start(job_id: str, *, source_gs_uri: str, upright_gs_uri: str
 
 
 @router.post('/{job_id}/upload/complete')
-def upload_complete(job_id: str, payload: JobUploadCompleteRequest, user: User = Depends(get_current_user)):
+def upload_complete(
+    job_id: str, payload: JobUploadCompleteRequest, user: User = Depends(get_current_user_without_email_verification)
+):
     _require_owned(user, job_id)
 
     job = jobs_repo.get_job(job_id)
@@ -176,7 +180,7 @@ def upload_complete(job_id: str, payload: JobUploadCompleteRequest, user: User =
 
 
 @router.post('/bulk-delete')
-def bulk_delete_jobs(payload: JobsBulkDeleteRequest, user: User = Depends(get_current_user)):
+def bulk_delete_jobs(payload: JobsBulkDeleteRequest, user: User = Depends(get_current_user_without_email_verification)):
     job_ids = [j for j in payload.job_ids if isinstance(j, str) and j]
     # Safety guard: avoid huge requests.
     if len(job_ids) > 500:
@@ -195,7 +199,7 @@ def bulk_delete_jobs(payload: JobsBulkDeleteRequest, user: User = Depends(get_cu
 
 
 @router.get('/{job_id}', response_model=JobDetail)
-def get_job(job_id: str, user: User = Depends(get_current_user)):
+def get_job(job_id: str, user: User = Depends(get_current_user_without_email_verification)):
     _require_owned(user, job_id)
 
     job = jobs_repo.get_job(job_id)
@@ -219,7 +223,7 @@ def get_job(job_id: str, user: User = Depends(get_current_user)):
 
 
 @router.delete('/{job_id}')
-def delete_job(job_id: str, user: User = Depends(get_current_user)):
+def delete_job(job_id: str, user: User = Depends(get_current_user_without_email_verification)):
     _require_owned(user, job_id)
     user_jobs_repo.mark_user_job_deleted(user.uid, job_id)
     # TODO: if no other user jobs point at this job, delete the job? Recursive delete to also delete the results document
@@ -227,7 +231,7 @@ def delete_job(job_id: str, user: User = Depends(get_current_user)):
 
 
 @router.post('/{job_id}/report')
-def report_job(job_id: str, payload: ReportRequest, user: User = Depends(get_current_user)):
+def report_job(job_id: str, payload: ReportRequest, user: User = Depends(get_current_user_without_email_verification)):
     _require_owned(user, job_id)
     reports_repo.add_report(user.uid, job_id, payload.type, payload.message)
     return {'ok': True}
