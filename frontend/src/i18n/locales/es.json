@@ -30,7 +30,9 @@
         "analyzerTutorialModal": {
             "actions": {
                 "startAddingVideos": "Empezaré a añadir videos",
-                "startSetup": "Iniciar setup"
+                "startSetup": "Iniciar setup",
+                "watchWalkthrough": "Ver walkthrough",
+                "watchWalkthroughTitle": "Se abre en una pestaÃ±a nueva"
             },
             "restart": "Reiniciar",
             "restartTitle": "Reiniciar tutorial",

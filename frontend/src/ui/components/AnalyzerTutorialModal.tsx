@@ -3,6 +3,9 @@ import { Trans, useTranslation } from 'react-i18next'
 import { Modal } from './Modal'
 import { Button } from './Button'
 import { Text, TextStack, TextStrong } from './Typography'
+import { trackEvent } from '../utils/analytics'
+
+const TUTORIAL_WALKTHROUGH_URL = 'https://www.youtube.com/watch?v=moZgljKpa6E'
 
 type Step = {
     key: string
@@ -256,6 +259,11 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     const isFirst = safeIdx === 0
     const isLast = safeIdx === visibleSteps.length - 1
     const canClose = !!ingressFolderName
+    const handleOpenWalkthrough = React.useCallback(() => {
+        trackEvent('tutorial_walkthrough_open', { step_key: step.key })
+        const w = window.open(TUTORIAL_WALKTHROUGH_URL, '_blank', 'noopener,noreferrer')
+        if (w) w.opener = null
+    }, [step.key])
     const nextTooltip =
         step.key === 'watch-folder' && !ingressFolderName
             ? t('components.analyzerTutorialModal.steps.watchFolder.nextDisabledTooltip')
@@ -300,6 +308,14 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                             total: visibleSteps.length,
                         })}
                     </div>
+                    <button
+                        type="button"
+                        className="text-xs font-medium text-brand-700 hover:underline"
+                        title={t('components.analyzerTutorialModal.actions.watchWalkthroughTitle')}
+                        onClick={handleOpenWalkthrough}
+                    >
+                        {t('components.analyzerTutorialModal.actions.watchWalkthrough')}
+                    </button>
                 </div>
             }
         >
