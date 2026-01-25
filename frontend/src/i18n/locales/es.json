@@ -37,12 +37,26 @@
             "stepLabel": "Paso {{current}} de {{total}}",
             "steps": {
                 "what": {
+                    "lead": "Convierte videos de windsurf shore-shot temblorosos en <b>clips estables con el rider bloqueado</b>.",
+                    "bullets": {
+                        "drop": "Pon videos en una carpeta",
+                        "process": "GybeLock los procesa autom\u00e1ticamente",
+                        "review": "Revisa el metraje suave"
+                    },
+                    "note": "Mejor con <b>metraje shore-shot y long-zoom</b>. (No para GoPro / action-cam.)",
                     "body": "GybeLock te permite <b>poner videos de windsurf en una carpeta de tu computadora</b>, <b>los sube y procesa en segundo plano</b> automáticamente, y te permite <b>revisarlos después en un reproductor fluido</b>.",
                     "bodyMuted": "Solo añade MP4s a tu carpeta — GybeLock se encarga del resto.",
                     "footageNote": "Diseñado para shore-shot, long-zoom footage — no está diseñado para GoPro o videos POV de action-cam.",
                     "title": "Qué hace GybeLock"
                 },
                 "watchFolder": {
+                    "lead": "Elige una <b>carpeta en tu computadora</b>. GybeLock vigila esta carpeta y procesa nuevos videos autom\u00e1ticamente.",
+                    "bullets": {
+                        "readOnly": "Los archivos son <b>solo lectura</b>",
+                        "unchanged": "Nada se mueve ni se modifica"
+                    },
+                    "tip2": "Tip: crea una carpeta vac\u00eda solo para GybeLock.",
+                    "permissions2": "Tu navegador te pedir\u00e1 permiso para acceder a esta carpeta.",
                     "body": "Elige una <b>carpeta en tu computadora</b> donde estén tus videos de windsurf. GybeLock <b>vigila esa carpeta en busca de nuevos videos</b> y procesa automáticamente cualquier MP4 nuevo que añadas.",
                     "button": "Elegir carpeta de videos",
                     "currentFolder": "Carpeta actual: {{name}}",
@@ -55,6 +69,13 @@
                     "title": "Elegir carpeta de videos"
                 },
                 "addVideos": {
+                    "intro": "A\u00f1ade videos a la carpeta.",
+                    "bullets": {
+                        "dragCopy": "Arrastra o copia <b>MP4s</b> dentro",
+                        "auto": "El procesamiento empieza autom\u00e1ticamente",
+                        "time": "Suele tardar <b>1-3 minutos</b>"
+                    },
+                    "subfoldersNote": "Se admiten subcarpetas.",
                     "body": "Arrastra <b>videos MP4</b> a esta carpeta (o cópialos ahí).",
                     "folderSelected": "Carpeta de videos seleccionada: {{name}}",
                     "muted": "Los videos aparecen aquí automáticamente a medida que se procesan.",
@@ -64,6 +85,17 @@
                     "title": "Añadir videos"
                 },
                 "reviewRiding": {
+                    "overviewIntro": "Los videos se abren en <b>Overview</b>:",
+                    "overviewBullets": {
+                        "stabilized": "Escena estabilizada",
+                        "allRiders": "Todos los riders visibles"
+                    },
+                    "focusedIntro": "Haz clic en un rider para cambiar a <b>Focused view</b>:",
+                    "focusedBullets": {
+                        "centered": "El rider se mantiene centrado",
+                        "cameraMotionRemoved": "Se elimina el movimiento de c\u00e1mara"
+                    },
+                    "tip2": "Presiona <b>Esc</b> para volver a Overview.",
                     "focused": "<b>Pasa el mouse por encima de un rider y haz clic</b> para cambiar a <b>Focused view</b>, donde ese rider se mantiene centrado y estable.",
                     "overview": "Los videos se abren en <b>Overview</b>, donde la escena se estabiliza y todos los riders permanecen visibles.",
                     "tip": "Tip: Haz clic en cualquier parte o presiona Esc para volver a Overview.",

@@ -40,7 +40,14 @@
                     "body": "GybeLock lets you <b>drop windsurfing videos into a folder on your computer</b>, automatically <b>uploads and processes them in the background</b>, and lets you <b>review them later in a smooth player</b>.",
                     "bodyMuted": "Just add MP4s to your folder — GybeLock handles the rest.",
                     "footageNote": "Designed for shore-shot, long-zoom footage — Not designed for GoPro or action-cam POV videos.",
-                    "title": "What GybeLock does"
+                    "title": "What GybeLock does",
+                    "lead": "Turn shaky shore-shot windsurfing videos into <b>stable, rider-locked clips</b>.",
+                    "bullets": {
+                        "drop": "Drop videos into a folder",
+                        "process": "GybeLock processes them automatically",
+                        "review": "Review smooth footage"
+                    },
+                    "note": "Best with <b>shore-shot, long-zoom footage</b>. (Not for GoPro / action-cam videos.)"
                 },
                 "watchFolder": {
                     "body": "Choose a <b>folder on your computer</b> where your windsurfing videos live. GybeLock <b>keeps an eye on this folder for new videos</b> and automatically processes any new MP4s you add.",
@@ -52,7 +59,14 @@
                     "uploadNotice": "When you add videos, GybeLock <b>securely uploads them to our servers</b> for stabilization and analysis. <b>Your original files are never modified.</b>",
                     "status": "Status: Waiting for videos",
                     "tip": "Tip: It’s often easiest to <b>create a new empty folder</b> (for example “Windsurf Videos”) and use that.",
-                    "title": "Choose a Video Folder"
+                    "title": "Choose a Video Folder",
+                    "lead": "Pick a <b>folder on your computer</b>. GybeLock watches this folder and processes new videos automatically.",
+                    "bullets": {
+                        "readOnly": "Files are <b>read-only</b>",
+                        "unchanged": "Nothing is moved or changed"
+                    },
+                    "tip2": "Tip: Create an empty folder just for GybeLock.",
+                    "permissions2": "Your browser will ask for permission to access this folder."
                 },
                 "addVideos": {
                     "body": "Drag <b>MP4 videos</b> into this folder (or copy them there).",
@@ -61,13 +75,32 @@
                     "processingTime": "Most videos take 1–3 minutes to process.",
                     "statusWaiting": "Status: Waiting for videos",
                     "subfolders": "Tip: <b>Subfolders are supported</b> — GybeLock mirrors your folder structure exactly.",
-                    "title": "Add videos"
+                    "title": "Add videos",
+                    "intro": "Add videos to the folder.",
+                    "bullets": {
+                        "dragCopy": "Drag or copy <b>MP4s</b> into it",
+                        "auto": "Processing starts automatically",
+                        "time": "Usually takes <b>1-3 minutes</b>"
+                    },
+                    "subfoldersNote": "Subfolders are supported."
                 },
                 "reviewRiding": {
                     "focused": "<b>Hover a rider and click</b> to switch to <b>Focused view</b>, where that rider stays centered and stable.",
                     "overview": "Videos open in <b>Overview mode</b>, where the scene is stabilized and all riders stay visible.",
                     "tip": "Tip: Click anywhere or press Esc to return to Overview mode.",
-                    "title": "Review your riding"
+                    "title": "Review your riding",
+                    "overviewIntro": "Videos open in <b>Overview</b>:",
+                    "overviewBullets": {
+                        "stabilized": "Stabilized scene",
+                        "allRiders": "All riders visible"
+                    },
+                    "focusedIntro": "Click a rider to switch to <b>Focused view</b>:",
+                    "focusedBullets": {
+                        "centered": "Rider stays centered",
+                        "cameraMotionRemoved": "Camera motion removed"
+                    },
+                    "tip": "Press <b>Esc</b> to return to Overview.",
+                    "tip2": "Press <b>Esc</b> to return to Overview."
                 },
                 "reviewTools": {
                     "labels": {

@@ -37,12 +37,26 @@
             "stepLabel": "Passo {{current}} di {{total}}",
             "steps": {
                 "what": {
+                    "lead": "Trasforma video di windsurf shore-shot tremolanti in <b>clip stabili con rider-lock</b>.",
+                    "bullets": {
+                        "drop": "Metti i video in una cartella",
+                        "process": "GybeLock li processa automaticamente",
+                        "review": "Rivedi i video stabilizzati"
+                    },
+                    "note": "Meglio con <b>footage shore-shot, long-zoom</b>. (Non per GoPro / action-cam.)",
                     "body": "GybeLock ti permette di <b>mettere video di windsurf in una cartella sul tuo computer</b>, li <b>carica e processa in background</b> automaticamente e ti fa <b>rivedere tutto più tardi in un player fluido</b>.",
                     "bodyMuted": "Aggiungi semplicemente MP4 alla tua cartella — GybeLock fa il resto.",
                     "footageNote": "Pensato per shore-shot, long-zoom footage — non è pensato per GoPro o video POV da action-cam.",
                     "title": "Cosa fa GybeLock"
                 },
                 "watchFolder": {
+                    "lead": "Scegli una <b>cartella sul tuo computer</b>. GybeLock controlla questa cartella e processa automaticamente i nuovi video.",
+                    "bullets": {
+                        "readOnly": "I file sono <b>solo lettura</b>",
+                        "unchanged": "Nulla viene spostato o modificato"
+                    },
+                    "tip2": "Tip: crea una cartella vuota solo per GybeLock.",
+                    "permissions2": "Il browser ti chieder\u00e0 il permesso di accedere a questa cartella.",
                     "body": "Scegli una <b>cartella sul tuo computer</b> dove stanno i tuoi video di windsurf. GybeLock <b>tiene d’occhio questa cartella per nuovi video</b> e processa automaticamente qualsiasi nuovo MP4 che aggiungi.",
                     "button": "Scegli cartella video",
                     "currentFolder": "Cartella attuale: {{name}}",
@@ -55,6 +69,13 @@
                     "title": "Scegli una cartella video"
                 },
                 "addVideos": {
+                    "intro": "Aggiungi video alla cartella.",
+                    "bullets": {
+                        "dragCopy": "Trascina o copia <b>MP4</b> dentro",
+                        "auto": "L'elaborazione parte automaticamente",
+                        "time": "Di solito <b>1-3 minuti</b>"
+                    },
+                    "subfoldersNote": "Le sottocartelle sono supportate.",
                     "body": "Trascina <b>video MP4</b> in questa cartella (oppure copiali dentro).",
                     "folderSelected": "Cartella video selezionata: {{name}}",
                     "muted": "I video compaiono qui automaticamente man mano che vengono processati.",
@@ -64,6 +85,17 @@
                     "title": "Aggiungi video"
                 },
                 "reviewRiding": {
+                    "overviewIntro": "I video si aprono in <b>Overview</b>:",
+                    "overviewBullets": {
+                        "stabilized": "Scena stabilizzata",
+                        "allRiders": "Tutti i rider visibili"
+                    },
+                    "focusedIntro": "Clicca su un rider per passare alla <b>Focused view</b>:",
+                    "focusedBullets": {
+                        "centered": "Il rider resta centrato",
+                        "cameraMotionRemoved": "Il movimento della camera viene rimosso"
+                    },
+                    "tip2": "Premi <b>Esc</b> per tornare a Overview.",
                     "focused": "<b>Passa il mouse su un rider e clicca</b> per passare alla <b>Focused view</b>, dove quel rider rimane centrato e stabile.",
                     "overview": "I video si aprono in <b>Overview</b>, dove la scena è stabilizzata e tutti i rider restano visibili.",
                     "tip": "Tip: clicca ovunque o premi Esc per tornare a Overview.",

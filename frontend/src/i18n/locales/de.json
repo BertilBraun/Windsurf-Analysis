@@ -40,7 +40,14 @@
                     "body": "GybeLock lässt dich <b>Windsurf-Videos in einen Ordner auf deinem Computer legen</b>, lädt sie automatisch <b>im Hintergrund hoch und verarbeitet sie</b>, und du kannst sie später <b>in einem flüssigen Player reviewen</b>.",
                     "bodyMuted": "Lege einfach MP4s in deinen Ordner — GybeLock erledigt den Rest.",
                     "footageNote": "Gemacht für shore-shot, long-zoom Aufnahmen — nicht für GoPro oder Action-Cam POV Videos.",
-                    "title": "Was GybeLock macht"
+                    "title": "Was GybeLock macht",
+                    "lead": "Mach aus wackeligen shore-shot Windsurf-Videos <b>stabile Clips mit Rider-Lock</b>.",
+                    "bullets": {
+                        "drop": "Lege Videos in einen Ordner",
+                        "process": "GybeLock verarbeitet sie automatisch",
+                        "review": "Sieh dir das stabilisierte Footage an"
+                    },
+                    "note": "Am besten mit <b>shore-shot, long-zoom Footage</b>. (Nicht f\u00fcr GoPro / Action-Cam-Videos.)"
                 },
                 "watchFolder": {
                     "body": "Wähle einen <b>Ordner auf deinem Computer</b>, in dem deine Windsurf-Videos liegen. GybeLock <b>überwacht diesen Ordner auf neue Videos</b> und verarbeitet automatisch neue MP4s, die du hinzufügst.",
@@ -51,6 +58,13 @@
                     "safety": "<b>Deine Dateien werden nie geändert, verschoben oder modifiziert.</b> GybeLock liest diesen Ordner nur.",
                     "uploadNotice": "Wenn du Videos hinzufügst, lädt GybeLock sie <b>sicher auf unsere Server hoch</b> (Stabilisierung & Analyse). <b>Deine Originaldateien werden nie verändert.</b>",
                     "status": "Status: Warte auf Videos",
+                    "lead": "W\u00e4hle einen <b>Ordner auf deinem Computer</b>. GybeLock \u00fcberwacht diesen Ordner und verarbeitet neue Videos automatisch.",
+                    "bullets": {
+                        "readOnly": "Dateien sind <b>schreibgesch\u00fctzt</b>",
+                        "unchanged": "Nichts wird verschoben oder ver\u00e4ndert"
+                    },
+                    "tip2": "Tipp: Erstelle einen leeren Ordner nur f\u00fcr GybeLock.",
+                    "permissions2": "Dein Browser wird nach einer Berechtigung f\u00fcr diesen Ordner fragen.",
                     "tip": "Tipp: Oft ist es am einfachsten, einen <b>neuen leeren Ordner</b> zu erstellen (z. B. „Windsurf Videos“) und diesen zu verwenden.",
                     "title": "Videoordner auswählen"
                 },
@@ -60,6 +74,13 @@
                     "muted": "Videos erscheinen hier automatisch, sobald sie verarbeitet werden.",
                     "processingTime": "Die meisten Videos brauchen 1–3 Minuten.",
                     "statusWaiting": "Status: Warte auf Videos",
+                    "intro": "F\u00fcge Videos zum Ordner hinzu.",
+                    "bullets": {
+                        "dragCopy": "Ziehe oder kopiere <b>MP4s</b> hinein",
+                        "auto": "Die Verarbeitung startet automatisch",
+                        "time": "Dauert meistens <b>1-3 Minuten</b>"
+                    },
+                    "subfoldersNote": "Unterordner werden unterst\u00fctzt.",
                     "subfolders": "Tipp: <b>Unterordner werden unterstützt</b> — GybeLock spiegelt deine Ordnerstruktur exakt wider.",
                     "title": "Videos hinzufügen"
                 },
@@ -67,7 +88,18 @@
                     "focused": "<b>Hover über einen Rider und klicke</b>, um in die <b>Focused View</b> zu wechseln — dort bleibt der Rider zentriert und stabil.",
                     "overview": "Videos öffnen in der <b>Overview</b> — die Szene ist stabilisiert und alle Rider bleiben sichtbar.",
                     "tip": "Tipp: Klicke irgendwo oder drücke Esc, um zur Overview zurückzukehren.",
-                    "title": "Dein Riding reviewen"
+                    "title": "Dein Riding reviewen",
+                    "overviewIntro": "Videos \u00f6ffnen in <b>Overview</b>:",
+                    "overviewBullets": {
+                        "stabilized": "Stabilisierte Szene",
+                        "allRiders": "Alle Rider sichtbar"
+                    },
+                    "focusedIntro": "Klicke einen Rider an, um zur <b>Focused View</b> zu wechseln:",
+                    "focusedBullets": {
+                        "centered": "Rider bleibt zentriert",
+                        "cameraMotionRemoved": "Kamerabewegung entfernt"
+                    },
+                    "tip2": "Dr\u00fccke <b>Esc</b>, um zur Overview zur\u00fcckzukehren."
                 },
                 "reviewTools": {
                     "labels": {

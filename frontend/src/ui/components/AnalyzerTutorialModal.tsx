@@ -43,17 +43,22 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                     <TextStack variant="support">
                         <Text as="p" variant="support">
                             <Trans
-                                i18nKey="components.analyzerTutorialModal.steps.what.body"
+                                i18nKey="components.analyzerTutorialModal.steps.what.lead"
                                 components={{ b: <TextStrong /> }}
                             />
                         </Text>
-                        <Text as="p" variant="support">
-                            {t('components.analyzerTutorialModal.steps.what.bodyMuted')}
-                        </Text>
+                        <ol className="list-decimal pl-5 space-y-1 text-sm text-slate-700">
+                            <li>{t('components.analyzerTutorialModal.steps.what.bullets.drop')}</li>
+                            <li>{t('components.analyzerTutorialModal.steps.what.bullets.process')}</li>
+                            <li>{t('components.analyzerTutorialModal.steps.what.bullets.review')}</li>
+                        </ol>
                         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                             <TextStack variant="support" className="space-y-1">
                                 <Text as="div" variant="support">
-                                    {t('components.analyzerTutorialModal.steps.what.footageNote')}
+                                    <Trans
+                                        i18nKey="components.analyzerTutorialModal.steps.what.note"
+                                        components={{ b: <TextStrong /> }}
+                                    />
                                 </Text>
                             </TextStack>
                         </div>
@@ -67,29 +72,23 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                     <TextStack variant="support">
                         <Text as="p" variant="support">
                             <Trans
-                                i18nKey="components.analyzerTutorialModal.steps.watchFolder.body"
+                                i18nKey="components.analyzerTutorialModal.steps.watchFolder.lead"
                                 components={{ b: <TextStrong /> }}
                             />
                         </Text>
-                        <Text as="div" variant="support">
-                            <Trans
-                                i18nKey="components.analyzerTutorialModal.steps.watchFolder.safety"
-                                components={{ b: <TextStrong /> }}
-                            />
-                        </Text>
+                        <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
+                            <li>
+                                <Trans
+                                    i18nKey="components.analyzerTutorialModal.steps.watchFolder.bullets.readOnly"
+                                    components={{ b: <TextStrong /> }}
+                                />
+                            </li>
+                            <li>{t('components.analyzerTutorialModal.steps.watchFolder.bullets.unchanged')}</li>
+                        </ul>
                         <div className="rounded-xl border border-slate-200 bg-white p-3">
                             <Text as="div" variant="muted">
                                 <Trans
-                                    i18nKey="components.analyzerTutorialModal.steps.watchFolder.tip"
-                                    components={{ b: <TextStrong /> }}
-                                />
-                            </Text>
-                        </div>
-
-                        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
-                            <Text as="div" variant="support">
-                                <Trans
-                                    i18nKey="components.analyzerTutorialModal.steps.watchFolder.uploadNotice"
+                                    i18nKey="components.analyzerTutorialModal.steps.watchFolder.tip2"
                                     components={{ b: <TextStrong /> }}
                                 />
                             </Text>
@@ -121,7 +120,7 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                             <Text as="div" variant="support" className="text-amber-950">
                                 <Trans
-                                    i18nKey="components.analyzerTutorialModal.steps.watchFolder.permissions"
+                                    i18nKey="components.analyzerTutorialModal.steps.watchFolder.permissions2"
                                     components={{ b: <TextStrong /> }}
                                 />
                             </Text>
@@ -147,22 +146,25 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                             </div>
                         ) : null}
                         <Text as="p" variant="support">
-                            <Trans
-                                i18nKey="components.analyzerTutorialModal.steps.addVideos.body"
-                                components={{ b: <TextStrong /> }}
-                            />
+                            {t('components.analyzerTutorialModal.steps.addVideos.intro')}
                         </Text>
+                        <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
+                            <li>
+                                <Trans
+                                    i18nKey="components.analyzerTutorialModal.steps.addVideos.bullets.dragCopy"
+                                    components={{ b: <TextStrong /> }}
+                                />
+                            </li>
+                            <li>{t('components.analyzerTutorialModal.steps.addVideos.bullets.auto')}</li>
+                            <li>
+                                <Trans
+                                    i18nKey="components.analyzerTutorialModal.steps.addVideos.bullets.time"
+                                    components={{ b: <TextStrong /> }}
+                                />
+                            </li>
+                        </ul>
                         <Text as="p" variant="support">
-                            {t('components.analyzerTutorialModal.steps.addVideos.muted')}
-                        </Text>
-                        <Text as="p" variant="muted">
-                            {t('components.analyzerTutorialModal.steps.addVideos.processingTime')}
-                        </Text>
-                        <Text as="div" variant="muted">
-                            <Trans
-                                i18nKey="components.analyzerTutorialModal.steps.addVideos.subfolders"
-                                components={{ b: <TextStrong /> }}
-                            />
+                            {t('components.analyzerTutorialModal.steps.addVideos.subfoldersNote')}
                         </Text>
                     </TextStack>
                 ),
@@ -171,23 +173,40 @@ export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
                 key: 'review-riding',
                 title: t('components.analyzerTutorialModal.steps.reviewRiding.title'),
                 body: (
-                    <div className="space-y-3">
-                        <p className="text-sm text-slate-700 leading-6">
-                            <Trans
-                                i18nKey="components.analyzerTutorialModal.steps.reviewRiding.overview"
-                                components={{ b: <b /> }}
-                            />
-                        </p>
-                        <p className="text-sm text-slate-700 leading-6">
-                            <Trans
-                                i18nKey="components.analyzerTutorialModal.steps.reviewRiding.focused"
-                                components={{ b: <b /> }}
-                            />
-                        </p>
+                    <TextStack variant="support" className="space-y-3">
+                        <div>
+                            <Text as="p" variant="support">
+                                <Trans
+                                    i18nKey="components.analyzerTutorialModal.steps.reviewRiding.overviewIntro"
+                                    components={{ b: <TextStrong /> }}
+                                />
+                            </Text>
+                            <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
+                                <li>{t('components.analyzerTutorialModal.steps.reviewRiding.overviewBullets.stabilized')}</li>
+                                <li>{t('components.analyzerTutorialModal.steps.reviewRiding.overviewBullets.allRiders')}</li>
+                            </ul>
+                        </div>
+
+                        <div>
+                            <Text as="p" variant="support">
+                                <Trans
+                                    i18nKey="components.analyzerTutorialModal.steps.reviewRiding.focusedIntro"
+                                    components={{ b: <TextStrong /> }}
+                                />
+                            </Text>
+                            <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
+                                <li>{t('components.analyzerTutorialModal.steps.reviewRiding.focusedBullets.centered')}</li>
+                                <li>{t('components.analyzerTutorialModal.steps.reviewRiding.focusedBullets.cameraMotionRemoved')}</li>
+                            </ul>
+                        </div>
+
                         <Text as="p" variant="muted">
-                            {t('components.analyzerTutorialModal.steps.reviewRiding.tip')}
+                            <Trans
+                                i18nKey="components.analyzerTutorialModal.steps.reviewRiding.tip2"
+                                components={{ b: <TextStrong /> }}
+                            />
                         </Text>
-                    </div>
+                    </TextStack>
                 ),
             },
             {
