@@ -136,7 +136,6 @@ export function drawDetailedCrop(
     const dstHH = clamp(params.dstY2 - params.dstY1, 0, outputHeight)
 
     if (srcWW > 0 && srcHH > 0 && dstWW > 0 && dstHH > 0) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0)
         ctx.fillStyle = '#000'
         ctx.fillRect(0, 0, outputWidth, outputHeight)
         ctx.imageSmoothingEnabled = true
