@@ -494,11 +494,10 @@ const UnmappedJobsSection: React.FC<{
                                     type="button"
                                     variant="unstyled"
                                     size="none"
-                                    className={`group absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border p-0 leading-none shadow-sm transition ${
-                                        isPendingDelete
+                                    className={`group absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border p-0 leading-none shadow-sm transition ${isPendingDelete
                                             ? 'border-red-200 bg-red-50 text-red-600 hover:text-red-700'
                                             : 'border-white/60 bg-white/90 text-black hover:text-black'
-                                    }`}
+                                        }`}
                                     title={deleteTitle}
                                     aria-label={deleteTitle}
                                     disabled={isDeleting}
@@ -553,183 +552,182 @@ export const JobList: React.FC<{
     dirHandle = null,
     initialSyncComplete = false,
 }) => {
-    const { t } = useTranslation()
-    const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set(['']))
+        const { t } = useTranslation()
+        const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set(['']))
 
-    const { root, folderPaths, unmappedJobs } = React.useMemo(() => buildJobTree(jobs), [jobs])
+        const { root, folderPaths, unmappedJobs } = React.useMemo(() => buildJobTree(jobs), [jobs])
 
-    const toggleFolder = React.useCallback((path: string) => {
-        setExpanded(prev => {
-            const next = new Set(prev)
-            if (next.has(path)) next.delete(path)
-            else next.add(path)
-            next.add('') // root always expanded
-            return next
-        })
-    }, [])
+        const toggleFolder = React.useCallback((path: string) => {
+            setExpanded(prev => {
+                const next = new Set(prev)
+                if (next.has(path)) next.delete(path)
+                else next.add(path)
+                next.add('') // root always expanded
+                return next
+            })
+        }, [])
 
-    const expandAll = React.useCallback(() => {
-        setExpanded(new Set(['', ...folderPaths]))
-    }, [folderPaths])
+        const expandAll = React.useCallback(() => {
+            setExpanded(new Set(['', ...folderPaths]))
+        }, [folderPaths])
 
-    const collapseAll = React.useCallback(() => {
-        setExpanded(new Set(['']))
-    }, [])
+        const collapseAll = React.useCallback(() => {
+            setExpanded(new Set(['']))
+        }, [])
 
-    const renderFolder = React.useCallback(
-        (node: FolderNode, depth: number) => {
-            const isRoot = node.path === ''
-            const isOpen = expanded.has(node.path) || isRoot
-            const childNames = sortedFolderNames(node)
-            const hasChildren = childNames.length > 0
-            const hasJobs = node.jobs.length > 0
-            const isProcessing = node.activeJobs > 0
+        const renderFolder = React.useCallback(
+            (node: FolderNode, depth: number) => {
+                const isRoot = node.path === ''
+                const isOpen = expanded.has(node.path) || isRoot
+                const childNames = sortedFolderNames(node)
+                const hasChildren = childNames.length > 0
+                const hasJobs = node.jobs.length > 0
+                const isProcessing = node.activeJobs > 0
 
-            // Hide an empty root header; everything else gets a header row.
-            const showHeader = !isRoot
+                // Hide an empty root header; everything else gets a header row.
+                const showHeader = !isRoot
 
-            return (
-                <div key={node.path || 'root'} className="flex flex-col">
-                    {showHeader && (
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                                trackEvent('joblist_folder_toggle')
-                                toggleFolder(node.path)
-                            }}
-                            className="justify-start text-left py-1.5"
-                            style={{ paddingLeft: depth * 12 }}
-                            title={node.path}
-                        >
-                            <span className="w-4 text-slate-500">
-                                {hasChildren || hasJobs
-                                    ? isOpen
-                                        ? t('components.jobList.folder.openIcon')
-                                        : t('components.jobList.folder.closedIcon')
-                                    : ''}
-                            </span>
-                            <span className="font-medium text-slate-900 flex items-center gap-2">
-                                {node.name}
-                                {isProcessing && (
-                                    <span
-                                        className="inline-flex items-center gap-1 text-[11px] text-blue-700"
-                                        title={t('components.jobList.folder.inProgress', { count: node.activeJobs })}
+                return (
+                    <div key={node.path || 'root'} className="flex flex-col">
+                        {showHeader && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                    trackEvent('joblist_folder_toggle')
+                                    toggleFolder(node.path)
+                                }}
+                                className="justify-start text-left py-1.5"
+                                style={{ paddingLeft: depth * 12 }}
+                                title={node.path}
+                            >
+                                <span className="w-4 text-slate-500">
+                                    {hasChildren || hasJobs
+                                        ? isOpen
+                                            ? t('components.jobList.folder.openIcon')
+                                            : t('components.jobList.folder.closedIcon')
+                                        : ''}
+                                </span>
+                                <span className="font-medium text-slate-900 flex items-center gap-2">
+                                    {node.name}
+                                    {isProcessing && (
+                                        <span
+                                            className="inline-flex items-center gap-1 text-[11px] text-blue-700"
+                                            title={t('components.jobList.folder.inProgress', { count: node.activeJobs })}
+                                        >
+                                            <Spinner />
+                                        </span>
+                                    )}
+                                </span>
+                                <span className="text-xs text-slate-500">({node.totalJobs})</span>
+                                <div className="flex-1" />
+                            </Button>
+                        )}
+
+                        {isOpen && (
+                            <>
+                                {childNames.map(childName => {
+                                    const child = node.children.get(childName)!
+                                    return renderFolder(child, depth + 1)
+                                })}
+
+                                {node.jobs.length > 0 && (
+                                    <div
+                                        className="mt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+                                        style={{ paddingLeft: (depth + (showHeader ? 1 : 0)) * 12 }}
                                     >
-                                        <Spinner />
-                                    </span>
-                                )}
-                            </span>
-                            <span className="text-xs text-slate-500">({node.totalJobs})</span>
-                            <div className="flex-1" />
-                        </Button>
-                    )}
-
-                    {isOpen && (
-                        <>
-                            {childNames.map(childName => {
-                                const child = node.children.get(childName)!
-                                return renderFolder(child, depth + 1)
-                            })}
-
-                            {node.jobs.length > 0 && (
-                                <div
-                                    className="mt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
-                                    style={{ paddingLeft: (depth + (showHeader ? 1 : 0)) * 12 }}
-                                >
-                                    {sortJobs(node.jobs, sortKey, sortDir).map(job => {
-                                        const fileName =
-                                            stripMp4(basename(job.local_relative_path)) || t('common.notAvailable')
-                                        const caption = fileName
-                                        return (
-                                            <div
-                                                key={`${job.id}::${job.local_relative_path ?? ''}`}
-                                                className="flex flex-col items-start"
-                                            >
+                                        {sortJobs(node.jobs, sortKey, sortDir).map(job => {
+                                            const fileName =
+                                                stripMp4(basename(job.local_relative_path)) || t('common.notAvailable')
+                                            const caption = fileName
+                                            return (
                                                 <div
-                                                    className={`relative ${
-                                                        job.status === 'succeeded' ? 'cursor-pointer' : 'cursor-default'
-                                                    } ${openingId === job.id ? 'opacity-60' : ''}`}
-                                                    onClick={() => {
-                                                        if (job.status === 'succeeded') onOpen(job.id)
-                                                    }}
-                                                    role="button"
-                                                    tabIndex={0}
-                                                    onKeyDown={e =>
-                                                        job.status === 'succeeded' &&
-                                                        (e.key === 'Enter' || e.key === ' ') &&
-                                                        onOpen(job.id)
-                                                    }
+                                                    key={`${job.id}::${job.local_relative_path ?? ''}`}
+                                                    className="flex flex-col items-start"
                                                 >
-                                                    <JobThumbnail
-                                                        job={job}
-                                                        dirHandle={dirHandle}
-                                                        playable={!!job.local_relative_path}
-                                                    />
-                                                    {openingId === job.id && (
-                                                        <div className="absolute inset-0 flex items-center justify-center">
-                                                            <div className="text-white text-sm bg-black/60 rounded px-2 py-1">
-                                                                {t('components.jobList.opening')}
+                                                    <div
+                                                        className={`relative ${job.status === 'succeeded' ? 'cursor-pointer' : 'cursor-default'
+                                                            } ${openingId === job.id ? 'opacity-60' : ''}`}
+                                                        onClick={() => {
+                                                            if (job.status === 'succeeded') onOpen(job.id)
+                                                        }}
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        onKeyDown={e =>
+                                                            job.status === 'succeeded' &&
+                                                            (e.key === 'Enter' || e.key === ' ') &&
+                                                            onOpen(job.id)
+                                                        }
+                                                    >
+                                                        <JobThumbnail
+                                                            job={job}
+                                                            dirHandle={dirHandle}
+                                                            playable={!!job.local_relative_path}
+                                                        />
+                                                        {openingId === job.id && (
+                                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                                <div className="text-white text-sm bg-black/60 rounded px-2 py-1">
+                                                                    {t('components.jobList.opening')}
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    )}
+                                                        )}
+                                                    </div>
+                                                    <div
+                                                        className="mt-1 max-w-48 truncate text-xs text-gray-700"
+                                                        title={caption}
+                                                    >
+                                                        {caption}
+                                                    </div>
                                                 </div>
-                                                <div
-                                                    className="mt-1 max-w-48 truncate text-xs text-gray-700"
-                                                    title={caption}
-                                                >
-                                                    {caption}
-                                                </div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            )}
-                        </>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                        {showHeader && <div className="mt-3 border-t border-slate-200" />}
+                    </div>
+                )
+            },
+            [dirHandle, expanded, onOpen, openingId, sortDir, sortKey, t, toggleFolder]
+        )
+
+        if (jobs.length === 0) {
+            return (
+                <div className="text-center text-gray-500 flex flex-col items-center gap-8">
+                    <div>
+                        {initialSyncComplete ? t('components.jobList.waiting') : t('components.jobList.loading')}
+                        <AnimatedDots />
+                    </div>
+                    {initialSyncComplete && (
+                        <div className="mt-2 text-sm text-slate-500 max-w-md mx-auto">
+                            {t('components.jobList.emptyTip')}
+                        </div>
                     )}
-                    {showHeader && <div className="mt-3 border-t border-slate-200" />}
                 </div>
             )
-        },
-        [dirHandle, expanded, onOpen, openingId, sortDir, sortKey, t, toggleFolder]
-    )
+        }
 
-    if (jobs.length === 0) {
         return (
-            <div className="text-center text-gray-500 flex flex-col items-center gap-8">
-                <div>
-                    {initialSyncComplete ? t('components.jobList.waiting') : t('components.jobList.loading')}
-                    <AnimatedDots />
-                </div>
-                {initialSyncComplete && (
-                    <div className="mt-2 text-sm text-slate-500 max-w-md mx-auto">
-                        {t('components.jobList.emptyTip')}
-                    </div>
-                )}
+            <div className="flex flex-col gap-3">
+                <SortBar
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onToggleSort={onToggleSort}
+                    onExpandAll={expandAll}
+                    onCollapseAll={collapseAll}
+                />
+                {/* Unmapped jobs (no known local path) */}
+                <UnmappedJobsSection
+                    unmappedJobs={unmappedJobs}
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    dirHandle={dirHandle}
+                    onDeleteJobs={onDeleteJobs}
+                />
+
+                <div className="flex flex-col gap-1">{renderFolder(root, 0)}</div>
             </div>
         )
     }
-
-    return (
-        <div className="flex flex-col gap-3">
-            <SortBar
-                sortKey={sortKey}
-                sortDir={sortDir}
-                onToggleSort={onToggleSort}
-                onExpandAll={expandAll}
-                onCollapseAll={collapseAll}
-            />
-            {/* Unmapped jobs (no known local path) */}
-            <UnmappedJobsSection
-                unmappedJobs={unmappedJobs}
-                sortKey={sortKey}
-                sortDir={sortDir}
-                dirHandle={dirHandle}
-                onDeleteJobs={onDeleteJobs}
-            />
-
-            <div className="flex flex-col gap-1">{renderFolder(root, 0)}</div>
-        </div>
-    )
-}
