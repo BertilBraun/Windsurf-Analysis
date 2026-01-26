@@ -356,8 +356,8 @@
                     "title": "Atajos de teclado"
                 },
                 "overviewStabilization": {
-                    "labelOn": "Estabilización: Activada",
-                    "labelOff": "Estabilización: Desactivada",
+                    "labelOn": "Estabilizado",
+                    "labelOff": "Raw",
                     "title": "Alternar estabilización en overview"
                 }
             },
@@ -484,12 +484,13 @@
                 "hashing": "Preparando la subida",
                 "processing": "Procesando: {{status}}",
                 "uploading": "Subiendo",
-                "waiting": "Esperando el job"
+                "waiting": "Esperando el video"
             },
             "title": "Demo",
             "upgrade": {
                 "bullets": {
                     "folder": "Elige una carpeta y procesa automáticamente cada nuevo clip",
+                    "parallel": "Todos los videos de la sesión se procesan en paralelo",
                     "workflow": "Revisa varios riders y sesiones con un flujo de trabajo más rápido"
                 },
                 "cta": "Configurar Analizador completo (~2 min) →",

@@ -356,8 +356,8 @@
                     "title": "Scorciatoie da tastiera"
                 },
                 "overviewStabilization": {
-                    "labelOn": "Stabilizzazione: On",
-                    "labelOff": "Stabilizzazione: Off",
+                    "labelOn": "Stabilizzato",
+                    "labelOff": "Raw",
                     "title": "Toggle stabilizzazione in overview"
                 }
             },
@@ -484,12 +484,13 @@
                 "hashing": "Preparazione upload",
                 "processing": "Elaborazione: {{status}}",
                 "uploading": "Caricamento",
-                "waiting": "In attesa del job"
+                "waiting": "In attesa del video"
             },
             "title": "Demo",
             "upgrade": {
                 "bullets": {
                     "folder": "Scegli una cartella e processa automaticamente ogni nuovo clip",
+                    "parallel": "Tutti i video della sessione vengono processati in parallelo",
                     "workflow": "Rivedi più rider e sessioni con un flusso di lavoro più rapido"
                 },
                 "cta": "Configura Full Analyzer (~2 min) →",

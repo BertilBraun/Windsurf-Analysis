@@ -356,8 +356,8 @@
                     "title": "Tastenkürzel"
                 },
                 "overviewStabilization": {
-                    "labelOn": "Stabilisierung: An",
-                    "labelOff": "Stabilisierung: Aus",
+                    "labelOn": "Stabilisiert",
+                    "labelOff": "Raw",
                     "title": "Stabilisierung in der Overview umschalten"
                 }
             },
@@ -480,7 +480,7 @@
             "status": {
                 "hashing": "Upload wird vorbereitet",
                 "uploading": "Wird hochgeladen",
-                "waiting": "Warte auf Job",
+                "waiting": "Warte auf Video",
                 "processing": "Verarbeitung: {{status}}"
             },
             "processingEta": "Die Verarbeitung dauert meistens ~1-3 Min.",
@@ -490,6 +490,7 @@
                 "title": "Willst du das für deine ganze Session?",
                 "bullets": {
                     "folder": "Ordner ablegen, jedes neue Video automatisch verarbeiten",
+                    "parallel": "Alle Session-Videos werden parallel verarbeitet",
                     "workflow": "Mehrere Rider und Sessions schneller reviewen"
                 },
                 "cta": "Vollen Analyzer einrichten (~2 Min) \u2192"
