@@ -230,13 +230,17 @@ export const JobThumbnail: React.FC<{
 
     // For non-succeeded jobs, show a status badge inside the box instead of a loading text
     if (job.status !== 'succeeded') {
-        const isProcessing =
-            job.status === 'starting' ||
-            job.status === 'orientation' ||
-            job.status === 'stabilization' ||
-            job.status === 'detection' ||
-            job.status === 'appearance' ||
-            job.status === 'tracking'
+        const processingSteps: JobSummary['status'][] = [
+            'starting',
+            'orientation',
+            'stabilization',
+            'detection',
+            'appearance',
+            'tracking',
+        ]
+        const isProcessing = processingSteps.includes(job.status)
+        const processingStepIndex = isProcessing ? processingSteps.indexOf(job.status) + 1 : null
+        const processingStepCount = processingSteps.length
         const color =
             job.status === 'failed'
                 ? '#ef4444'
@@ -254,11 +258,14 @@ export const JobThumbnail: React.FC<{
         return (
             <div className={boxClasses}>
                 <span
-                    className="text-white rounded-md px-2 py-1 text-sm text-center"
+                    className="text-white rounded-md px-2 py-1 text-sm text-center leading-5"
                     style={{ background: color }}
                     title={t(tooltipKey)}
                 >
-                    {t(statusKey)}
+                    <div>{t(statusKey)}</div>
+                    {processingStepIndex != null && (
+                        <div className="text-xs opacity-90 tabular-nums">{processingStepIndex}/{processingStepCount}</div>
+                    )}
                 </span>
             </div>
         )
