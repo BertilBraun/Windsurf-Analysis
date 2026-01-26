@@ -186,7 +186,29 @@ export const Player: React.FC<Props> = ({
     React.useEffect(() => {
         if (!webPlayer.ready) return
         try {
-            setPlayer(PlayerState.from(job, webPlayer.frameCount))
+            const base = PlayerState.from(job, webPlayer.frameCount)
+
+            const tracksByCoverage = [...job.tracks]
+                .map(t => ({
+                    track: t,
+                    coverage: Math.max(0, Math.min(1, (t.end_percent ?? 0) - (t.start_percent ?? 0))),
+                }))
+                .sort((a, b) => b.coverage - a.coverage)
+
+            const best = tracksByCoverage[0]
+            const bestCoverage = best?.coverage ?? 0
+            const bestId = best?.track.track_id ?? null
+            const otherMaxCoverage = tracksByCoverage.slice(1).reduce((m, x) => Math.max(m, x.coverage), 0)
+
+            const shouldAutoSelect =
+                (job.tracks.length === 1 && bestId != null) ||
+                (bestId != null && bestCoverage >= 0.9 && otherMaxCoverage <= 0.2)
+
+            setPlayer(
+                shouldAutoSelect
+                    ? base.copy({ mode: 'detailed', currentTrackId: bestId })
+                    : base
+            )
         } catch (e: any) {
             setPlayer(null)
             setPlayerInitError(String(e?.message ?? e ?? 'Failed to initialize player state'))

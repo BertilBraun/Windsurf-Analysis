@@ -19,7 +19,8 @@ export const PlayerModal: React.FC<{
     onReport: (id: string, type: ReportType, message: string) => void
     onOpenNextJob?: () => void
     onOpenPrevJob?: () => void
-}> = ({ job, videoSource, onClose, onReport, onOpenNextJob, onOpenPrevJob }) => {
+    showDemoTutorialTips?: boolean
+}> = ({ job, videoSource, onClose, onReport, onOpenNextJob, onOpenPrevJob, showDemoTutorialTips = false }) => {
     const { t } = useTranslation()
     const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
     const [showReport, setShowReport] = React.useState<boolean>(false)
@@ -27,6 +28,7 @@ export const PlayerModal: React.FC<{
     const [drawMode, setDrawMode] = React.useState<boolean>(false)
     const [player, setPlayer] = React.useState<PlayerState | null>(null)
     const [disableOverviewStabilization, setDisableOverviewStabilization] = React.useState<boolean>(false)
+    const [showDemoTips, setShowDemoTips] = React.useState<boolean>(showDemoTutorialTips)
 
     React.useEffect(() => {
         loadSetting<boolean>(PLAYER_DISABLE_OVERVIEW_STABILIZATION_KEY).then(saved => {
@@ -95,6 +97,82 @@ export const PlayerModal: React.FC<{
                 }
             >
                 <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
+                    {showDemoTips && (
+                        <div className="absolute z-30 top-3 right-3 w-[min(420px,92vw)] rounded-xl border border-slate-200 bg-white/95 backdrop-blur shadow-sm p-3">
+                            <div className="flex items-start gap-2">
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-semibold text-slate-900">
+                                        {t('components.analyzerTutorialModal.steps.reviewRiding.title')}
+                                    </div>
+                                    <div className="mt-1 text-xs text-slate-700 space-y-2">
+                                        <div>
+                                            <Trans
+                                                i18nKey="components.analyzerTutorialModal.steps.reviewRiding.overviewIntro"
+                                                components={{ b: <span className="font-semibold text-slate-900" /> }}
+                                            />
+                                            <ul className="mt-1 list-disc pl-5 space-y-0.5">
+                                                <li>{t('components.analyzerTutorialModal.steps.reviewRiding.overviewBullets.stabilized')}</li>
+                                                <li>{t('components.analyzerTutorialModal.steps.reviewRiding.overviewBullets.allRiders')}</li>
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <Trans
+                                                i18nKey="components.analyzerTutorialModal.steps.reviewRiding.focusedIntro"
+                                                components={{ b: <span className="font-semibold text-slate-900" /> }}
+                                            />
+                                            <ul className="mt-1 list-disc pl-5 space-y-0.5">
+                                                <li>{t('components.analyzerTutorialModal.steps.reviewRiding.focusedBullets.centered')}</li>
+                                                <li>{t('components.analyzerTutorialModal.steps.reviewRiding.focusedBullets.cameraMotionRemoved')}</li>
+                                            </ul>
+                                        </div>
+                                        <div className="text-[11px] text-slate-500">
+                                            <Trans
+                                                i18nKey="components.analyzerTutorialModal.steps.reviewRiding.tip2"
+                                                components={{ b: <span className="font-semibold text-slate-700" /> }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 border-t border-slate-200 pt-2">
+                                        <div className="text-xs font-semibold text-slate-900">
+                                            {t('components.analyzerTutorialModal.steps.feedbackReports.title')}
+                                        </div>
+                                        <div className="mt-1 text-xs text-slate-700">
+                                            {t('components.analyzerTutorialModal.steps.feedbackReports.body')}
+                                        </div>
+                                        <ul className="mt-1 list-disc pl-5 space-y-0.5 text-xs text-slate-700">
+                                            <li>
+                                                <Trans
+                                                    i18nKey="components.analyzerTutorialModal.steps.feedbackReports.bullets.feedback"
+                                                    components={{ b: <span className="font-semibold text-slate-900" /> }}
+                                                />
+                                            </li>
+                                            <li>
+                                                <Trans
+                                                    i18nKey="components.analyzerTutorialModal.steps.feedbackReports.bullets.report"
+                                                    components={{ b: <span className="font-semibold text-slate-900" /> }}
+                                                />
+                                            </li>
+                                        </ul>
+                                        <div className="mt-1 text-[11px] text-slate-500">
+                                            {t('components.analyzerTutorialModal.steps.feedbackReports.muted')}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    className="shrink-0 rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                                    onClick={() => setShowDemoTips(false)}
+                                    aria-label={t('common.close')}
+                                >
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12l-4.9 4.89a1 1 0 1 0 1.41 1.42L12 13.41l4.89 4.9a1 1 0 0 0 1.42-1.41L13.41 12l4.9-4.89a1 1 0 0 0-.01-1.4Z" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div className="w-full h-full overflow-hidden">
                         <Player
                             key={job.id}

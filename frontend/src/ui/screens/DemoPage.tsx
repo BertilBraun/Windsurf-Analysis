@@ -311,6 +311,7 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
                         <ul className="mt-2 list-disc pl-5 space-y-1 text-sm text-slate-700">
                             <li>{t('screens.demo.upgrade.bullets.folder')}</li>
                             <li>{t('screens.demo.upgrade.bullets.workflow')}</li>
+                            <li>{t('screens.demo.upgrade.bullets.parallel')}</li>
                         </ul>
                         <div className="mt-4">
                             <Button
@@ -330,6 +331,7 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
                         videoSource={{ kind: 'file', file: selectedFile }}
                         onClose={() => setSelectedJob(null)}
                         onReport={reportJob}
+                        showDemoTutorialTips
                     />
                 )}
             </main>
