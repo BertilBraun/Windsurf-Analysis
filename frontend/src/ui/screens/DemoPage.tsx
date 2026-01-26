@@ -41,6 +41,7 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
     const [phase, setPhase] = React.useState<'idle' | 'hashing' | 'uploading' | 'waiting'>('idle')
     const [error, setError] = React.useState<string | null>(null)
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
+    const [isSampleDownloading, setIsSampleDownloading] = React.useState(false)
     const autoOpenedRef = React.useRef(false)
 
     const currentJob = React.useMemo(() => (jobId ? jobs.find(j => j.id === jobId) ?? null : null), [jobs, jobId])
@@ -113,7 +114,9 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
     )
 
     const startSampleUpload = React.useCallback(async () => {
+        if (busy || isSampleDownloading) return
         try {
+            setIsSampleDownloading(true)
             setError(null)
             const res = await fetch('/sample_video.mp4')
             if (!res.ok) throw new Error(await res.text())
@@ -122,8 +125,10 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
             await startUpload(file)
         } catch (e: any) {
             setError(e?.message || String(e))
+        } finally {
+            setIsSampleDownloading(false)
         }
-    }, [startUpload])
+    }, [busy, isSampleDownloading, startUpload])
 
     React.useEffect(() => {
         if (!selectedFileSha256) return
@@ -292,7 +297,8 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => void startSampleUpload()}
-                                    disabled={busy}
+                                    disabled={busy || isSampleDownloading}
+                                    isPending={isSampleDownloading}
                                     text={t('screens.demo.actions.sampleVideo')}
                                 />
                             </div>
