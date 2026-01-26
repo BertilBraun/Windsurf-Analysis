@@ -49,6 +49,7 @@ export const ControlsBar: React.FC<{
                     )}
                     <Button
                         onClick={onExportTrack}
+                        title={t('player.controlsBar.exportTitle')}
                         text={t('player.controlsBar.export')}
                         disabled={!exportEnabled || !!isExporting}
                     />

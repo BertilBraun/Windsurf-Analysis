@@ -444,6 +444,7 @@
         },
         "controlsBar": {
             "export": "Export",
+            "exportTitle": "Exportiere den fokussierten Rider als MP4-Clip",
             "pause": "Pause",
             "play": "Play",
             "speed": "Speed: {{value}}x",

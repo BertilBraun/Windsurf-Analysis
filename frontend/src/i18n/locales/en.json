@@ -445,6 +445,7 @@
         },
         "controlsBar": {
             "export": "Export",
+            "exportTitle": "Export the focused rider as an MP4 clip",
             "pause": "Pause",
             "play": "Play",
             "speed": "Speed: {{value}}x",

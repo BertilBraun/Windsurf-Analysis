@@ -135,18 +135,9 @@ export const PlayerModal: React.FC<{
 
                                     <div className="mt-3 border-t border-slate-200 pt-2">
                                         <div className="text-xs font-semibold text-slate-900">
-                                            {t('components.analyzerTutorialModal.steps.feedbackReports.title')}
-                                        </div>
-                                        <div className="mt-1 text-xs text-slate-700">
-                                            {t('components.analyzerTutorialModal.steps.feedbackReports.body')}
+                                            {t('components.playerModal.actions.report.label')}
                                         </div>
                                         <ul className="mt-1 list-disc pl-5 space-y-0.5 text-xs text-slate-700">
-                                            <li>
-                                                <Trans
-                                                    i18nKey="components.analyzerTutorialModal.steps.feedbackReports.bullets.feedback"
-                                                    components={{ b: <span className="font-semibold text-slate-900" /> }}
-                                                />
-                                            </li>
                                             <li>
                                                 <Trans
                                                     i18nKey="components.analyzerTutorialModal.steps.feedbackReports.bullets.report"
