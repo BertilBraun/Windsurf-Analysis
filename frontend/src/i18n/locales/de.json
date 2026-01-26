@@ -11,7 +11,8 @@
         "done": "Fertig",
         "next": "Weiter",
         "or": "Oder",
-        "notAvailable": "n/v"
+        "notAvailable": "n/v",
+        "fullAnalyzerBetaFreeNote": "Full Analyzer ist während der Beta komplett kostenlos."
     },
     "components": {
         "analyticsConsentBanner": {
@@ -157,7 +158,7 @@
                     },
                     "analyzer": {
                         "title": "Voller Analyzer",
-                        "subtitle": "Ordner einrichten und alles automatisch verarbeiten"
+                        "subtitle": "Ordner einrichten und alles automatisch verarbeiten (während der Beta kostenlos)"
                     }
                 },
                 "analyzer": "Analyzer",
@@ -603,7 +604,7 @@
                 "beforeLabel": "Vorher (raw)"
             },
             "ctaSection": {
-                "body": "Lade ein MP4 hoch und sieh GybeLock in Aktion. Kein Ordner-Setup nötig.",
+                "body": "Lade ein MP4 hoch und sieh GybeLock in Aktion. Kein Setup nötig.",
                 "cta": "Demo jetzt ausprobieren",
                 "ctaSecondary": "Vollen Analyzer einrichten (~2 Min)",
                 "headline": "Demo ausprobieren",
@@ -613,7 +614,7 @@
             "hero": {
                 "brand": "GybeLock",
                 "cta": "Demo jetzt ausprobieren",
-                "ctaSecondary": "Voller Analyzer",
+                "ctaSecondary": "Voller Analyzer (Beta kostenlos)",
                 "freeVideos": "Kostenlos während der Beta · Zum Verarbeiten ist ein Login erforderlich",
                 "disclaimer": "Nur Windsurfen. Am besten mit shore-shot/long-zoom. Kein GoPro/POV.",
                 "lede1": "<strong>GybeLock</strong> macht aus verwackelten Strandaufnahmen eine glatte, zentrierte Ansicht pro Rider — so sieht man Timing und Körperposition klar.",

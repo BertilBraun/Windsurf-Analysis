@@ -192,12 +192,17 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
                         </span>
                     </div>
                     <div className="flex-1" />
-                    <Button
-                        variant="brandOutline"
-                        size="sm"
-                        onClick={() => void goToAnalyzer()}
-                        text={t('screens.demo.upgrade.cta')}
-                    />
+                    <div className="flex flex-col items-end gap-1">
+                        <Button
+                            variant="brandOutline"
+                            size="sm"
+                            onClick={() => void goToAnalyzer()}
+                            text={t('screens.demo.upgrade.cta')}
+                        />
+                        <div className="hidden sm:block text-[10px] leading-4 text-slate-500 text-right">
+                            {t('common.fullAnalyzerBetaFreeNote')}
+                        </div>
+                    </div>
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -308,6 +313,7 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
                                 onClick={() => void goToAnalyzer()}
                                 text={t('screens.demo.upgrade.cta')}
                             />
+                            <div className="mt-2 text-xs text-slate-500">{t('common.fullAnalyzerBetaFreeNote')}</div>
                         </div>
                     </section>
                 </div>
