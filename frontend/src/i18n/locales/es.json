@@ -106,13 +106,13 @@
                 },
                 "reviewTools": {
                     "labels": {
-                        "draw": "Dibujo",
+                        "draw": "Anotar",
                         "export": "Export",
                         "zoom": "Zoom",
                         "timeline": "Timeline"
                     },
                     "bullets": {
-                        "draw": "Dibuja líneas y formas para coaching",
+                        "draw": "Anota posición del cuerpo, ángulo de la vela o stance",
                         "export": "Exporta el rider enfocado como un clip",
                         "slow": "Scrub en la Timeline, baja la velocidad de reproducción o avanza frame a frame con las flechas",
                         "zoom": "Haz zoom con la rueda del mouse"
@@ -344,12 +344,16 @@
         "playerModal": {
             "actions": {
                 "draw": {
-                    "label": "Dibujar",
-                    "title": "Alternar modo dibujo"
+                    "label": "Anotar",
+                    "title": "Alternar modo anotación"
                 },
                 "report": {
                     "label": "Report",
                     "title": "Reportar un problema en este video"
+                },
+                "help": {
+                    "label": "Ayuda",
+                    "title": "Mostrar consejos"
                 },
                 "shortcuts": {
                     "label": "Shortcuts",
@@ -360,6 +364,9 @@
                     "labelOff": "Raw",
                     "title": "Alternar estabilización en overview"
                 }
+            },
+            "titleMeta": {
+                "riders": "{{n}} riders"
             },
             "report": {
                 "descriptionLabel": "Describe — ¿qué salió mal?",
@@ -418,12 +425,13 @@
                 "widthLabel": "Ancho {{value}}"
             },
             "modeIndicator": {
-                "draw": "Modo dibujo",
+                "draw": "Modo anotación",
                 "focused": "Focused view",
                 "overview": "Overview"
             },
             "hints": {
-                "clickRiderFocused": "Haz clic en un rider para cambiar a Focused view"
+                "clickRiderFocused": "Haz clic en un rider para cambiar a Focused view",
+                "annotateOnPause": "Tip: usa Anotar para marcar posición del cuerpo o ángulo de la vela"
             },
             "export": {
                 "errorLabel": "Export: {{message}}",
@@ -473,6 +481,7 @@
                 "sampleVideo": "Usar video de ejemplo",
                 "selectVideo": "Seleccionar un video"
             },
+            "assurance": "¿Quieres probarlo con uno de tus videos? Usa la demo — sin configuración.",
             "failed": "El procesamiento falló.",
             "hero": {
                 "body": "Sube un MP4 para ver GybeLock en acción.",

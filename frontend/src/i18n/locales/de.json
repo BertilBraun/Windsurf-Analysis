@@ -106,13 +106,13 @@
                 },
                 "reviewTools": {
                     "labels": {
-                        "draw": "Zeichnen",
+                        "draw": "Annotate",
                         "export": "Export",
                         "zoom": "Zoom",
                         "timeline": "Timeline"
                     },
                     "bullets": {
-                        "draw": "Linien und Formen fürs Coaching zeichnen",
+                        "draw": "Körperposition, Segelwinkel oder Stand markieren",
                         "export": "Den fokussierten Rider als Clip exportieren",
                         "slow": "In der Timeline scrubben, Playback verlangsamen oder mit den Pfeiltasten frameweise vor/zurück",
                         "zoom": "Mit dem Mausrad zoomen"
@@ -344,12 +344,16 @@
         "playerModal": {
             "actions": {
                 "draw": {
-                    "label": "Zeichnen",
-                    "title": "Zeichenmodus umschalten"
+                    "label": "Annotate",
+                    "title": "Annotate-Modus umschalten"
                 },
                 "report": {
                     "label": "Report",
                     "title": "Ein Problem in diesem Video melden"
+                },
+                "help": {
+                    "label": "Hilfe",
+                    "title": "Tipps anzeigen"
                 },
                 "shortcuts": {
                     "label": "Shortcuts",
@@ -360,6 +364,9 @@
                     "labelOff": "Raw",
                     "title": "Stabilisierung in der Overview umschalten"
                 }
+            },
+            "titleMeta": {
+                "riders": "{{n}} Rider"
             },
             "report": {
                 "descriptionLabel": "Beschreibe kurz: Was ist schiefgelaufen?",
@@ -418,12 +425,13 @@
                 "widthLabel": "Breite {{value}}"
             },
             "modeIndicator": {
-                "draw": "Zeichenmodus",
+                "draw": "Annotate-Modus",
                 "focused": "Focused View",
                 "overview": "Overview"
             },
             "hints": {
-                "clickRiderFocused": "Klicke auf einen Rider, um zur Focused View zu wechseln"
+                "clickRiderFocused": "Klicke auf einen Rider, um zur Focused View zu wechseln",
+                "annotateOnPause": "Tipp: Nutze Annotate, um Körperposition oder Segelwinkel zu markieren"
             },
             "export": {
                 "errorLabel": "Export: {{message}}",
@@ -474,6 +482,7 @@
                 "play": "Abspielen",
                 "sampleVideo": "Beispielvideo verwenden"
             },
+            "assurance": "Willst du es mit einem deiner Videos testen? Nutze einfach die Demo — kein Setup.",
             "hero": {
                 "title": "GybeLock ausprobieren",
                 "body": "Wähle ein MP4-Video aus, lade es hoch und sieh Live-Updates zur Verarbeitung."

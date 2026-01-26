@@ -21,6 +21,8 @@ import { VideoSource } from './videoSource'
 
 const PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY = 'player.focusedClickHintDismissed.v1'
 const PLAYER_OPENED_ONCE_KEY = 'player.openedOnce.v1'
+const PLAYER_ALL_BBOXES_UNTIL_FIRST_CLICK_KEY = 'player.allBboxesUntilFirstClickDismissed.v1'
+const PLAYER_FOCUSED_PAUSE_ANNOTATE_HINT_DISMISSED_KEY = 'player.focusedPauseAnnotateHintDismissed.v1'
 
 type Props = {
     job: JobDetail
@@ -59,12 +61,21 @@ export const Player: React.FC<Props> = ({
     const [hoveredTrackId, setHoveredTrackId] = React.useState<number | null>(null)
     const [isExporting, setIsExporting] = React.useState<boolean>(false)
     const [exportProgressPct, setExportProgressPct] = React.useState<number | null>(null)
+    const [showAnnotatePauseHint, setShowAnnotatePauseHint] = React.useState(false)
     const { used: focusedClickHintDismissed, ready: focusedClickHintReady, mark: dismissFocusedClickHint } =
         useOnce(PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY)
     const { mark: markPlayerOpenedOnce } = useOnce(PLAYER_OPENED_ONCE_KEY)
+    const { used: allBboxesDismissed, ready: allBboxesReady, mark: dismissAllBboxes } =
+        useOnce(PLAYER_ALL_BBOXES_UNTIL_FIRST_CLICK_KEY)
+    const {
+        used: focusedPauseAnnotateHintDismissed,
+        ready: focusedPauseAnnotateHintReady,
+        mark: dismissFocusedPauseAnnotateHint,
+    } = useOnce(PLAYER_FOCUSED_PAUSE_ANNOTATE_HINT_DISMISSED_KEY)
 
     // Rendering uses a slightly zoomed-out baseline, but UI still reports 1.0 as the "normal" level.
-    const renderZoom = zoom * DEFAULT_ZOOM_BASELINE
+    // Only apply this baseline in detailed mode (overview should be true 1.0).
+    const renderZoom = zoom
     const renderDetailedZoom = detailedZoom.value * DEFAULT_ZOOM_BASELINE
 
     const { sourceFile, fileMissing, error } = useJobVideoSource({ job, videoSource })
@@ -231,6 +242,15 @@ export const Player: React.FC<Props> = ({
         }
         if (!webPlayer.ready) return
         if (webPlayer.playing) {
+            if (
+                player?.mode === 'detailed' &&
+                focusedPauseAnnotateHintReady &&
+                !focusedPauseAnnotateHintDismissed
+            ) {
+                dismissFocusedPauseAnnotateHint()
+                setShowAnnotatePauseHint(true)
+                window.setTimeout(() => setShowAnnotatePauseHint(false), 4500)
+            }
             webPlayer.pause()
             return
         }
@@ -242,12 +262,16 @@ export const Player: React.FC<Props> = ({
     }, [
         drawMode,
         onToggleDrawMode,
+        focusedPauseAnnotateHintReady,
+        focusedPauseAnnotateHintDismissed,
+        dismissFocusedPauseAnnotateHint,
         webPlayer.ready,
         webPlayer.playing,
         webPlayer.play,
         webPlayer.pause,
         webPlayer.ended,
         seekToFrame,
+        player?.mode,
     ])
 
     const goToAdjacentTrack = React.useCallback(
@@ -309,6 +333,7 @@ export const Player: React.FC<Props> = ({
                 offsetY: offset.y,
                 hoveredTrackId,
                 disableStabilization: disableOverviewStabilization && player.mode === 'overview',
+                showAllDetections: allBboxesReady && !allBboxesDismissed,
             },
             visible,
             frameIndex,
@@ -552,6 +577,7 @@ export const Player: React.FC<Props> = ({
         const active = player.isTrackActiveAtFrame(hoveredTrackId, webPlayer.currentFrameIndex)
         if (active) {
             if (!focusedClickHintDismissed) dismissFocusedClickHint()
+            if (allBboxesReady && !allBboxesDismissed) dismissAllBboxes()
             setPlayer(p => (p ? p.copy({ mode: 'detailed', currentTrackId: hoveredTrackId }) : p))
         } else {
             setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
@@ -560,6 +586,9 @@ export const Player: React.FC<Props> = ({
         drawMode,
         dismissFocusedClickHint,
         focusedClickHintDismissed,
+        allBboxesDismissed,
+        allBboxesReady,
+        dismissAllBboxes,
         hoveredTrackId,
         player,
         webPlayer.currentFrameIndex,
@@ -659,6 +688,13 @@ export const Player: React.FC<Props> = ({
                     <div className="absolute left-1/2 top-10 -translate-x-1/2 z-20 pointer-events-none">
                         <div className="px-3 py-2 rounded-md bg-black/70 border border-gray-700 text-gray-100 text-xs">
                             {t('player.canvas.hints.clickRiderFocused')}
+                        </div>
+                    </div>
+                )}
+                {showAnnotatePauseHint && player?.mode === 'detailed' && (
+                    <div className="absolute left-1/2 top-10 mt-10 -translate-x-1/2 z-20 pointer-events-none">
+                        <div className="px-3 py-2 rounded-md bg-black/60 border border-gray-700 text-gray-100 text-xs">
+                            {t('player.canvas.hints.annotateOnPause')}
                         </div>
                     </div>
                 )}

@@ -9,6 +9,7 @@ import { JobDetail, ReportType } from '../types'
 import { Spinner } from './Spinner'
 import { loadSetting, saveSetting } from '../utils/idb'
 import { VideoSource } from '../player/videoSource'
+import { getFileByRelativePath } from '../utils/fsAccess'
 
 const PLAYER_DISABLE_OVERVIEW_STABILIZATION_KEY = 'player.disableOverviewStabilization.v1'
 
@@ -29,6 +30,7 @@ export const PlayerModal: React.FC<{
     const [player, setPlayer] = React.useState<PlayerState | null>(null)
     const [disableOverviewStabilization, setDisableOverviewStabilization] = React.useState<boolean>(false)
     const [showDemoTips, setShowDemoTips] = React.useState<boolean>(showDemoTutorialTips)
+    const [durationSeconds, setDurationSeconds] = React.useState<number | null>(null)
 
     React.useEffect(() => {
         loadSetting<boolean>(PLAYER_DISABLE_OVERVIEW_STABILIZATION_KEY).then(saved => {
@@ -53,10 +55,84 @@ export const PlayerModal: React.FC<{
         })
     }, [])
 
+    React.useEffect(() => {
+        let revoked: string | null = null
+        let cancelled = false
+        const loadDuration = async () => {
+            setDurationSeconds(null)
+            try {
+                let file: File | null = null
+                if (videoSource.kind === 'file') {
+                    file = videoSource.file
+                } else {
+                    const dh = videoSource.dirHandle
+                    if (!dh) return
+                    const rel = job.local_relative_path
+                    if (!rel) return
+                    file = await getFileByRelativePath(dh, rel)
+                }
+                if (!file || cancelled) return
+
+                const url = URL.createObjectURL(file)
+                revoked = url
+                const video = document.createElement('video')
+                video.preload = 'metadata'
+                video.src = url
+                await new Promise<void>((resolve, reject) => {
+                    const onLoaded = () => resolve()
+                    const onError = () => reject(new Error('failed_to_load_video_metadata'))
+                    video.addEventListener('loadedmetadata', onLoaded, { once: true })
+                    video.addEventListener('error', onError, { once: true })
+                })
+                if (cancelled) return
+                const d = Number.isFinite(video.duration) ? video.duration : NaN
+                if (Number.isFinite(d) && d > 0) setDurationSeconds(d)
+            } catch {
+                // ignore metadata failures
+            } finally {
+                if (revoked) URL.revokeObjectURL(revoked)
+            }
+        }
+        void loadDuration()
+        return () => {
+            cancelled = true
+            if (revoked) URL.revokeObjectURL(revoked)
+        }
+    }, [job.id, job.local_relative_path, videoSource])
+
     const title =
         videoSource.kind === 'file'
             ? videoSource.file.name.replace(/\.mp4$/i, '')
             : job.local_relative_path?.replace(/\.mp4$/i, '') ?? job.id ?? t('common.notAvailable')
+
+    const titleDate = React.useMemo(() => {
+        const d = new Date()
+        try {
+            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        } catch {
+            return d.toDateString()
+        }
+    }, [])
+
+    const titleDuration = React.useMemo(() => {
+        if (durationSeconds == null) return null
+        const secs = Math.max(1, Math.round(durationSeconds))
+        return `${secs}s`
+    }, [durationSeconds])
+
+    const titleRiders = React.useMemo(() => {
+        const n = job.tracks?.length ?? 0
+        if (n <= 0) return null
+        return t('components.playerModal.titleMeta.riders', { n })
+    }, [job.tracks, t])
+
+    const titleMode = player
+        ? player.mode === 'detailed'
+            ? t('player.canvas.modeIndicator.focused')
+            : t('player.canvas.modeIndicator.overview')
+        : null
+
+    const titleMeta = [title, titleDate, titleDuration, titleRiders, titleMode].filter(Boolean).join(' · ')
 
     return (
         <>
@@ -64,14 +140,14 @@ export const PlayerModal: React.FC<{
                 key={job.id}
                 onClose={onClose}
                 closeOnEscape={player?.mode !== 'detailed'}
-                title={title}
+                title={titleMeta}
                 additionalHeader={
                     <>
                         <Button
                             onClick={toggleDrawMode}
                             title={t('components.playerModal.actions.draw.title')}
                             text={t('components.playerModal.actions.draw.label')}
-                            variant={drawMode ? 'primary' : 'secondary'}
+                            variant={drawMode ? 'brandOutline' : 'ghost'}
                         />
                         <Button
                             onClick={toggleOverviewStabilization}
@@ -81,24 +157,32 @@ export const PlayerModal: React.FC<{
                                     ? t('components.playerModal.actions.overviewStabilization.labelOff')
                                     : t('components.playerModal.actions.overviewStabilization.labelOn')
                             }
-                            variant={disableOverviewStabilization ? 'secondary' : 'primary'}
+                            variant={disableOverviewStabilization ? 'ghost' : 'brandOutline'}
+                        />
+                        <Button
+                            onClick={() => setShowDemoTips(true)}
+                            title={t('components.playerModal.actions.help.title')}
+                            text={t('components.playerModal.actions.help.label')}
+                            variant="ghost"
                         />
                         <Button
                             onClick={() => setShowShortcuts(true)}
                             title={t('components.playerModal.actions.shortcuts.title')}
                             text={t('components.playerModal.actions.shortcuts.label')}
+                            variant="ghost"
                         />
                         <Button
                             onClick={() => setShowReport(true)}
                             title={t('components.playerModal.actions.report.title')}
                             text={t('components.playerModal.actions.report.label')}
+                            variant="ghost"
                         />
                     </>
                 }
             >
                 <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
                     {showDemoTips && (
-                        <div className="absolute z-30 top-3 right-3 w-[min(420px,92vw)] rounded-xl border border-slate-200 bg-white/95 backdrop-blur shadow-sm p-3">
+                        <div className="absolute z-30 top-3 right-3 w-[min(280px,92vw)] rounded-xl border border-slate-200 bg-white/95 backdrop-blur shadow-sm p-3">
                             <div className="flex items-start gap-2">
                                 <div className="flex-1 min-w-0">
                                     <div className="text-xs font-semibold text-slate-900">

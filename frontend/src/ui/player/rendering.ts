@@ -10,6 +10,7 @@ export type OverviewView = {
     offsetX: number
     offsetY: number
     hoveredTrackId: number | null
+    showAllDetections?: boolean
     disableStabilization?: boolean
 }
 
@@ -357,7 +358,7 @@ export function drawFrame(
         // Draw detections under same transform
         for (const t of player.tracks) {
             const isHovered = ov.hoveredTrackId === t.track_id
-            if (!isHovered) continue
+            if (!isHovered && !ov.showAllDetections) continue
 
             const det = player.getDetectionAtFrame(t.track_id, frameIndex)
             if (!det) continue
@@ -367,8 +368,12 @@ export function drawFrame(
             const w = Math.max(1, (x2p - x1p) * rotatedVideo.width)
             const h = Math.max(1, (y2p - y1p) * rotatedVideo.height)
 
-            ctx.strokeStyle = det.interpolated ? '#f97316' : '#10b981'
-            ctx.lineWidth = 2 / sBase
+            ctx.strokeStyle = isHovered
+                ? det.interpolated
+                    ? '#f97316'
+                    : '#10b981'
+                : 'rgba(255,255,255,0.7)'
+            ctx.lineWidth = (isHovered ? 2 : 1.5) / sBase
             ctx.strokeRect(Math.round(x1) + 0.5, Math.round(y1) + 0.5, Math.round(w), Math.round(h))
         }
         if (annotations.length > 0) {

@@ -302,6 +302,7 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
                                     text={t('screens.demo.actions.sampleVideo')}
                                 />
                             </div>
+                            <div className="mt-2 text-xs text-slate-500">{t('screens.demo.assurance')}</div>
                         </div>
                     </section>
 
