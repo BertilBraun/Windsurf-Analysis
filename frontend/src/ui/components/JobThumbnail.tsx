@@ -233,8 +233,8 @@ export const JobThumbnail: React.FC<{
         const processingSteps: JobSummary['status'][] = [
             'starting',
             'orientation',
-            'stabilization',
             'detection',
+            'stabilization',
             'appearance',
             'tracking',
         ]
