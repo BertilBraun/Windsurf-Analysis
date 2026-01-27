@@ -123,6 +123,12 @@
             "type": "shell",
             "command": "python video_processing/scripts/render_homepage_demo.py --input-video \"${input:video-file}\" --skip-orientation --track-id ${input:track-id}",
             "problemMatcher": []
+        },
+        {
+            "label": "Update Documentation",
+            "type": "shell",
+            "command": "python tools/docs_agent/worktree_run.py -- --apply --llm gemini --write-state --format-python --update-inline-docs --update-readmes",
+            "problemMatcher": []
         }
     ],
     "inputs": [

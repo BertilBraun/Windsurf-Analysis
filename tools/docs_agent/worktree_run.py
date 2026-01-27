@@ -5,6 +5,7 @@ import argparse
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +26,42 @@ def _run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> subpro
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+
+
+def _run_stream(cmd: list[str], *, cwd: Path, env: dict[str, str] | None) -> int:
+    """
+    Run a process and stream its stdout/stderr directly to our stdout/stderr.
+
+    Uses byte streaming to preserve progress bars (tqdm carriage returns) and avoid
+    Windows encoding decode errors.
+    """
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(cwd),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    assert proc.stdout is not None
+    assert proc.stderr is not None
+
+    def pump(src, dst):
+        while True:
+            chunk = src.read(4096)
+            if not chunk:
+                break
+            dst.write(chunk)
+            dst.flush()
+
+    t_out = threading.Thread(target=pump, args=(proc.stdout, sys.stdout.buffer), daemon=True)
+    t_err = threading.Thread(target=pump, args=(proc.stderr, sys.stderr.buffer), daemon=True)
+    t_out.start()
+    t_err.start()
+    rc = proc.wait()
+    t_out.join(timeout=5)
+    t_err.join(timeout=5)
+    return rc
 
 
 def _ensure_clean_worktree(root: Path, wt_path: Path, ref: str) -> None:
@@ -164,11 +201,13 @@ def main(argv: list[str]) -> int:
     env.setdefault('PYTHONUTF8', '1')
 
     generate_py = wt_path / 'tools' / 'docs_agent' / 'generate.py'
-    proc = _run([sys.executable, str(generate_py)] + [a for a in args.generate_args if a != '--'], cwd=wt_path, env=env)
-    sys.stdout.write(proc.stdout or "")
-    sys.stderr.write(proc.stderr or "")
-    if proc.returncode != 0:
-        return proc.returncode
+    rc = _run_stream(
+        [sys.executable, str(generate_py)] + [a for a in args.generate_args if a != '--'],
+        cwd=wt_path,
+        env=env,
+    )
+    if rc != 0:
+        return rc
 
     # Ensure newly-created untracked files show up in the diff (e.g. new README.md files).
     wt_status = run_git(['status', '--porcelain=v1'], cwd=wt_path)
