@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import random
+import time
 import urllib.request
 from dataclasses import dataclass
+from urllib.error import HTTPError
 from typing import Any
 
 
@@ -70,3 +73,57 @@ def gemini_chat_text(config: GeminiConfig, *, system: str, user: str) -> str:
         raise GeminiError(str(resp["error"]))
     return _extract_text(resp)
 
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _sleep_with_jitter(seconds: float) -> None:
+    time.sleep(max(0.0, seconds) + random.uniform(0.0, 0.25))
+
+
+def gemini_chat_text_with_retries(config: GeminiConfig, *, system: str, user: str) -> str:
+    """
+    Retry wrapper for transient Gemini failures (429 / 503).
+
+    Tunables:
+    - DOCS_AGENT_LLM_MAX_RETRIES (default: 6)
+    - DOCS_AGENT_LLM_RETRY_BASE_SECONDS (default: 2)
+    - DOCS_AGENT_LLM_RETRY_MAX_SECONDS (default: 60)
+    """
+    max_retries = _env_int("DOCS_AGENT_LLM_MAX_RETRIES", 6)
+    base = float(_env_int("DOCS_AGENT_LLM_RETRY_BASE_SECONDS", 2))
+    cap = float(_env_int("DOCS_AGENT_LLM_RETRY_MAX_SECONDS", 60))
+
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            return gemini_chat_text(config, system=system, user=user)
+        except GeminiError as e:
+            message = str(e)
+            is_rate_limit = "HTTP Error 429" in message
+            is_unavailable = "HTTP Error 503" in message
+            if not (is_rate_limit or is_unavailable):
+                raise
+            if attempt > max_retries:
+                raise
+
+            retry_after: float | None = None
+            cause = getattr(e, "__cause__", None)
+            if isinstance(cause, HTTPError):
+                header = cause.headers.get("Retry-After") if cause.headers else None
+                if header:
+                    try:
+                        retry_after = float(header)
+                    except ValueError:
+                        retry_after = None
+
+            delay = retry_after if retry_after is not None else min(cap, base * (2 ** (attempt - 1)))
+            _sleep_with_jitter(delay)

@@ -24,10 +24,16 @@ python tools\docs_agent\generate.py --update-readmes --apply --write-state
 
 Create `.env` from `.env.example` and set your key(s).
 
+Install tqdm (optional, for progress bars):
+
+```powershell
+python -m pip install tqdm
+```
+
 Generate inline docs + folder READMEs with Gemini:
 
 ```powershell
-python tools\docs_agent\generate.py --llm gemini --update-inline-docs --update-readmes --force --max-files 10 --max-folders 10 --apply --write-state --format-python
+python tools\docs_agent\generate.py --llm gemini --update-inline-docs --update-readmes --force --max-files 10 --max-folders 10 --apply --write-state --format-python --llm-sleep-seconds 2
 ```
 
 Generate inline docs + folder READMEs with OpenAI (optional):
@@ -47,7 +53,7 @@ python tools\docs_agent\worktree_run.py -- --llm openai --update-inline-docs --u
 For Gemini in a clean worktree:
 
 ```powershell
-python tools\docs_agent\worktree_run.py -- --llm gemini --update-inline-docs --update-readmes --force --max-files 10 --max-folders 10 --apply
+python tools\docs_agent\worktree_run.py -- --llm gemini --update-inline-docs --update-readmes --force --max-files 10 --max-folders 10 --apply --llm-sleep-seconds 2
 ```
 
 ## Periodic runs

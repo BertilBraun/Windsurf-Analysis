@@ -26,6 +26,52 @@ def _ensure_clean_worktree(root: Path, wt_path: Path, ref: str) -> None:
         raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or 'git worktree add failed')
 
 
+def _sync_root_changes_into_worktree(root: Path, wt_path: Path) -> None:
+    """
+    Mirror the current working-tree contents of modified tracked files into the worktree.
+
+    Why: if your main working directory is dirty, we want generation to run against that
+    exact state so the produced patch applies cleanly back on top of it.
+    """
+    status = run_git(['status', '--porcelain=v1'], cwd=root)
+    if not status.strip():
+        return
+
+    for raw in status.splitlines():
+        if not raw:
+            continue
+        if raw.startswith('??'):
+            path_part = raw[3:].strip()
+            rel_path = Path(path_part)
+            # Never copy secrets or agent artifacts.
+            if rel_path.as_posix().startswith('.docs_agent/') or rel_path.name == '.env':
+                continue
+            src = root / rel_path
+            dst = wt_path / rel_path
+            if not src.exists() or src.is_dir():
+                continue
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(src.read_bytes())
+            continue
+        xy = raw[:2]
+        path_part = raw[3:].strip()
+        if ' -> ' in path_part:
+            continue
+        rel_path = Path(path_part)
+        src = root / rel_path
+        dst = wt_path / rel_path
+
+        if 'D' in xy:
+            if dst.exists():
+                dst.unlink()
+            continue
+
+        if not src.exists() or src.is_dir():
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(src.read_bytes())
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         prog='docs-agent-worktree',
@@ -51,9 +97,18 @@ def main(argv: list[str]) -> int:
     patch_path.parent.mkdir(parents=True, exist_ok=True)
 
     _ensure_clean_worktree(root, wt_path, ref=args.ref)
+    _sync_root_changes_into_worktree(root, wt_path)
+
+    # Stage the synced baseline so the diff only contains generator-produced changes.
+    stage_proc = _run(['git', 'add', '-A'], cwd=wt_path)
+    if stage_proc.returncode != 0:
+        sys.stderr.write(stage_proc.stderr)
+        sys.stderr.write(stage_proc.stdout)
+        return stage_proc.returncode
 
     env = os.environ.copy()
     env['DOCS_AGENT_STATE_PATH'] = str(state_path(root).resolve())
+    env.setdefault('DOCS_AGENT_CACHE_DIR', str((root / '.docs_agent' / 'llm_cache').resolve()))
     # Worktrees don't include untracked `.env` files, so point the generator at the real env file.
     env.setdefault('DOCS_AGENT_ENV_PATH', str((root / '.env').resolve()))
 
@@ -64,6 +119,19 @@ def main(argv: list[str]) -> int:
     if proc.returncode != 0:
         return proc.returncode
 
+    # Ensure newly-created untracked files show up in the diff (e.g. new README.md files).
+    wt_status = run_git(['status', '--porcelain=v1'], cwd=wt_path)
+    untracked: list[str] = []
+    for line in wt_status.splitlines():
+        if line.startswith('?? '):
+            untracked.append(line[3:].strip())
+    if untracked:
+        addn_proc = _run(['git', 'add', '-N', '--', *untracked], cwd=wt_path)
+        if addn_proc.returncode != 0:
+            sys.stderr.write(addn_proc.stderr)
+            sys.stderr.write(addn_proc.stdout)
+            return addn_proc.returncode
+
     diff = run_git(['diff'], cwd=wt_path)
     if not diff.strip():
         print('No changes produced.')
@@ -73,11 +141,13 @@ def main(argv: list[str]) -> int:
     print(f'Wrote patch: {patch_path}')
 
     if not args.no_apply:
-        apply_proc = _run(['git', 'apply', str(patch_path)], cwd=root)
+        apply_proc = _run(['git', 'apply', '--3way', '--whitespace=nowarn', str(patch_path)], cwd=root)
         if apply_proc.returncode != 0:
-            sys.stderr.write(apply_proc.stderr)
-            sys.stderr.write(apply_proc.stdout)
-            return apply_proc.returncode
+            apply_proc = _run(['git', 'apply', '--reject', '--whitespace=nowarn', str(patch_path)], cwd=root)
+            if apply_proc.returncode != 0:
+                sys.stderr.write(apply_proc.stderr)
+                sys.stderr.write(apply_proc.stdout)
+                return apply_proc.returncode
         state_proc = _run(
             [sys.executable, str(root / 'tools' / 'docs_agent' / 'run.py'), '--write-state'], cwd=root, env=env
         )

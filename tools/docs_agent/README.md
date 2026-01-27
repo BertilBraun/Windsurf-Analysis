@@ -27,6 +27,15 @@ Variables supported:
 
 If you want to load a different env file path, set `DOCS_AGENT_ENV_PATH`.
 
+## LLM caching
+
+LLM responses are cached on disk (default: `.docs_agent/llm_cache/`) keyed by a hash of:
+- provider/model/base URL
+- `prompt_version`
+- the request inputs (hashed)
+
+Override the cache location with `DOCS_AGENT_CACHE_DIR`.
+
 ## Inventory
 
 From the repo root:
@@ -52,7 +61,7 @@ python tools\docs_agent\generate.py --update-readmes --apply --write-state
 ### With Gemini 3 Flash (inline docs + folder READMEs)
 
 ```powershell
-python tools\docs_agent\generate.py --llm gemini --update-inline-docs --update-readmes --force --max-files 10 --max-folders 10 --apply --write-state --format-python
+python tools\docs_agent\generate.py --llm gemini --update-inline-docs --update-readmes --force --max-files 10 --max-folders 10 --apply --write-state --format-python --llm-sleep-seconds 2
 ```
 
 ### With OpenAI (optional)
@@ -64,7 +73,14 @@ python tools\docs_agent\generate.py --llm openai --update-inline-docs --update-r
 ## Running from a clean worktree
 
 ```powershell
-python tools\docs_agent\worktree_run.py -- --llm gemini --update-inline-docs --update-readmes --force --max-files 10 --max-folders 10 --apply
+python tools\docs_agent\worktree_run.py -- --llm gemini --update-inline-docs --update-readmes --force --max-files 10 --max-folders 10 --apply --llm-sleep-seconds 2
 ```
 
 This generates changes in a detached worktree, writes a patch to `.docs_agent/last.patch`, applies it to your current repo, then updates `.docs_agent/state.json`.
+
+If you hit 429/503 rate limits, increase `--llm-sleep-seconds` and/or lower `--max-files` / `--max-folders`. You can also tune retries via env vars: `DOCS_AGENT_LLM_MAX_RETRIES`, `DOCS_AGENT_LLM_RETRY_BASE_SECONDS`.
+
+## Progress bar (tqdm)
+
+If `tqdm` is installed, `generate.py` shows progress bars for inline-doc and README generation.
+Install: `python -m pip install tqdm`

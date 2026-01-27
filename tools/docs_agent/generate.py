@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -13,6 +15,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from tools.docs_agent.dotenv import load_repo_env  # noqa: E402
+from tools.docs_agent.cache import LlmCache  # noqa: E402
 from tools.docs_agent.lib import (  # noqa: E402
     DEFAULT_CODE_EXTS,
     DEFAULT_EXCLUDE_DIRS,
@@ -26,13 +29,22 @@ from tools.docs_agent.lib import (  # noqa: E402
     touch_state_for_scan,
     tracked_code_files,
 )
-from tools.docs_agent.llm_gemini import GeminiError, config_from_env as gemini_config_from_env, gemini_chat_text  # noqa: E402
+from tools.docs_agent.llm_gemini import (  # noqa: E402
+    GeminiError,
+    config_from_env as gemini_config_from_env,
+    gemini_chat_text_with_retries,
+)
 from tools.docs_agent.llm_openai import OpenAIError, config_from_env as openai_config_from_env, openai_respond_text  # noqa: E402
 from tools.docs_agent.verify import VerificationError, verify_python_docs_only  # noqa: E402
 
 
 _FENCE_RE = re.compile(r"```[a-zA-Z0-9_+-]*\n(.*?)\n```", re.DOTALL)
 
+# Optional dependency: progress bars.
+try:
+    from tqdm import tqdm  # type: ignore
+except Exception:  # pragma: no cover
+    tqdm = None
 
 def _extract_first_fenced_block(text: str) -> str | None:
     m = _FENCE_RE.search(text)
@@ -79,7 +91,7 @@ def _readme_prompt(folder_rel: str, files_rel: list[str], existing: str | None) 
 
 def _llm_text(provider: str, *, system: str, user: str) -> str:
     if provider == "gemini":
-        return gemini_chat_text(gemini_config_from_env(), system=system, user=user)
+        return gemini_chat_text_with_retries(gemini_config_from_env(), system=system, user=user)
     if provider == "openai":
         # Map system->instructions (close enough for our docs use-case).
         return openai_respond_text(openai_config_from_env(), instructions=system, user_input=user)
@@ -97,10 +109,28 @@ def _ensure_folder_readme_stub(folder: Path) -> str:
     )
 
 
+def _strip_trailing_whitespace(text: str) -> str:
+    has_trailing_newline = text.endswith("\n")
+    cleaned = "\n".join(line.rstrip() for line in text.splitlines())
+    return cleaned + ("\n" if has_trailing_newline else "")
+
+
+def _progress(iterable, *, total: int | None, desc: str):
+    if tqdm is None:
+        return iterable
+    return tqdm(iterable, total=total, desc=desc)
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="docs-agent-generate", description="Generate docs only for changed files/folders.")
     parser.add_argument("--apply", action="store_true", help="Write changes to disk. Default is dry-run.")
     parser.add_argument("--force", action="store_true", help="Ignore cached hashes and process everything (useful for the first run).")
+    parser.add_argument(
+        "--llm-sleep-seconds",
+        type=float,
+        default=float(os.environ.get("DOCS_AGENT_LLM_SLEEP_SECONDS", "0") or 0),
+        help="Sleep between LLM requests to reduce 429s (or set DOCS_AGENT_LLM_SLEEP_SECONDS).",
+    )
     parser.add_argument("--max-files", type=int, default=25, help="Max code files to process per run.")
     parser.add_argument("--max-folders", type=int, default=25, help="Max folders to process per run.")
     parser.add_argument("--include-ext", action="append", default=[], help="Additional file extension to include.")
@@ -123,6 +153,7 @@ def main(argv: list[str]) -> int:
 
     root = repo_root(Path.cwd())
     load_repo_env(root)
+    llm_cache = LlmCache.from_env(root)
 
     extra_exts = {e if e.startswith(".") else f".{e}" for e in args.include_ext}
     exts = {*(DEFAULT_CODE_EXTS | extra_exts)}
@@ -149,7 +180,8 @@ def main(argv: list[str]) -> int:
     updated_python_files: list[Path] = []
     if args.update_inline_docs and args.llm in {"gemini", "openai"}:
         processed = 0
-        for p in changed_files:
+        inline_targets = changed_files[: args.max_files]
+        for p in _progress(inline_targets, total=len(inline_targets), desc="Inline docs"):
             if processed >= args.max_files:
                 break
             rel = norm_rel(root, p)
@@ -157,17 +189,60 @@ def main(argv: list[str]) -> int:
             src = p.read_text(encoding="utf-8")
             system, user = _file_update_prompt(rel, lang, src)
             try:
-                text = _llm_text(args.llm, system=system, user=user)
+                if args.llm == "gemini":
+                    cfg = gemini_config_from_env()
+                    key = llm_cache.build_key(
+                        provider="gemini",
+                        model=cfg.model,
+                        base_url=cfg.base_url,
+                        system=system,
+                        user=user,
+                        prompt_version=prompt_version,
+                    )
+                    text, _ = llm_cache.get_or_set(
+                        key=key,
+                        provider="gemini",
+                        model=cfg.model,
+                        base_url=cfg.base_url,
+                        prompt_version=prompt_version,
+                        system=system,
+                        user=user,
+                        fetch=lambda: gemini_chat_text_with_retries(cfg, system=system, user=user),
+                    )
+                else:
+                    cfg = openai_config_from_env()
+                    key = llm_cache.build_key(
+                        provider="openai",
+                        model=cfg.model,
+                        base_url=cfg.base_url,
+                        system=system,
+                        user=user,
+                        prompt_version=prompt_version,
+                    )
+                    text, _ = llm_cache.get_or_set(
+                        key=key,
+                        provider="openai",
+                        model=cfg.model,
+                        base_url=cfg.base_url,
+                        prompt_version=prompt_version,
+                        system=system,
+                        user=user,
+                        fetch=lambda: openai_respond_text(cfg, instructions=system, user_input=user),
+                    )
             except (OpenAIError, GeminiError) as e:
                 print(f"[llm error] {rel}: {e}", file=sys.stderr)
+                if args.llm_sleep_seconds > 0:
+                    time.sleep(args.llm_sleep_seconds)
                 continue
 
-            updated = _extract_first_fenced_block(text) or text
+            updated = _strip_trailing_whitespace(_extract_first_fenced_block(text) or text)
             if p.suffix.lower() == ".py":
                 try:
                     verify_python_docs_only(src, updated)
                 except VerificationError as e:
                     print(f"[verify failed] {rel}: {e}", file=sys.stderr)
+                    if args.llm_sleep_seconds > 0:
+                        time.sleep(args.llm_sleep_seconds)
                     continue
 
             if updated != src:
@@ -177,6 +252,8 @@ def main(argv: list[str]) -> int:
                     p.write_text(updated, encoding="utf-8")
                     if p.suffix.lower() == ".py":
                         updated_python_files.append(p)
+            if args.llm_sleep_seconds > 0:
+                time.sleep(args.llm_sleep_seconds)
 
         if args.apply and args.format_python and updated_python_files:
             ruff = shutil.which("ruff")
@@ -199,7 +276,23 @@ def main(argv: list[str]) -> int:
         processed_folders = 0
         current_files = tracked_code_files(root, exts=exts)
         current_file_hashes = {norm_rel(root, p): sha256_file(p) for p in current_files}
+        # Precompute folder candidates so we can show progress.
+        folder_candidates: list[Path] = []
         for folder in iter_folders(current_files, root=root, exclude_dirs=exclude_dirs):
+            if len(folder_candidates) >= args.max_folders:
+                break
+            rel_folder = norm_rel(root, folder)
+            folder_h = folder_content_hash(root, folder, file_hashes=current_file_hashes)
+            prev_h = state.folder_hashes.get(rel_folder)
+            readme_path = folder / "README.md"
+            existing = readme_path.read_text(encoding="utf-8") if readme_path.exists() else None
+            if existing is not None and (not cache_invalidated and prev_h == folder_h):
+                continue
+            if args.llm == "none" and existing is not None:
+                continue
+            folder_candidates.append(folder)
+
+        for folder in _progress(folder_candidates, total=len(folder_candidates), desc="Folder READMEs"):
             if processed_folders >= args.max_folders:
                 break
             rel_folder = norm_rel(root, folder)
@@ -222,10 +315,54 @@ def main(argv: list[str]) -> int:
             else:
                 system, user = _readme_prompt(rel_folder, files_rel, existing)
                 try:
-                    new_readme = _llm_text(args.llm, system=system, user=user).strip() + "\n"
+                    if args.llm == "gemini":
+                        cfg = gemini_config_from_env()
+                        key = llm_cache.build_key(
+                            provider="gemini",
+                            model=cfg.model,
+                            base_url=cfg.base_url,
+                            system=system,
+                            user=user,
+                            prompt_version=prompt_version,
+                        )
+                        text, _ = llm_cache.get_or_set(
+                            key=key,
+                            provider="gemini",
+                            model=cfg.model,
+                            base_url=cfg.base_url,
+                            prompt_version=prompt_version,
+                            system=system,
+                            user=user,
+                            fetch=lambda: gemini_chat_text_with_retries(cfg, system=system, user=user),
+                        )
+                    else:
+                        cfg = openai_config_from_env()
+                        key = llm_cache.build_key(
+                            provider="openai",
+                            model=cfg.model,
+                            base_url=cfg.base_url,
+                            system=system,
+                            user=user,
+                            prompt_version=prompt_version,
+                        )
+                        text, _ = llm_cache.get_or_set(
+                            key=key,
+                            provider="openai",
+                            model=cfg.model,
+                            base_url=cfg.base_url,
+                            prompt_version=prompt_version,
+                            system=system,
+                            user=user,
+                            fetch=lambda: openai_respond_text(cfg, instructions=system, user_input=user),
+                        )
+                    new_readme = _strip_trailing_whitespace(text.strip() + "\n")
                 except (OpenAIError, GeminiError) as e:
                     print(f"[llm error] {rel_folder}/README.md: {e}", file=sys.stderr)
+                    if args.llm_sleep_seconds > 0:
+                        time.sleep(args.llm_sleep_seconds)
                     continue
+                if args.llm_sleep_seconds > 0:
+                    time.sleep(args.llm_sleep_seconds)
 
             if (existing or "") != new_readme:
                 processed_folders += 1
