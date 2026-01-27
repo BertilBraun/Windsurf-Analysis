@@ -1,3 +1,9 @@
+/**
+ * @file AuthProvider.tsx
+ * @description Provides authentication context and utilities using Firebase Auth,
+ * managing user sessions, registration, and authorized API communication.
+ */
+
 import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import {
     createUserWithEmailAndPassword,
@@ -14,35 +20,68 @@ import { auth, backendUrl, googleProvider } from '../../firebase'
 import { useSettings } from '../hooks/useSettings'
 import { setUserId, trackEvent } from '../utils/analytics'
 
+/**
+ * Shape of the authentication context value, providing user state and auth methods.
+ */
 type AuthContextValue = {
+    /** The current Firebase user object. */
     user: User | null
+    /** Whether the initial authentication state has been loaded from Firebase. */
     isAuthReady: boolean
+    /** Whether the user is signed in and has a verified email. */
     isAuthenticated: boolean
+    /** Whether the user is signed in (regardless of email verification). */
     isSignedIn: boolean
+    /** Whether the user is signed in but needs to verify their email. */
     needsEmailVerification: boolean
+    /** The current Bearer token header string. */
     authHeader: string | null
+    /** The unique identifier for the user. */
     uid: string | null
+    /** The user's email address. */
     email: string | null
+    /** Logs in a user with email and password. */
     login: (email: string, password: string) => Promise<void>
+    /** Signs up a new user, sends verification email, and creates a backend record. */
     signup: (
         email: string,
         password: string,
         password2: string,
         consent?: { termsAccepted: boolean; marketingConsent: boolean }
     ) => Promise<void>
+    /** Logs in or signs up a user using Google OAuth. */
     loginWithGoogle: () => Promise<void>
+    /** Sends a password reset email to the specified address. */
     resetPassword: (email: string) => Promise<void>
+    /** Signs out the current user and clears local auth state. */
     logout: () => void
+    /** Resends the email verification link to the current user. */
     resendVerificationEmail: () => Promise<void>
+    /** Reloads the user profile to check for updated verification status. */
     refreshVerificationStatus: () => Promise<void>
+    /** Performs a fetch request with the current authentication token injected into headers. */
     authorizedFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>
+    /** Current application settings. */
     settings: ReturnType<typeof useSettings>['settings']
 }
 
+/**
+ * Context for accessing authentication state and methods.
+ */
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
+/**
+ * The base URL for the backend API, derived from the environment configuration.
+ */
 export const API_BASE = backendUrl.replace(/\/+$/, '')
 
+/**
+ * Provider component that manages authentication state using Firebase.
+ * Handles login, signup, password reset, and authorized API requests.
+ *
+ * @param props - Component props.
+ * @param props.children - Child components that will have access to the auth context.
+ */
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { settings, clearAuth } = useSettings()
     const [user, setUser] = useState<User | null>(auth.currentUser)
@@ -236,6 +275,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+/**
+ * Hook to access the authentication context.
+ *
+ * @returns The current authentication context value.
+ * @throws Error if used outside of an AuthProvider.
+ */
 export function useAuth(): AuthContextValue {
     const ctx = React.useContext(AuthContext)
     if (!ctx) throw new Error('useAuth must be used within AuthProvider')

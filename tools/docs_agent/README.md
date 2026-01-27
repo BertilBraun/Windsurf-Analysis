@@ -1,100 +1,34 @@
-# Docs Agent (hash-based)
+# Docs Agent
 
-This folder contains a small, provider-agnostic “docs maintenance” toolchain.
+Automated documentation maintenance toolchain using LLMs (Gemini or OpenAI) with hash-based incremental updates.
 
-Goal: only (re)process files/folders whose content changed, so you can run it periodically (locally or in CI) without re-documenting the entire repo every time.
+## Core Tools
 
-## What exists
+*   **run.py**: Performs repository inventory and change detection using SHA256 hashes.
+*   **generate.py**: Main engine for updating inline docstrings/JSDoc and generating folder-level README.md files.
+*   **worktree_run.py**: Executes the generation process in a detached Git worktree to produce a clean patch and avoid local workspace conflicts.
+*   **verify.py**: Provides AST-based safety checks for Python files to ensure LLM updates only modify docstrings and not runtime logic.
 
-- `tools/docs_agent/run.py`: fast inventory + hashing cache
-- `tools/docs_agent/generate.py`: optional docs generator (folder `README.md` + inline docs)
-- `tools/docs_agent/worktree_run.py`: run generation in a clean detached worktree
+## Key Features
 
-## Environment (.env)
+*   **Incremental Processing**: Uses a local state file (`.docs_agent/state.json`) to skip unchanged files and folders.
+*   **LLM Caching**: Persists LLM responses to disk (`.docs_agent/llm_cache/`) keyed by model, prompt version, and input content.
+*   **Context-Aware READMEs**: Generates folder documentation using the contents of local files and the READMEs of immediate subfolders (processed bottom-up).
+*   **Public API Focus**: Prompts LLMs to only document exported TypeScript symbols and public Python members (skipping private/internal functions).
+*   **Safety Verification**: Uses Python's `ast` module to compare code before and after LLM processing, rejecting any changes that modify runtime behavior.
+*   **Rate Limit Management**: Includes configurable sleep intervals and exponential backoff retries for 429/503 errors.
+*   **Python Formatting**: Optional integration with `ruff` to format updated Python files.
 
-This repo ignores `.env` files. Create a root `.env` (or copy from `.env.example`) and put secrets there.
+## Configuration
 
-Variables supported:
+*   **Environment**: Loads settings from `.env` or a path specified by `DOCS_AGENT_ENV_PATH`.
+*   **API Keys**: Requires `GEMINI_API_KEY` or `OPENAI_API_KEY`.
+*   **Model Selection**: Configurable via `DOCS_AGENT_GEMINI_MODEL` or `DOCS_AGENT_OPENAI_MODEL`.
+*   **File Support**: Defaults to `.py`, `.ts`, and `.tsx`; additional extensions can be added via CLI flags.
+*   **Storage Paths**: State and cache locations can be overridden via `DOCS_AGENT_STATE_PATH` and `DOCS_AGENT_CACHE_DIR`.
 
-- Gemini (OpenAI-compatible endpoint):
-  - `GEMINI_API_KEY=...`
-  - `DOCS_AGENT_GEMINI_MODEL=gemini-3-flash-preview`
-  - `DOCS_AGENT_GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`
-- OpenAI (optional):
-  - `OPENAI_API_KEY=...`
-  - `DOCS_AGENT_OPENAI_MODEL=...`
-  - `OPENAI_BASE_URL=https://api.openai.com/v1`
+## TODO
 
-If you want to load a different env file path, set `DOCS_AGENT_ENV_PATH`.
-
-## LLM caching
-
-LLM responses are cached on disk (default: `.docs_agent/llm_cache/`) keyed by a hash of:
-- provider/model/base URL
-- `prompt_version`
-- the request inputs (hashed)
-
-Override the cache location with `DOCS_AGENT_CACHE_DIR`.
-
-## Inventory
-
-From the repo root:
-
-```powershell
-python tools\docs_agent\run.py --write-state
-python tools\docs_agent\run.py --changed-only
-python tools\docs_agent\run.py --print-json
-```
-
-Notes:
-- Only **tracked** files are scanned (`git ls-files`), so vendor/untracked output folders are naturally ignored.
-- State is stored in `.docs_agent/state.json` (and `.docs_agent/**` is ignored via `.gitignore`).
-
-## Generating docs
-
-### Folder README stubs (no LLM)
-
-```powershell
-python tools\docs_agent\generate.py --update-readmes --apply --write-state
-```
-
-### With Gemini 3 Flash (inline docs + folder READMEs)
-
-```powershell
-python tools\docs_agent\generate.py --llm gemini --update-inline-docs --update-readmes --force --max-files 10 --max-folders 10 --apply --write-state --format-python --llm-sleep-seconds 2
-```
-
-### With OpenAI (optional)
-
-```powershell
-python tools\docs_agent\generate.py --llm openai --update-inline-docs --update-readmes --max-files 10 --max-folders 10 --apply --write-state --format-python
-```
-
-## Running from a clean worktree
-
-```powershell
-python tools\docs_agent\worktree_run.py -- --llm gemini --update-inline-docs --update-readmes --force --max-files 10 --max-folders 10 --apply --llm-sleep-seconds 2
-```
-
-This generates changes in a detached worktree, writes a patch to `.docs_agent/last.patch`, applies it to your current repo, then updates `.docs_agent/state.json`.
-
-If you hit 429/503 rate limits, increase `--llm-sleep-seconds` and/or lower `--max-files` / `--max-folders`. You can also tune retries via env vars: `DOCS_AGENT_LLM_MAX_RETRIES`, `DOCS_AGENT_LLM_RETRY_BASE_SECONDS`.
-
-If you previously ran an older version that used `git apply --reject`, you may have leftover `*.rej` files. They can be safely deleted.
-
-## README context
-
-When generating a folder `README.md`, the prompt includes:
-- full contents of all tracked `.py/.ts/.tsx` files directly in that folder (excluding `__init__.*`)
-- `README.md` contents from immediate subfolders (so run order is bottom-up: subfolders first)
-
-## Inline docs scope
-
-When updating inline docs in code files, the agent asks the LLM to document only the public API:
-- Python: module-level names not starting with `_`, plus public class methods (skips private `_` and nested/local functions)
-- TS/TSX: exported symbols only (skips non-exported and nested/local symbols)
-
-## Progress bar (tqdm)
-
-If `tqdm` is installed, `generate.py` shows progress bars for inline-doc and README generation.
-Install: `python -m pip install tqdm`
+*   Implement AST-based verification for TypeScript/JavaScript files.
+*   Add support for more LLM providers beyond Gemini and OpenAI.
+*   Expand language-specific public API detection for other file types.

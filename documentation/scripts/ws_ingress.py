@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+Interactive windsurfing video annotator and cutter.
+Provides a workflow to preview videos, mark segments, tag them, and process them using ffmpeg.
+"""
 import argparse, os, queue, subprocess, threading, time
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +19,7 @@ MARK_LUA_SCRIPT = Path(__file__).parent / 'mpv_script_cutting.lua'
 
 
 def signal_handler(_sig, _frame):
+    """Handles interrupt signals to ensure a clean shutdown."""
     logging.warning('Interrupted! Shutting down workers...')
     sys.exit(1)
 
@@ -28,10 +33,15 @@ g_output_pre_stabilized = False
 
 
 def tagify_str(s: str) -> str:
+    """Sanitizes a string for use in filenames by replacing whitespace with underscores."""
     return s.strip().replace('\n', '_').replace('\r', '').replace(' ', '_')
 
 
 def ask_tags_popup(default='') -> str:
+    """
+    Prompts the user for tags using a Zenity entry dialog.
+    Falls back to command-line input if Zenity is not available.
+    """
     try:
         res = subprocess.run(
             ['zenity', '--entry', '--text=Enter tags:', '--entry-text', default], capture_output=True, text=True
@@ -46,6 +56,7 @@ def ask_tags_popup(default='') -> str:
 
 
 def rotation_vf_string(angle):
+    """Returns the ffmpeg video filter string for the specified rotation angle, or None if no rotation is needed."""
     # Returns None if no rotation needed, else the correct -vf string for ffmpeg
     if angle == 0 or angle is None:
         return None
@@ -61,6 +72,7 @@ def rotation_vf_string(angle):
 
 
 def cut_worker_inner(item, done_list):
+    """Processes a single video segment, handling cutting, rotation, and optional stabilization."""
     seg, src, dst = item
     angle = seg.get('rotate', 0)
 
@@ -132,6 +144,7 @@ def cut_worker_inner(item, done_list):
 
 
 def cut_worker(task_queue, done_list):
+    """Worker thread function that consumes and processes video segments from a task queue."""
     while True:
         item = task_queue.get()
         if item is None:
@@ -149,6 +162,7 @@ filename_counter = defaultdict(int)
 
 
 def generate_video_path(base_name: str, out_dir: Path, in_video: Path) -> Path:
+    """Generates a unique output path based on file date, tags, and an incrementing counter."""
     date_prefix = datetime.fromtimestamp(in_video.stat().st_mtime).strftime('%Y_%m_%d')
     base_name = f'{date_prefix}_{base_name}'
     filename_counter[base_name] += 1
@@ -162,6 +176,7 @@ def generate_video_path(base_name: str, out_dir: Path, in_video: Path) -> Path:
 
 
 def annotate_and_cut(input_path: Path, out_dir: Path, n_workers: int, no_input: bool = False):
+    """Orchestrates the interactive annotation loop and manages worker threads for video processing."""
     if input_path.is_file():
         videos = [input_path]
     else:
@@ -278,6 +293,7 @@ def annotate_and_cut(input_path: Path, out_dir: Path, n_workers: int, no_input: 
 
 
 def main():
+    """Parses command-line arguments and initiates the annotation and cutting process."""
     global g_apply_stabilized, g_output_pre_stabilized
 
     setup_logging()

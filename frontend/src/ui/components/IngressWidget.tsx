@@ -1,3 +1,8 @@
+/**
+ * @module IngressWidget
+ * Provides a UI component for monitoring local directories and managing automated file uploads.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useIngressScanner } from '../hooks/useIngressScanner'
@@ -12,13 +17,23 @@ import type { JobSummary } from '../types'
 const WATCH_FOLDER_AUTO_EXPANDED_KEY = 'watchFolder.widget.autoExpandedOnFirstVideo.v1'
 const WATCH_FOLDER_MULTI_VIDEO_HINT_SHOWN_KEY = 'watchFolder.widget.multiVideoHintShown.v1'
 
+/**
+ * Props for the {@link IngressWidget} component.
+ */
 type Props = {
+    /** The directory handle to monitor for new files. */
     dirHandle: FileSystemDirectoryHandle | null
+    /** Current permission status for the selected directory. */
     dirPermission: 'granted' | 'denied' | 'prompt' | null
+    /** Callback to trigger the directory selection process. */
     onPickDirectory: () => void
+    /** Fetcher for authorized upload requests. */
     authorizedFetch: AuthorizedFetch
+    /** List of existing jobs to avoid duplicate uploads. */
     jobs: JobSummary[]
+    /** Whether the ingress scanner is currently active. Defaults to `true`. */
     enabled?: boolean
+    /** Callback invoked when the number of active uploads changes. */
     onUploadingChange?: (uploading: number) => void
 }
 
@@ -52,6 +67,12 @@ const Ring: React.FC<{ percent: number }> = ({ percent }) => {
     )
 }
 
+/**
+ * A floating widget that monitors a local directory for new files and manages their upload.
+ *
+ * It provides status updates on scanning, hashing, and upload progress, and handles
+ * directory permission prompts and error reporting.
+ */
 export const IngressWidget: React.FC<Props> = ({
     dirHandle,
     dirPermission,

@@ -1,6 +1,15 @@
+/**
+ * State management for the video player.
+ * Handles track data, stabilization transforms, and frame-based lookups.
+ */
+
 import { JobDetail, Track, TrackDetection } from '../types'
 import { assert } from '../utils/assert'
 
+/**
+ * Represents the viewing mode of the player.
+ * 'overview' shows all tracks, while 'detailed' focuses on a specific track.
+ */
 export type PlayerMode = 'overview' | 'detailed'
 
 type PlayerStateInit = {
@@ -11,14 +20,24 @@ type PlayerStateInit = {
     stabilizationByFrame: Array<{ dx: number; dy: number; da: number }>
 }
 
+/**
+ * Manages the state of the video player, including track data and stabilization transforms.
+ */
 export class PlayerState {
+    /** Current viewing mode. */
     mode: PlayerMode
+    /** ID of the currently selected track, or null if none. */
     currentTrackId: number | null
-    frameCount: number // this is the total frame count of the video - it will always be >0
+    /** Total number of frames in the video (always > 0). */
+    frameCount: number
+    /** List of tracks associated with the video. */
     tracks: Track[]
 
     private stabilizationByFrame: Array<{ dx: number; dy: number; da: number }>
 
+    /**
+     * @param params - Initial state parameters.
+     */
     constructor(params: PlayerStateInit) {
         this.mode = params.mode
         this.currentTrackId = params.currentTrackId
@@ -27,6 +46,11 @@ export class PlayerState {
         this.stabilizationByFrame = params.stabilizationByFrame
     }
 
+    /**
+     * Creates a copy of the state with optional property overrides.
+     * @param patch - Properties to update.
+     * @returns A new PlayerState instance.
+     */
     copy(patch: Partial<PlayerStateInit>): PlayerState {
         const hasCurrentTrackId = Object.prototype.hasOwnProperty.call(patch, 'currentTrackId')
         return new PlayerState({
@@ -38,6 +62,13 @@ export class PlayerState {
         })
     }
 
+    /**
+     * Initializes PlayerState from a job detail and frame count.
+     * Ensures tracks and stabilization data are sorted and validated.
+     * @param job - The job detail containing tracks and stabilization data.
+     * @param frameCount - Total number of frames in the video.
+     * @returns A new PlayerState instance.
+     */
     static from(job: JobDetail, frameCount: number): PlayerState {
         assert(frameCount > 0, 'Invalid frame count')
 
@@ -59,11 +90,23 @@ export class PlayerState {
         })
     }
 
+    /**
+     * Gets the stabilization transform (dx, dy, da) for a specific frame index.
+     * @param frameIndex - The index of the frame.
+     * @returns The transform object.
+     */
     getStabilizationAtFrame(frameIndex: number): { dx: number; dy: number; da: number } {
         assert(frameIndex >= 0 && frameIndex < this.frameCount, 'Invalid frame index')
         return this.stabilizationByFrame[frameIndex]!
     }
 
+    /**
+     * Retrieves the detection for a track at a specific frame index, if it exists.
+     * Uses binary search for efficiency.
+     * @param trackId - The ID of the track.
+     * @param frameIndex - The index of the frame.
+     * @returns The detection or null if not found.
+     */
     getDetectionAtFrame(trackId: number, frameIndex: number): TrackDetection | null {
         assert(frameIndex >= 0 && frameIndex < this.frameCount, 'Invalid frame index')
         const track = this.getTrackById(trackId)
@@ -81,6 +124,12 @@ export class PlayerState {
         return null
     }
 
+    /**
+     * Finds the detection in a track closest to the specified frame index.
+     * @param trackId - The ID of the track.
+     * @param frameIndex - The index of the frame.
+     * @returns The closest detection.
+     */
     getClosestDetectionAtFrame(trackId: number, frameIndex: number): TrackDetection {
         assert(frameIndex >= 0 && frameIndex < this.frameCount, 'Invalid frame index')
         const track = this.getTrackById(trackId)
@@ -98,6 +147,11 @@ export class PlayerState {
         return closest
     }
 
+    /**
+     * Calculates the start and end frame indices for a given track based on its time percentages.
+     * @param trackId - The ID of the track.
+     * @returns An object containing startFrameIndex and endFrameIndex.
+     */
     getTrackFrameRange(trackId: number): { startFrameIndex: number; endFrameIndex: number } {
         const track = this.getTrackById(trackId)
         const startFrameIndex = this.frameIndexForPercent(track.start_percent)
@@ -105,18 +159,34 @@ export class PlayerState {
         return { startFrameIndex, endFrameIndex }
     }
 
+    /**
+     * Determines if a track is active at the specified frame index.
+     * @param trackId - The ID of the track.
+     * @param frameIndex - The index of the frame.
+     * @returns True if the track is active at the given frame.
+     */
     isTrackActiveAtFrame(trackId: number, frameIndex: number): boolean {
         const r = this.getTrackFrameRange(trackId)
         if (!r) return false
         return frameIndex >= r.startFrameIndex && frameIndex <= r.endFrameIndex
     }
 
+    /**
+     * Retrieves a track by its unique ID.
+     * @param trackId - The ID of the track.
+     * @returns The track object.
+     */
     getTrackById(trackId: number): Track {
         const track = this.tracks.find(track => track.track_id === trackId)
         assert(track !== undefined, 'Track not found for id ${trackId}')
         return track!
     }
 
+    /**
+     * Converts a normalized time percentage (0.0 to 1.0) to a frame index.
+     * @param percent - The time percentage.
+     * @returns The corresponding frame index.
+     */
     frameIndexForPercent(percent: number): number {
         assert(percent >= 0 && percent <= 1, 'Invalid percent')
         const frameIndex = Math.round(percent * this.frameCount)

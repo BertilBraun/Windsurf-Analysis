@@ -1,3 +1,8 @@
+/**
+ * @file FaqPage.tsx
+ * @description FAQ screen component providing answers to common user queries and troubleshooting information.
+ */
+
 import React from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -19,6 +24,10 @@ const FaqItem: React.FC<{ q: string; a: React.ReactNode }> = ({ q, a }) => {
     )
 }
 
+/**
+ * FAQ page component.
+ * Renders a list of collapsible frequently asked questions and a call-to-action to the analyzer.
+ */
 export const FaqPage: React.FC = () => {
     const { t } = useTranslation()
     const navigate = useNavigate()
@@ -55,11 +64,11 @@ export const FaqPage: React.FC = () => {
                 />
                 <FaqItem
                     q={t('screens.faq.items.ingressFolder.question')}
-                    a={<Trans i18nKey="screens.faq.items.ingressFolder.answer" />} 
+                    a={<Trans i18nKey="screens.faq.items.ingressFolder.answer" />}
                 />
                 <FaqItem
                     q={t('screens.faq.items.processedVideos.question')}
-                    a={<Trans i18nKey="screens.faq.items.processedVideos.answer" />} 
+                    a={<Trans i18nKey="screens.faq.items.processedVideos.answer" />}
                 />
                 <FaqItem
                     q={t('screens.faq.items.cannotOpen.question')}
@@ -90,11 +99,11 @@ export const FaqPage: React.FC = () => {
                 />
                 <FaqItem
                     q={t('screens.faq.items.videoTooLong.question')}
-                    a={<Trans i18nKey="screens.faq.items.videoTooLong.answer" />} 
+                    a={<Trans i18nKey="screens.faq.items.videoTooLong.answer" />}
                 />
                 <FaqItem
                     q={t('screens.faq.items.uploadSkipped.question')}
-                    a={<Trans i18nKey="screens.faq.items.uploadSkipped.answer" />} 
+                    a={<Trans i18nKey="screens.faq.items.uploadSkipped.answer" />}
                 />
                 <FaqItem
                     q={t('screens.faq.items.uploadsPaused.question')}
@@ -107,7 +116,7 @@ export const FaqPage: React.FC = () => {
                 />
                 <FaqItem
                     q={t('screens.faq.items.formats.question')}
-                    a={<Trans i18nKey="screens.faq.items.formats.answer" />} 
+                    a={<Trans i18nKey="screens.faq.items.formats.answer" />}
                 />
                 <FaqItem
                     q={t('screens.faq.items.shortcuts.question')}

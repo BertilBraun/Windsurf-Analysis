@@ -1,4 +1,9 @@
-/** NOTE: Under no circumstances should you translate this page. It is only used for legal purposes. */
+/**
+ * Legal information pages for the application.
+ * Includes Terms of Use, Privacy Policy, Impressum, and Contact information.
+ *
+ * NOTE: Under no circumstances should you translate this page. It is only used for legal purposes.
+ */
 
 import React from 'react'
 import { Link } from 'react-router-dom'
@@ -38,6 +43,12 @@ function Pill({ children }: { children: React.ReactNode }) {
     )
 }
 
+/**
+ * Renders a legal page based on the specified kind.
+ *
+ * @param props - Component props.
+ * @param props.kind - The type of legal content to display ('terms', 'privacy', 'impressum', or 'contact').
+ */
 export const LegalPage: React.FC<{ kind: 'terms' | 'privacy' | 'impressum' | 'contact' }> = ({ kind }) => {
     const title =
         kind === 'terms'

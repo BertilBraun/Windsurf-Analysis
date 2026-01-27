@@ -1,3 +1,9 @@
+/**
+ * @file AnalyzerTutorialModal.tsx
+ * @description Multi-step onboarding modal for the video analyzer, guiding users through
+ * folder selection and explaining core analysis and review features.
+ */
+
 import React from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Modal } from './Modal'
@@ -13,15 +19,31 @@ type Step = {
     body: React.ReactNode
 }
 
+/**
+ * Configuration properties for the AnalyzerTutorialModal component.
+ */
 export type AnalyzerTutorialModalProps = {
+    /** Callback triggered when the modal is closed or the tutorial is completed. */
     onClose: () => void
+    /** The zero-based index of the current active tutorial step. */
     stepIndex: number
+    /** Callback triggered when the user navigates to a different step. */
     onStepIndexChange: (next: number) => void
+    /** Callback triggered to open the system folder picker for the watch directory. */
     onPickIngressFolder: () => void
+    /** The name of the currently selected watch folder, or null if none is selected. */
     ingressFolderName: string | null
+    /** Optional list of step keys to filter the tutorial sequence. */
     stepKeys?: string[] | null
 }
 
+/**
+ * A modal component that guides users through the analyzer setup and usage.
+ *
+ * Manages tutorial content display, navigation logic, and folder selection triggers.
+ * It also manipulates global CSS variables to highlight specific UI elements
+ * (such as the ingress widget) during relevant steps.
+ */
 export const AnalyzerTutorialModal: React.FC<AnalyzerTutorialModalProps> = ({
     onClose,
     stepIndex,

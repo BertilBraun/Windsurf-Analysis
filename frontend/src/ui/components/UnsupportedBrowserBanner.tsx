@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Provides a banner component to warn users when their browser
+ * lacks required features like WebCodecs or File System Access API.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -6,6 +11,10 @@ const hasWebCodecs = () =>
 
 const hasFolderPicker = () => 'showDirectoryPicker' in window
 
+/**
+ * A banner component that conditionally renders a warning if the browser does
+ * not support necessary APIs (WebCodecs and Directory Picker).
+ */
 export const UnsupportedBrowserBanner: React.FC = () => {
     const { t } = useTranslation()
     const [isUnsupported, setIsUnsupported] = React.useState(false)

@@ -1,3 +1,8 @@
+/**
+ * @file LanguageSwitcher.tsx
+ * @description Provides a language selection dropdown with flag icons for application internationalization.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import flagDe from '../assets/flags/de.svg'
@@ -29,6 +34,13 @@ function normalizeLanguage(lang: string | undefined | null) {
     return normalized.split('-')[0]
 }
 
+/**
+ * A dropdown component that allows users to switch between supported languages.
+ * Displays the current language flag and provides a menu of available options.
+ *
+ * @param props - Component properties.
+ * @param props.className - Optional CSS class name for the container.
+ */
 export const LanguageSwitcher: React.FC<{ className?: string }> = ({ className }) => {
     const { i18n, t } = useTranslation()
     const [open, setOpen] = React.useState(false)

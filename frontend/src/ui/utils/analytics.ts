@@ -1,3 +1,8 @@
+/**
+ * Google Analytics integration and consent management utilities.
+ * Handles script initialization, event tracking, and automatic click monitoring.
+ */
+
 import { requireEnv } from '../../env'
 
 declare global {
@@ -10,12 +15,21 @@ declare global {
 type GtagParams = Record<string, unknown>
 
 const CONSENT_KEY = 'gybelock_analytics_consent' as const
+
+/**
+ * User consent status for analytics tracking.
+ */
 export type AnalyticsConsent = 'accepted' | 'declined'
 
 let _measurementId: string | null = null
 let _initialized = false
 let _clickTrackingInstalled = false
 
+/**
+ * Retrieves the stored analytics consent status from local storage.
+ *
+ * @returns The stored consent status, or null if no preference has been set.
+ */
 export function getAnalyticsConsent(): AnalyticsConsent | null {
     if (typeof window === 'undefined') return null
     try {
@@ -27,6 +41,11 @@ export function getAnalyticsConsent(): AnalyticsConsent | null {
     }
 }
 
+/**
+ * Persists the analytics consent status to local storage.
+ *
+ * @param consent - The consent status to store.
+ */
 export function setAnalyticsConsent(consent: AnalyticsConsent) {
     if (typeof window === 'undefined') return
     try {
@@ -36,6 +55,11 @@ export function setAnalyticsConsent(consent: AnalyticsConsent) {
     }
 }
 
+/**
+ * Checks if the user has explicitly accepted analytics tracking.
+ *
+ * @returns True if analytics are enabled.
+ */
 export function isAnalyticsEnabled(): boolean {
     return getAnalyticsConsent() === 'accepted'
 }
@@ -60,6 +84,10 @@ function ensureInitialized() {
     if (!_initialized) initAnalytics()
 }
 
+/**
+ * Initializes Google Analytics by loading the gtag.js script and configuring the measurement ID.
+ * Only executes if analytics are enabled and the environment is a browser.
+ */
 export function initAnalytics() {
     if (typeof window === 'undefined' || typeof document === 'undefined') return
     if (!isAnalyticsEnabled()) return
@@ -84,6 +112,11 @@ export function initAnalytics() {
     window.gtag?.('config', _measurementId!, { send_page_view: false })
 }
 
+/**
+ * Sets the user ID for the current analytics session to enable cross-device tracking.
+ *
+ * @param userId - The unique identifier for the user, or null to clear.
+ */
 export function setUserId(userId: string | null) {
     ensureInitialized()
     if (!_measurementId || !window?.gtag) return
@@ -92,6 +125,11 @@ export function setUserId(userId: string | null) {
     window.gtag('config', _measurementId, { user_id: uid })
 }
 
+/**
+ * Tracks a page view event for the specified path.
+ *
+ * @param pagePath - The URL path of the page being viewed.
+ */
 export function trackPageView(pagePath: string) {
     ensureInitialized()
     if (!_measurementId || !window?.gtag) return
@@ -101,6 +139,12 @@ export function trackPageView(pagePath: string) {
     })
 }
 
+/**
+ * Tracks a custom event with optional parameters.
+ *
+ * @param eventName - The name of the event to track.
+ * @param params - Optional key-value pairs for event metadata.
+ */
 export function trackEvent(eventName: string, params?: GtagParams) {
     ensureInitialized()
     if (!_measurementId || !window?.gtag) return
@@ -119,6 +163,10 @@ function defaultClickLabel(el: HTMLElement): string | null {
     return text.slice(0, 120)
 }
 
+/**
+ * Installs a global click listener to automatically track interactions with buttons,
+ * links, and elements with ARIA button roles.
+ */
 export function installClickTracking() {
     ensureInitialized()
     if (typeof document === 'undefined') return

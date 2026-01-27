@@ -1,3 +1,7 @@
+/**
+ * @file Hook for managing and synchronizing processing jobs with Firestore and local file indexing.
+ */
+
 import React from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { JobDetail, JobSummary, ReportType } from '../types'
@@ -7,12 +11,21 @@ import { collection, doc, onSnapshot, query, where, type Unsubscribe } from 'fir
 import { db } from '../../firebase'
 import { useLocalFileIndex } from './useLocalFileIndex'
 
+/**
+ * Return type for the {@link useJobs} hook.
+ */
 type UseJobsReturn = {
+    /** List of job summaries, sorted by most recent update. */
     jobs: JobSummary[]
+    /** Whether the initial connection to the user's job list has been established. */
     ready: boolean
+    /** Whether all active jobs have been fully hydrated with local file path information. */
     initialSyncComplete: boolean
+    /** Fetches full job details, utilizing persistent cache and local path resolution. */
     refreshJobDetail: (id: string) => Promise<JobDetail>
+    /** Deletes multiple jobs by ID. */
     deleteJobs: (ids: string[]) => Promise<number>
+    /** Submits a report (e.g., bug or feedback) for a specific job. */
     reportJob: (id: string, type: ReportType, message: string) => Promise<void>
 }
 
@@ -20,6 +33,15 @@ const _assertIsPercentage = (p: number) => {
     assert(0 <= p && p <= 1, `Percentage must be between 0 and 1: ${p}`)
 }
 
+/**
+ * Hook for managing and synchronizing processing jobs.
+ *
+ * Maintains a real-time list of jobs from Firestore, resolves SHA256 hashes
+ * to local file paths via the local file index, and provides management methods
+ * like deletion, reporting, and detail fetching.
+ *
+ * @returns An object containing the job list, sync status, and management functions.
+ */
 export function useJobs(): UseJobsReturn {
     const { authorizedFetch, uid } = useAuth()
     const [jobs, setJobs] = React.useState<JobSummary[]>([])

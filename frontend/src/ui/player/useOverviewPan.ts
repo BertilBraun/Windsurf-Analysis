@@ -1,3 +1,7 @@
+/**
+ * @fileoverview Hook for managing panning interactions in a zoomed-in view.
+ */
+
 import React from 'react'
 import { clamp } from '../utils/clamp'
 import type { ZoomOffset } from '../hooks/useZoom'
@@ -11,25 +15,48 @@ type PointerHandlers = {
     onPointerCancel?: (e: React.PointerEvent<HTMLCanvasElement>) => void
 }
 
+/**
+ * Manages panning logic for a zoomed-in view, typically used in a video player.
+ * Calculates boundaries based on container and video dimensions to constrain movement.
+ *
+ * @param params - Configuration for zoom state, container reference, and video dimensions.
+ * @param delegate - Optional pointer event handlers to be invoked alongside the pan logic.
+ * @returns Panning state and pointer event handlers for the interactive element.
+ */
 export function useOverviewPan(
     params: {
+        /** Whether panning is enabled. */
         enabled: boolean
+        /** Current zoom level (1.0 is no zoom). */
         zoom: number
+        /** Current pan offset in pixels. */
         offset: ZoomOffset
+        /** Callback to update the pan offset. */
         setOffset: React.Dispatch<React.SetStateAction<ZoomOffset>>
+        /** Ref to the container element used for boundary calculations. */
         containerRef: React.RefObject<HTMLElement | null>
+        /** Dimensions of the video content. */
         videoSize: { width: number; height: number }
+        /** Rotation of the video in degrees. */
         dominantOrientationDeg: number
+        /** Optional callback triggered when a pan operation starts. */
         onPanStart?: () => void
     },
     delegate?: PointerHandlers
 ): {
+    /** Whether panning is currently possible (zoom > 1 and valid dimensions). */
     canPan: boolean
+    /** Whether a pan operation is actively in progress. */
     isPanning: boolean
+    /** Returns true if the last interaction was a pan and should prevent a click event. */
     shouldSuppressClick: () => boolean
+    /** Pointer down handler to initiate panning. */
     onPointerDown: (e: React.PointerEvent<HTMLCanvasElement>) => void
+    /** Pointer move handler to update pan offset. */
     onPointerMove: (e: React.PointerEvent<HTMLCanvasElement>) => void
+    /** Pointer up handler to conclude panning. */
     onPointerUp: (e: React.PointerEvent<HTMLCanvasElement>) => void
+    /** Pointer cancel handler to conclude panning. */
     onPointerCancel: (e: React.PointerEvent<HTMLCanvasElement>) => void
 } {
     const { enabled, zoom, offset, setOffset, containerRef, videoSize, dominantOrientationDeg, onPanStart } = params
@@ -151,4 +178,3 @@ export function useOverviewPan(
 
     return { canPan, isPanning, shouldSuppressClick, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }
 }
-

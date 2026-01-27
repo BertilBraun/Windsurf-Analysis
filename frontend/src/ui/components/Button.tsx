@@ -1,12 +1,24 @@
+/**
+ * @file Button component for user interactions.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Spinner } from './Spinner'
 
+/**
+ * Props for the Button component.
+ */
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    /** Optional text label for the button. */
     text?: string
+    /** Optional React nodes to render inside the button. */
     children?: React.ReactNode
+    /** If true, disables the button and displays a loading spinner. */
     isPending?: boolean
+    /** Visual style variant of the button. */
     variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline' | 'brandOutline' | 'warning' | 'inverse' | 'unstyled'
+    /** Size variant of the button. */
     size?: 'sm' | 'md' | 'none'
 }
 
@@ -14,6 +26,10 @@ function cx(...parts: Array<string | undefined | null | false>) {
     return parts.filter(Boolean).join(' ')
 }
 
+/**
+ * A reusable button component that supports various visual variants, sizes,
+ * and a pending (loading) state.
+ */
 export const Button: React.FC<ButtonProps> = ({
     text,
     children,

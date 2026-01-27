@@ -1,3 +1,9 @@
+/**
+ * @file LoginPage.tsx
+ * @module LoginPage
+ * @description Authentication screen providing login, Google OAuth, and password recovery.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthProvider'
@@ -24,6 +30,13 @@ const GoogleMark: React.FC<{ className?: string }> = ({ className }) => (
     </svg>
 )
 
+/**
+ * Component for user authentication, supporting email/password login, Google OAuth, and password resets.
+ *
+ * @param props - Component properties.
+ * @param props.onSignup - Callback triggered when the user navigates to the signup screen.
+ * @param props.onSuccess - Callback triggered after a successful login.
+ */
 export const LoginPage: React.FC<{
     onSignup: () => void
     onSuccess: () => void

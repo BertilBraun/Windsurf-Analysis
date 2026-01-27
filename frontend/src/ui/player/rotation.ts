@@ -1,3 +1,12 @@
+/**
+ * Utilities for handling rotation of video frames and canvas elements.
+ */
+
+/**
+ * Normalizes and snaps a rotation angle to the nearest 90-degree increment.
+ * @param deg Rotation in degrees.
+ * @returns The quantized angle (0, 90, 180, or 270).
+ */
 export function quantizeOrientation(deg: number): 0 | 90 | 180 | 270 {
     const r = (-Math.round(deg) + 360) % 360
     if (r >= 315 || r < 45) return 0
@@ -6,12 +15,28 @@ export function quantizeOrientation(deg: number): 0 | 90 | 180 | 270 {
     return 270
 }
 
+/**
+ * Calculates the dimensions of a rectangle after applying a quantized rotation.
+ * @param width Original width.
+ * @param height Original height.
+ * @param deg Rotation in degrees.
+ * @returns The rotated width and height.
+ */
 export function getRotatedDimensions(width: number, height: number, deg: number): { width: number; height: number } {
     const rot = quantizeOrientation(deg)
     if (rot === 90 || rot === 270) return { width: height, height: width }
     return { width, height }
 }
 
+/**
+ * Draws a source frame to a canvas with the specified rotation.
+ * Automatically resizes the target canvas and applies necessary 2D transformations.
+ * @param frame The source image, video, or frame to draw.
+ * @param target The canvas element to draw into.
+ * @param deg Rotation in degrees.
+ * @param explicitSize Optional override for source dimensions.
+ * @returns The dimensions of the resulting output on the canvas.
+ */
 export function drawRotatedToCanvas(
     frame: VideoFrame | HTMLVideoElement | CanvasImageSource,
     target: HTMLCanvasElement,

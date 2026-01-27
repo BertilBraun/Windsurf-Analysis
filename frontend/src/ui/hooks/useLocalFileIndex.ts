@@ -1,3 +1,8 @@
+/**
+ * @file Provides a hook for indexing local files using the File System Access API.
+ * Handles file discovery, hashing, and persistence of file snapshots.
+ */
+
 import React from 'react'
 import { FsEntry, listFilesRecursively } from '../utils/fsAccess'
 import { loadFileSnapshot, saveFileSnapshot, saveLastKnownPaths } from '../utils/idb'
@@ -15,9 +20,15 @@ import { notifyLocalFileSnapshotChanged, subscribeLocalFileSnapshotChanged } fro
 const PENDING_SHA256 = 'PENDING'
 const FILE_EXTENSIONS = ['.mp4']
 
+/**
+ * Represents the progress and state of a local file system scan.
+ */
 export type LocalFileIndexScanStatus = {
+    /** The current stage of the indexing process. */
     phase: 'idle' | 'listing' | 'hashing' | 'saving'
+    /** Total number of files or operations in the current phase. */
     total: number
+    /** Number of files or operations completed in the current phase. */
     processed: number
 }
 
@@ -113,6 +124,20 @@ async function updateSavedSnapshot(snapshot: FileSnapshot) {
     await saveFileSnapshot(snapshot)
 }
 
+/**
+ * Manages a local file index for a directory handle.
+ *
+ * Scans for video files, computes SHA-256 fingerprints, and persists snapshots
+ * to IndexedDB. Synchronizes state across hook instances and browser tabs.
+ *
+ * @param dirHandle - The directory handle to scan, or null if none is selected.
+ * @returns An object containing:
+ * - `snapshot`: The current file snapshot.
+ * - `refresh`: Function to trigger a re-scan. Returns the new snapshot and a file retriever.
+ * - `shaToPaths`: A map of SHA-256 hashes to relative file paths.
+ * - `loaded`: Whether the initial snapshot has been loaded from storage.
+ * - `scanStatus`: The current progress of the indexing operation.
+ */
 export function useLocalFileIndex(dirHandle: FileSystemDirectoryHandle | null) {
     const [snapshot, setSnapshot] = React.useState<FileSnapshot | null>(null)
     const [loaded, setLoaded] = React.useState(false)

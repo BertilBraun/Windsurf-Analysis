@@ -1,3 +1,9 @@
+/**
+ * @module PlayerModal
+ * This module provides the primary modal interface for the video player,
+ * integrating job metadata, player controls, and feedback reporting.
+ */
+
 import React from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Modal } from './Modal'
@@ -13,13 +19,26 @@ import { getFileByRelativePath } from '../utils/fsAccess'
 
 const PLAYER_DISABLE_OVERVIEW_STABILIZATION_KEY = 'player.disableOverviewStabilization.v1'
 
+/**
+ * A modal component that hosts the video player for reviewing job results.
+ *
+ * It manages the player lifecycle, metadata loading (such as video duration),
+ * and provides UI for drawing, stabilization toggles, and reporting issues.
+ */
 export const PlayerModal: React.FC<{
+    /** The job details containing tracking data and metadata to be displayed. */
     job: JobDetail
+    /** The source of the video file, either a direct File object or a directory handle. */
     videoSource: VideoSource
+    /** Callback invoked when the modal is requested to close. */
     onClose: () => void
+    /** Callback invoked when a user submits a feedback report for the current job. */
     onReport: (id: string, type: ReportType, message: string) => void
+    /** Optional callback to navigate to the next job in the current sequence. */
     onOpenNextJob?: () => void
+    /** Optional callback to navigate to the previous job in the current sequence. */
     onOpenPrevJob?: () => void
+    /** Whether to display tutorial tips for the demo experience. Defaults to false. */
     showDemoTutorialTips?: boolean
 }> = ({ job, videoSource, onClose, onReport, onOpenNextJob, onOpenPrevJob, showDemoTutorialTips = false }) => {
     const { t } = useTranslation()

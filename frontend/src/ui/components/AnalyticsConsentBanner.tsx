@@ -1,3 +1,8 @@
+/**
+ * @file AnalyticsConsentBanner component.
+ * Handles user consent for analytics tracking and manages related layout adjustments.
+ */
+
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Trans, useTranslation } from 'react-i18next'
@@ -14,6 +19,14 @@ function cx(...parts: Array<string | undefined | null | false>) {
     return parts.filter(Boolean).join(' ')
 }
 
+/**
+ * A banner component that prompts users for analytics tracking consent.
+ *
+ * It appears at the bottom of the viewport if no consent has been recorded.
+ * The component manages a `--analytics-consent-offset` CSS variable on the document
+ * root to allow other UI elements to adjust their position based on the banner's height.
+ * It is automatically hidden on the privacy policy page.
+ */
 export const AnalyticsConsentBanner: React.FC = () => {
     const [consent, setConsent] = React.useState<AnalyticsConsent | null>(null)
     const location = useLocation()

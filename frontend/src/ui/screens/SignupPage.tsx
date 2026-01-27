@@ -4,6 +4,11 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { Button } from '../components/Button'
 
+/**
+ * @file SignupPage.tsx
+ * @description Provides the user registration interface, supporting email/password signup and Google OAuth.
+ */
+
 const GoogleMark: React.FC<{ className?: string }> = ({ className }) => (
     <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
         <path
@@ -25,6 +30,12 @@ const GoogleMark: React.FC<{ className?: string }> = ({ className }) => (
     </svg>
 )
 
+/**
+ * SignupPage component for creating new user accounts.
+ *
+ * @param props.onBackToLogin - Callback to navigate back to the login screen.
+ * @param props.onSuccess - Callback triggered after a successful registration or Google login.
+ */
 export const SignupPage: React.FC<{
     onBackToLogin: () => void
     onSuccess: () => void

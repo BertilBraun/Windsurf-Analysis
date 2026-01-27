@@ -1,19 +1,31 @@
-# Motion compensation notes
+Tools for estimating global camera motion and tracking objects using a Kalman Filter with motion compensation.
 
-This folder contains experimental/debug notes around camera motion estimation and how it interacts with Kalman-based
-tracking and gap-filling. The screenshots below are referenced when tuning stabilization and motion gates.
+### Components
 
-![Pre](Screenshot%202025-09-23%20204439.png)
+*   **GMC (Global Motion Compensation)**: Estimates rigid transformations between consecutive frames.
+    *   Uses `cv2.goodFeaturesToTrack` and Lucas-Kanade optical flow.
+    *   Employs RANSAC (`estimateAffinePartial2D`) to find the best rigid fit.
+    *   Supports image downscaling for performance and masking to exclude foreground objects.
+*   **CMC (Camera Motion Compensation)**: Applies GMC transformations to Kalman Filter states.
+    *   Adjusts position ($cx, cy$) and velocity ($vx, vy$) components of the state vector.
+    *   Symmetrizes the covariance matrix after transformation to prevent numerical drift.
+*   **Kalman Filter**: A constant-velocity linear filter for tracking bounding boxes.
+    *   **State**: $[cx, cy, w, h, vx, vy, vw, vh]$ (center coordinates, dimensions, and velocities).
+    *   **Joseph Update**: Uses the Joseph form covariance update for numerical stability and to ensure the matrix remains positive semi-definite.
+    *   **Gating**: Supports Mahalanobis and Gaussian distance metrics for detection-to-track association.
+    *   **Inflation**: Provides `display_bbox` which inflates the bounding box based on state uncertainty (Chi-squared quantiles).
+    *   **KFState**: A dataclass wrapper that manages state history, prediction caching, and batch updates.
 
-- Blue line: Global Camera Motion trajectory
-- Pink arrows: Kalman Filter velocity vector
-- Pink BBox: Last Kalman Filter bounding box
-- Yellow BBox: Last Detection bounding box
-- Red BBox: Current Detection bounding box
-- Blue BBox: Current Kalman Filter bounding box
-- Green BBox: Current Kalman Filter + Camera Motion compensated bounding box
+### Visual Legend
+When debugging motion and tracking, the following color codes are typically used:
+*   **Blue line**: Global Camera Motion trajectory.
+*   **Pink arrows**: Kalman Filter velocity vector.
+*   **Pink BBox**: Last Kalman Filter bounding box.
+*   **Yellow BBox**: Last Detection bounding box.
+*   **Red BBox**: Current Detection bounding box.
+*   **Blue BBox**: Current Kalman Filter predicted bounding box.
+*   **Green BBox**: Current Kalman Filter + Camera Motion compensated bounding box.
 
-![Post](Screenshot%202025-09-23%20204833.png)
-
-Track 2 is now missing (no detection was found for it for some frames).
-Kalman Filter predicted the track's trajectory and compensated for the camera motion. Because the prediction is uncertain, the bbox is inflated and is growing with increasing miss count.
+### TODO
+*   Optimize GMC feature tracking for high-resolution 4K inputs.
+*   Evaluate EKF (Extended Kalman Filter) if non-linear motion models are required.

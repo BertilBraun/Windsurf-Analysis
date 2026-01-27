@@ -1,10 +1,25 @@
+/**
+ * @file DrawOverlay.tsx
+ * @description UI overlay for drawing tool configuration and annotation management.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/Button'
 
+/**
+ * Supported drawing tool types.
+ */
 export type DrawTool = 'freehand' | 'line'
 
+/**
+ * Available stroke width options for drawing.
+ */
 export const DRAW_WIDTH_OPTIONS = [2, 3, 5, 8, 14, 20]
+
+/**
+ * Available color options for drawing.
+ */
 export const DRAW_COLOR_OPTIONS = ['#f97316', '#22c55e', '#3b82f6', '#ef4444', '#facc15']
 
 const WIDTH_PREVIEW_MIN = 8
@@ -21,6 +36,12 @@ type DrawOverlayProps = {
     hasVisibleAnnotations: boolean
 }
 
+/**
+ * A floating overlay component that allows users to configure drawing settings
+ * (tool, width, color) and clear annotations.
+ *
+ * @param props - Component properties including current drawing state and change handlers.
+ */
 export const DrawOverlay: React.FC<DrawOverlayProps> = ({
     drawTool,
     onDrawToolChange,

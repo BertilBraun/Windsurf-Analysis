@@ -1,3 +1,10 @@
+/**
+ * @module i18n
+ * @description Internationalization configuration for the application.
+ * This module initializes i18next with React support, defines supported languages,
+ * and manages language persistence in local storage.
+ */
+
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import en from './locales/en.json'
@@ -49,4 +56,7 @@ i18n.on('languageChanged', language => {
     window.localStorage.setItem(STORAGE_KEY, normalized)
 })
 
+/**
+ * The initialized i18next instance used for application-wide translations.
+ */
 export default i18n

@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""Runs documentation generation in a temporary Git worktree.
+
+Creates a clean worktree, mirrors local changes, runs the generator, and
+applies the resulting changes back to the main repository.
+"""
 from __future__ import annotations
 
 import argparse
@@ -158,6 +163,7 @@ def _sync_root_changes_into_worktree(root: Path, wt_path: Path) -> None:
 
 
 def main(argv: list[str]) -> int:
+    """Main entry point for the docs-agent-worktree tool."""
     parser = argparse.ArgumentParser(
         prog='docs-agent-worktree',
         description='Run docs generation in a clean detached worktree and apply the patch to the current repo.',

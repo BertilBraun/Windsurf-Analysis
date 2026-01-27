@@ -1,3 +1,10 @@
+"""
+API routes for user management.
+
+This module provides endpoints for creating user profiles, updating consent settings,
+retrieving user data, and performing account deletions.
+"""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,11 +22,17 @@ user_jobs_repo = UserJobsRepo()
 
 
 class CreateUserRequest(BaseModel):
+    """
+    Request schema for creating a new user profile.
+    """
     terms_accepted: bool | None = None
     marketing_consent: bool | None = None
 
 
 class UpdateConsentRequest(BaseModel):
+    """
+    Request schema for updating user consent settings.
+    """
     terms_accepted: bool | None = None
     marketing_consent: bool | None = None
 
@@ -30,6 +43,12 @@ def create_user(
     payload: CreateUserRequest | None = None,
     user: User = Depends(get_current_user_without_email_verification),
 ):
+    """
+    Create a new user record in the database if it does not already exist.
+
+    Validates that the authenticated user matches the target user_id and that
+    terms are accepted if provided.
+    """
     if user.uid != user_id:
         raise HTTPException(status_code=403, detail='Forbidden')
     if user_repo.does_user_exist(user_id):
@@ -59,6 +78,12 @@ def update_user_consent(
     payload: UpdateConsentRequest,
     user: User = Depends(get_current_user_without_email_verification),
 ):
+    """
+    Update terms of service and marketing consent for a specific user.
+
+    If the user record does not exist, it will be created. Validates that the
+    authenticated user matches the target user_id.
+    """
     if user.uid != user_id:
         raise HTTPException(status_code=403, detail='Forbidden')
     if payload.terms_accepted is False:
@@ -99,6 +124,11 @@ def update_user_consent(
 
 @router.get('/{user_id}')
 def get_user(user_id: str, user: User = Depends(get_current_user)):
+    """
+    Retrieve the profile data for a specific user.
+
+    Validates that the authenticated user matches the target user_id.
+    """
     if user.uid != user_id:
         raise HTTPException(status_code=403, detail='Forbidden')
     return user_repo.get_user(user_id)
@@ -106,6 +136,11 @@ def get_user(user_id: str, user: User = Depends(get_current_user)):
 
 @router.delete('/{user_id}')
 def delete_user(user_id: str, user: User = Depends(get_current_user)):
+    """
+    Delete a user's data from the database and remove their account from Firebase Auth.
+
+    Cleans up associated user jobs and profile data before revoking authentication.
+    """
     if user.uid != user_id:
         raise HTTPException(status_code=403, detail='Forbidden')
 

@@ -1,5 +1,19 @@
+/**
+ * Utilities for loading and rendering a watermark overlay on video or canvas outputs.
+ */
+
+/**
+ * Represents a loaded watermark image and its intrinsic dimensions.
+ */
 export type WatermarkAsset = { img: CanvasImageSource; width: number; height: number }
 
+/**
+ * Fetches and decodes the default watermark asset (`logo.png`).
+ *
+ * Uses `ImageBitmap` where available for better performance, falling back to `HTMLImageElement`.
+ *
+ * @returns A promise resolving to the {@link WatermarkAsset}, or `null` if the asset cannot be loaded or decoded.
+ */
 export async function getWatermarkAsset(): Promise<WatermarkAsset | null> {
     try {
         // Respect Vite base path if present (e.g. hosted under a subpath).
@@ -29,6 +43,17 @@ export async function getWatermarkAsset(): Promise<WatermarkAsset | null> {
     return null
 }
 
+/**
+ * Renders the watermark onto a canvas context.
+ *
+ * The watermark is placed in the bottom-right corner with a subtle shadow and transparency.
+ * It automatically scales to fit the output dimensions without upscaling.
+ *
+ * @param ctx - The canvas rendering context (2D or Offscreen).
+ * @param outW - The width of the output canvas.
+ * @param outH - The height of the output canvas.
+ * @param wm - The watermark asset to draw.
+ */
 export function drawWatermark(
     ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D,
     outW: number,

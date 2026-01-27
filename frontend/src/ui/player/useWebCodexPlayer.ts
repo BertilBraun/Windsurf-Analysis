@@ -1,42 +1,93 @@
+/**
+ * @module useWebCodexPlayer
+ * Provides a React hook for high-performance, frame-accurate video playback using the WebCodecs API.
+ * This module handles video demuxing, decoding, and frame caching for smooth seeking and playback.
+ */
+
 import React from 'react'
 import { ALL_FORMATS, BlobSource, CanvasSink, Input, type WrappedCanvas } from 'mediabunny'
 import { getSortedVideoPacketMeta } from '../../media/videoPackets'
 import { clamp } from '../utils/clamp'
 
+/**
+ * Represents a single decoded frame and its associated metadata.
+ */
 export type WebCodexFrame = {
+    /** The zero-based index of the frame in the video sequence. */
     frameIndex: number
+    /** The temporal position of the frame as a percentage (0 to 1). */
     percent: number
+    /** The intrinsic width of the decoded frame. */
     width: number
+    /** The intrinsic height of the decoded frame. */
     height: number
+    /** The canvas element or offscreen canvas containing the frame's pixel data. */
     frameCanvas: HTMLCanvasElement | OffscreenCanvas
 }
 
+/**
+ * The public API and state for controlling the WebCodecs-based video player.
+ */
 export type WebCodexPlayerApi = {
+    /** Whether the player is initialized and ready for playback. */
     ready: boolean
+    /** Whether a file is currently being loaded and processed. */
     loading: boolean
+    /** Whether a seek operation is currently in progress. */
     seeking: boolean
+    /** Whether the video is currently playing. */
     playing: boolean
+    /** Whether the video has reached the last frame. */
     ended: boolean
+    /** Contains an error message if a player operation failed. */
     error?: string
 
+    /** Total number of frames in the loaded video. */
     frameCount: number
+    /** The index of the currently displayed frame. */
     currentFrameIndex: number
+    /** The current playback position as a percentage (0 to 1). */
     currentPercent: number
+    /** The canvas containing the current frame's image data. Null if no frame is loaded. */
     currentFrameCanvas: HTMLCanvasElement | OffscreenCanvas | null
 
+    /** The display width of the video in pixels. */
     width: number
+    /** The display height of the video in pixels. */
     height: number
 
+    /**
+     * Loads a video file into the player.
+     * @param file The video file to load.
+     */
     load: (file: File) => Promise<void>
+    /** Releases all resources, stops playback, and resets the player state. */
     dispose: () => Promise<void>
 
+    /** Starts video playback. */
     play: () => void
+    /** Pauses video playback. */
     pause: () => void
+    /** Toggles between play and pause states. */
     togglePlay: () => void
 
+    /**
+     * Seeks to a specific percentage of the video.
+     * @param p Percentage from 0 to 1.
+     * @param playAfter Whether to resume playback after seeking. Defaults to current playing state.
+     */
     seekPercent: (p: number, playAfter?: boolean) => Promise<void>
+    /**
+     * Seeks to a specific frame index.
+     * @param i The target frame index.
+     * @param playAfter Whether to resume playback after seeking. Defaults to current playing state.
+     */
     seekFrame: (i: number, playAfter?: boolean) => Promise<void>
 
+    /**
+     * Moves the playback position by a specific number of frames.
+     * @param delta Number of frames to move (positive for forward, negative for backward).
+     */
     stepFrames: (delta: number) => Promise<void>
 }
 
@@ -44,6 +95,15 @@ function sleep(ms: number) {
     return new Promise<void>(r => setTimeout(r, ms))
 }
 
+/**
+ * A React hook that provides a frame-accurate video player powered by WebCodecs.
+ *
+ * @param params Configuration for the player.
+ * @param params.behindSeconds Number of seconds to keep in the decode cache behind the current position.
+ * @param params.aheadSeconds Number of seconds to keep in the decode cache ahead of the current position.
+ * @param params.playbackRate The speed at which the video should play (e.g., 1.0 for normal speed).
+ * @returns An object containing the player state and control methods.
+ */
 export function useWebCodexPlayer(params: {
     behindSeconds?: number
     aheadSeconds?: number

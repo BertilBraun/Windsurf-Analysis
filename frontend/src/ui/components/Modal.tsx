@@ -1,22 +1,47 @@
+/**
+ * @file Modal component for displaying content in an overlay.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from './Button'
 
+/**
+ * Props for the Modal component.
+ */
 export type ModalProps = {
+    /** Callback function triggered when the modal requests to close. */
     onClose?: () => void
+    /** The content to be displayed inside the modal. */
     children: React.ReactNode
+    /** Optional additional elements to render in the header. */
     additionalHeader?: React.ReactNode
+    /** Custom CSS class for the outermost container. */
     containerClassName?: string
+    /** Custom CSS class for the backdrop overlay. */
     backdropClassName?: string
+    /** Custom CSS class for the modal content wrapper. */
     contentClassName?: string
+    /** The title displayed in the modal header. */
     title?: string
+    /** Custom CSS class for the header element. */
     headerClassName?: string
+    /** If true, the header section will not be rendered. */
     hideHeader?: boolean
+    /** Whether clicking the backdrop should trigger onClose. @default true */
     closeOnBackdropClick?: boolean
+    /** Whether pressing the Escape key should trigger onClose. @default true */
     closeOnEscape?: boolean
+    /** Whether to show the default close button in the header. @default true */
     showCloseButton?: boolean
 }
 
+/**
+ * A modal dialog component that overlays the screen.
+ *
+ * Provides an accessible overlay with support for keyboard navigation (Escape key),
+ * backdrop interaction, and focus management.
+ */
 export const Modal: React.FC<ModalProps> = ({
     onClose,
     children,

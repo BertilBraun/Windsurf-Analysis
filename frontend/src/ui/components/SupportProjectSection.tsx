@@ -1,16 +1,32 @@
+/**
+ * @file SupportProjectSection.tsx
+ * @description Provides a UI section encouraging users to support the project via donations.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 
+/**
+ * The URL for the PayPal donation page.
+ */
 export const PAYPAL_LINK = 'https://paypal.me/bertilbraun'
 
 function cx(...parts: Array<string | undefined | null | false>) {
     return parts.filter(Boolean).join(' ')
 }
 
+/**
+ * Props for the SupportProjectSection component.
+ */
 export type SupportProjectSectionProps = {
+    /** Optional CSS class name for the container. */
     className?: string
 }
 
+/**
+ * A component that displays a call-to-action for supporting the project.
+ * Includes a title, description, and a link to the donation page.
+ */
 export const SupportProjectSection: React.FC<SupportProjectSectionProps> = ({ className }) => {
     const { t } = useTranslation()
     return (

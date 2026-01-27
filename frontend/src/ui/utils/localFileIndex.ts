@@ -1,9 +1,21 @@
+/**
+ * @fileoverview Utilities for indexing and fingerprinting local files.
+ */
+
 import shajs from 'sha.js'
 
 const HASH_BLOCK_SIZE = 1024 * 1024 // 1 MiB
 const SKIP_BLOCKS = 7 // hash 1 block, skip N blocks (~8x faster)
 const YIELD_EVERY_SAMPLES = 8
 
+/**
+ * Computes a sampled SHA-256 hash of a file for fingerprinting.
+ * Uses a sampling strategy to improve performance on large files by skipping blocks
+ * and periodically yielding to the main thread.
+ *
+ * @param file - The file blob to hash.
+ * @returns A promise that resolves to the hex-encoded SHA-256 hash.
+ */
 export async function computeSha256(file: Blob): Promise<string> {
     const sha = shajs('sha256')
     const total = file.size || 0
@@ -27,24 +39,48 @@ export async function computeSha256(file: Blob): Promise<string> {
     return String(sha.digest('hex')).toLowerCase()
 }
 
+/**
+ * Metadata representing a unique file state.
+ */
 export type FileFingerprint = {
+    /** Relative path of the file. */
     path: string
+    /** File size in bytes. */
     size: number
+    /** Last modification time in milliseconds. */
     mtimeMs: number
+    /** Sampled SHA-256 hash of the file content. */
     sha256: string
 }
 
+/**
+ * A collection of file fingerprints captured at a specific point in time.
+ */
 export type FileSnapshot = {
+    /** Array of fingerprints for files included in the snapshot. */
     fileFingerprints: FileFingerprint[]
+    /** Timestamp (ms) when the snapshot was generated. */
     updatedAt: number
 }
 
+/**
+ * Normalizes a relative file path by removing leading separators and standardizing slashes.
+ *
+ * @param path - The raw file path to normalize.
+ * @returns The normalized path string.
+ */
 export function normalizeRelativePath(path: string): string {
     return String(path || '')
         .replace(/^[./\\]+/, '')
         .replace(/\\/g, '/')
 }
 
+/**
+ * Builds a map of SHA-256 hashes to their corresponding normalized file paths from a snapshot.
+ *
+ * @param snapshot - The file snapshot to process, or null.
+ * @returns A map where keys are SHA-256 hashes and values are arrays of unique normalized paths.
+ */
 export function buildShaToPaths(snapshot: FileSnapshot | null): Map<string, string[]> {
     const shaToPaths = new Map<string, string[]>()
     if (!snapshot) return shaToPaths

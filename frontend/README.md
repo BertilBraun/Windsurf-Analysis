@@ -1,62 +1,34 @@
-## Frontend (React + TypeScript + Vite) + Firebase Hosting
+# Frontend (React + TypeScript + Vite)
 
-For end-to-end setup (Firebase + Cloud Run + Modal), see `documentation/DEPLOYMENT.md`.
+React-based web application integrated with Firebase for authentication, database, and storage.
 
-### Setup (Firebase Console)
-- Create / select your Firebase project
-- **Authentication**: enable a provider (e.g. Google)
-- **Firestore Database**: create the database (Native mode)
-- Copy your web app config into env vars (see below)
+### Core Technologies
+*   **Framework**: React with TypeScript and Vite.
+*   **State & Routing**: React hooks and `react-router-dom`.
+*   **Backend Integration**: Firebase (Auth, Firestore, Storage) and a custom Cloud Run backend.
+*   **Internationalization**: `i18next` supporting English, German, Spanish, and Italian.
+*   **Media Processing**: Client-side video transcoding and frame manipulation via Mediabunny.
 
-### Configure env vars
-This app reads config from Vite env vars (`VITE_*`).
+### Configuration
+*   **Environment Variables**: Uses `VITE_` prefixed variables (e.g., Firebase config, `VITE_BACKEND_URL`). Validated at runtime via `src/env.ts`.
+*   **Polyfills**: Configured via `vite.config.ts` to support Node.js globals (`Buffer`, `process`, `global`) in the browser.
+*   **Port**: Defaults to `5173`.
 
-Create a local file **(don’t commit it)**:
-- `frontend/.env.local`
+### Development Commands
+*   **Install**: `npm install`
+*   **Local Dev**: `npm run dev`
+*   **Build**: `npm run build` (Outputs to `dist/`)
+*   **Preview Build**: `npm run preview`
+*   **Firebase Emulator**: `firebase emulators:start --only hosting`
 
-Use `frontend/env.example` as a template.
+### Folder Structure
+*   **src/**: Core source code including UI components, Firebase initialization, media utilities (WebCodecs player, transcoding), and i18n configuration.
+*   **scripts/**: Maintenance utilities, such as `i18n_unused_keys.py` for scanning and cleaning up translation files.
 
-### Debug locally (hot reload / watch mode)
-From repo root:
+### Deployment
+*   **Target**: Firebase Hosting.
+*   **Command**: `firebase deploy --only hosting` (Run after `npm run build`).
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open `http://localhost:5173`
-
-#### Point the frontend at your local backend
-Set this in `frontend/.env.local`:
-- `VITE_BACKEND_URL=http://localhost:8080`
-
-Then restart `npm run dev`.
-
-### Debug locally as “built” app
-From repo root:
-
-```bash
-cd frontend
-npm run build
-npm run preview -- --host --port 5173
-```
-
-### Debug locally via Firebase Hosting emulator (optional)
-This serves what would be deployed (from `dist/`), so build first:
-
-```bash
-cd frontend
-npm run build
-firebase emulators:start --only hosting
-```
-
-### Deploy (Firebase Hosting)
-```bash
-cd frontend
-npm run build
-firebase deploy --only hosting
-```
-
-### Notes
-- The frontend signs in with Firebase Auth, gets an ID token, and calls the backend with `Authorization: Bearer <token>`.
+### TODO
+*   Add automated tests for environment variable validation logic.
+*   Consolidate custom type definitions into a dedicated `types/` directory.

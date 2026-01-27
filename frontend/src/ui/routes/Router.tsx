@@ -1,3 +1,12 @@
+/**
+ * @module Router
+ * @description Main routing configuration for the application.
+ *
+ * Orchestrates the application's navigation structure, including public marketing
+ * pages, protected analyzer routes, and ephemeral demo sessions. Includes
+ * automated page view tracking for analytics.
+ */
+
 import React from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
@@ -408,6 +417,14 @@ const AnalyzerRoute: React.FC = () => {
     return <AnalyzerPage onGoHome={() => navigate('/')} onGoPricing={() => navigate('/pricing')} />
 }
 
+/**
+ * The primary application router component.
+ *
+ * Defines all top-level routes, manages page view analytics tracking, and
+ * handles conditional rendering for authenticated vs. public views.
+ *
+ * @returns {JSX.Element} The rendered route configuration.
+ */
 export const Router: React.FC = () => {
     const location = useLocation()
 

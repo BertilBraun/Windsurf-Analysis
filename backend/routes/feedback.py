@@ -1,3 +1,6 @@
+"""
+Feedback routes for handling user feedback submissions.
+"""
 from __future__ import annotations
 
 
@@ -13,10 +16,23 @@ reports_repo = ReportsRepo()
 
 
 class FeedbackCreateRequest(BaseModel):
+    """
+    Request schema for submitting user feedback.
+    """
     message: str
 
 
 @router.post('')
 def create_feedback(payload: FeedbackCreateRequest, user: User = Depends(get_current_user)):
+    """
+    Creates a feedback report for the current authenticated user.
+
+    Args:
+        payload: The feedback submission payload containing the message.
+        user: The authenticated user submitting the feedback.
+
+    Returns:
+        A dictionary indicating the success status of the operation.
+    """
     reports_repo.add_report(user.uid, 'feedback_id', 'feedback', payload.message)
     return {'ok': True}

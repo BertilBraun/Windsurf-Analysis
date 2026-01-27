@@ -1,9 +1,22 @@
+/**
+ * @file GetStartedSection.tsx
+ * @description Provides a call-to-action section for the landing page, directing users to key application features.
+ */
+
 import React from 'react'
 import { Button } from './Button'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Heading, Text } from './Typography'
 
+/**
+ * A promotional section component that encourages users to start using the application.
+ *
+ * This component displays a headline and description along with primary and secondary
+ * action buttons that navigate to the demo and analyzer routes respectively.
+ *
+ * @returns {JSX.Element} The rendered call-to-action section.
+ */
 export const GetStartedSection: React.FC = () => {
     const { t } = useTranslation()
     const navigate = useNavigate()

@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Provides the JobList component and utilities for displaying jobs in a
+ * hierarchical folder structure based on their local file paths.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { JobSummary } from '../types'
@@ -9,7 +14,9 @@ import { trackEvent } from '../utils/analytics'
 import trashbinSvg from '../assets/trashbin.svg'
 import { Spinner } from './Spinner'
 
+/** Supported keys for sorting the job list. */
 export type JobListSortKey = 'name' | 'date'
+/** Sort direction for the job list. */
 export type JobListSortDir = 'asc' | 'desc'
 
 type FolderNode = {
@@ -170,6 +177,15 @@ function buildJobTree(jobs: JobSummary[]) {
     return { root, folderPaths, unmappedJobs }
 }
 
+/**
+ * Calculates the flat list of job IDs in the order they appear in the hierarchical tree.
+ * Note: If a job has multiple local paths, its ID may appear multiple times in the result.
+ *
+ * @param jobs - The list of jobs to process.
+ * @param sortKey - The key to sort by within each folder.
+ * @param sortDir - The direction to sort.
+ * @returns An array of job IDs in display order.
+ */
 export function getJobListOrderedJobIds(
     jobs: JobSummary[],
     sortKey: JobListSortKey,
@@ -534,15 +550,28 @@ const UnmappedJobsSection: React.FC<{
     )
 }
 
+/**
+ * A component that renders a hierarchical list of jobs organized by their local file paths.
+ * Includes sorting controls, folder expansion/collapse, and a section for jobs without local paths.
+ */
 export const JobList: React.FC<{
+    /** The list of job summaries to display. */
     jobs: JobSummary[]
+    /** The current sort key. */
     sortKey: JobListSortKey
+    /** The current sort direction. */
     sortDir: JobListSortDir
+    /** Callback triggered when a sort key is toggled. */
     onToggleSort: (key: JobListSortKey) => void
+    /** Callback triggered when a job thumbnail is clicked. */
     onOpen: (id: string) => void
+    /** Callback to delete one or more jobs by ID. */
     onDeleteJobs: (ids: string[]) => Promise<number>
+    /** The ID of a job that is currently being opened. */
     openingId?: string | null
+    /** File system handle for resolving local video thumbnails. */
     dirHandle?: FileSystemDirectoryHandle | null
+    /** Indicates if the initial job sync has finished. */
     initialSyncComplete?: boolean
 }> = ({
     jobs,

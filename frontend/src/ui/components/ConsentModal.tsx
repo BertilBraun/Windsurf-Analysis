@@ -1,14 +1,28 @@
+/**
+ * @module ConsentModal
+ * Provides a modal dialog for users to accept terms of service and opt-in to marketing communications.
+ */
+
 import React from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { Button } from './Button'
 import { Modal } from './Modal'
 
+/**
+ * Props for the ConsentModal component.
+ */
 type ConsentModalProps = {
+    /** Indicates if the consent submission is currently in progress. */
     isSubmitting: boolean
+    /** Callback triggered when the user accepts the terms. Receives the marketing consent status. */
     onSubmit: (marketingConsent: boolean) => void
 }
 
+/**
+ * A modal component that requires users to accept terms and conditions before proceeding.
+ * Includes an optional checkbox for marketing consent.
+ */
 export const ConsentModal: React.FC<ConsentModalProps> = ({ isSubmitting, onSubmit }) => {
     const { t } = useTranslation()
     const [termsAccepted, setTermsAccepted] = React.useState(false)

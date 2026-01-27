@@ -1,3 +1,4 @@
+"""Repository for managing user-submitted reports in Firestore."""
 from __future__ import annotations
 from typing import Literal
 
@@ -9,7 +10,18 @@ ReportType = Literal['missed_detection', 'false_association', 'visual_problem', 
 
 
 class ReportsRepo:
+    """Handles database operations for the reports collection."""
+
     def add_report(self, user_id: str, job_id: str, report_type: ReportType, message: str) -> None:
+        """
+        Adds a new report entry to Firestore.
+
+        Args:
+            user_id: ID of the user submitting the report.
+            job_id: ID of the job associated with the report.
+            report_type: Category of the report.
+            message: Detailed description provided by the user.
+        """
         reports.add(
             {
                 'user_id': user_id,

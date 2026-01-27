@@ -1,9 +1,18 @@
+/**
+ * Rendering logic for the video player, including canvas management,
+ * coordinate transformations, and drawing routines for overview and detailed views.
+ */
+
 import { clamp } from '../utils/clamp'
 import { MAX_CROP_NORM, MIN_CROP_NORM } from './constants'
 import { computeBaseRect } from './renderMath'
 import { drawRotatedToCanvas, getRotatedDimensions } from './rotation'
 import { PlayerState } from './state'
 
+/**
+ * Configuration for the player's view state, including zoom levels,
+ * offsets, and visibility toggles for detections.
+ */
 export type OverviewView = {
     zoom: number
     detailedZoom?: number
@@ -14,7 +23,15 @@ export type OverviewView = {
     disableStabilization?: boolean
 }
 
+/**
+ * Union type for 2D rendering contexts, supporting both standard and offscreen canvases.
+ */
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+
+/**
+ * Represents a bounding box at a specific point in time with associated metadata
+ * for interpolation and rendering.
+ */
 export type TimedBBox = {
     time_percent: number
     bbox: [number, number, number, number]
@@ -22,7 +39,15 @@ export type TimedBBox = {
     scale: number
     interpolated: boolean
 }
+
+/**
+ * A point in normalized video coordinates.
+ */
 export type AnnotationPoint = { x: number; y: number }
+
+/**
+ * A collection of points forming a single drawing stroke on a specific frame.
+ */
 export type AnnotationStroke = {
     id: string
     frameIndex: number
@@ -32,6 +57,12 @@ export type AnnotationStroke = {
 }
 
 let _sharedOffscreenCanvas: HTMLCanvasElement | null = null
+
+/**
+ * Returns a shared offscreen canvas instance, creating it if necessary.
+ * Used for intermediate rendering operations like rotation.
+ * @returns The shared HTMLCanvasElement.
+ */
 export function getSharedOffscreenCanvas(): HTMLCanvasElement {
     if (!_sharedOffscreenCanvas) {
         _sharedOffscreenCanvas = document.createElement('canvas')
@@ -39,6 +70,11 @@ export function getSharedOffscreenCanvas(): HTMLCanvasElement {
     return _sharedOffscreenCanvas
 }
 
+/**
+ * Synchronizes canvas internal dimensions with its CSS size, accounting for device pixel ratio.
+ * Resets the transform and applies scaling for high-DPI displays.
+ * @returns The 2D rendering context of the canvas.
+ */
 export function ensureCanvasSize(canvas: HTMLCanvasElement, cssWidth: number, cssHeight: number) {
     const dpr = Math.max(1, Math.floor(window.devicePixelRatio))
     const needW = Math.max(1, Math.floor(cssWidth * dpr))
@@ -119,6 +155,10 @@ function getDetailedCropParams(
     return { s, srcX1, srcY1, srcX2, srcY2, winX1, winY1, dstX1, dstY1, dstX2, dstY2 }
 }
 
+/**
+ * Renders a zoomed-in crop of the source canvas based on a detection's anchor and scale.
+ * Handles letterboxing and coordinate mapping.
+ */
 export function drawDetailedCrop(
     ctx: Ctx2D,
     outputWidth: number,
@@ -307,6 +347,10 @@ function drawStabilizationTransforms(
     } catch {}
 }
 
+/**
+ * Main rendering entry point. Draws the current frame to the canvas, handling
+ * orientation, stabilization, annotations, and view modes (overview vs detailed).
+ */
 export function drawFrame(
     canvas: HTMLCanvasElement,
     containerEl: HTMLElement,
@@ -395,6 +439,11 @@ export function drawFrame(
     }
 }
 
+/**
+ * Converts a screen-space point (pixels) to normalized video coordinates [0, 1].
+ * Accounts for current view mode, zoom, offset, and stabilization.
+ * @returns The normalized coordinates or null if the point is outside the video area.
+ */
 export function screenPointToVideoNorm(
     px: number,
     py: number,
@@ -450,6 +499,10 @@ export function screenPointToVideoNorm(
     return null
 }
 
+/**
+ * Identifies the track ID at a given screen-space point by reversing the view transforms.
+ * @returns The track ID or null if no track is found at the point.
+ */
 export function pickTrackAtScreenPoint(
     px: number,
     py: number,

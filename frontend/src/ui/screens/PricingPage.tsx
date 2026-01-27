@@ -1,9 +1,18 @@
+/**
+ * @file PricingPage.tsx
+ * @description Pricing information page detailing the beta phase and future pay-per-use model.
+ */
+
 import React from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { SupportProjectSection } from '../components/SupportProjectSection'
 import { GetStartedSection } from '../components/GetStartedSection'
 import { Heading, Text, TextStack, TextStrong } from '../components/Typography'
 
+/**
+ * Renders the pricing page, providing details on the current beta phase,
+ * future pay-per-use billing, and project support options.
+ */
 export const PricingPage: React.FC = () => {
     const { t } = useTranslation()
     return (

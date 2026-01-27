@@ -1,3 +1,9 @@
+/**
+ * @module crossTabChannel
+ * Provides utilities for cross-tab communication using the BroadcastChannel API
+ * with a localStorage-based fallback for older browsers.
+ */
+
 type Envelope<T> = { at: number; payload: T }
 
 function safeJsonParse<T>(raw: string): T | null {
@@ -8,6 +14,16 @@ function safeJsonParse<T>(raw: string): T | null {
     }
 }
 
+/**
+ * Creates a communication channel for synchronizing data across multiple browser tabs.
+ * Uses BroadcastChannel for modern browsers and localStorage events as a fallback.
+ *
+ * @template T The type of the payload data.
+ * @param opts Configuration options for the channel.
+ * @param opts.broadcastChannelName - The unique name of the BroadcastChannel.
+ * @param opts.storageKey - The localStorage key used for fallback synchronization.
+ * @returns An object containing `publish` to send data and `subscribe` to listen for updates.
+ */
 export function createCrossTabChannel<T>(opts: { broadcastChannelName: string; storageKey: string }) {
     const { broadcastChannelName, storageKey } = opts
 
@@ -59,6 +75,15 @@ export function createCrossTabChannel<T>(opts: { broadcastChannelName: string; s
     return { publish, subscribe }
 }
 
+/**
+ * Creates a simplified cross-tab communication channel for signaling events without a payload.
+ * Useful for triggering refreshes or state invalidations across tabs.
+ *
+ * @param opts Configuration options for the signal.
+ * @param opts.broadcastChannelName - The unique name of the BroadcastChannel.
+ * @param opts.storageKey - The localStorage key used for fallback synchronization.
+ * @returns An object containing `notify` to trigger the signal and `subscribe` to listen for it.
+ */
 export function createCrossTabSignal(opts: { broadcastChannelName: string; storageKey: string }) {
     const chan = createCrossTabChannel<{ at: number }>(opts)
     return {
@@ -66,4 +91,3 @@ export function createCrossTabSignal(opts: { broadcastChannelName: string; stora
         subscribe: (onNotify: () => void) => chan.subscribe(() => onNotify()),
     }
 }
-

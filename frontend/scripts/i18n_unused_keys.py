@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+Utility to find and optionally remove unused i18n keys from JSON locale files
+by scanning source code for string literal occurrences.
+"""
 from __future__ import annotations
 
 import argparse
@@ -11,12 +15,23 @@ from typing import Any, Iterable
 
 @dataclass(frozen=True)
 class ScanResult:
+    """
+    Container for i18n key usage analysis results.
+
+    Attributes:
+        locale_keys: All keys found in the locale JSON.
+        used_keys: Keys explicitly found in the source code.
+        maybe_used: Keys that might be used via dynamic construction (e.g., template literals).
+    """
     locale_keys: set[str]
     used_keys: set[str]
     maybe_used: set[str]
 
     @property
     def unused_keys(self) -> list[str]:
+        """
+        Returns keys present in the locale but not found in source files.
+        """
         return sorted(self.locale_keys - self.used_keys)
 
 
@@ -43,6 +58,20 @@ def _iter_files(root: Path, extensions: tuple[str, ...]) -> Iterable[Path]:
 
 
 def scan_used_keys(tsx_root: Path, locale_keys: set[str], extensions: tuple[str, ...]) -> ScanResult:
+    """
+    Scans source files for occurrences of i18n keys.
+
+    Identifies exact matches for keys and "maybe" matches where a key's parent
+    path is used with dynamic accessors (e.g., template literals).
+
+    Args:
+        tsx_root: The root directory to scan for source files.
+        locale_keys: The set of flattened keys from the locale file.
+        extensions: File extensions to include in the scan (e.g., 'tsx', 'ts').
+
+    Returns:
+        A ScanResult containing used, unused, and potentially used keys.
+    """
     used: set[str] = set()
     maybe_used: set[str] = set()
     for tsx_file in _iter_files(tsx_root, extensions=extensions):
@@ -93,6 +122,12 @@ def _delete_key_path(obj: Any, dotted_key: str) -> bool:
 
 
 def main() -> int:
+    """
+    CLI entry point for the i18n unused key scanner.
+
+    Parses arguments, performs the scan, and optionally removes unused keys
+    from the locale file.
+    """
     parser = argparse.ArgumentParser(
         description='Find unused i18n keys in a locale JSON file by scanning quoted string literals in TS/TSX.',
         epilog=(

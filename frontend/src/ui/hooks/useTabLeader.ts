@@ -1,5 +1,10 @@
 import React from 'react'
 
+/**
+ * @file Provides a hook for coordinating a single "leader" tab among multiple open tabs
+ * of the same origin using localStorage as a synchronization mechanism.
+ */
+
 type LockRecord = { id: string; ts: number }
 
 function now() {
@@ -46,6 +51,16 @@ function isStale(rec: LockRecord | null, staleMs: number) {
     return !rec || now() - rec.ts >= staleMs
 }
 
+/**
+ * Coordinates leadership among multiple browser tabs using a shared localStorage key.
+ *
+ * @param lockKey - The unique key in localStorage used to coordinate leadership.
+ * @param options - Configuration for heartbeat and stale checks.
+ * @param options.heartbeatMs - Frequency (ms) at which the leader updates its timestamp.
+ * @param options.staleMs - Duration (ms) after which a lock is considered expired.
+ * @param options.recheckMs - Frequency (ms) at which non-leaders check for leadership availability.
+ * @returns An object containing the leadership status, the unique tab ID, and a manual retry function.
+ */
 export function useTabLeader(
     lockKey: string,
     { heartbeatMs = 1000, staleMs = 3000, recheckMs = 1000 }: { heartbeatMs?: number; staleMs?: number; recheckMs?: number } = {}

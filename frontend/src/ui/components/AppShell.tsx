@@ -1,3 +1,9 @@
+/**
+ * @module AppShell
+ * Provides the primary layout structure for the application, including the global header,
+ * navigation menu, and footer.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, Outlet } from 'react-router-dom'
@@ -5,6 +11,12 @@ import { LanguageSwitcher } from './LanguageSwitcher'
 import { LogoButton } from './LogoButton'
 import { PAYPAL_LINK } from './SupportProjectSection'
 
+/**
+ * The main layout component that wraps the application's pages.
+ *
+ * It includes a sticky header with navigation links, a language switcher,
+ * a main content area that renders nested routes via `<Outlet />`, and a footer.
+ */
 export const AppShellLayout: React.FC = () => {
     const { t } = useTranslation()
     return (

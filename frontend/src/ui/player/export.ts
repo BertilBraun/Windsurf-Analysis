@@ -1,3 +1,8 @@
+/**
+ * Utilities for exporting processed video tracks from the player.
+ * Handles filename generation, browser downloads, and the core MP4 export logic.
+ */
+
 import { processVideo } from '../../preprocess/preprocess'
 import { QUALITY_HIGH } from 'mediabunny'
 import { drawRotatedToCanvas } from './rotation'
@@ -36,6 +41,12 @@ function stripExtension(name: string): string {
     return name.replace(/\.[^./\\]+$/, '')
 }
 
+/**
+ * Constructs a standardized filename for a video export based on source metadata and track timing.
+ *
+ * @param params - Metadata and timing for the export.
+ * @returns A sanitized filename string.
+ */
 export function buildExportFilename(params: {
     sourceFileName: string
     localRelativePath: string | null | undefined
@@ -49,10 +60,30 @@ export function buildExportFilename(params: {
     return `${base}_track_${params.trackId}_${start}-${end}.mp4`
 }
 
+/**
+ * Triggers a browser download for the provided Blob.
+ *
+ * @param blob - The data to download.
+ * @param filename - The name of the file to be saved.
+ */
 export function downloadExport(blob: Blob, filename: string) {
     downloadBlob(blob, filename)
 }
 
+/**
+ * Processes a video segment to export a specific track as an MP4.
+ * Applies rotation, dynamic cropping based on track detections, and watermarking.
+ *
+ * @param params - Configuration for the export process.
+ * @param params.file - The source video file.
+ * @param params.player - Player state containing track detections.
+ * @param params.dominantOrientationDeg - Rotation to apply to source frames.
+ * @param params.trackId - ID of the track to follow.
+ * @param params.startSec - Start time in seconds.
+ * @param params.endSec - End time in seconds.
+ * @param params.onProgress - Optional progress callback (0-1).
+ * @returns A Promise resolving to the exported MP4 Blob.
+ */
 export async function exportTrackMp4(params: {
     file: File
     player: PlayerState

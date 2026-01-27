@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Hook for scanning local directories and uploading video files to the server.
+ * Handles tab leadership, file stability checks, and cross-tab state synchronization.
+ */
+
 import React from 'react'
 import { AuthorizedFetch, uploadVideoFile } from '../utils/uploader'
 import { useSettings } from './useSettings'
@@ -14,13 +19,24 @@ import {
     type IngressScannerSharedState,
 } from '../utils/ingressScannerSync'
 
+/**
+ * Possible states for a file during the ingress process.
+ */
 export type IngressUploadStatus = 'queued' | 'uploading' | 'done' | 'error' | 'skipped'
 
+/**
+ * Metadata and progress information for a file being processed by the ingress scanner.
+ */
 export type IngressUploadItem = {
-    id: string // sha256 of the original file
+    /** SHA-256 hash of the original file content. */
+    id: string
+    /** Path relative to the root of the scanned directory. */
     relativePath: string
-    progress: number // 0-100
+    /** Upload progress percentage (0-100). */
+    progress: number
+    /** Current status of the upload. */
     status: IngressUploadStatus
+    /** Error message if the status is 'error'. */
     error?: string | null
 }
 
@@ -43,6 +59,20 @@ function isTransientUploadError(err: any): boolean {
     )
 }
 
+/**
+ * Hook that manages scanning a local directory for video files and uploading them.
+ *
+ * It ensures only one tab (the leader) performs the actual scanning and uploading,
+ * while broadcasting state to all other tabs. It includes logic to wait for files
+ * to "settle" (stability check) before uploading to avoid partial files.
+ *
+ * @param dirHandle - The File System API directory handle to scan.
+ * @param authorizedFetch - Authenticated fetch utility for uploads.
+ * @param jobs - List of existing server-side jobs to prevent duplicate uploads.
+ * @param uploadsEnabled - Whether the scanner should actively process files.
+ * @param intervalMs - Frequency in milliseconds to poll the directory for changes.
+ * @returns Scanner state, including upload progress, errors, and control functions.
+ */
 export function useIngressScanner(
     dirHandle: FileSystemDirectoryHandle | null,
     authorizedFetch: AuthorizedFetch,

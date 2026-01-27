@@ -1,3 +1,8 @@
+/**
+ * @module preprocess
+ * Provides utilities for video transcoding and frame-by-frame processing using Mediabunny.
+ */
+
 import {
     ALL_FORMATS,
     BlobSource,
@@ -14,6 +19,13 @@ import {
 } from 'mediabunny'
 import { closestIndexForTimestampSec, getSortedVideoPacketMeta } from '../media/videoPackets'
 
+/**
+ * Quality presets for video preprocessing.
+ * - 'original': Maintains source dimensions and frame rate.
+ * - 'high': Targets up to 1080p at 30 FPS.
+ * - 'medium': Targets up to 720p at 25 FPS.
+ * - 'minimum': Targets 640px (long side) at 15 FPS.
+ */
 export type UploadQuality = 'original' | 'high' | 'medium' | 'minimum'
 
 interface TargetSpec {
@@ -78,6 +90,22 @@ async function getApproxFps(videoTrack: Awaited<ReturnType<Input['getPrimaryVide
     return 30
 }
 
+/**
+ * Processes a video file frame-by-frame, allowing for custom canvas-based manipulation.
+ *
+ * @param params - Configuration for the processing task.
+ * @param params.file - The source video file.
+ * @param params.inputStartSec - Optional start timestamp in seconds.
+ * @param params.inputEndSec - Optional end timestamp in seconds.
+ * @param params.outputWidth - The width of the output video.
+ * @param params.outputHeight - The height of the output video.
+ * @param params.outputFps - The target constant frame rate. Defaults to source FPS.
+ * @param params.videoBitrate - Bitrate in bps or a Mediabunny Quality constant.
+ * @param params.onProgress - Callback for processing progress (0.0 to 1.0).
+ * @param params.onFrame - Callback invoked for every frame. Use the provided context to draw.
+ *                         Return true to include the frame in the output.
+ * @returns A promise resolving to the processed MP4 video as an ArrayBuffer.
+ */
 export async function processVideo(params: {
     file: File
     inputStartSec?: number
@@ -174,6 +202,15 @@ export async function processVideo(params: {
     }
 }
 
+/**
+ * Preprocesses a video file by resizing and re-encoding it based on a quality preset.
+ *
+ * @param file - The source video file.
+ * @param quality - The target quality preset.
+ * @param onProgress - Optional callback for processing progress (0.0 to 1.0).
+ * @param videoBitrate - Optional bitrate override (bps or Mediabunny Quality constant).
+ * @returns A promise resolving to the preprocessed MP4 video as an ArrayBuffer.
+ */
 export async function preprocessVideo(
     file: File,
     quality: UploadQuality,

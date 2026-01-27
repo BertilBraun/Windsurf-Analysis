@@ -1,11 +1,25 @@
-// Common filesystem helpers for File System Access API (Chrome/Edge)
+/**
+ * Utilities for interacting with the browser's File System Access API.
+ * Provides helpers for permission management, path resolution, and recursive file listing.
+ */
 
+/**
+ * Represents a file or directory entry within a filesystem.
+ */
 export type FsEntry = {
+    /** The name of the file or directory. */
     name: string
+    /** The path relative to the root directory handle. */
     relativePath: string
+    /** The type of entry. */
     kind: 'file' | 'directory'
+    /** The underlying File System Access API handle. */
     handle: FileSystemHandle
 
+    /**
+     * Retrieves the File object if the entry is a file.
+     * @returns A promise resolving to the File object.
+     */
     getFile(): Promise<File>
 }
 
@@ -19,6 +33,13 @@ function getPathParts(path: string): string[] {
     return path.split(/[\\/]+/).filter(Boolean)
 }
 
+/**
+ * Ensures that read permission is granted for the given directory handle.
+ * Prompts the user for permission if it has not already been granted.
+ *
+ * @param dirHandle - The directory handle to check or request permissions for.
+ * @returns The permission state: 'granted', 'denied', or 'prompt'.
+ */
 export async function ensureReadPermission(
     dirHandle: FileSystemDirectoryHandle
 ): Promise<'granted' | 'denied' | 'prompt'> {
@@ -29,6 +50,14 @@ export async function ensureReadPermission(
     return rp || 'denied'
 }
 
+/**
+ * Resolves a relative path string to a File object starting from a directory handle.
+ *
+ * @param dirHandle - The root directory handle to start the resolution from.
+ * @param relativePath - The relative path to the target file.
+ * @returns A promise resolving to the File object.
+ * @throws Error if permission is denied or the path cannot be resolved.
+ */
 export async function getFileByRelativePath(dirHandle: FileSystemDirectoryHandle, relativePath: string): Promise<File> {
     if ((await ensureReadPermission(dirHandle)) !== 'granted') throw new Error('Permission denied')
 
@@ -105,6 +134,13 @@ async function* iterateFilesRecursively(
     }
 }
 
+/**
+ * Recursively crawls a directory handle to list all files.
+ *
+ * @param dirHandle - The root directory handle to start from.
+ * @param extensions - Optional list of file extensions (e.g., ['.ts', '.js']) to filter results.
+ * @returns A promise resolving to an array of FsEntry objects representing the files found.
+ */
 export async function listFilesRecursively(
     dirHandle: FileSystemDirectoryHandle,
     extensions?: string[]

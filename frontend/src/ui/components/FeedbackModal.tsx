@@ -1,13 +1,28 @@
+/**
+ * @file FeedbackModal.tsx
+ * @description Provides a modal interface for users to submit feedback to the application.
+ */
+
 import React, { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from './Button'
 import { Modal } from './Modal'
 import { useAuth } from '../auth/AuthProvider'
 
+/**
+ * Props for the FeedbackModal component.
+ */
 type Props = {
+    /** Callback function to close the modal. */
     onClose: () => void
 }
 
+/**
+ * A modal component that allows users to input and send feedback.
+ *
+ * @param props - Component properties.
+ * @param props.onClose - Callback function to close the modal.
+ */
 export const FeedbackModal: React.FC<Props> = ({ onClose }) => {
     const { t } = useTranslation()
     const [message, setMessage] = React.useState<string>('')

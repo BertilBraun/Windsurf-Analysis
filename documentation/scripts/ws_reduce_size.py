@@ -1,47 +1,10 @@
 #!/usr/bin/env python3
 """
-windurf_video_shrinker.py
+Video reduction script for batch processing clips into shareable and archival tiers.
 
-Batch shrink Canon RP (or any) MP4 action-sports clips to 2 practical distribution tiers:
-
-  1. "send"  – aggressively small, e.g., <64 MiB per clip, good for messaging / email.
-  2. "keep"  – high visual quality archival/share copy that is *much* smaller than camera originals.
-
-Key ideas
----------
-* Uses ffprobe to read duration / frame rate / resolution / bitrates.
-* Computes bitrate budget for the "send" tier from desired *maximum total file size*.
-* Optionally scales down resolution and/or frame rate for "send" (defaults: <=720p, <=30fps) to save bits.
-* 2‑pass rate control for predictable target size in "send" tier; falls back gracefully for very short clips.
-* "keep" tier encodes visually transparent-ish copy using CRF‑based encode (size floats with content) –
-  you get a big size reduction versus camera originals without the headache of picking bitrates.
-* Automatically prefers HEVC (libx265) when available for better compression; otherwise uses H.264 (libx264).
-* Simple CLI: supply one or more input files. Optional -o output directory. Optional --profiles to choose which
-  tiers to create. Reasonable defaults; override almost everything with flags.
-
-Example usage
--------------
-# Create _send (<=64MiB) and _keep versions alongside sources:
-$ python windsurf_video_shrinker.py session/*.MP4
-
-# Create only send copies, capped at 48MiB, outputs to ./shareable:
-$ python windsurf_video_shrinker.py -p send -S 48 -o shareable session/*.MP4
-
-# Create keep copies at 1080p max height and CRF 22 (x265 if available):
-$ python windsurf_video_shrinker.py -p keep --keep-max-height 1080 --keep-crf 22 session/*.MP4
-
-Installation prerequisites
--------------------------
-* ffmpeg + ffprobe installed and on PATH.
-  - macOS (homebrew):  brew install ffmpeg
-  - Linux (apt):        sudo apt install ffmpeg
-  - Windows (choco):    choco install ffmpeg
-
-Return codes
-------------
-* 0 on overall success (all requested outputs produced or skipped because already within constraints).
-* Non‑zero on first encountered fatal error.
-
+This script shrinks video files (e.g., MP4s) into two tiers:
+1. "send": Aggressively small for messaging or email.
+2. "keep": High-quality archival copies using CRF-based encoding.
 """
 
 import argparse
@@ -59,14 +22,16 @@ from pathlib import Path
 ###############################################################################
 
 def run(cmd, *, quiet=False, check=True):
-    """Run a subprocess command.
+    """
+    Execute a subprocess command.
 
     Args:
-        cmd (list[str] | str): Command + args.
-        quiet (bool): If True, suppress stdout/stderr capture in terminal; still capture for return.
-        check (bool): Raise CalledProcessError on non‑zero exit.
+        cmd: Command string or list of arguments.
+        quiet: If True, suppress command logging to stdout.
+        check: If True, raise CalledProcessError on non-zero exit.
+
     Returns:
-        CompletedProcess
+        The result of the command execution.
     """
     if isinstance(cmd, str):
         cmd_list = shlex.split(cmd)
@@ -78,6 +43,12 @@ def run(cmd, *, quiet=False, check=True):
 
 
 def which_ffmpeg():
+    """
+    Locate ffmpeg and ffprobe binaries in the system PATH.
+
+    Returns:
+        A tuple containing the paths to (ffmpeg, ffprobe).
+    """
     ffmpeg = shutil.which("ffmpeg")
     ffprobe = shutil.which("ffprobe")
     if not ffmpeg or not ffprobe:
@@ -90,7 +61,16 @@ def which_ffmpeg():
 ###############################################################################
 
 def ffprobe_info(ffprobe_bin, infile: Path):
-    """Return dict with selected metadata for infile using ffprobe JSON output."""
+    """
+    Extract video and audio metadata from a file using ffprobe.
+
+    Args:
+        ffprobe_bin: Path to the ffprobe binary.
+        infile: Path to the input video file.
+
+    Returns:
+        A dictionary containing duration, size, video, and audio stream details.
+    """
     cmd = [
         ffprobe_bin,
         "-v", "error",
@@ -146,12 +126,16 @@ def ffprobe_info(ffprobe_bin, infile: Path):
 ###############################################################################
 
 def compute_bitrates_for_target(total_mebibytes: float, duration_s: float, *, audio_kbps: int) -> int:
-    """Compute *video* bitrate (kbps) to hit total size budget.
+    """
+    Calculate the required video bitrate (kbps) to meet a total file size budget.
 
-    total_bits = target_size_bytes * 8.
-    subtract audio_bits = audio_kbps*1000 * duration_s.
-    We leave 5% safety margin for container overhead + ratecontrol variance.
-    Returns >=100 kbps minimum safeguard.
+    Args:
+        total_mebibytes: Target file size in MiB.
+        duration_s: Video duration in seconds.
+        audio_kbps: Audio bitrate in kbps.
+
+    Returns:
+        The calculated video bitrate in kbps.
     """
     if duration_s <= 0:
         # fallback: just pick something modest
@@ -170,7 +154,18 @@ def compute_bitrates_for_target(total_mebibytes: float, duration_s: float, *, au
 ###############################################################################
 
 def build_scale_filter(src_w, src_h, max_height=None, max_width=None):
-    """Return ffmpeg -vf scale expression to *not upsize*; maintain aspect."""
+    """
+    Create an ffmpeg scale filter that maintains aspect ratio without upscaling.
+
+    Args:
+        src_w: Source width.
+        src_h: Source height.
+        max_height: Maximum allowed height.
+        max_width: Maximum allowed width.
+
+    Returns:
+        The ffmpeg filter string or None if no scaling is required.
+    """
     if max_height is None and max_width is None:
         return None
     # We'll enforce whichever constraint is tighter; use ffmpeg's force_original_aspect_ratio=decrease
@@ -188,6 +183,16 @@ def build_scale_filter(src_w, src_h, max_height=None, max_width=None):
 
 
 def build_fps_filter(limit_fps, src_fps):
+    """
+    Create an ffmpeg fps filter string to limit the frame rate.
+
+    Args:
+        limit_fps: Target maximum frame rate.
+        src_fps: Source frame rate.
+
+    Returns:
+        The ffmpeg filter string or None if no change is needed.
+    """
     if limit_fps is None:
         return None
     if src_fps <= 0:
@@ -198,6 +203,15 @@ def build_fps_filter(limit_fps, src_fps):
 
 
 def maybe_chain_filters(*filters):
+    """
+    Combine multiple ffmpeg filter strings into a single comma-separated chain.
+
+    Args:
+        *filters: Filter strings to combine (can be None).
+
+    Returns:
+        The chained filter string or None if no filters are provided.
+    """
     fs = [f for f in filters if f]
     if not fs:
         return None
@@ -205,6 +219,15 @@ def maybe_chain_filters(*filters):
 
 
 def detect_hevc_support(ffmpeg_bin):
+    """
+    Check if the ffmpeg binary supports the libx265 (HEVC) encoder.
+
+    Args:
+        ffmpeg_bin: Path to the ffmpeg binary.
+
+    Returns:
+        True if libx265 is supported, False otherwise.
+    """
     try:
         cp = run([ffmpeg_bin, "-hide_banner", "-encoders"], quiet=True, check=False)
     except Exception:  # noqa: BLE001
@@ -219,7 +242,23 @@ def detect_hevc_support(ffmpeg_bin):
 def encode_send(ffmpeg_bin, src: Path, dst: Path, meta: dict, *, size_mib: float, max_height: int, max_fps: float,
                 vcodec: str = "libx264", preset: str = "slow", audio_kbps: int = 64, two_pass: bool = True,
                 extra_vopts=None):
-    """Encode a size‑targeted send copy."""
+    """
+    Encode a video to a specific target file size using the "send" profile.
+
+    Args:
+        ffmpeg_bin: Path to ffmpeg.
+        src: Input file path.
+        dst: Output file path.
+        meta: Metadata from ffprobe_info.
+        size_mib: Target size in MiB.
+        max_height: Max vertical resolution.
+        max_fps: Max frame rate.
+        vcodec: Video codec to use.
+        preset: Encoder preset.
+        audio_kbps: Audio bitrate.
+        two_pass: Whether to use 2-pass encoding.
+        extra_vopts: Additional video options for ffmpeg.
+    """
     if dst.exists():
         print(f"[send] Skipping {src.name}: destination exists.")
         return
@@ -324,7 +363,23 @@ def encode_send(ffmpeg_bin, src: Path, dst: Path, meta: dict, *, size_mib: float
 def encode_keep(ffmpeg_bin, src: Path, dst: Path, meta: dict, *, max_height: int | None,
                 vcodec_pref: str, crf: int, preset: str, tune: str | None,
                 audio_kbps: int, copy_audio: bool = True, extra_vopts=None):
-    """Encode a quality‑oriented keep copy (CRF‑based)."""
+    """
+    Encode a video for high-quality archival using the "keep" profile.
+
+    Args:
+        ffmpeg_bin: Path to ffmpeg.
+        src: Input file path.
+        dst: Output file path.
+        meta: Metadata from ffprobe_info.
+        max_height: Max vertical resolution.
+        vcodec_pref: Preferred video codec.
+        crf: Constant Rate Factor (quality).
+        preset: Encoder preset.
+        tune: Encoder tuning option.
+        audio_kbps: Audio bitrate if re-encoding.
+        copy_audio: If True, stream-copies audio without re-encoding.
+        extra_vopts: Additional video options for ffmpeg.
+    """
     if dst.exists():
         print(f"[keep] Skipping {src.name}: destination exists.")
         return
@@ -366,6 +421,12 @@ def encode_keep(ffmpeg_bin, src: Path, dst: Path, meta: dict, *, max_height: int
 ###############################################################################
 
 def parse_args():
+    """
+    Parse command-line arguments for the video reduction script.
+
+    Returns:
+        The parsed arguments as a Namespace.
+    """
     p = argparse.ArgumentParser(
         description="Shrink high‑res/high‑fps windsurfing MP4 videos into shareable + archival tiers.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -405,6 +466,17 @@ def parse_args():
 ###############################################################################
 
 def output_path(infile: Path, outdir: Path | None, suffix: str) -> Path:
+    """
+    Construct the output file path based on input and profile suffix.
+
+    Args:
+        infile: Input file path.
+        outdir: Target output directory.
+        suffix: Suffix to append to the filename.
+
+    Returns:
+        The calculated output path.
+    """
     if outdir is not None:
         outdir.mkdir(parents=True, exist_ok=True)
         base = infile.stem
@@ -418,6 +490,16 @@ def output_path(infile: Path, outdir: Path | None, suffix: str) -> Path:
 ###############################################################################
 
 def process_file(ffmpeg_bin, ffprobe_bin, infile: Path, args, hevc_available: bool):
+    """
+    Process a single input file by extracting metadata and running encoding profiles.
+
+    Args:
+        ffmpeg_bin: Path to ffmpeg.
+        ffprobe_bin: Path to ffprobe.
+        infile: Input file path.
+        args: Parsed CLI arguments.
+        hevc_available: Whether HEVC encoding is supported.
+    """
     if not infile.exists():
         print(f"WARNING: input not found: {infile}")
         return
@@ -500,6 +582,9 @@ def process_file(ffmpeg_bin, ffprobe_bin, infile: Path, args, hevc_available: bo
 ###############################################################################
 
 def main():
+    """
+    Main entry point for the video reduction script.
+    """
     args = parse_args()
     ffmpeg_bin, ffprobe_bin = which_ffmpeg()
     hevc_available = detect_hevc_support(ffmpeg_bin)

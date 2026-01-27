@@ -1,3 +1,8 @@
+/**
+ * @module AnalyzerPage
+ * Main dashboard for authenticated users to manage analysis jobs, ingress folders, and view results.
+ */
+
 import React from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthProvider'
@@ -23,6 +28,13 @@ import { notifyIngressDirectoryChanged, subscribeIngressDirectoryChanged } from 
 const FEEDBACK_PROMPT_SEEN_KEY = 'feedbackPromptSeen.v1'
 const PLAYER_OPENED_ONCE_KEY = 'player.openedOnce.v1'
 
+/**
+ * The primary application screen for authenticated users to manage and view analysis jobs.
+ *
+ * @param props - Component properties.
+ * @param props.onGoHome - Callback to navigate to the landing page.
+ * @param props.onGoPricing - Callback to navigate to the pricing page.
+ */
 export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => void }> = ({
     onGoHome,
     onGoPricing,

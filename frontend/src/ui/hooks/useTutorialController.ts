@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Provides the logic for managing the analyzer tutorial flow,
+ * including progress tracking, persistence, and automatic triggers.
+ */
+
 import React from 'react'
 import { loadSetting, saveSetting } from '../utils/idb'
 import { trackEvent } from '../utils/analytics'
@@ -21,18 +26,37 @@ const ALL_TUTORIAL_STEP_KEYS: TutorialStepKey[] = [
 const ONBOARDING_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['what', 'watch-folder', 'add-videos']
 const PLAYER_TUTORIAL_STEP_KEYS: TutorialStepKey[] = ['review-riding', 'feedback-reports']
 
+/**
+ * Configuration options for the tutorial controller.
+ */
 type TutorialControllerOptions = {
+    /** Current directory handle for video ingress. */
     dirHandle: FileSystemDirectoryHandle | null
+    /** Currently selected job, used to trigger contextual tutorial steps. */
     selectedJob: JobDetail | null
+    /** Callback to trigger the folder selection process. */
     onPickIngressFolder: () => void
 }
 
+/**
+ * The state and control functions exposed by the tutorial controller.
+ */
 type TutorialControllerState = {
+    /** Whether the tutorial modal is currently visible. */
     showTutorial: boolean
+    /** Function to manually open the tutorial with specific steps or starting point. */
     openTutorial: (source: TutorialOpenSource, stepKeys?: TutorialStepKey[] | null, startAt?: TutorialStepKey) => void
+    /** Props to be passed directly to the AnalyzerTutorialModal component. */
     tutorialModalProps: AnalyzerTutorialModalProps
 }
 
+/**
+ * A hook that manages the tutorial state, tracking progress in IndexedDB
+ * and handling automatic triggers for onboarding and player-specific steps.
+ *
+ * @param options - Configuration for folder selection and job context.
+ * @returns The current tutorial state and methods to control the tutorial UI.
+ */
 export const useTutorialController = ({
     dirHandle,
     selectedJob,

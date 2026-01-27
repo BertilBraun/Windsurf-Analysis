@@ -1,3 +1,8 @@
+/**
+ * @module LogoButton
+ * Provides a clickable logo component that can function as either a navigation link or a button.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -29,8 +34,22 @@ type ButtonVariantProps = {
     type?: React.ButtonHTMLAttributes<HTMLButtonElement>['type']
 }
 
+/**
+ * Props for the LogoButton component.
+ *
+ * This type is a discriminated union requiring either a `to` prop for navigation (rendering a `Link`)
+ * or an `onClick` prop for actions (rendering a `Button`).
+ */
 export type LogoButtonProps = BaseProps & (LinkVariantProps | ButtonVariantProps)
 
+/**
+ * A component that renders a logo image wrapped in either a router `Link` or a `Button`.
+ *
+ * It automatically handles localization for accessibility attributes (alt, title, aria-label)
+ * and defaults the image source to `/logo.png`.
+ *
+ * @param props - Configuration for the logo, including source, styling, and interaction behavior.
+ */
 export const LogoButton: React.FC<LogoButtonProps> = ({
     className,
     imgClassName,

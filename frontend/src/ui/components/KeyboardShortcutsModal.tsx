@@ -1,7 +1,18 @@
+/**
+ * @file KeyboardShortcutsModal.tsx
+ * @description Modal component that displays a list of available keyboard shortcuts for the application.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Modal } from './Modal'
 
+/**
+ * A modal component that displays a categorized list of keyboard shortcuts and their descriptions.
+ *
+ * @param props - Component properties.
+ * @param props.onClose - Callback function invoked when the modal is requested to close.
+ */
 export const KeyboardShortcutsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { t } = useTranslation()
     return (

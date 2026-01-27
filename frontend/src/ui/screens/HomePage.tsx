@@ -1,3 +1,8 @@
+/**
+ * @file HomePage.tsx
+ * @description Main landing page component for the application.
+ */
+
 import React from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -6,6 +11,12 @@ import { SupportProjectSection } from '../components/SupportProjectSection'
 import { GetStartedSection } from '../components/GetStartedSection'
 import { Heading, Text, TextStack, TextStrong } from '../components/Typography'
 
+/**
+ * The main landing page of the application.
+ *
+ * Displays the hero section with a video demo, explains the core problem and solution,
+ * outlines the workflow steps, and provides links to the demo and support sections.
+ */
 export const HomePage: React.FC = () => {
     const { t } = useTranslation()
     const navigate = useNavigate()

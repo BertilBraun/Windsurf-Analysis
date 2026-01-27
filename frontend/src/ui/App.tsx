@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Main entry point for the React application UI.
+ * Sets up global providers, analytics, and the root routing structure.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { AuthProvider } from './auth/AuthProvider'
@@ -6,6 +11,11 @@ import { initAnalytics, installClickTracking, isAnalyticsEnabled } from './utils
 import { AnalyticsConsentBanner } from './components/AnalyticsConsentBanner'
 import { UnsupportedBrowserBanner } from './components/UnsupportedBrowserBanner'
 
+/**
+ * The root component of the application.
+ * Handles global side effects like analytics initialization and language synchronization,
+ * and provides the authentication context to the component tree.
+ */
 export const App: React.FC = () => {
     const { i18n } = useTranslation()
 

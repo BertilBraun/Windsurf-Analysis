@@ -1,9 +1,22 @@
+/**
+ * @file Timeline.tsx
+ * @description A timeline slider component for media playback control and seeking.
+ */
+
 import React from 'react'
 import { assert } from '../utils/assert'
 import { clamp } from '../utils/clamp'
 
+/**
+ * A visual timeline slider that allows users to view and seek playback progress.
+ *
+ * This component handles pointer interactions to calculate seek positions and
+ * renders a progress bar based on the current playback state.
+ */
 export const Timeline: React.FC<{
+    /** Callback invoked when the user seeks to a specific percentage (0 to 1). */
     onSeekPercent: (currentProgressPercent: number) => void
+    /** The current playback progress as a decimal between 0 and 1. */
     currentProgressPercent: number
 }> = ({ onSeekPercent, currentProgressPercent }) => {
     assert(0 <= currentProgressPercent && currentProgressPercent <= 1, 'currentProgressPercent must be between 0 and 1')

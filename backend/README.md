@@ -1,54 +1,43 @@
-## FastAPI backend (Cloud Run-ready)
+# Backend Service
 
-For end-to-end setup (Firebase + Cloud Run + Modal), see `documentation/DEPLOYMENT.md`.
+FastAPI application providing the core API for video analysis, user management, and job tracking. It integrates with Firebase for authentication/database and Modal for heavy processing.
 
-### Run locally (Python)
-From repo root:
+### Core Components
 
-```bash
-python -m venv .venv
-. .venv/bin/activate  # (Linux/Mac) on Windows: .venv\Scripts\activate
-pip install -r backend/requirements.txt
-python backend/main.py
-```
+*   main.py: Application entry point, CORS configuration, and router registration.
+*   config.py: Environment variable management and global settings (CORS, Firestore, Modal secrets).
+*   models.py: Pydantic schemas for Firestore documents and API payloads, including JobRecord, UserRecord, and TrackResult.
 
-### Run locally (Firebase Auth + Firestore enabled)
-You need a **Firebase Admin SDK service account** for your Firebase project.
+### Architecture
 
-Then run (Windows PowerShell):
+*   auth: Handles Firebase ID token verification and internal service-to-service authentication via shared secrets.
+*   db: Initializes the Firestore client and provides centralized access to collections (jobs, users, reports).
+*   repos: Data access layer managing persistence logic for jobs, users, and feedback reports.
+*   routes: API endpoint definitions organized by resource (Jobs, Users, Feedback, Internal).
+*   storage: Utilities for serializing and retrieving JSON data from Google Cloud Storage.
 
-```powershell
-gcloud auth application-default login
-python backend/main.py
-```
+### Key Features
 
-### Deploy to Google Cloud Run
-From repo root (example):
+*   Job Lifecycle Management: Tracks video processing from upload through stabilization, detection, and tracking.
+*   User Quotas: Enforces limits on the number of jobs processed per user.
+*   Result Persistence: Stores large tracking results in GCS to bypass Firestore document size limits.
+*   Internal Webhooks: Secure endpoints for external workers (Modal) to update job status and submit results.
 
-```bash
-cd backend
-gcloud init
-gcloud auth login
-gcloud config set project gybelock-00
-gcloud run deploy backend \
-  --source . \
-  --region europe-west3 \
-  --allow-unauthenticated
-```
+### Local Development
 
-### Environment variables
-- `MODAL_SHARED_SECRET`: shared secret for Modal -> Cloud Run internal endpoints.
-- `MODAL_TRIGGER_BASE_URL`: Modal trigger web endpoint base URL (used to start processing).
-- `FIREBASE_STORAGE_BUCKET`: bucket name, e.g. `gybelock-00.appspot.com` (used to build `gs://...` URIs).
+*   Install dependencies: pip install -r requirements.txt
+*   Set up environment variables in a .env file (refer to config.py for keys).
+*   Authenticate with GCP: gcloud auth application-default login
+*   Run the server: python main.py (defaults to port 8080).
 
-### Job results storage
-Job results are written to Firebase Storage / GCS as JSON (instead of Firestore subcollections) to avoid Firestore document size limits.
-By default the backend uses `gs://$FIREBASE_STORAGE_BUCKET/results/{job_id}.json`.
+### Deployment
 
-### CORS (calling from Firebase Hosting)
-If your frontend is hosted on Firebase (e.g. `https://gybelock-00.web.app`) and you call this backend from the browser,
-the backend must allow that origin via CORS. Configure `allowed_origins` in `main.py` and redeploy.
+The service is designed for Google Cloud Run (region: europe-west3). It requires Firebase ID tokens for public endpoints and X-Modal-Secret for internal worker communication.
 
-### Firebase Auth + Firestore
-- **Auth**: the backend expects `Authorization: Bearer <Firebase ID token>` and verifies it (`GET /whoami`).
-- **Firestore**: `POST /firestore/ping` writes a doc under `backendPings/{uid}`.
+### TODO
+
+*   Implement recursive deletion of job records and GCS results when no users are associated with a job.
+*   Re-enable strict email verification for job creation.
+*   Add abuse protections for job submission.
+*   Add support for non-JSON file formats in storage utilities.
+*   Implement repository patterns to further decouple business logic from Firestore-specific syntax.

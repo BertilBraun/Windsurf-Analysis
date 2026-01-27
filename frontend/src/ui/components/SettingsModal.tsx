@@ -1,3 +1,9 @@
+/**
+ * @module SettingsModal
+ * @description Provides a modal interface for user settings, including language selection,
+ * logout functionality, and account deletion.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Modal } from './Modal'
@@ -7,6 +13,13 @@ import { useSettings } from '../hooks/useSettings'
 import { UploadQuality } from '../types'
 import { useAuth } from '../auth/AuthProvider'
 
+/**
+ * A modal component that displays user settings and account management actions.
+ *
+ * @param props - Component properties.
+ * @param props.onClose - Callback function to close the modal.
+ * @param props.onLogout - Callback function to handle user logout.
+ */
 export const SettingsModal: React.FC<{
     onClose: () => void
     onLogout: () => void

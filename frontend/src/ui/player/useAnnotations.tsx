@@ -1,9 +1,25 @@
+/**
+ * @module useAnnotations
+ * Provides logic for drawing and managing frame-based annotations on a canvas.
+ */
+
 import React from 'react'
 import { DrawOverlay, DRAW_COLOR_OPTIONS, DRAW_WIDTH_OPTIONS, type DrawTool } from './DrawOverlay'
 import type { AnnotationPoint, AnnotationStroke } from './rendering'
 
 type GetDrawPoint = (e: React.PointerEvent<HTMLCanvasElement>) => AnnotationPoint | null
 
+/**
+ * Hook to manage drawing state, pointer events, and annotation persistence.
+ *
+ * @param getDrawPoint - Function to convert a pointer event into normalized annotation coordinates.
+ * @param params - Configuration for drawing state and playback context.
+ * @param params.drawMode - Whether drawing mode is active.
+ * @param params.isExporting - Whether the player is currently exporting.
+ * @param params.isPlaying - Whether the player is currently playing.
+ * @param params.currentFrameIndex - The current frame index for frame-locked annotations.
+ * @returns An object containing annotation data, UI components, and event handlers.
+ */
 export function useAnnotations(
     getDrawPoint: GetDrawPoint,
     params?: {
@@ -13,13 +29,21 @@ export function useAnnotations(
         currentFrameIndex?: number
     }
 ): {
+    /** Returns all strokes visible at the specified frame index. */
     getVisibleAnnotations: (frameIndex: number) => AnnotationStroke[]
+    /** Removes the last completed stroke or cancels the active one. */
     undo: () => void
+    /** Resets all annotations and drawing settings to defaults. */
     reset: () => void
+    /** The UI overlay for selecting tools, colors, and clearing annotations. */
     drawModal: React.ReactNode
+    /** Pointer down handler for the drawing canvas. */
     onPointerDown: (e: React.PointerEvent<HTMLCanvasElement>) => void
+    /** Pointer move handler for the drawing canvas. */
     onPointerMove: (e: React.PointerEvent<HTMLCanvasElement>) => void
+    /** Pointer up handler for the drawing canvas. */
     onPointerUp: (e: React.PointerEvent<HTMLCanvasElement>) => void
+    /** Pointer cancel handler for the drawing canvas. */
     onPointerCancel: (e: React.PointerEvent<HTMLCanvasElement>) => void
 } {
     const { drawMode = false, isExporting = false, isPlaying = false, currentFrameIndex = 0 } = params ?? {}
@@ -200,4 +224,3 @@ export function useAnnotations(
         onPointerCancel,
     }
 }
-

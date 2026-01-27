@@ -1,3 +1,8 @@
+/**
+ * @module TechnicalPage
+ * @description Provides a screen for displaying technical documentation and repository links.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
@@ -7,6 +12,12 @@ import { Heading, Text, TextStack } from '../components/Typography'
 const TECHNICAL_DOC_URL = '/TECHNICAL.md'
 const GITHUB_REPO_URL = 'https://github.com/BertilBraun/Windsurf-Analysis/tree/production'
 
+/**
+ * A screen component that fetches and renders the project's technical documentation.
+ *
+ * It retrieves the `TECHNICAL.md` file from the server and displays it using
+ * a custom-styled Markdown renderer, alongside links to the source repository.
+ */
 export const TechnicalPage: React.FC = () => {
     const { t } = useTranslation()
     const [markdown, setMarkdown] = React.useState<string>('')

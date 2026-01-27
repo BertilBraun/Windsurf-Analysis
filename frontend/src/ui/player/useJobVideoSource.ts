@@ -1,10 +1,35 @@
+/**
+ * @fileoverview Hook for resolving video files from job metadata and file system sources.
+ */
+
 import React from 'react'
 import { JobDetail } from '../types'
 import { getFileByRelativePath } from '../utils/fsAccess'
 import { VideoSource } from './videoSource'
 
-export type VideoSourceError = { key: string; detail?: string }
+/**
+ * Error details for video source resolution failures.
+ */
+export type VideoSourceError = {
+    /** Translation key for the error message. */
+    key: string
+    /** Technical error details, if available. */
+    detail?: string
+}
 
+/**
+ * Resolves a video file for a job based on the provided video source configuration.
+ *
+ * This hook handles both direct file sources and directory-based lookups. For directory
+ * sources, it iterates through the job's `local_relative_paths` to find a matching file
+ * within the provided directory handle.
+ *
+ * @param params - Hook parameters.
+ * @param params.job - The job containing file path metadata.
+ * @param params.videoSource - The source configuration (file or directory handle).
+ * @param params.onFileLoaded - Callback invoked when a file is successfully resolved.
+ * @returns An object containing the resolved `sourceFile`, a `fileMissing` flag, and any `error`.
+ */
 export function useJobVideoSource(params: {
     job: JobDetail
     videoSource: VideoSource

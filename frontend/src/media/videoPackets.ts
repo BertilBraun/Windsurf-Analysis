@@ -1,12 +1,29 @@
+/**
+ * Utilities for extracting and indexing video packet metadata.
+ */
+
 import { EncodedPacketSink } from 'mediabunny'
 
+/**
+ * Metadata representing an encoded video packet.
+ */
 export type VideoPacketMeta = {
+    /** Presentation timestamp (PTS). */
     ts: number
+    /** Duration of the packet. */
     dur: number
+    /** Whether the packet is a keyframe. */
     key: boolean
+    /** Sequence number used to break ties for identical timestamps. */
     tie: number
 }
 
+/**
+ * Extracts metadata from a video track and returns it sorted by timestamp and sequence number.
+ *
+ * @param videoTrack - The source video track to extract packets from.
+ * @returns A promise resolving to an array of sorted packet metadata.
+ */
 export async function getSortedVideoPacketMeta(videoTrack: any): Promise<VideoPacketMeta[]> {
     try {
         const packetSink = new EncodedPacketSink(videoTrack)
@@ -27,6 +44,13 @@ export async function getSortedVideoPacketMeta(videoTrack: any): Promise<VideoPa
     }
 }
 
+/**
+ * Performs a binary search to find the index of the timestamp closest to the target time.
+ *
+ * @param ptsSec - Sorted array of presentation timestamps in seconds.
+ * @param tSec - Target time in seconds.
+ * @returns The index of the timestamp closest to the target time.
+ */
 export function closestIndexForTimestampSec(ptsSec: number[], tSec: number): number {
     const n = ptsSec.length
     if (n <= 0) return 0
@@ -48,4 +72,3 @@ export function closestIndexForTimestampSec(ptsSec: number[], tSec: number): num
     const d1 = Math.abs(ptsSec[i1]! - tSec)
     return d0 <= d1 ? i0 : i1
 }
-

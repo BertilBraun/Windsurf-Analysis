@@ -1,3 +1,9 @@
+/**
+ * @file DemoPage.tsx
+ * @description Demo interface for single-video analysis, allowing users to test
+ * platform capabilities with local files or sample videos.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthProvider'
@@ -27,6 +33,18 @@ const UploadProgressBar: React.FC<{ percent: number }> = ({ percent }) => {
     )
 }
 
+/**
+ * A simplified interface for demonstrating video analysis capabilities.
+ *
+ * Features include:
+ * - Single file upload with progress tracking.
+ * - Sample video processing.
+ * - Automatic playback upon successful analysis.
+ * - Navigation to the full Analyzer application.
+ *
+ * @param props - Component properties.
+ * @param props.onGoHome - Callback triggered when the user requests to return to the home screen.
+ */
 export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
     const { t } = useTranslation()
     const { authorizedFetch, settings } = useAuth()

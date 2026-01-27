@@ -1,3 +1,8 @@
+/**
+ * @file JobThumbnail.tsx
+ * @description Provides a component for displaying video job thumbnails, handling generation from source and caching.
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { ALL_FORMATS, BlobSource, CanvasSink, Input } from 'mediabunny'
@@ -107,6 +112,21 @@ const PlayOverlay: React.FC = () => (
     </div>
 )
 
+/**
+ * Displays a thumbnail for a video processing job.
+ *
+ * This component handles:
+ * - Retrieving cached thumbnails from IndexedDB.
+ * - Generating thumbnails from video files if not cached.
+ * - Displaying processing status and progress for active jobs.
+ * - Displaying error states for failed or missing files.
+ *
+ * @param props - Component properties.
+ * @param props.job - The job summary data.
+ * @param props.videoSource - The source of the video (file or directory handle).
+ * @param props.playable - Whether to show a play overlay. Defaults to true.
+ * @param props.layout - Visual layout style ('tile' or 'wide'). Defaults to 'tile'.
+ */
 export const JobThumbnail: React.FC<{
     job: JobSummary
     videoSource: VideoSource

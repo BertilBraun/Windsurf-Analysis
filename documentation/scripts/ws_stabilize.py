@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""
+Video stabilization script using FFmpeg.
+
+Provides parallel processing capabilities for multiple video files using a process pool.
+Supports batch processing, custom output naming, and configurable concurrency.
+"""
 
 import shutil
 import logging
@@ -12,6 +18,17 @@ from util import stabilize_ffmpeg, setup_logging, get_tmp_file, mby_notify
 
 
 def stabilize_one(input_file: Path, output_file: Path, force: bool):
+    """
+    Stabilizes a single video file using FFmpeg.
+
+    Args:
+        input_file: Path to the source video.
+        output_file: Path where the stabilized video will be saved.
+        force: If True, overwrites existing output files.
+
+    Returns:
+        A tuple of (input_path, success_status, message_or_path).
+    """
     if not input_file.exists():
         logging.error(f'Input file {input_file} does not exist.')
         return (input_file, False, 'Input file does not exist.')
@@ -42,6 +59,12 @@ def stabilize_one(input_file: Path, output_file: Path, force: bool):
 
 
 def main():
+    """
+    Main entry point for the video stabilization CLI.
+
+    Handles argument parsing, output path logic for single or multiple files,
+    and manages parallel execution using a process pool.
+    """
     parser = argparse.ArgumentParser(description='Stabilize video files using FFmpeg (parallelized)')
     parser.add_argument('input_files', nargs='+', help='Path(s) to the input video file(s)')
     parser.add_argument(

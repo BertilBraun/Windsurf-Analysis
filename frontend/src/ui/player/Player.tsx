@@ -1,3 +1,9 @@
+/**
+ * @file Player.tsx
+ * @description Main video player component for reviewing jobs, managing annotations,
+ * and handling video playback with specialized modes (overview and detailed/stabilized).
+ */
+
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { JobDetail, ReportType, Track } from '../types'
@@ -24,20 +30,43 @@ const PLAYER_OPENED_ONCE_KEY = 'player.openedOnce.v1'
 const PLAYER_ALL_BBOXES_UNTIL_FIRST_CLICK_KEY = 'player.allBboxesUntilFirstClickDismissed.v1'
 const PLAYER_FOCUSED_PAUSE_ANNOTATE_HINT_DISMISSED_KEY = 'player.focusedPauseAnnotateHintDismissed.v1'
 
+/**
+ * Props for the Player component.
+ */
 type Props = {
+    /** The job detail object containing tracks and metadata. */
     job: JobDetail
+    /** Configuration for locating the video file. */
     videoSource: VideoSource
+    /** Callback triggered when the player is closed. */
     onClose: () => void
+    /** Callback for reporting issues with specific tracks or frames. */
     onReport: (id: string, type: ReportType, message: string) => void
+    /** Optional callback to navigate to the next job. */
     onOpenNextJob?: () => void
+    /** Optional callback to navigate to the previous job. */
     onOpenPrevJob?: () => void
+    /** Whether the player is currently in annotation drawing mode. */
     drawMode: boolean
+    /** Callback to toggle the annotation drawing mode. */
     onToggleDrawMode: () => void
+    /** If true, disables camera stabilization logic in overview mode. */
     disableOverviewStabilization: boolean
+    /** The current state of the player (mode, current track, etc.). */
     player: PlayerState | null
+    /** Setter for the player state. */
     setPlayer: React.Dispatch<React.SetStateAction<PlayerState | null>>
 }
 
+/**
+ * High-performance video player component using WebCodecs.
+ *
+ * Supports two primary modes:
+ * 1. Overview: Full video frame with optional track overlays.
+ * 2. Detailed: Focused track view with stabilization and zoom.
+ *
+ * Handles keyboard shortcuts, zooming, panning, and annotation drawing.
+ */
 export const Player: React.FC<Props> = ({
     job,
     videoSource,
