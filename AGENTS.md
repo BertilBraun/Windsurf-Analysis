@@ -9,19 +9,18 @@ Follow these rules for any work done in this repository.
 - Keep files, classes, and functions short and focused (single responsibility).
 - Avoid deep nesting; prefer guard clauses, early returns, and extracting helper functions.
 - Structure code into sensible modules; keep boundaries clear.
-- Don't repeat yourself more than twice; extract shared logic when a 3rd copy would appear.
+- Don't repeat yourself more than twice; extract shared logic when a 3rd copy would appear or earlier.
 - Naming: ALWAYS use descriptive variable/function names; NEVER abbreviate.
-  - Prefer `player` over `p`, `indices` over `idxs`, `configuration` over `cfg`.
+  - Prefer `player` over `p`, `indices` over `idxs`, `config` over `cfg`.
 - Prefer straightforward control flow and simple data structures over cleverness.
 - When touching code, keep diffs minimal; avoid drive-by refactors.
+- Use strong typing - ALWAYS. Always use dataclasses and typedefinitions over generic objects or maps. Use enums over string constants.
 
 ## Safety and hygiene
 - Never commit or print secrets. Treat `.env` as sensitive; use `.env.example` for examples.
 - Avoid editing generated/vendor directories (`frontend/dist/`, `frontend/node_modules/`, `.docs_agent/`, `__pycache__/`) unless explicitly asked.
 - If you change runtime behavior, call it out in the final summary and include how it was verified.
 - Concurrency safety: DO NOT remove or revert code that appeared “in the meantime” (e.g., manual edits or another agent’s changes).
-  - Avoid rewriting whole files; make minimal, surgical edits that preserve unrelated lines.
-  - Before/after edits, check for unexpected deletions in `git diff`; if you detect unrelated changes, stop and rebase/merge your changes instead of overwriting.
 
 ## Repo map
 - `backend/`: FastAPI backend for GybeLock (Firebase + API).
@@ -32,7 +31,6 @@ Follow these rules for any work done in this repository.
 
 ## Validation (pick the closest fit)
 - Python sanity: `python -m compileall backend tools video_processing train`
-- Backend run: `python backend/main.py`
 - Frontend run: `cd frontend; npm run dev`
 
 ## Repo skills (installed in your Codex home)
