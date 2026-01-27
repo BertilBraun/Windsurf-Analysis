@@ -88,6 +88,12 @@ When generating a folder `README.md`, the prompt includes:
 - full contents of all tracked `.py/.ts/.tsx` files directly in that folder (excluding `__init__.*`)
 - `README.md` contents from immediate subfolders (so run order is bottom-up: subfolders first)
 
+## Inline docs scope
+
+When updating inline docs in code files, the agent asks the LLM to document only the public API:
+- Python: module-level names not starting with `_`, plus public class methods (skips private `_` and nested/local functions)
+- TS/TSX: exported symbols only (skips non-exported and nested/local symbols)
+
 ## Progress bar (tqdm)
 
 If `tqdm` is installed, `generate.py` shows progress bars for inline-doc and README generation.

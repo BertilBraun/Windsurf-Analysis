@@ -42,7 +42,7 @@ def main(argv: list[str]) -> int:
     exts = {*(DEFAULT_CODE_EXTS | extra_exts)}
     exclude_dirs = {*(DEFAULT_EXCLUDE_DIRS | set(args.exclude_dir))}
 
-    prompt_version = "docs_agent/v1"
+    prompt_version = "docs_agent/v3"
     state = load_state(root, prompt_version=prompt_version)
     cache_invalidated = state.prompt_version != prompt_version
 

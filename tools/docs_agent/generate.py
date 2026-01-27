@@ -57,6 +57,22 @@ def _is_init_file(path: Path) -> bool:
     name = path.name.lower()
     return name in {"__init__.py", "__init__.ts", "__init__.tsx"}
 
+def _public_api_instructions_for_file(path: Path, src: str) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".py":
+        return (
+            "Public API scope:\n"
+            "- Only add/update docs for module-level public functions/classes and their public methods (names not starting with '_').\n"
+            "- Do NOT add/update docs for private ('_') members or nested/local functions.\n"
+        )
+    if suffix in {".ts", ".tsx"}:
+        return (
+            "Public API scope:\n"
+            "- Only add/update docs for exported TS/TSX symbols (and their public surface as needed).\n"
+            "- Do NOT document non-exported or nested/local functions/classes.\n"
+        )
+    return ""
+
 
 def _file_update_prompt(path: str, lang: str, src: str) -> tuple[str, str]:
     system = (
@@ -70,6 +86,7 @@ def _file_update_prompt(path: str, lang: str, src: str) -> tuple[str, str]:
     user = (
         f"File path: {path}\n"
         f"Language: {lang}\n\n"
+        f"{_public_api_instructions_for_file(Path(path), src)}\n"
         "Update documentation for the entire file (module/file header, classes, functions).\n"
         "Keep it concise and accurate.\n\n"
         "Current file content:\n"
@@ -234,7 +251,7 @@ def main(argv: list[str]) -> int:
     exts = {*(DEFAULT_CODE_EXTS | extra_exts)}
     exclude_dirs = {*(DEFAULT_EXCLUDE_DIRS | set(args.exclude_dir))}
 
-    prompt_version = "docs_agent/v1"
+    prompt_version = "docs_agent/v3"
     state = load_state(root, prompt_version=prompt_version)
     cache_invalidated = args.force or (state.prompt_version != prompt_version)
 
