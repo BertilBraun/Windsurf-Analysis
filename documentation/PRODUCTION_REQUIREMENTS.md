@@ -1,5 +1,18 @@
 # Production Requirements — GPU Inference Service with React Frontend (v1.0)
 
+Status: **historical design spec**.
+
+This document describes an earlier production plan that assumed:
+
+- HTTP Basic Auth
+- Neon Postgres
+- S3-compatible object storage (e.g., Cloudflare R2)
+
+The currently implemented MVP in this repo uses **Firebase Auth + Firestore + Firebase Storage** instead. See:
+
+- `documentation/README.md` (what’s implemented)
+- `documentation/DEPLOYMENT.md` (current deployment)
+
 ---
 
 ## 1) Purpose & Goals

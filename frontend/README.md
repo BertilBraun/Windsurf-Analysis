@@ -1,5 +1,7 @@
 ## Frontend (React + TypeScript + Vite) + Firebase Hosting
 
+For end-to-end setup (Firebase + Cloud Run + Modal), see `documentation/DEPLOYMENT.md`.
+
 ### Setup (Firebase Console)
 - Create / select your Firebase project
 - **Authentication**: enable a provider (e.g. Google)

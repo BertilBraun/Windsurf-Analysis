@@ -1,5 +1,7 @@
 ## FastAPI backend (Cloud Run-ready)
 
+For end-to-end setup (Firebase + Cloud Run + Modal), see `documentation/DEPLOYMENT.md`.
+
 ### Run locally (Python)
 From repo root:
 

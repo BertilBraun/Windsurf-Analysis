@@ -9,6 +9,8 @@ This document is a developer-facing overview of how this repo turns raw windsurf
 
 It’s intentionally written as a “portfolio-style” technical explanation and points directly to code in this repo.
 
+For a non-technical end-to-end overview + documentation map, see `documentation/README.md`.
+
 ---
 
 ## 1) High-level architecture
@@ -334,14 +336,19 @@ See:
 
 ### Active learning loop (keypoints)
 
-Keypoints are expensive to label, so I used a lightweight active-learning workflow to keep annotation effort manageable:
+Keypoints are expensive to label, so the pose dataset is grown via a lightweight active-learning workflow:
 
 1) Fully annotate ~200 frames (bbox + 2 keypoints).
 2) Train a first-pass pose model.
 3) Run that model to predict keypoints on new frames, then use the annotator to fix only the mistakes.
 4) Retrain and repeat ~3 iterations.
 
-In practice, this produces a fully-annotated dataset with far less manual work than labeling everything from scratch, while still reaching strong model performance.
+Two practical details make this work without poisoning the dataset:
+
+- **Gated pseudo-labeling**: pseudo labels are only accepted when the predicted bbox matches the GT bbox well and keypoint confidences pass thresholds (see `pseudo_label_pose.py` usage in `train/detection/README.md`).
+- **Manual remains source-of-truth**: pseudo labels are stored separately and can be promoted to manual after inspection/correction.
+
+In practice, this produces a strong keypoint dataset with far less manual work than labeling everything from scratch.
 
 ### Annotation tools
 

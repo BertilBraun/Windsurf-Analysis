@@ -1,5 +1,7 @@
 # Feedback Runbook: when user videos "don't work"
 
+This is an internal engineering playbook. For a high-level “what the application does”, start with `documentation/README.md`.
+
 This is the "future me" workflow when someone sends a broken video sample. The goal is to: (1) reproduce, (2) decide what subsystem is at fault, (3) fix via data/hparams/code, (4) re-test on the same sample, (5) deploy.
 
 Preferred: use the VS Code tasks in `.vscode/tasks.json` for the repeatable steps.

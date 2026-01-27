@@ -1,13 +1,30 @@
 # Windsurfer Detection Training – Quick Guide
 
 ## Overview
-This guide walks you through creating a high‑quality detection dataset and training the YOLOv11 model:
+
+This guide walks you through the two training loops used in this repo:
+
+1. **Detection (bbox)**: train a YOLO detector to find windsurfers + sails in full frames.
+2. **Pose (bbox + 2 keypoints)**: train a YOLO-pose model that predicts:
+   - `boom_mast` (boom/mast intersection)
+   - `mast_tip`
+
+The **pose model** is what the tracking/player pipeline relies on to compute stable per-frame `anchor` + `scale` for the focused view.
+
+This file also documents the **active learning** workflow used to make keypoint labeling tractable.
+
+---
+
+This guide covers:
+
 - Annotate frames from videos with `annotator.py`
 - Review/fix labels with `annotation_editor.py`
 - Optionally add negative samples with `negative_sample_creation.py`
 - Train the detector with `train.py`
 
 Tip: On Windows, run commands in Git Bash or WSL for best compatibility.
+
+For the full system context (how weights are used in the pipeline / web app), see `documentation/README.md`.
 
 ## 0) Setup
 ```bash
@@ -114,11 +131,35 @@ python train_pose.py --src ./windsurf_dataset --pose ./pose_projects/boom_mast_v
 ```
 
 ### 5.3) Active learning (pseudo-label the remaining samples)
-Workflow:
-1) Manually label a small seed set (e.g. ~200) with `annotator_keypoints_fullframe.py`.
-2) Train a first pose model with `train_pose.py`.
-3) Run pseudo-labeling to auto-accept keypoints on the rest where predictions match the GT bboxes well.
-4) Inspect/correct with `annotator_keypoints_fullframe.py`, then retrain.
+Keypoints are expensive to label. The workflow here is designed to spend human time only where the model is uncertain/wrong.
+
+#### Mental model
+
+- **Bboxes** are relatively quick to label and are reused for pose training.
+- **Keypoints** (boom/mast + mast tip) are the “expensive” signal; we grow that set gradually.
+- Pseudo labels are only used when the model prediction is “safe enough” (gated), so they don’t poison the dataset.
+
+#### What lives where (pose project layout)
+
+Given `--out ./pose_projects/boom_mast_v1`:
+
+- `pose_index.yaml` — which image keys exist and which split they belong to (`train` / `val`).
+- `labels_pose/<split>/*.txt` — **manual** pose labels (source of truth).
+- `labels_pose_pseudo/<split>/*.txt` — **pseudo** pose labels (accepted by gates).
+- `dryruns/run_<timestamp>/...` — analysis output from pseudo-label dry runs (for inspection).
+
+#### Loop (recommended)
+
+1. **Seed**: manually label ~100–300 representative frames (diverse lighting, distances, angles, wave sails if relevant).
+2. **Train**: `python train_pose.py ...` to get a first `best.pt`.
+3. **Pseudo-label**: run `pseudo_label_pose.py` with strict gates (next section).
+4. **Inspect + fix**:
+   - open the annotator in `--label-source pseudo` mode,
+   - convert “mostly correct” pseudo labels into manual,
+   - discard bad ones.
+5. **Retrain**: include both manual + pseudo (`--include-pseudo`) and repeat 2–4 rounds.
+
+Stop when additional rounds stop reducing the number of manual fixes needed (diminishing returns).
 
 Pseudo-labeling writes pose labels for samples that pass gates (IoU vs GT bbox + keypoint checks):
 ```bash
@@ -132,6 +173,13 @@ python pseudo_label_pose.py ^
   --require-all-boxes ^
   --require-mast-above
 ```
+
+#### Why these gates exist (what they protect against)
+
+- `--iou ...` ensures the model’s bbox matches the *ground-truth* bbox well (so keypoints likely refer to the right object).
+- `--kp-conf ...` prevents accepting low-confidence keypoints (common when mast tip is occluded).
+- `--require-all-boxes` prevents partial labeling when multiple surfers are present (reduces identity/keypoint swaps).
+- `--require-mast-above` enforces a geometric sanity check (mast tip should be above boom/mast in image space for typical beach-shot footage).
 
 Inspect a dryrun output with the viewer:
 ```bash

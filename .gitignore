@@ -21,5 +21,3 @@ test_outputs/**
 !server/inference/weights/**
 !.vscode/tasks.json
 !documentation/Video Tutorial.mp4
-
-test/**

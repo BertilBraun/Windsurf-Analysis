@@ -1,3 +1,8 @@
+# Motion compensation notes
+
+This folder contains experimental/debug notes around camera motion estimation and how it interacts with Kalman-based
+tracking and gap-filling. The screenshots below are referenced when tuning stabilization and motion gates.
+
 ![Pre](Screenshot%202025-09-23%20204439.png)
 
 - Blue line: Global Camera Motion trajectory

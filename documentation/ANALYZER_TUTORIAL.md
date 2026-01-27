@@ -4,6 +4,8 @@ GybeLock’s Analyzer is designed for **beach-shot windsurf footage**: a camera 
 
 It is **not** designed for GoPro/action-cam POV footage.
 
+Note: The “ingress folder” feature uses the browser’s File System Access API, so it works best in Chromium-based browsers.
+
 ### 1) Set the ingress folder
 
 - Open the Analyzer.
@@ -52,3 +54,7 @@ In the Analyzer / Player, click **Shortcuts** to see all keyboard controls (play
 
 - **Export** lets you export a focused clip for the currently selected track.
 - **Report** lets you report an analysis issue (include an approximate timestamp if possible).
+
+---
+
+For developer/ops documentation, see `documentation/README.md`.

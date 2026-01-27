@@ -17,6 +17,8 @@ GybeLock helps you review **beach-shot windsurf footage** (shore camera, long zo
 
 The ingress folder is a folder on your computer that GybeLock monitors. When you add a new MP4 video into that folder, GybeLock automatically uploads it for processing.
 
+Note: Selecting folders requires the browser’s File System Access API, so Chromium-based browsers work best.
+
 ### Where do processed videos appear?
 
 They appear on the Analyzer page under **Analyzed Videos**. When a job is finished, it shows as **Succeeded** and can be opened.
@@ -64,3 +66,7 @@ In the Analyzer / Player, click **Shortcuts** to open the keyboard shortcuts mod
 - Click **Delete account**
 
 This will permanently delete your user and job mappings.
+
+---
+
+For developer/ops documentation, see `documentation/README.md`.

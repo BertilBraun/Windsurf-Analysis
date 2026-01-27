@@ -3,8 +3,9 @@
 This repo has:
 - `frontend/`: React + TypeScript + Vite app deployed to **Firebase Hosting**
 - `backend/`: FastAPI app deployed to **Google Cloud Run**
+- `video_processing/`: Modal pipeline (orientation → detection → tracking) that reports results back to Cloud Run
 
-This guide assumes **Windows** and the Firebase project id: `gybelock-00`.
+This guide assumes **Windows** and uses the Firebase project id `gybelock-00` as an example.
 
 ---
 
@@ -162,7 +163,20 @@ Put that URL into:
 
 Then rebuild + redeploy Hosting (next section).
 
-### 6.3 Logs (runtime)
+### 6.3 Configure required backend env vars
+
+In Cloud Run → your service → “Edit & deploy new revision” → “Variables & secrets”:
+
+- `FIREBASE_STORAGE_BUCKET=<your-bucket>` (often `<project>.appspot.com`)
+- `MODAL_SHARED_SECRET=<random>` (same value you will set in Modal)
+- `MODAL_TRIGGER_BASE_URL=<modal-trigger-url>` (set after deploying Modal)
+
+Optional:
+
+- `MAX_JOBS_PER_USER=5`
+- `FIRESTORE_DATABASE=(default)`
+
+### 6.4 Logs (runtime)
 Cloud Run logs are under the **gybelock-00** project:
 
 ```bash
@@ -218,9 +232,37 @@ When `A` resolves to Firebase’s IP(s), click “Retry” in Firebase Hosting.
 
 ---
 
-## 9) Common troubleshooting
+## 9) Deploy Modal (required for processing)
+
+The backend triggers Modal, and Modal calls back into Cloud Run.
+
+1. Install Modal and authenticate:
+
+```bash
+pip install modal
+modal token new
+```
+
+2. Create a Modal secret named `backend-secret` containing:
+
+- `MODAL_SHARED_SECRET` (must match your backend env var)
+- `CLOUD_RUN_BASE_URL` (your Cloud Run backend base URL)
+
+3. Deploy:
+
+```bash
+python video_processing/deploy.py
+```
+
+4. Copy the trigger endpoint URL Modal prints and set:
+
+- `MODAL_TRIGGER_BASE_URL=<that-url>`
+
+---
+
+## 10) Common troubleshooting
 
 ### Browser CORS errors calling Cloud Run
 CORS headers come from the FastAPI app. If the revision is crashing, you’ll see “CORS blocked” even though it’s actually a backend failure.
-- Check Cloud Run logs (section 6.3)
+- Check Cloud Run logs (section 6.4)
 - Ensure the backend is returning responses for `OPTIONS` and your allowed origins include your Hosting domain.

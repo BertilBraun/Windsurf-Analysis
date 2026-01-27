@@ -41,3 +41,16 @@ python train.py \
   --resize-shorter 384 \
   --balance \
   --epochs 30 --batch 64 --imgsz 320
+```
+
+## Using the trained model in this repo
+
+The production/local pipelines expect an orientation classifier weight file at:
+
+- `video_processing/inference/weights/orientation_fixer/best.pt`
+
+So after training, copy:
+
+- `<outdir>/<run-name>/weights/best.pt` → `video_processing/inference/weights/orientation_fixer/best.pt`
+
+Then redeploy Modal (`python video_processing/deploy.py`) if you want the change in production.

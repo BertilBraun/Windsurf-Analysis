@@ -1,48 +1,124 @@
-Infrastructure setup guide for Windsurf Analysis (Modal + FastAPI + Neon + R2)
+# Deployment (Firebase Hosting + Cloud Run + Modal)
 
-Prerequisites
+This document describes the **current** production MVP deployment for GybeLock / Windsurf Analysis:
 
-- Python 3.11+
+- **Frontend**: Firebase Hosting (`frontend/`)
+- **Backend API**: FastAPI on Google Cloud Run (`backend/`)
+- **Data**: Firebase Auth + Firestore + Firebase Storage (GCS-backed)
+- **Compute**: Modal (GPU/CPU pipeline in `video_processing/`)
+
+If you’re setting this up from scratch, also read `documentation/FIREBASE_SETUP.md` (it is the “click-by-click” Firebase guide).
+
+---
+
+## Prerequisites
+
+- Python 3.10+ (Modal images use 3.10; local can be newer)
 - Node 18+
-- Accounts: Neon (Postgres), Cloudflare R2 (S3), Modal.com, Vercel/Render (for FastAPI/React)
+- Accounts:
+  - Firebase + Google Cloud (same project)
+  - Modal
 
-Environment variables (shared)
+---
 
-- BACKEND_WEBHOOK_SECRET=<random>
-- BACKEND_PUBLIC_BASE_URL=https://api.example.com            # This is the URL of the backend API
-- MODAL_INVOKE_URL=https://<modal-web-endpoint>
-- CORS_ORIGINS=https://app.example.com
-- USER_CREATE_SECRET=<admin-secret>
+## Required configuration (backend)
 
-Database setup (Neon)
+### Backend env vars (`backend/.env` or Cloud Run env)
 
-1. Create a new Neon project and DB.
-2. Set DATABASE_URL to async URL (use postgresql+asyncpg scheme).
-3. The backend will auto-create tables on startup.
+- `FIREBASE_STORAGE_BUCKET` — e.g. `gybelock-00.appspot.com`
+- `MODAL_SHARED_SECRET` — shared secret used for Modal → Cloud Run internal calls (header `X-Modal-Secret`)
+- `MODAL_TRIGGER_BASE_URL` — Modal trigger ASGI app base URL (see “Deploy Modal” below)
 
-Object storage (Cloudflare R2)
+Optional (recommended):
 
-1. Create a bucket (e.g., windsurf-analysis).
-2. Create an API token with read+write to the bucket.
-3. Note Account ID for endpoint URL, set env vars above.
+- `MAX_JOBS_PER_USER` — soft quota (default: `5`)
+- `FIRESTORE_DATABASE` — Firestore database id (default: `(default)`)
 
-Modal deployment
+### CORS origins
 
-1. pip install modal-client
-2. modal token new
-3. Deploy app:
-   modal deploy server/inference.py
-4. Copy the printed web endpoint URL into MODAL_INVOKE_URL.
-5. Note: Modal no longer needs storage credentials; the backend sends the AC bytes directly via multipart to Modal.
+Allowed origins are currently hard-coded in `backend/config.py`. Make sure it includes:
 
-Backend deployment (Render or similar)
+- your Firebase Hosting domain (`https://<project>.web.app`)
+- your custom domain (if any)
+- local dev origins (`http://localhost:5173`, etc.)
 
-1. Create a Python service with Start Command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-2. Set all env vars listed above.
-3. Deploy.
+---
 
-Frontend deployment
+## Deploy Modal
 
-1. Scaffold with Vite React TS (outside this repo scope). Configure .env with API base.
-2. Implement flows per PRODUCTION_REQUIREMENTS.md.
+Modal apps live under `video_processing/` and are deployed via `video_processing/deploy.py`.
 
+1. Install the Modal CLI and authenticate:
+
+```bash
+pip install modal
+modal token new
+```
+
+2. Create a Modal secret named `backend-secret` containing at least:
+
+- `MODAL_SHARED_SECRET` (same value you set on the backend)
+- `CLOUD_RUN_BASE_URL` (the backend’s public base URL, e.g. `https://backend-...run.app`)
+
+3. Deploy:
+
+```bash
+python video_processing/deploy.py
+```
+
+4. From the Modal output, copy the trigger web endpoint URL and set it on the backend as:
+
+- `MODAL_TRIGGER_BASE_URL=<that-url>`
+
+---
+
+## Deploy backend (Cloud Run)
+
+1. Ensure the required Firebase/GCP APIs are enabled for your project:
+
+```bash
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+```
+
+2. Deploy from repo root:
+
+```bash
+cd backend
+gcloud run deploy backend --source . --region europe-west3 --allow-unauthenticated
+```
+
+3. Configure the backend’s environment variables in Cloud Run (see “Required configuration”).
+
+4. Verify:
+
+- `GET /` returns `{ "ok": true }`
+- jobs endpoints require Firebase Auth
+
+---
+
+## Deploy frontend (Firebase Hosting)
+
+1. Configure `frontend/.env.production` with the deployed backend URL:
+
+- `VITE_BACKEND_URL=https://<cloud-run-url>`
+
+2. Build and deploy:
+
+```bash
+cd frontend
+npm install
+npm run build
+firebase deploy --only hosting
+```
+
+---
+
+## End-to-end smoke test
+
+1. Open the deployed frontend.
+2. Sign in (Firebase Auth).
+3. Select an ingress folder.
+4. Drop a short `.mp4` file into it and confirm:
+   - the upload progresses,
+   - the job transitions through states,
+   - the player opens once status is `succeeded`.

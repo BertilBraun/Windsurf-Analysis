@@ -1,5 +1,10 @@
 # GybeLock Style Guideline + UI Plan
 
+Status: **design document / not necessarily implemented**.
+
+This is a UI/brand plan for the GybeLock frontend. Some file paths below were written during a refactor and may
+need adjustment; treat them as guidance, not a guarantee.
+
 ## Brand & tone
 - **Name**: GybeLock
 - **Concept**: “Locked onto the jibe” — confident, technical, and inviting.
@@ -82,26 +87,26 @@ Suggested palette (can be adjusted after you see it in-app):
 
 ### 1) Add an App shell (header/footer) and simple nav state
 - Create `AppShell` wrapping content with header + footer.
-- Update routing in `server/frontend/src/ui/routes/Router.tsx` to include `home/analyzer/faq` post-auth.
-- Replace the inline margin wrapper in `server/frontend/src/ui/App.tsx` with `AppShell` so margins and typography are centralized.
+- Update routing in `frontend/src/ui/routes/Router.tsx` to include `home/analyzer/faq` post-auth.
+- Replace the inline margin wrapper in `frontend/src/ui/App.tsx` with `AppShell` so margins and typography are centralized.
 
 ### 2) Add pages: Home + FAQ, refactor MainPage → Analyzer
-- Create `server/frontend/src/ui/screens/HomePage.tsx`.
-- Create `server/frontend/src/ui/screens/FaqPage.tsx`.
-- Refactor `server/frontend/src/ui/screens/MainPage.tsx` into `AnalyzerPage` layout: grid prominent, controls row, remove the big `IngressPanel` from the top.
+- Create `frontend/src/ui/screens/HomePage.tsx`.
+- Create `frontend/src/ui/screens/FaqPage.tsx`.
+- Refactor `frontend/src/ui/screens/MainPage.tsx` into `AnalyzerPage` layout: grid prominent, controls row, remove the big `IngressPanel` from the top.
 
 ### 3) Floating Ingress widget
-- Build `server/frontend/src/ui/components/IngressWidget.tsx` that uses `useIngressScanner` (same logic as `IngressPanel`).
-- Reuse visual sub-parts from `server/frontend/src/ui/components/IngressPanel.tsx` but in a collapsible container anchored bottom-right.
+- Build `frontend/src/ui/components/IngressWidget.tsx` that uses `useIngressScanner` (same logic as `IngressPanel`).
+- Reuse visual sub-parts from `frontend/src/ui/components/IngressPanel.tsx` but in a collapsible container anchored bottom-right.
 
 ### 4) Light-theme primitives (Modal/Button) and player-mode header
-- Update `server/frontend/src/ui/components/Modal.tsx` so default modal chrome is light (it’s currently dark by default).
-- Update `server/frontend/src/ui/components/Button.tsx` to support variants + consistent sizing.
-- Update `server/frontend/src/ui/components/PlayerModal.tsx` to render “player-mode” header (logo-only + close/back behavior) while keeping the current modal flow.
+- Update `frontend/src/ui/components/Modal.tsx` so default modal chrome is light (it’s currently dark by default).
+- Update `frontend/src/ui/components/Button.tsx` to support variants + consistent sizing.
+- Update `frontend/src/ui/components/PlayerModal.tsx` to render “player-mode” header (logo-only + close/back behavior) while keeping the current modal flow.
 
 ### 5) Design tokens
-- Define CSS variables and base typography in `server/frontend/src/index.css`.
-- Extend Tailwind colors to reference CSS vars in `server/frontend/tailwind.config.js`.
+- Define CSS variables and base typography in `frontend/src/index.css`.
+- Extend Tailwind colors to reference CSS vars in `frontend/tailwind.config.js`.
 
 ### 6) Footer links
 - Add footer component with the four links; route them to simple placeholder pages or `mailto:` for Contact.
@@ -109,5 +114,4 @@ Suggested palette (can be adjusted after you see it in-app):
 ## Open items (decide during implementation)
 - Whether to add an icon set (e.g. `lucide-react`) or keep inline SVG only.
 - Whether footer links are real routes vs external links (legal pages often start as placeholders).
-
 

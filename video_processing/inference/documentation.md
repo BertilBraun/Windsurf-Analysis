@@ -1,12 +1,12 @@
 # Windsurf Tracking Pipeline Documentation
 
-This document outlines the architecture and algorithms used in the windsurf tracking system located in `server/inference/src`.
+This document outlines the architecture and algorithms used in the windsurf tracking system located in `video_processing/inference/src`.
 
 ## Overview
 
 The tracking pipeline is orchestrated by `WindsurfingVideoProcessor` in `windsurf_video_processor.py`. It transforms raw video input into stable, identified tracks of surfers using a multi-stage approach:
 
-1.  **Object Detection**: YOLOv8 detects surfers in every frame.
+1.  **Object Detection**: an Ultralytics YOLO **pose** model produces bboxes + keypoints per frame.
 2.  **Camera Motion Compensation (CMC)**: Global Motion Compensation (GMC) calculates camera movement to allow tracking in a stabilized coordinate system.
 3.  **Tracking Pipeline**:
     *   **Preprocessing**: Greedy stitching of obvious connections.
@@ -123,5 +123,4 @@ This replaces simple linear interpolation with a theoretically optimal **Rauch-T
 2.  `List[Detection]` $\rightarrow$ **PreProcessor** $\rightarrow$ `List[Track]` (fragments)
 3.  `List[Track]` $\rightarrow$ **IterativeILP** $\rightarrow$ `List[Track]` (global consistent tracks)
 4.  `List[Track]` $\rightarrow$ **RTS Smoother** $\rightarrow$ `List[Track]` (dense, smoothed trajectories)
-
 

@@ -1,5 +1,22 @@
 # Windsurfing Video Player Interface - Requirements Document
 
+Status: **partially implemented / partially historical**.
+
+This doc was written as a forward-looking spec for the interactive player. The current web player exists in
+`frontend/src/ui/player/…`, but some details below (file formats, exact output structure, implementation language)
+may not match what’s shipped today.
+
+Notable differences vs the current system:
+
+- The production pipeline uses a **YOLO pose** model (bbox + 2 keypoints) and computes per-frame `anchor` + `scale` for focused view stability.
+- ReID/appearance is configurable; the default in production is not necessarily OSNet.
+- The web app stores job results as JSON in Firebase Storage/GCS (rather than generating per-track video files by default).
+
+For the up-to-date implementation overview, start with:
+
+- `frontend/public/TECHNICAL.md`
+- `documentation/README.md`
+
 ## Overview
 
 This document outlines the requirements for a new interactive video player interface for the Windsurfing Video Analysis system. The player will allow users to efficiently review and analyze processed windsurfing videos by seamlessly switching between overview and detailed views of individual surfers.
