@@ -29,6 +29,8 @@ Follow these rules for any work done in this repository.
 - `tools/docs_agent/`: Local "docs agent" scripts for generating/updating documentation.
 - `documentation/`: Human docs; start at `documentation/README.md`.
 
+If you need to find a certain part of the code, use the README files in each folder to navigate to appropriate code parts if regex searches do not help directly.
+
 ## Validation (pick the closest fit)
 - Python sanity: `python -m compileall backend tools video_processing train`
 - Frontend run: `cd frontend; npm run dev`
