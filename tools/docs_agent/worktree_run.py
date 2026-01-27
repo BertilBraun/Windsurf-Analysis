@@ -15,7 +15,16 @@ from tools.docs_agent.lib import repo_root, run_git, state_path  # noqa: E402
 
 
 def _run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, cwd=str(cwd), env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return subprocess.run(
+        cmd,
+        cwd=str(cwd),
+        env=env,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
 
 def _ensure_clean_worktree(root: Path, wt_path: Path, ref: str) -> None:
@@ -24,6 +33,43 @@ def _ensure_clean_worktree(root: Path, wt_path: Path, ref: str) -> None:
     proc = _run(['git', 'worktree', 'add', '--force', '--detach', str(wt_path), ref], cwd=root)
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or 'git worktree add failed')
+
+
+def _apply_worktree_changes_by_copy(*, root: Path, wt_path: Path) -> tuple[int, int]:
+    """
+    Apply worktree changes back to the main repo by copying files.
+
+    This avoids `git apply` failures on Windows (CRLF/LF, missing final newline, etc.)
+    and prevents .rej files when patches don't match.
+    """
+    name_status = run_git(['diff', '--name-status', '--no-renames'], cwd=wt_path)
+    copied = 0
+    deleted = 0
+    for line in name_status.splitlines():
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        status = parts[0].strip()
+        if len(parts) < 2:
+            continue
+        rel = parts[1].strip()
+        if not rel or rel.startswith(".git/") or rel.startswith(".docs_agent/"):
+            continue
+        src = wt_path / rel
+        dst = root / rel
+
+        if status.startswith("D"):
+            if dst.exists():
+                dst.unlink()
+                deleted += 1
+            continue
+
+        if not src.exists() or src.is_dir():
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(src.read_bytes())
+        copied += 1
+    return copied, deleted
 
 
 def _sync_root_changes_into_worktree(root: Path, wt_path: Path) -> None:
@@ -45,6 +91,8 @@ def _sync_root_changes_into_worktree(root: Path, wt_path: Path) -> None:
             rel_path = Path(path_part)
             # Never copy secrets or agent artifacts.
             if rel_path.as_posix().startswith('.docs_agent/') or rel_path.name == '.env':
+                continue
+            if rel_path.suffix.lower() == ".rej":
                 continue
             src = root / rel_path
             dst = wt_path / rel_path
@@ -111,11 +159,14 @@ def main(argv: list[str]) -> int:
     env.setdefault('DOCS_AGENT_CACHE_DIR', str((root / '.docs_agent' / 'llm_cache').resolve()))
     # Worktrees don't include untracked `.env` files, so point the generator at the real env file.
     env.setdefault('DOCS_AGENT_ENV_PATH', str((root / '.env').resolve()))
+    # Make the child process write UTF-8 so our decoding is stable.
+    env.setdefault('PYTHONIOENCODING', 'utf-8')
+    env.setdefault('PYTHONUTF8', '1')
 
     generate_py = wt_path / 'tools' / 'docs_agent' / 'generate.py'
     proc = _run([sys.executable, str(generate_py)] + [a for a in args.generate_args if a != '--'], cwd=wt_path, env=env)
-    sys.stdout.write(proc.stdout)
-    sys.stderr.write(proc.stderr)
+    sys.stdout.write(proc.stdout or "")
+    sys.stderr.write(proc.stderr or "")
     if proc.returncode != 0:
         return proc.returncode
 
@@ -133,7 +184,7 @@ def main(argv: list[str]) -> int:
             return addn_proc.returncode
 
     diff = run_git(['diff'], cwd=wt_path)
-    if not diff.strip():
+    if not (diff or "").strip():
         print('No changes produced.')
         return 0
 
@@ -141,13 +192,8 @@ def main(argv: list[str]) -> int:
     print(f'Wrote patch: {patch_path}')
 
     if not args.no_apply:
-        apply_proc = _run(['git', 'apply', '--3way', '--whitespace=nowarn', str(patch_path)], cwd=root)
-        if apply_proc.returncode != 0:
-            apply_proc = _run(['git', 'apply', '--reject', '--whitespace=nowarn', str(patch_path)], cwd=root)
-            if apply_proc.returncode != 0:
-                sys.stderr.write(apply_proc.stderr)
-                sys.stderr.write(apply_proc.stdout)
-                return apply_proc.returncode
+        copied, deleted = _apply_worktree_changes_by_copy(root=root, wt_path=wt_path)
+        print(f'Applied changes: {copied} file(s) updated, {deleted} deleted.')
         state_proc = _run(
             [sys.executable, str(root / 'tools' / 'docs_agent' / 'run.py'), '--write-state'], cwd=root, env=env
         )

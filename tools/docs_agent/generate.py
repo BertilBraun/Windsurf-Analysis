@@ -110,9 +110,9 @@ def _ensure_folder_readme_stub(folder: Path) -> str:
 
 
 def _strip_trailing_whitespace(text: str) -> str:
-    has_trailing_newline = text.endswith("\n")
     cleaned = "\n".join(line.rstrip() for line in text.splitlines())
-    return cleaned + ("\n" if has_trailing_newline else "")
+    # Always end with a newline to avoid patch/apply edge cases and keep diffs stable.
+    return cleaned.rstrip("\n") + "\n"
 
 
 def _progress(iterable, *, total: int | None, desc: str):

@@ -31,8 +31,10 @@ def run_git(args: list[str], cwd: Path) -> str:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
-    return proc.stdout
+    return proc.stdout or ""
 
 
 def repo_root(cwd: Path) -> Path:
@@ -159,4 +161,3 @@ def touch_state_for_scan(
     state.prompt_version = prompt_version
     state.updated_at_unix = int(time.time())
     return state
-

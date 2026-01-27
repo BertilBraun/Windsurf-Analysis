@@ -80,6 +80,8 @@ This generates changes in a detached worktree, writes a patch to `.docs_agent/la
 
 If you hit 429/503 rate limits, increase `--llm-sleep-seconds` and/or lower `--max-files` / `--max-folders`. You can also tune retries via env vars: `DOCS_AGENT_LLM_MAX_RETRIES`, `DOCS_AGENT_LLM_RETRY_BASE_SECONDS`.
 
+If you previously ran an older version that used `git apply --reject`, you may have leftover `*.rej` files. They can be safely deleted.
+
 ## Progress bar (tqdm)
 
 If `tqdm` is installed, `generate.py` shows progress bars for inline-doc and README generation.
