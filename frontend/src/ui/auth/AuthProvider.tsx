@@ -7,6 +7,9 @@
 import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import {
     createUserWithEmailAndPassword,
+    EmailAuthProvider,
+    linkWithCredential,
+    linkWithPopup,
     onIdTokenChanged,
     reload,
     sendEmailVerification,
@@ -126,10 +129,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     )
 
     const login = useCallback(async (e: string, p: string) => {
-        await signInWithEmailAndPassword(auth, e.trim(), p)
+        const email = e.trim()
+        const current = auth.currentUser
+        const isAnonymous = !!(current as any)?.isAnonymous
+
+        if (isAnonymous && current) {
+            const credential = EmailAuthProvider.credential(email, p)
+            try {
+                const result = await linkWithCredential(current, credential)
+                await ensureBackendUser(result.user)
+                trackEvent('auth_login', { method: 'password' })
+                return
+            } catch (err: any) {
+                const code = String(err?.code || '')
+                const shouldFallbackToSignIn =
+                    code === 'auth/credential-already-in-use' || code === 'auth/email-already-in-use'
+                if (!shouldFallbackToSignIn) throw err
+            }
+        }
+
+        await signInWithEmailAndPassword(auth, email, p)
         // Token + email are picked up via onIdTokenChanged below.
         trackEvent('auth_login', { method: 'password' })
-    }, [])
+    }, [ensureBackendUser])
 
     const signup = useCallback(
         async (e: string, p: string, p2: string, consent?: { termsAccepted: boolean; marketingConsent: boolean }) => {
@@ -138,7 +160,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!p) throw new Error('Password is required.')
             if (p !== p2) throw new Error('Passwords do not match.')
 
-            const result = await createUserWithEmailAndPassword(auth, email, p)
+            const current = auth.currentUser
+            const isAnonymous = !!(current as any)?.isAnonymous
+
+            const result =
+                isAnonymous && current
+                    ? await linkWithCredential(current, EmailAuthProvider.credential(email, p))
+                    : await createUserWithEmailAndPassword(auth, email, p)
             // Send verification email for email/password signup
             await sendEmailVerification(result.user)
             // Always create the backend user record after signup
@@ -149,7 +177,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     )
 
     const loginWithGoogle = useCallback(async () => {
-        const result = await signInWithPopup(auth, googleProvider)
+        const current = auth.currentUser
+        const isAnonymous = !!(current as any)?.isAnonymous
+
+        const result =
+            isAnonymous && current ? await linkWithPopup(current, googleProvider) : await signInWithPopup(auth, googleProvider)
         // Always create the backend user record after (first-time) Google signup.
         // Calling this every time is fine; backend treats "already exists" as 400.
         await ensureBackendUser(result.user)
@@ -240,7 +272,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isAuthReady,
             isAuthenticated: !!user && !!user.emailVerified,
             isSignedIn: !!user,
-            needsEmailVerification: !!user && !user.emailVerified,
+            needsEmailVerification: !!user && !!user.email && !user.emailVerified,
             authHeader,
             uid: user?.uid ?? null,
             email,

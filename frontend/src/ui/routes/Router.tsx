@@ -26,7 +26,7 @@ import { Button } from '../components/Button'
 import { ConsentModal } from '../components/ConsentModal'
 import { trackPageView } from '../utils/analytics'
 import { auth } from '../../firebase'
-import { createUserWithEmailAndPassword, inMemoryPersistence, setPersistence, signInAnonymously } from 'firebase/auth'
+import { browserLocalPersistence, setPersistence, signInAnonymously } from 'firebase/auth'
 
 const DemoRoute: React.FC = () => {
     const { t } = useTranslation()
@@ -42,8 +42,8 @@ const DemoRoute: React.FC = () => {
             ; (async () => {
                 setAuthError(null)
                 try {
-                    // Demo sessions should be ephemeral: refresh wipes the session.
-                    await setPersistence(auth, inMemoryPersistence)
+                    // Demo sessions should persist per-browser to avoid creating a new anonymous user on every load.
+                    await setPersistence(auth, browserLocalPersistence)
                     await signInAnonymously(auth)
                 } catch (e: any) {
                     if (cancelled) return
@@ -134,10 +134,9 @@ const AnalyzerRoute: React.FC = () => {
 
         // NOTE/TODO: Demo uses anonymous or generated demo accounts. Those should not be carried into
         // the full analyzer (it would trigger email verification). Sign out and show login/signup instead.
-        const isAnon = !!(user as any)?.isAnonymous
         const emailStr = String(user.email || '')
         const isGeneratedDemoEmail = emailStr.startsWith('demo+') && emailStr.endsWith('@example.com')
-        if (!isAnon && !isGeneratedDemoEmail) return
+        if (!isGeneratedDemoEmail) return
 
         setClearingDemoSession(true)
         logout()
@@ -232,7 +231,10 @@ const AnalyzerRoute: React.FC = () => {
         )
     }
 
-    if (!isSignedIn) {
+    const isAnonymous = !!(user as any)?.isAnonymous
+    const shouldShowAuthGate = !isSignedIn || isAnonymous
+
+    if (shouldShowAuthGate) {
         return (
             <div className="min-h-dvh bg-gradient-to-br from-brand-50 via-white to-white text-slate-900">
                 <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">

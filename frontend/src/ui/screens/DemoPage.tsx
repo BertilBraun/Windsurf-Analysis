@@ -17,8 +17,6 @@ import { computeSha256 } from '../utils/localFileIndex'
 import { uploadVideoFile } from '../utils/uploader'
 import type { JobDetail, JobSummary } from '../types'
 import { useNavigate } from 'react-router-dom'
-import { auth } from '../../firebase'
-import { signOut } from 'firebase/auth'
 
 function isTerminal(status: JobSummary['status']): boolean {
     return status === 'succeeded' || status === 'failed' || status === 'canceled'
@@ -196,10 +194,6 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
     }, [currentJob, jobId, refreshJobDetail])
 
     const goToAnalyzer = React.useCallback(async () => {
-        // Demo uses anonymous/ephemeral auth; sign out so the full Analyzer starts at login/signup.
-        try {
-            await signOut(auth)
-        } catch { }
         navigate('/analyzer')
     }, [navigate])
 
