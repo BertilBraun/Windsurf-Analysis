@@ -18,6 +18,8 @@ test_outputs/**
 **/*.json
 **/.env
 
+.docs_agent/**
+
 !server/inference/weights/**
 !.vscode/tasks.json
 !documentation/Video Tutorial.mp4
