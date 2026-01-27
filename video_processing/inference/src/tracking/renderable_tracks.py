@@ -8,6 +8,7 @@ This module converts dense per-frame `Track` objects into `RenderableTrack`s by 
 
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from ..common_types import Detection, Point, RenderableDetection, RenderableTrack, Track, interpolate
@@ -25,19 +26,21 @@ def _assert_dense_per_frame(detections: list[Detection], track_id: int) -> None:
         )
 
 
-def _anchor_weighted(points: list[Point]) -> list[Point]:
+def _anchor_weighted(points: list[Point], *, max_neighbor_distance: Optional[float] = None) -> list[Point]:
     out: list[Point] = []
     for i in range(len(points)):
         acc = Point(0, 0)
         acc_w = 0.0
         if i - 1 >= 0:
-            acc += points[i - 1] * 1.0
-            acc_w += 1.0
+            if max_neighbor_distance is None or points[i - 1].distance_to(points[i]) <= max_neighbor_distance:
+                acc += points[i - 1] * 1.0
+                acc_w += 1.0
         acc += points[i] * 4.0
         acc_w += 4.0
         if i + 1 < len(points):
-            acc += points[i + 1] * 0.5
-            acc_w += 0.5
+            if max_neighbor_distance is None or points[i + 1].distance_to(points[i]) <= max_neighbor_distance:
+                acc += points[i + 1] * 0.5
+                acc_w += 0.5
         out.append(acc / acc_w)
     return out
 
@@ -63,17 +66,30 @@ def _median(values: list[float]) -> float:
     return float((s[mid - 1] + s[mid]) / 2.0)
 
 
-def calculate_anchors(detections: list[Detection], *, missing_grace_frames: int) -> list[Point]:
+def calculate_anchors(
+    detections: list[Detection],
+    *,
+    missing_grace_frames: int,
+    video_width: int,
+    video_height: int,
+) -> list[Point]:
     """
     Compute per-frame anchors for a dense, per-frame list of detections.
 
     Behavior:
       - Prefer a point along the mast segment when boom is visible.
       - Short gaps (<= missing_grace_frames) between two visible boom keypoints are interpolated (anchor->anchor).
+        This interpolation is suppressed if it would move the anchor more than 5% of the frame diagonal in one step
+        (to avoid large jumps from outlier detections).
       - Longer missing spans blend to/from bbox centers over missing_grace_frames to avoid snapping.
       - Final anchors are smoothed with a fixed weighted window [prev:1, curr:4, next:0.5].
     """
     assert missing_grace_frames > 0
+    assert video_width > 0
+    assert video_height > 0
+
+    MAX_DISTANCE_FRAME_PERCENT = 0.05
+    max_anchor_step_px = MAX_DISTANCE_FRAME_PERCENT * math.hypot(float(video_width), float(video_height))
 
     bbox_centers = [d.bbox.center for d in detections]
     boom_vis = [d.boom.is_visible for d in detections]
@@ -182,7 +198,7 @@ def calculate_anchors(detections: list[Detection], *, missing_grace_frames: int)
         return bbox_centers[i]
 
     if not visible_indices:
-        return _anchor_weighted(bbox_centers)
+        return _anchor_weighted(bbox_centers, max_neighbor_distance=max_anchor_step_px)
 
     anchors = list(bbox_centers)
     visible_set = set(visible_indices)
@@ -195,11 +211,15 @@ def calculate_anchors(detections: list[Detection], *, missing_grace_frames: int)
         if 0 < gap <= missing_grace_frames:
             p0 = preferred_anchor(a_i)
             p1 = preferred_anchor(b_i)
+            current_anchor = anchors[a_i]
             for k in range(1, gap + 1):
                 t = float(k) / float(gap + 1)
                 idx = a_i + k
-                anchors[idx] = p0.interpolate(p1, t)
-                short_gap_indices.add(idx)
+                candidate = p0.interpolate(p1, t)
+                if candidate.distance_to(current_anchor) <= max_anchor_step_px:
+                    anchors[idx] = candidate
+                    short_gap_indices.add(idx)
+                current_anchor = anchors[idx]
 
     out_point: list[Optional[Point]] = [None for _ in detections]
     out_weight: list[float] = [0.0 for _ in detections]
@@ -298,7 +318,7 @@ def calculate_anchors(detections: list[Detection], *, missing_grace_frames: int)
         elif p_in is not None:
             anchors[idx] = p_in
 
-    return _anchor_weighted(anchors)
+    return _anchor_weighted(anchors, max_neighbor_distance=max_anchor_step_px)
 
 
 def calculate_scales(
@@ -374,6 +394,7 @@ def calculate_scales(
 def prepare_renderable_tracks(
     tracks: list[Track],
     *,
+    video_width: int,
     video_height: int,
     missing_grace_frames: int = 5,
     mast_smooth_radius: int = 15,
@@ -394,7 +415,12 @@ def prepare_renderable_tracks(
             continue
 
         _assert_dense_per_frame(detections, track.track_id)
-        anchors = calculate_anchors(detections, missing_grace_frames=missing_grace_frames)
+        anchors = calculate_anchors(
+            detections,
+            missing_grace_frames=missing_grace_frames,
+            video_width=video_width,
+            video_height=video_height,
+        )
         scales = calculate_scales(
             detections,
             anchors,

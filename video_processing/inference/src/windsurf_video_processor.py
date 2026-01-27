@@ -221,7 +221,7 @@ def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Pat
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    render_tracks = prepare_renderable_tracks(tracks, video_height=video_props.height)
+    render_tracks = prepare_renderable_tracks(tracks, video_width=video_props.width, video_height=video_props.height)
 
     metadata = Metadata(
         input_video_path=input_path.absolute().as_posix(),
