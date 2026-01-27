@@ -14,7 +14,7 @@ from tools.docs_agent.dotenv import load_repo_env  # noqa: E402
 from tools.docs_agent.lib import (  # noqa: E402
     DEFAULT_CODE_EXTS,
     DEFAULT_EXCLUDE_DIRS,
-    folder_content_hash,
+    folder_trigger_hash_with_readmes,
     iter_folders,
     load_state,
     norm_rel,
@@ -67,7 +67,7 @@ def main(argv: list[str]) -> int:
     folder_hashes: dict[str, str] = {}
     for folder in iter_folders(files, root=root, exclude_dirs=exclude_dirs):
         rel_folder = norm_rel(root, folder)
-        folder_hashes[rel_folder] = folder_content_hash(root, folder, file_hashes=file_hashes)
+        folder_hashes[rel_folder] = folder_trigger_hash_with_readmes(root, folder, file_hashes=file_hashes, exclude_dirs=exclude_dirs)
 
     if args.print_json:
         print(
@@ -104,4 +104,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-

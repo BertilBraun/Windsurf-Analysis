@@ -153,6 +153,43 @@ def folder_content_hash(root: Path, folder: Path, file_hashes: dict[str, str]) -
     return sha256_bytes(joined)
 
 
+def folder_trigger_hash_with_readmes(root: Path, folder: Path, *, file_hashes: dict[str, str], exclude_dirs: set[str]) -> str:
+    """
+    Folder hash used to decide when to regenerate folder README.md files.
+
+    Includes:
+    - tracked code file hashes under the folder (via `file_hashes`)
+    - README.md content hashes under the folder (recursive)
+
+    This ensures parent folders are invalidated when subfolder READMEs change.
+    """
+    rel_folder = norm_rel(root, folder)
+    prefix = rel_folder.rstrip("/") + "/"
+
+    entries: list[tuple[str, str]] = []
+    for rel_path, h in file_hashes.items():
+        if rel_path.startswith(prefix):
+            entries.append((f"CODE\t{rel_path}", h))
+    entries.sort(key=lambda x: x[0])
+
+    readme_entries: list[tuple[str, str]] = []
+    for p in folder.rglob("README.md"):
+        try:
+            rel = norm_rel(root, p)
+        except Exception:
+            continue
+        if any(part in exclude_dirs for part in Path(rel).parts):
+            continue
+        try:
+            readme_entries.append((f"README\t{rel}", sha256_file(p)))
+        except Exception:
+            continue
+    readme_entries.sort(key=lambda x: x[0])
+
+    joined = "\n".join([f"{k}\t{v}" for k, v in entries] + [f"{k}\t{v}" for k, v in readme_entries]).encode("utf-8")
+    return sha256_bytes(joined)
+
+
 def touch_state_for_scan(
     state: State, *, file_hashes: dict[str, str], folder_hashes: dict[str, str], prompt_version: str
 ) -> State:

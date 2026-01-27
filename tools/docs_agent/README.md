@@ -82,6 +82,12 @@ If you hit 429/503 rate limits, increase `--llm-sleep-seconds` and/or lower `--m
 
 If you previously ran an older version that used `git apply --reject`, you may have leftover `*.rej` files. They can be safely deleted.
 
+## README context
+
+When generating a folder `README.md`, the prompt includes:
+- full contents of all tracked `.py/.ts/.tsx` files directly in that folder (excluding `__init__.*`)
+- `README.md` contents from immediate subfolders (so run order is bottom-up: subfolders first)
+
 ## Progress bar (tqdm)
 
 If `tqdm` is installed, `generate.py` shows progress bars for inline-doc and README generation.

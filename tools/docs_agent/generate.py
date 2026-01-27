@@ -20,6 +20,7 @@ from tools.docs_agent.lib import (  # noqa: E402
     DEFAULT_CODE_EXTS,
     DEFAULT_EXCLUDE_DIRS,
     folder_content_hash,
+    folder_trigger_hash_with_readmes,
     iter_folders,
     load_state,
     norm_rel,
@@ -52,6 +53,10 @@ def _extract_first_fenced_block(text: str) -> str | None:
         return None
     return m.group(1)
 
+def _is_init_file(path: Path) -> bool:
+    name = path.name.lower()
+    return name in {"__init__.py", "__init__.ts", "__init__.tsx"}
+
 
 def _file_update_prompt(path: str, lang: str, src: str) -> tuple[str, str]:
     system = (
@@ -73,16 +78,27 @@ def _file_update_prompt(path: str, lang: str, src: str) -> tuple[str, str]:
     return system, user
 
 
-def _readme_prompt(folder_rel: str, files_rel: list[str], existing: str | None) -> tuple[str, str]:
+def _readme_prompt(
+    *,
+    folder_rel: str,
+    file_context: str,
+    subfolder_readmes_context: str,
+    existing: str | None,
+) -> tuple[str, str]:
     system = (
         "You write short, practical folder README.md documentation.\n"
         "Rules:\n"
         "- Keep it concise; prefer bullets.\n"
         "- Don't invent features; if uncertain, include a TODO.\n"
+        "- Base your description on the provided file contents and subfolder READMEs.\n"
         "- Output ONLY markdown content (no code fences).\n"
     )
-    file_list = "\n".join(f"- {p}" for p in files_rel[:200])
-    user = f"Folder: {folder_rel}\n\nTracked code files in this folder (subset):\n{file_list}\n\n"
+    user = f"Folder: {folder_rel}\n\n"
+    user += "Files in this folder (full contents):\n"
+    user += file_context + "\n\n"
+    if subfolder_readmes_context.strip():
+        user += "Subfolder READMEs (already updated):\n"
+        user += subfolder_readmes_context + "\n\n"
     if existing:
         user += f"Existing README.md:\n\n{existing}\n\n"
     user += "Write/update README.md for this folder."
@@ -113,6 +129,65 @@ def _strip_trailing_whitespace(text: str) -> str:
     cleaned = "\n".join(line.rstrip() for line in text.splitlines())
     # Always end with a newline to avoid patch/apply edge cases and keep diffs stable.
     return cleaned.rstrip("\n") + "\n"
+
+def _file_lang_for_path(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".py":
+        return "python"
+    if suffix == ".tsx":
+        return "tsx"
+    if suffix == ".ts":
+        return "ts"
+    return ""
+
+
+def _build_folder_files_context(*, root: Path, folder: Path, exts: set[str]) -> str:
+    """
+    Build a deterministic context string consisting of full contents of all tracked code files
+    directly in `folder` (not recursive), excluding __init__.* files.
+    """
+    parts: list[str] = []
+    entries = sorted([p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in exts], key=lambda p: p.name.lower())
+    for p in entries:
+        if _is_init_file(p):
+            continue
+        rel = norm_rel(root, p)
+        lang = _file_lang_for_path(p)
+        try:
+            content = p.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        parts.append(f"--- {rel} ---\n```{lang}\n{content}\n```")
+    return "\n\n".join(parts).strip()
+
+
+def _build_subfolder_readmes_context(*, root: Path, folder: Path, exclude_dirs: set[str]) -> str:
+    """
+    Include README.md contents from immediate subfolders (not recursive). This relies on
+    processing subfolders before parents in the same run.
+    """
+    parts: list[str] = []
+    try:
+        children = [p for p in folder.iterdir() if p.is_dir()]
+    except Exception:
+        return ""
+    for child in sorted(children, key=lambda p: p.name.lower()):
+        rel_child = norm_rel(root, child)
+        if any(part in exclude_dirs for part in Path(rel_child).parts):
+            continue
+        readme = child / "README.md"
+        if not readme.exists():
+            continue
+        try:
+            content = readme.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        parts.append(f"--- {norm_rel(root, readme)} ---\n{content}".strip())
+    return "\n\n".join(parts).strip()
+
+
+def _folder_depth(root: Path, folder: Path) -> int:
+    return len(folder.resolve().relative_to(root.resolve()).parts)
 
 
 def _progress(iterable, *, total: int | None, desc: str):
@@ -167,6 +242,8 @@ def main(argv: list[str]) -> int:
     file_hashes: dict[str, str] = {}
     changed_files: list[Path] = []
     for p in files:
+        if _is_init_file(p):
+            continue
         rel = norm_rel(root, p)
         try:
             h = sha256_file(p)
@@ -276,44 +353,40 @@ def main(argv: list[str]) -> int:
         processed_folders = 0
         current_files = tracked_code_files(root, exts=exts)
         current_file_hashes = {norm_rel(root, p): sha256_file(p) for p in current_files}
-        # Precompute folder candidates so we can show progress.
-        folder_candidates: list[Path] = []
-        for folder in iter_folders(current_files, root=root, exclude_dirs=exclude_dirs):
-            if len(folder_candidates) >= args.max_folders:
-                break
-            rel_folder = norm_rel(root, folder)
-            folder_h = folder_content_hash(root, folder, file_hashes=current_file_hashes)
-            prev_h = state.folder_hashes.get(rel_folder)
-            readme_path = folder / "README.md"
-            existing = readme_path.read_text(encoding="utf-8") if readme_path.exists() else None
-            if existing is not None and (not cache_invalidated and prev_h == folder_h):
-                continue
-            if args.llm == "none" and existing is not None:
-                continue
-            folder_candidates.append(folder)
 
-        for folder in _progress(folder_candidates, total=len(folder_candidates), desc="Folder READMEs"):
+        # Bottom-up: process deeper folders first so parent READMEs can include updated subfolder READMEs.
+        all_folders = list(iter_folders(current_files, root=root, exclude_dirs=exclude_dirs))
+        all_folders.sort(key=lambda f: _folder_depth(root, f), reverse=True)
+
+        for folder in _progress(all_folders, total=len(all_folders), desc="Folder READMEs"):
             if processed_folders >= args.max_folders:
                 break
+
             rel_folder = norm_rel(root, folder)
-            folder_h = folder_content_hash(root, folder, file_hashes=current_file_hashes)
+            folder_h = folder_trigger_hash_with_readmes(root, folder, file_hashes=current_file_hashes, exclude_dirs=exclude_dirs)
             prev_h = state.folder_hashes.get(rel_folder)
 
             readme_path = folder / "README.md"
             existing = readme_path.read_text(encoding="utf-8") if readme_path.exists() else None
+            if args.llm == "none" and existing is not None:
+                continue
             if existing is not None and (not cache_invalidated and prev_h == folder_h):
                 continue
 
-            files_rel = sorted(
-                [norm_rel(root, p) for p in current_files if norm_rel(root, p).startswith(rel_folder.rstrip("/") + "/")]
-            )
+            file_context = _build_folder_files_context(root=root, folder=folder, exts=exts)
+            subfolder_readmes_context = _build_subfolder_readmes_context(root=root, folder=folder, exclude_dirs=exclude_dirs)
 
             if args.llm == "none":
                 if existing is not None:
                     continue
                 new_readme = _ensure_folder_readme_stub(folder)
             else:
-                system, user = _readme_prompt(rel_folder, files_rel, existing)
+                system, user = _readme_prompt(
+                    folder_rel=rel_folder,
+                    file_context=file_context,
+                    subfolder_readmes_context=subfolder_readmes_context,
+                    existing=existing,
+                )
                 try:
                     if args.llm == "gemini":
                         cfg = gemini_config_from_env()
@@ -355,7 +428,7 @@ def main(argv: list[str]) -> int:
                             user=user,
                             fetch=lambda: openai_respond_text(cfg, instructions=system, user_input=user),
                         )
-                    new_readme = _strip_trailing_whitespace(text.strip() + "\n")
+                    new_readme = _strip_trailing_whitespace(text)
                 except (OpenAIError, GeminiError) as e:
                     print(f"[llm error] {rel_folder}/README.md: {e}", file=sys.stderr)
                     if args.llm_sleep_seconds > 0:
@@ -376,7 +449,9 @@ def main(argv: list[str]) -> int:
         refreshed_folder_hashes: dict[str, str] = {}
         for folder in iter_folders(refreshed_files, root=root, exclude_dirs=exclude_dirs):
             rel_folder = norm_rel(root, folder)
-            refreshed_folder_hashes[rel_folder] = folder_content_hash(root, folder, file_hashes=refreshed_file_hashes)
+            refreshed_folder_hashes[rel_folder] = folder_trigger_hash_with_readmes(
+                root, folder, file_hashes=refreshed_file_hashes, exclude_dirs=exclude_dirs
+            )
         save_state(
             root,
             touch_state_for_scan(
