@@ -74,6 +74,16 @@ export const PlayerModal: React.FC<{
         })
     }, [])
 
+    const durationKey = React.useMemo(() => {
+        if (videoSource.kind === 'file') {
+            const file = videoSource.file
+            return `${file.name}|${file.type}|${file.size}|${file.lastModified}`
+        }
+        return `${job.id}|${job.local_relative_path ?? ''}`
+    }, [job.id, job.local_relative_path, videoSource.kind === 'file' ? videoSource.file : null, videoSource.kind])
+
+    const ingressDirHandle = videoSource.kind === 'ingress' ? videoSource.dirHandle : null
+
     React.useEffect(() => {
         let revoked: string | null = null
         let cancelled = false
@@ -117,7 +127,7 @@ export const PlayerModal: React.FC<{
             cancelled = true
             if (revoked) URL.revokeObjectURL(revoked)
         }
-    }, [job.id, job.local_relative_path, videoSource])
+    }, [durationKey, ingressDirHandle, videoSource.kind])
 
     const title =
         videoSource.kind === 'file'
