@@ -24,6 +24,7 @@ import { useOnce } from '../hooks/useOnce'
 import settingsIcon from '../assets/settings.svg'
 import { assert } from '../utils/assert'
 import { notifyIngressDirectoryChanged, subscribeIngressDirectoryChanged } from '../utils/ingressDirectorySync'
+import { UnsupportedBrowserBanner } from '../components/UnsupportedBrowserBanner'
 
 const FEEDBACK_PROMPT_SEEN_KEY = 'feedbackPromptSeen.v1'
 const PLAYER_OPENED_ONCE_KEY = 'player.openedOnce.v1'
@@ -188,6 +189,7 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
 
     return (
         <div className="min-h-dvh bg-white text-slate-900" style={containerVars}>
+            <UnsupportedBrowserBanner />
             <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
                 <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3 flex items-center gap-3">
                     <LogoButton onClick={handleGoHome} />
