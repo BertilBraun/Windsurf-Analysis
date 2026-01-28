@@ -403,8 +403,8 @@
         },
         "supportProjectSection": {
             "body": "Si GybeLock te ayuda, puedes apoyar su desarrollo. ¡Cualquier ayuda se agradece muchísimo!",
-            "linkText": "Invítame un café (PayPal)",
-            "linkTitle": "Invítame un café (PayPal)",
+            "linkText": "\u2615 Invítame un café (PayPal)",
+            "linkTitle": "\u2615 Invítame un café (PayPal)",
             "title": "¿Quieres apoyar el proyecto?"
         },
         "unsupportedBrowser": {
