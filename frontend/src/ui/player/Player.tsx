@@ -225,6 +225,9 @@ export const Player: React.FC<Props> = ({
 
     React.useEffect(() => {
         if (!webPlayer.ready) return
+        // Only initialize once per loaded video/job. Avoid re-initializing (and resetting mode/track)
+        // if unrelated job metadata updates (e.g. local path mappings) cause job object identity to change.
+        if (player) return
         try {
             const base = PlayerState.from(job, webPlayer.frameCount)
 
@@ -244,16 +247,12 @@ export const Player: React.FC<Props> = ({
                 (job.tracks.length === 1 && bestId != null) ||
                 (bestId != null && bestCoverage >= 0.9 && otherMaxCoverage <= 0.2)
 
-            setPlayer(
-                shouldAutoSelect
-                    ? base.copy({ mode: 'detailed', currentTrackId: bestId })
-                    : base
-            )
+            setPlayer(shouldAutoSelect ? base.copy({ mode: 'detailed', currentTrackId: bestId }) : base)
         } catch (e: any) {
             setPlayer(null)
             setPlayerInitError(String(e?.message ?? e ?? 'Failed to initialize player state'))
         }
-    }, [job, webPlayer.ready, webPlayer.frameCount])
+    }, [job, player, setPlayer, webPlayer.frameCount, webPlayer.ready])
 
     React.useEffect(() => {
         if (!webPlayer.ready) return
