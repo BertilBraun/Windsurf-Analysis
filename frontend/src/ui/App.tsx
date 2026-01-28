@@ -5,6 +5,7 @@
 
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { useLocation } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthProvider'
 import { Router } from './routes/Router'
 import { initAnalytics, installClickTracking, isAnalyticsEnabled } from './utils/analytics'
@@ -18,6 +19,7 @@ import { UnsupportedBrowserBanner } from './components/UnsupportedBrowserBanner'
  */
 export const App: React.FC = () => {
     const { i18n } = useTranslation()
+    const location = useLocation()
 
     React.useEffect(() => {
         if (isAnalyticsEnabled()) {
@@ -33,7 +35,7 @@ export const App: React.FC = () => {
     return (
         <AuthProvider>
             <div style={{ fontFamily: 'Inter, system-ui, Arial', lineHeight: 1.4 }}>
-                <UnsupportedBrowserBanner />
+                {location.pathname === '/analyzer' && <UnsupportedBrowserBanner />}
                 <Router />
                 <AnalyticsConsentBanner />
             </div>
