@@ -41,6 +41,25 @@ export function useJobVideoSource(params: {
     const [fileMissing, setFileMissing] = React.useState<boolean>(false)
     const [sourceFile, setSourceFile] = React.useState<File | null>(null)
 
+    const onFileLoadedRef = React.useRef<typeof onFileLoaded>(onFileLoaded)
+    React.useEffect(() => {
+        onFileLoadedRef.current = onFileLoaded
+    }, [onFileLoaded])
+
+    const candidatesKey = React.useMemo(() => {
+        const candidates = job.local_relative_paths
+        if (!candidates || candidates.length === 0) return ''
+        return candidates.join('\n')
+    }, [job.local_relative_paths])
+
+    const fileKey = React.useMemo(() => {
+        if (videoSource.kind !== 'file') return ''
+        const file = videoSource.file
+        return `${file.name}|${file.type}|${file.size}|${file.lastModified}`
+    }, [videoSource.kind === 'file' ? videoSource.file : null, videoSource.kind])
+
+    const ingressDirHandle = videoSource.kind === 'ingress' ? videoSource.dirHandle : null
+
     React.useEffect(() => {
         let cancelled = false
 
@@ -51,7 +70,7 @@ export function useJobVideoSource(params: {
         const run = async () => {
             if (videoSource.kind === 'file') {
                 setSourceFile(videoSource.file)
-                onFileLoaded?.(videoSource.file)
+                onFileLoadedRef.current?.(videoSource.file)
                 return
             }
 
@@ -62,8 +81,8 @@ export function useJobVideoSource(params: {
                     return
                 }
 
-                if (!job.local_relative_paths) throw new Error('missing_local_paths')
                 const candidates = job.local_relative_paths
+                if (!candidates) throw new Error('missing_local_paths')
                 if (candidates.length === 0) throw new Error('missing_mapping')
 
                 let file: File | null = null
@@ -84,7 +103,7 @@ export function useJobVideoSource(params: {
                 if (cancelled) return
 
                 setSourceFile(file)
-                onFileLoaded?.(file)
+                onFileLoadedRef.current?.(file)
             } catch (e: any) {
                 if (cancelled) return
                 const msg = String(e?.message || '')
@@ -106,7 +125,7 @@ export function useJobVideoSource(params: {
         return () => {
             cancelled = true
         }
-    }, [job.id, job.local_relative_paths, onFileLoaded, videoSource])
+    }, [job.id, candidatesKey, fileKey, ingressDirHandle, videoSource.kind])
 
     return { sourceFile, fileMissing, error }
 }
