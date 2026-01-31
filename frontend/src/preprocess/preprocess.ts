@@ -146,7 +146,8 @@ export async function processVideo(params: {
         const videoTrack = await input.getPrimaryVideoTrack()
         if (!videoTrack) throw new Error('No video track found.')
 
-        const packetPtsSec = (await getSortedVideoPacketMeta(videoTrack)).map(p => p.ts)
+        const packetMetas = await getSortedVideoPacketMeta(videoTrack)
+        const packetPtsSec = packetMetas.map(p => p.ts)
         const fps = Math.max(1e-6, outputFps ?? (await getApproxFps(videoTrack)))
 
         const { canvas, ctx } = create2DCanvas(outputWidth, outputHeight)
@@ -157,26 +158,60 @@ export async function processVideo(params: {
 
         const expectedFrames =
             typeof inputStartSec === 'number' && typeof inputEndSec === 'number' && inputEndSec > inputStartSec
-                ? Math.max(1, Math.ceil((inputEndSec - inputStartSec) * fps))
+                ? Math.max(1, packetMetas.filter(p => p.ts >= inputStartSec && p.ts <= inputEndSec).length)
                 : null
 
+        const lowerBound = (xs: number[], x: number): number => {
+            let lo = 0
+            let hi = xs.length
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1
+                if (xs[mid]! < x) lo = mid + 1
+                else hi = mid
+            }
+            return lo
+        }
+
         let framesWritten = 0
+        let frameIndexCursor: number | null = null
+        let outputStartTimestampSec: number | null = null
         const sink = new VideoSampleSink(videoTrack)
         for await (const sample of sink.samples(inputStartSec, inputEndSec)) {
             const vf = sample.toVideoFrame()
             try {
                 ctx.clearRect(0, 0, outputWidth, outputHeight)
+
+                // Match the WebCodecs player index semantics: frameIndex is the packet index
+                // in the sorted presentable packet list (including duplicate PTS packets).
+                if (frameIndexCursor === null) {
+                    frameIndexCursor = Math.min(packetPtsSec.length - 1, lowerBound(packetPtsSec, sample.timestamp))
+                }
+
+                let frameIndex = Math.max(0, Math.min(packetPtsSec.length - 1, frameIndexCursor))
+                frameIndexCursor = frameIndex + 1
+
+                // Best-effort resync if the decode iterator doesn't align 1:1 with packet order.
+                const ptsAtIndex = packetPtsSec[frameIndex]
+                if (typeof ptsAtIndex === 'number' && Math.abs(ptsAtIndex - sample.timestamp) > 1e-3) {
+                    frameIndex = closestIndexForTimestampSec(packetPtsSec, sample.timestamp)
+                    frameIndexCursor = frameIndex + 1
+                }
+
+                if (outputStartTimestampSec === null) outputStartTimestampSec = sample.timestamp
+
                 const keep = await onFrame(
                     {
                         frame: vf,
                         timestampSec: sample.timestamp,
-                        frameIndex: closestIndexForTimestampSec(packetPtsSec, sample.timestamp),
+                        frameIndex,
                     },
                     ctx
                 )
                 if (!keep) continue
 
-                await videoSource.add(framesWritten / fps, 1 / fps)
+                const outT = Math.max(0, sample.timestamp - (outputStartTimestampSec ?? 0))
+                const outDur = Math.max(1e-6, packetMetas[frameIndex]?.dur ?? 1 / fps)
+                await videoSource.add(outT, outDur)
                 framesWritten++
 
                 if (onProgress && expectedFrames) onProgress(Math.min(0.95, (framesWritten / expectedFrames) * 0.95))
