@@ -96,13 +96,13 @@ def embedding_extraction_and_tracking(
         tracks = [
             {
                 'track_id': t.track_id,
-                'start_percent': clamp_percentage(t.start_frame / props.total_frames),
-                'end_percent': clamp_percentage(t.end_frame / props.total_frames),
+                'start_percent': clamp_percentage(t.start_frame / props.approximate_total_frames),
+                'end_percent': clamp_percentage(t.end_frame / props.approximate_total_frames),
                 'start_time_seconds': t.start_frame / props.fps,
                 'duration_seconds': t.duration_frames / props.fps,
                 'detections': [
                     {
-                        'time_percent': clamp_percentage(d.frame_idx / props.total_frames),
+                        'time_percent': clamp_percentage(d.frame_idx / props.approximate_total_frames),
                         'bbox': [
                             clamp_percentage(d.bbox.x1 / props.width),
                             clamp_percentage(d.bbox.y1 / props.height),
@@ -125,17 +125,17 @@ def embedding_extraction_and_tracking(
 
         with timeit(f'{job_id}: Stabilization Optimization'):
             # Compute per-frame stabilization correction values for rendering (dx,dy,da anchored at frame k).
-            smoothing_window = min(int(STABLE_SMOOTHING_WINDOW), props.total_frames - 1)
+            smoothing_window = min(int(STABLE_SMOOTHING_WINDOW), props.approximate_total_frames - 1)
             stabilized_transforms_for_output = vidstab_like_correction_by_frame(
                 parsed_transforms,
-                frame_count=int(props.total_frames),
+                frame_count=int(props.approximate_total_frames),
                 smoothing_window=int(smoothing_window),
             )
 
         # Convert transforms payload into result with time_percent
         stabilization_transforms = [
             {
-                'time_percent': clamp_percentage(t.frame_idx / props.total_frames),
+                'time_percent': clamp_percentage(t.frame_idx / props.approximate_total_frames),
                 'dx': t.dx,
                 'dy': t.dy,
                 'da': t.da,

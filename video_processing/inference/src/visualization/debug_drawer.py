@@ -348,7 +348,7 @@ def generate_debug_video_worker_function(
             prev_scaled: Optional[np.ndarray] = None
             prev_dets: List[Tuple[TrackId, Detection]] = []
 
-            for f_idx, frame in tqdm(reader.read_frames(), total=props.total_frames, desc='Debug render'):
+            for f_idx, frame in tqdm(reader.read_frames(), total=props.approximate_total_frames, desc='Debug render'):
                 cur_scaled = cv2.resize(frame, (sw, sh), interpolation=cv2.INTER_LINEAR)
                 bottom = prev_scaled if prev_scaled is not None else np.zeros_like(cur_scaled)
 
@@ -449,7 +449,7 @@ def debug_track_similarities(
         frames = [f[1] for f in reader.read_frames()]
 
         with VideoWriter(out_path, feed_w, feed_h, props.fps) as writer:
-            for f_idx, frame in tqdm(enumerate(frames), total=props.total_frames, desc='Debug render'):
+            for f_idx, frame in tqdm(enumerate(frames), total=props.approximate_total_frames, desc='Debug render'):
                 cur_scaled = cv2.resize(frame, (center_w, center_h), interpolation=cv2.INTER_LINEAR)
 
                 # Create canvas and views

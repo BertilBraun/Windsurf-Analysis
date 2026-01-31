@@ -703,7 +703,7 @@ class OCSortEmbedTracker(Tracker):
 
         tid2dets: Dict[int, List[Detection]] = {}
 
-        for f in range(video_properties.total_frames):
+        for f in range(video_properties.approximate_total_frames):
             dets_f = by_frame.get(f, [])
             T_delta = get_delta(f)
             core.update(dets_f, f, W, H, T_delta)

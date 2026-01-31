@@ -142,7 +142,7 @@ def generate_individual_videos(
     input_name = Path(original_video_path).stem
 
     props = get_video_properties(original_video_path)
-    total_frames = props.total_frames
+    total_frames = props.approximate_total_frames
 
     logger.info(
         'Generating %d videos (%d×%d px, target ratio %.2f)…',

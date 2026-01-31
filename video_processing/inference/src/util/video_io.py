@@ -12,7 +12,7 @@ class VideoInfo:
     fps: int
     width: int
     height: int
-    total_frames: int
+    approximate_total_frames: int
 
 
 class VideoReader:
@@ -39,7 +39,7 @@ class VideoReader:
             fps=int(self.cap.get(cv2.CAP_PROP_FPS)),
             width=int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
             height=int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            total_frames=int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)),
+            approximate_total_frames=int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)),
         )
 
     def read_frames(self) -> Generator[tuple[int, cv2.typing.MatLike], None, None]:

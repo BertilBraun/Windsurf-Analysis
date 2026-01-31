@@ -46,7 +46,7 @@ class TrackPostProcessing:
 class TrackFiltering:
     def track(self, tracks: list[Track], video_properties: VideoInfo, transforms: list[Transform]) -> list[Track]:
         """Filter tracks for minimum duration requirement"""
-        return _get_valid_tracks(tracks, video_properties.total_frames)
+        return _get_valid_tracks(tracks, video_properties.approximate_total_frames)
 
 
 class TrackRelabeling:

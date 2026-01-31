@@ -78,7 +78,7 @@ class OrientationFixer:
 
         with timeit(f'{input_video}: Reading frames'):
             # Pick indices and read frames (one batch per video)
-            indices = _sample_frame_indices(props.total_frames, n_samples, sampling)
+            indices = _sample_frame_indices(props.approximate_total_frames, n_samples, sampling)
             frames = _read_frames_at_indices(input_video, indices)
 
         if not frames:

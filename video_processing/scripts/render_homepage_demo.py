@@ -378,7 +378,7 @@ def _main() -> int:
             raise SystemExit('No stabilization transforms written by pipeline')
 
     props = get_video_properties(upright_video)
-    frame_count = int(props.total_frames)
+    frame_count = int(props.approximate_total_frames)
     if args.limit_frames is not None:
         frame_count = min(frame_count, int(args.limit_frames))
 

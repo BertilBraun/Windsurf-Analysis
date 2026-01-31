@@ -195,7 +195,7 @@ def _compute_transforms(
     masked_block_size: int = int(STABLE_GFTT_BLOCK_SIZE),
 ) -> list[Transform]:
     if stabilizer == 'none':
-        frames = get_video_properties(video_path).total_frames
+        frames = get_video_properties(video_path).approximate_total_frames
         return [Transform(0, 0, 0, i) for i in range(frames + 1)]
 
     if stabilizer == 'vidstab':
@@ -255,7 +255,7 @@ def _save_tracks_metadata(tracks: list[RenderableTrack], video_path: Path, outpu
             fps=float(props.fps),
             width=int(props.width),
             height=int(props.height),
-            total_frames=int(props.total_frames),
+            total_frames=int(props.approximate_total_frames),
         ),
         tracks=[
             TrackLite(
@@ -474,7 +474,7 @@ def run_local_pipeline(
         )
 
     props = get_video_properties(upright_video)
-    frame_count = int(props.total_frames)
+    frame_count = int(props.approximate_total_frames)
     smoothing_window = 1 if frame_count <= 1 else max(1, min(int(smoothing_window), frame_count - 1))
     transforms_by_frame = _compute_stabilization_correction_by_frame(
         raw_motion_transforms=raw_motion_transforms,

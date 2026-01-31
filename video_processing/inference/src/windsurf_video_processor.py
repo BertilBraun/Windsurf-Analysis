@@ -71,7 +71,9 @@ class WindsurfingVideoProcessor:
         input_path = Path(input_path)
 
         props = get_video_properties(input_path)
-        logger.info(f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.total_frames} frames')
+        logger.info(
+            f'Processing video: {props.width}x{props.height}, {props.fps} FPS, {props.approximate_total_frames} frames'
+        )
 
         # run detection and tracking
         detections = self.surf_detector.run_object_detection_on_video(input_path.as_posix())
@@ -172,7 +174,7 @@ def _process_detections_into_tracks(
     logger.info(f'After processing: {len(processed_tracks)} tracks remaining')
     for track in processed_tracks:
         duration_seconds = track.duration_frames / video_properties.fps
-        frame_percentage = track.duration_frames / video_properties.total_frames
+        frame_percentage = track.duration_frames / video_properties.approximate_total_frames
         logger.info(
             f'  Track {track.track_id}: {len(track.sorted_detections)} detections, {duration_seconds:.1f}s ({frame_percentage * 100:.1f}%)'
         )
@@ -202,7 +204,7 @@ def _generate_annotated_video_worker_function(args: tuple[list[Track], os.PathLi
         video_props = reader.get_properties()
         with VideoWriter(annotated_video_path, video_props.width, video_props.height, video_props.fps) as writer:
             for frame_index, frame in tqdm(
-                reader.read_frames(), total=video_props.total_frames, desc='Drawing annotations'
+                reader.read_frames(), total=video_props.approximate_total_frames, desc='Drawing annotations'
             ):
                 annotations = [
                     Annotation(track.track_id, detection.bbox, detection.confidence)
@@ -229,7 +231,7 @@ def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Pat
             fps=video_props.fps,
             width=video_props.width,
             height=video_props.height,
-            total_frames=video_props.total_frames,
+            total_frames=video_props.approximate_total_frames,
         ),
         tracks=[
             TrackLite(

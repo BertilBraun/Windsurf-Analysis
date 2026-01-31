@@ -12,9 +12,7 @@ from ..motion.gmc import GMC
 
 from ..util.video_io import get_video_properties
 
-Transform = NamedTuple(
-    'Transform', [('dx', float), ('dy', float), ('da', float), ('frame_idx', int)]
-)
+Transform = NamedTuple('Transform', [('dx', float), ('dy', float), ('da', float), ('frame_idx', int)])
 # NOTE:
 # - For *raw motion estimation*, `Transform(dx,dy,da,frame_idx=k)` represents the estimated prev->curr delta
 #   between frames k-1 and k.
@@ -212,7 +210,9 @@ def compute_stabilization_transforms(input_video: str | os.PathLike) -> list[Tra
     video_properties = get_video_properties(input_video)
 
     stabilizer = VidStab()  # TODO: 'DENSE')
-    stabilizer.gen_transforms(input_path=input_video, smoothing_window=min(20, video_properties.total_frames - 1))
+    stabilizer.gen_transforms(
+        input_path=input_video, smoothing_window=min(20, video_properties.approximate_total_frames - 1)
+    )
 
     assert stabilizer._raw_transforms is not None
     raw = [

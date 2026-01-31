@@ -181,7 +181,7 @@ def ensure_tracks_pkl(
             fps=fps,
             width=int(props.width),
             height=int(props.height),
-            total_frames=int(props.total_frames),
+            total_frames=int(props.approximate_total_frames),
         ),
         tracks=tracks,
     )
@@ -363,7 +363,9 @@ def main() -> int:
     ap.add_argument('--fourcc', default='mp4v')
     ap.add_argument('--kp', nargs='*', default=['GFTT', 'BRISK', 'FAST', 'MSER', 'ORB'])
     ap.add_argument('--windows', nargs='*', type=int, default=[30])
-    ap.add_argument('--alpha', nargs='*', type=float, default=[1.0], help='Stabilization strength (0=no stabilize, 1=full).')
+    ap.add_argument(
+        '--alpha', nargs='*', type=float, default=[1.0], help='Stabilization strength (0=no stabilize, 1=full).'
+    )
     ap.add_argument('--max-dim', type=float, default=float('inf'))
     ap.add_argument(
         '--border-size',

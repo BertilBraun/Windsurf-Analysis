@@ -59,7 +59,7 @@ def _build_metadata(tracks: list[Track], input_path: Path, video_props: VideoInf
             fps=video_props.fps,
             width=video_props.width,
             height=video_props.height,
-            total_frames=video_props.total_frames,
+            total_frames=video_props.approximate_total_frames,
         ),
         tracks=[
             TrackLite(
@@ -153,7 +153,7 @@ class TrackAnnotatorWindow(QMainWindow):
                 fps=video_props.fps,
                 width=video_props.width,
                 height=video_props.height,
-                total_frames=video_props.total_frames,
+                total_frames=video_props.approximate_total_frames,
             ),
             loaded_tracks=_to_tracklites(preprocessed_tracks, video_props),
         )
@@ -220,7 +220,9 @@ class TrackAnnotatorWindow(QMainWindow):
         if not self._can_assign_without_overlap(pre_id, self.current_golden_id):
             self._update_hud(brief='Overlap conflict: cannot assign to this golden id')
             return
-        self._set_assignment(pre_id, self.current_golden_id, brief=f'Assigned pre {pre_id} -> golden {self.current_golden_id}')
+        self._set_assignment(
+            pre_id, self.current_golden_id, brief=f'Assigned pre {pre_id} -> golden {self.current_golden_id}'
+        )
 
     def _set_assignment(self, pre_id: int, golden_id: int, *, brief: str | None = None) -> None:
         prev = self.assignments.get(int(pre_id))
