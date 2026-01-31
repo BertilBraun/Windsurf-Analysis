@@ -104,7 +104,7 @@ export const Modal: React.FC<ModalProps> = ({
             >
                 {!hideHeader && (title || onClose || additionalHeader) && (
                     <div
-                        className={`flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white/80 backdrop-blur rounded-t-2xl gap-2 ${
+                        className={`relative z-20 flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white/80 backdrop-blur rounded-t-2xl gap-2 ${
                             headerClassName || ''
                         }`}
                     >

@@ -56,6 +56,8 @@ type Props = {
     player: PlayerState | null
     /** Setter for the player state. */
     setPlayer: React.Dispatch<React.SetStateAction<PlayerState | null>>
+    /** Optional preloaded video duration in seconds (used for time display). */
+    durationSeconds?: number | null
 }
 
 /**
@@ -78,6 +80,7 @@ export const Player: React.FC<Props> = ({
     disableOverviewStabilization,
     player,
     setPlayer,
+    durationSeconds,
 }) => {
     const { t } = useTranslation()
     const [exportError, setExportError] = React.useState<string | null>(null)
@@ -86,7 +89,7 @@ export const Player: React.FC<Props> = ({
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null)
     const { zoom, offset, setOffset, onWheelZoom } = useZoom({ minZoom: 0.5, maxZoom: 4 })
     const detailedZoom = useCappedValue(1, 0.5, 2.0)
-    const { speed, bumpSpeed } = usePlaybackSpeed(1.0)
+    const { speed, bumpSpeed, setSpeed, rates } = usePlaybackSpeed(1.0)
     const [hoveredTrackId, setHoveredTrackId] = React.useState<number | null>(null)
     const [isExporting, setIsExporting] = React.useState<boolean>(false)
     const [exportProgressPct, setExportProgressPct] = React.useState<number | null>(null)
@@ -107,10 +110,59 @@ export const Player: React.FC<Props> = ({
     const renderZoom = zoom
     const renderDetailedZoom = detailedZoom.value * DEFAULT_ZOOM_BASELINE
 
+    const [zoomOverlayValue, setZoomOverlayValue] = React.useState<number | null>(null)
+    const zoomOverlayTimerRef = React.useRef<number | null>(null)
+    const prevUiZoomRef = React.useRef<number | null>(null)
+    const prevModeRef = React.useRef<'overview' | 'detailed' | null>(null)
+
+    React.useEffect(() => {
+        return () => {
+            if (zoomOverlayTimerRef.current != null) {
+                window.clearTimeout(zoomOverlayTimerRef.current)
+                zoomOverlayTimerRef.current = null
+            }
+        }
+    }, [])
+
+    React.useEffect(() => {
+        if (!player) {
+            prevUiZoomRef.current = null
+            prevModeRef.current = null
+            setZoomOverlayValue(null)
+            return
+        }
+
+        const mode = player.mode
+        const uiZoom = mode === 'detailed' ? detailedZoom.value : zoom
+
+        if (prevModeRef.current !== null && prevModeRef.current !== mode) {
+            prevModeRef.current = mode
+            prevUiZoomRef.current = uiZoom
+            setZoomOverlayValue(null)
+            return
+        }
+
+        const prev = prevUiZoomRef.current
+        prevModeRef.current = mode
+        prevUiZoomRef.current = uiZoom
+
+        if (prev == null) return
+        if (Math.abs(prev - uiZoom) < 1e-6) return
+
+        setZoomOverlayValue(uiZoom)
+        if (zoomOverlayTimerRef.current != null) window.clearTimeout(zoomOverlayTimerRef.current)
+        zoomOverlayTimerRef.current = window.setTimeout(() => setZoomOverlayValue(null), 1000)
+    }, [detailedZoom.value, player, player?.mode, zoom])
+
     const { sourceFile, fileMissing, error } = useJobVideoSource({ job, videoSource })
     const errorText = error ? t(error.key, { message: error.detail }) : null
 
     const webPlayer = useWebCodexPlayer({ playbackRate: speed })
+
+    const currentTimeSeconds = React.useMemo(() => {
+        if (durationSeconds == null || !Number.isFinite(durationSeconds) || durationSeconds <= 0) return null
+        return clamp(webPlayer.currentPercent * durationSeconds, 0, durationSeconds)
+    }, [durationSeconds, webPlayer.currentPercent])
 
     const seekToFrame = React.useCallback(
         (frameIndex: number, play: boolean) => {
@@ -712,6 +764,13 @@ export const Player: React.FC<Props> = ({
                         {modeIndicatorLabel}
                     </div>
                 </div>
+                {zoomOverlayValue != null && (
+                    <div className="absolute left-1/2 top-2 -translate-x-1/2 z-20 pointer-events-none">
+                        <div className="px-2 py-1 rounded-md bg-black/60 border border-gray-700 text-gray-100 text-[11px] font-medium tabular-nums">
+                            {t('player.controlsBar.zoom', { value: zoomOverlayValue.toFixed(2) })}
+                        </div>
+                    </div>
+                )}
                 {showFocusedClickHint && (
                     <div className="absolute left-1/2 top-10 -translate-x-1/2 z-20 pointer-events-none">
                         <div className="px-3 py-2 rounded-md bg-black/70 border border-gray-700 text-gray-100 text-xs">
@@ -782,17 +841,15 @@ export const Player: React.FC<Props> = ({
                             trackEvent('player_play_pause_clicked', { job_id: job.id })
                             handlePlayPause()
                         }}
-                        onSpeedDown={() => {
-                            trackEvent('player_speed_down_clicked', { job_id: job.id })
-                            bumpSpeed(true)
-                        }}
-                        onSpeedUp={() => {
-                            trackEvent('player_speed_up_clicked', { job_id: job.id })
-                            bumpSpeed(false)
-                        }}
                         isPlaying={webPlayer.playing}
+                        currentTimeSeconds={currentTimeSeconds}
+                        totalTimeSeconds={durationSeconds ?? null}
                         speed={speed}
-                        zoom={player.mode === 'detailed' ? detailedZoom.value : zoom}
+                        speedRates={rates}
+                        onSetSpeed={next => {
+                            trackEvent('player_speed_selected', { job_id: job.id, speed: next })
+                            setSpeed(next)
+                        }}
                         onExportTrack={onExportTrack}
                         exportVisible={exportVisible}
                         exportEnabled={exportEnabled}

@@ -45,6 +45,7 @@ export const PlayerModal: React.FC<{
     const [showShortcuts, setShowShortcuts] = React.useState<boolean>(false)
     const [showReport, setShowReport] = React.useState<boolean>(false)
     const [showReportThanks, setShowReportThanks] = React.useState<boolean>(false)
+    const [showInfo, setShowInfo] = React.useState<boolean>(false)
     const [drawMode, setDrawMode] = React.useState<boolean>(false)
     const [player, setPlayer] = React.useState<PlayerState | null>(null)
     const [disableOverviewStabilization, setDisableOverviewStabilization] = React.useState<boolean>(false)
@@ -131,37 +132,42 @@ export const PlayerModal: React.FC<{
 
     const title =
         videoSource.kind === 'file'
-            ? videoSource.file.name.replace(/\.mp4$/i, '')
-            : job.local_relative_path?.replace(/\.mp4$/i, '') ?? job.id ?? t('common.notAvailable')
+            ? videoSource.file.name.replace(/\.(mp4|hevc|mov|mkv)$/i, '')
+            : job.local_relative_path?.replace(/\.(mp4|hevc|mov|mkv)$/i, '') ?? job.id ?? t('common.notAvailable')
 
-    const titleDate = React.useMemo(() => {
-        const d = new Date()
+    const [moreOpen, setMoreOpen] = React.useState(false)
+    const moreRef = React.useRef<HTMLDivElement | null>(null)
+
+    const riderCount = job.tracks?.length ?? 0
+    const createdAtLabel = React.useMemo(() => {
+        const raw = job.created_at
+        if (!raw) return null
         try {
-            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+            const d = new Date(raw)
+            if (!Number.isFinite(d.getTime())) return null
+            return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
         } catch {
-            return d.toDateString()
+            return null
+        }
+    }, [job.created_at])
+
+    React.useEffect(() => {
+        const onPointerDown = (event: MouseEvent) => {
+            const el = moreRef.current
+            if (!el) return
+            if (el.contains(event.target as Node)) return
+            setMoreOpen(false)
+        }
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setMoreOpen(false)
+        }
+        document.addEventListener('mousedown', onPointerDown)
+        document.addEventListener('keydown', onKeyDown)
+        return () => {
+            document.removeEventListener('mousedown', onPointerDown)
+            document.removeEventListener('keydown', onKeyDown)
         }
     }, [])
-
-    const titleDuration = React.useMemo(() => {
-        if (durationSeconds == null) return null
-        const secs = Math.max(1, Math.round(durationSeconds))
-        return `${secs}s`
-    }, [durationSeconds])
-
-    const titleRiders = React.useMemo(() => {
-        const n = job.tracks?.length ?? 0
-        if (n <= 0) return null
-        return t('components.playerModal.titleMeta.riders', { n })
-    }, [job.tracks, t])
-
-    const titleMode = player
-        ? player.mode === 'detailed'
-            ? t('player.canvas.modeIndicator.focused')
-            : t('player.canvas.modeIndicator.overview')
-        : null
-
-    const titleMeta = [title, titleDate, titleDuration, titleRiders, titleMode].filter(Boolean).join(' · ')
 
     return (
         <>
@@ -169,9 +175,10 @@ export const PlayerModal: React.FC<{
                 key={job.id}
                 onClose={onClose}
                 closeOnEscape={player?.mode !== 'detailed'}
-                title={titleMeta}
+                title={title}
+                showCloseButton={false}
                 additionalHeader={
-                    <>
+                    <div className="flex items-center gap-2">
                         <Button
                             onClick={toggleDrawMode}
                             title={t('components.playerModal.actions.draw.title')}
@@ -188,28 +195,123 @@ export const PlayerModal: React.FC<{
                             }
                             variant={disableOverviewStabilization ? 'ghost' : 'brandOutline'}
                         />
+                        <div ref={moreRef} className="relative">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                aria-haspopup="menu"
+                                aria-expanded={moreOpen}
+                                onClick={() => setMoreOpen(open => !open)}
+                                title={t('common.more')}
+                                className="px-2"
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+                                    <path d="M5 10.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm7 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm7 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Z" />
+                                </svg>
+                            </Button>
+                            {moreOpen && (
+                                <div
+                                    role="menu"
+                                    aria-label={t('common.more')}
+                                    className="absolute right-0 mt-2 w-40 rounded-md border border-slate-200 bg-white shadow-lg z-50 overflow-hidden"
+                                >
+                                    <Button
+                                        type="button"
+                                        variant="unstyled"
+                                        size="none"
+                                        role="menuitem"
+                                        onClick={() => {
+                                            setMoreOpen(false)
+                                            setShowInfo(v => !v)
+                                        }}
+                                        className="w-full px-3 py-2 text-xs text-left text-slate-700 hover:bg-slate-50"
+                                    >
+                                        {t('common.info')}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="unstyled"
+                                        size="none"
+                                        role="menuitem"
+                                        onClick={() => {
+                                            setMoreOpen(false)
+                                            setShowDemoTips(true)
+                                        }}
+                                        className="w-full px-3 py-2 text-xs text-left text-slate-700 hover:bg-slate-50"
+                                    >
+                                        {t('components.playerModal.actions.help.label')}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="unstyled"
+                                        size="none"
+                                        role="menuitem"
+                                        onClick={() => {
+                                            setMoreOpen(false)
+                                            setShowShortcuts(true)
+                                        }}
+                                        className="w-full px-3 py-2 text-xs text-left text-slate-700 hover:bg-slate-50"
+                                    >
+                                        {t('components.playerModal.actions.shortcuts.label')}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="unstyled"
+                                        size="none"
+                                        role="menuitem"
+                                        onClick={() => {
+                                            setMoreOpen(false)
+                                            setShowReport(true)
+                                        }}
+                                        className="w-full px-3 py-2 text-xs text-left text-slate-700 hover:bg-slate-50"
+                                    >
+                                        {t('components.playerModal.actions.report.label')}
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
                         <Button
-                            onClick={() => setShowDemoTips(true)}
-                            title={t('components.playerModal.actions.help.title')}
-                            text={t('components.playerModal.actions.help.label')}
+                            onClick={onClose}
                             variant="ghost"
-                        />
-                        <Button
-                            onClick={() => setShowShortcuts(true)}
-                            title={t('components.playerModal.actions.shortcuts.title')}
-                            text={t('components.playerModal.actions.shortcuts.label')}
-                            variant="ghost"
-                        />
-                        <Button
-                            onClick={() => setShowReport(true)}
-                            title={t('components.playerModal.actions.report.title')}
-                            text={t('components.playerModal.actions.report.label')}
-                            variant="ghost"
-                        />
-                    </>
+                            title={t('common.close')}
+                            aria-label={t('common.close')}
+                            className="px-2"
+                        >
+                            <img src="/icons/close.svg" alt="" className="h-4 w-4" />
+                        </Button>
+                    </div>
                 }
             >
                 <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
+                    {showInfo && (
+                        <div className="absolute z-30 top-3 left-3 w-[min(320px,92vw)] rounded-xl border border-slate-200 bg-white/95 backdrop-blur shadow-sm p-3">
+                            <div className="flex items-start gap-2">
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-semibold text-slate-900">{t('common.info')}</div>
+                                    <div className="mt-1 text-xs text-slate-700 space-y-1">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-slate-500">Riders</span>
+                                            <span className="tabular-nums text-slate-900">{riderCount}</span>
+                                        </div>
+                                        {createdAtLabel && (
+                                            <div className="flex items-center justify-between gap-3">
+                                                <span className="text-slate-500">Processed</span>
+                                                <span className="text-slate-900">{createdAtLabel}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="shrink-0 rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                                    onClick={() => setShowInfo(false)}
+                                    aria-label={t('common.close')}
+                                >
+                                    <img src="/icons/close.svg" alt="" className="h-4 w-4" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     {showDemoTips && (
                         <div className="absolute z-30 top-3 right-3 w-[min(280px,92vw)] rounded-xl border border-slate-200 bg-white/95 backdrop-blur shadow-sm p-3">
                             <div className="flex items-start gap-2">
@@ -291,6 +393,7 @@ export const PlayerModal: React.FC<{
                             disableOverviewStabilization={disableOverviewStabilization}
                             player={player}
                             setPlayer={setPlayer}
+                            durationSeconds={durationSeconds}
                         />
                     </div>
                 </div>
