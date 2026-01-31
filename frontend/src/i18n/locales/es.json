@@ -408,7 +408,12 @@
             "title": "¿Quieres apoyar el proyecto?"
         },
         "unsupportedBrowser": {
-            "body": "GybeLock necesita WebCodecs y la API de selección de carpetas, que no están disponibles en este navegador. Usa un navegador basado en Chromium como Chrome o Edge.",
+            "actions": {
+                "backHome": "Volver al inicio",
+                "tryDemo": "Probar demo"
+            },
+            "body": "GybeLock necesita funciones modernas del navegador para gestionar tus videos locales (acceso a una carpeta de videos). Tu navegador actual no las admite.",
+            "recommendation": "Usa Chrome o Edge y asegúrate de que estén actualizados. Firefox, Safari y navegadores desactualizados no están soportados actualmente. Mientras tanto, puedes probar GybeLock en la página de demo.",
             "title": "Navegador no compatible"
         }
     },

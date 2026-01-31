@@ -11,7 +11,7 @@ Reusable UI components for the application, ranging from core design system elem
 *   **AppShell**: The primary layout wrapper containing the sticky header, navigation menu, main content area (`Outlet`), and footer.
 *   **LanguageSwitcher**: A dropdown menu for switching between supported languages (EN, DE, ES, IT) with flag icons.
 *   **AnalyticsConsentBanner**: A bottom-fixed banner for tracking consent that manages a `--analytics-consent-offset` CSS variable for layout adjustments.
-*   **UnsupportedBrowserBanner**: Displays a warning if the browser lacks required APIs like WebCodecs or File System Access.
+*   **Browser support**: The Full Analyzer route blocks unsupported browsers early (before login/signup) and offers a Demo fallback.
 
 ### Analyzer & Video Management
 *   **IngressWidget**: A floating status widget that monitors a local directory for new videos, manages background uploads, and handles directory permissions.

@@ -27,6 +27,8 @@ import { ConsentModal } from '../components/ConsentModal'
 import { trackPageView } from '../utils/analytics'
 import { auth } from '../../firebase'
 import { browserLocalPersistence, setPersistence, signInAnonymously } from 'firebase/auth'
+import { UnsupportedBrowserPage } from '../screens/UnsupportedBrowserPage'
+import { getAnalyzerBrowserSupport } from '../utils/browserSupport'
 
 const DemoRoute: React.FC = () => {
     const { t } = useTranslation()
@@ -126,6 +128,11 @@ const AnalyzerRoute: React.FC = () => {
     >('checking')
     const [consentSubmitting, setConsentSubmitting] = React.useState(false)
     const [consentReloadKey, setConsentReloadKey] = React.useState(0)
+    const analyzerSupport = React.useMemo(() => getAnalyzerBrowserSupport(), [])
+
+    if (!analyzerSupport.supported) {
+        return <UnsupportedBrowserPage onGoHome={() => navigate('/')} onGoDemo={() => navigate('/demo')} />
+    }
 
     React.useEffect(() => {
         if (!isAuthReady) return

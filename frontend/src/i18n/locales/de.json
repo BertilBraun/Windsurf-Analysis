@@ -408,7 +408,12 @@
             "title": "Projekt unterstützen?"
         },
         "unsupportedBrowser": {
-            "body": "GybeLock braucht WebCodecs und die Folder-Picker API, die in diesem Browser nicht verfügbar sind. Bitte nutze einen Chromium-basierten Browser wie Chrome oder Edge.",
+            "actions": {
+                "backHome": "Zur Startseite",
+                "tryDemo": "Demo ausprobieren"
+            },
+            "body": "GybeLock braucht neuere Browser-Funktionen, um deine lokalen Videos zu verwalten (Zugriff auf einen Videoordner). Dein Browser unterstützt das nicht.",
+            "recommendation": "Bitte nutze Chrome oder Edge und stelle sicher, dass der Browser aktuell ist. Firefox, Safari und veraltete Browser werden derzeit nicht unterstützt. Du kannst GybeLock in der Zwischenzeit auf der Demo-Seite ausprobieren.",
             "title": "Browser nicht unterstützt"
         }
     },
