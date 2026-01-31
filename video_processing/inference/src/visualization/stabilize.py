@@ -10,7 +10,7 @@ from ..util.cache import cache_to_file
 from ..util.video_io import VideoReader
 from ..motion.gmc import GMC
 
-from ..util.video_io import get_video_properties
+from ..util.video_io import get_video_properties, get_video_total_frame_count
 
 Transform = NamedTuple('Transform', [('dx', float), ('dy', float), ('da', float), ('frame_idx', int)])
 # NOTE:
@@ -207,11 +207,11 @@ def compute_stabilization_transforms(input_video: str | os.PathLike) -> list[Tra
     Compute per-frame stabilization deltas using VidStab's generated transforms.
     Output is dx, dy, da for each frame relative to the previous frame (no cumulative, no prepend).
     """
-    video_properties = get_video_properties(input_video)
+    total_frames = get_video_total_frame_count(input_video)
 
     stabilizer = VidStab()  # TODO: 'DENSE')
     stabilizer.gen_transforms(
-        input_path=input_video, smoothing_window=min(20, video_properties.approximate_total_frames - 1)
+        input_path=input_video, smoothing_window=min(20, int(total_frames) - 1)
     )
 
     assert stabilizer._raw_transforms is not None

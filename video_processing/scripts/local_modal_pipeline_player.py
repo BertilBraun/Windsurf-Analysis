@@ -32,7 +32,12 @@ from inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
 from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
 from inference.src.tracking.track_processing import TrackPostProcessing, prepare_renderable_tracks
 from inference.src.util.timing import timeit
-from inference.src.util.video_io import VideoReader, get_video_properties
+from inference.src.util.video_io import (
+    VideoReader,
+    get_video_properties,
+    get_video_properties_with_accurate_total_frame_count,
+    get_video_total_frame_count,
+)
 from inference.src.visualization.stabilize import (
     STABLE_GFTT_BLOCK_SIZE,
     STABLE_GFTT_MAX_CORNERS,
@@ -195,7 +200,7 @@ def _compute_transforms(
     masked_block_size: int = int(STABLE_GFTT_BLOCK_SIZE),
 ) -> list[Transform]:
     if stabilizer == 'none':
-        frames = get_video_properties(video_path).approximate_total_frames
+        frames = int(get_video_total_frame_count(video_path))
         return [Transform(0, 0, 0, i) for i in range(frames + 1)]
 
     if stabilizer == 'vidstab':
@@ -247,15 +252,15 @@ def _compute_transforms(
 
 
 def _save_tracks_metadata(tracks: list[RenderableTrack], video_path: Path, output_dir: Path) -> Path:
-    props = get_video_properties(video_path)
+    props = get_video_properties_with_accurate_total_frame_count(video_path)
 
     metadata = Metadata(
         input_video_path=video_path.absolute().as_posix(),
         video_properties=VideoProperties(
-            fps=float(props.fps),
-            width=int(props.width),
-            height=int(props.height),
-            total_frames=int(props.approximate_total_frames),
+            fps=props.fps,
+            width=props.width,
+            height=props.height,
+            total_frames=props.total_frames,
         ),
         tracks=[
             TrackLite(
@@ -473,12 +478,11 @@ def run_local_pipeline(
             masked_block_size=int(masked_block_size),
         )
 
-    props = get_video_properties(upright_video)
-    frame_count = int(props.approximate_total_frames)
-    smoothing_window = 1 if frame_count <= 1 else max(1, min(int(smoothing_window), frame_count - 1))
+    props = get_video_properties_with_accurate_total_frame_count(upright_video)
+    smoothing_window = 1 if props.total_frames <= 1 else max(1, min(int(smoothing_window), props.total_frames - 1))
     transforms_by_frame = _compute_stabilization_correction_by_frame(
         raw_motion_transforms=raw_motion_transforms,
-        frame_count=frame_count,
+        frame_count=props.total_frames,
         smoothing_window=smoothing_window,
     )
 
@@ -511,15 +515,17 @@ def run_local_pipeline(
         metadata_path = _save_tracks_metadata(renderable_tracks, upright_video, output_dir)
         stabilization_transforms_path = _save_stabilization_transforms(
             transforms_by_frame,
-            frame_count=frame_count,
+            frame_count=props.total_frames,
             output_dir=output_dir,
             stem=upright_video.stem,
             stabilizer=stabilizer,
             smoothing_window=smoothing_window,
         )
         raw_motion_transforms_path = _save_raw_motion_transforms(
-            _dense_raw_motion_deltas_by_frame(raw_motion_transforms=raw_motion_transforms, frame_count=frame_count),
-            frame_count=frame_count,
+            _dense_raw_motion_deltas_by_frame(
+                raw_motion_transforms=raw_motion_transforms, frame_count=props.total_frames
+            ),
+            frame_count=props.total_frames,
             output_dir=output_dir,
             stem=upright_video.stem,
             stabilizer=stabilizer,

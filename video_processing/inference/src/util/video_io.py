@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import cv2
 import time
 from typing import Generator
@@ -13,6 +14,11 @@ class VideoInfo:
     width: int
     height: int
     approximate_total_frames: int
+
+
+@dataclass
+class AccurateVideoInfo(VideoInfo):
+    total_frames: int
 
 
 class VideoReader:
@@ -60,6 +66,71 @@ class VideoReader:
 def get_video_properties(video_path: os.PathLike | str) -> VideoInfo:
     with VideoReader(video_path) as reader:
         return reader.get_properties()
+
+
+def get_video_properties_with_accurate_total_frame_count(video_path: os.PathLike | str) -> AccurateVideoInfo:
+    """
+    Return VideoInfo where `approximate_total_frames` is replaced with an ffprobe-derived frame count.
+
+    We keep the field name `approximate_total_frames` to preserve existing call sites that expect a cheap
+    `get_video_properties()` call. Use this helper only in places that must have a correct count (e.g.
+    stabilization arrays, time_percent computations, per-frame loops).
+    """
+    props = get_video_properties(video_path)
+    accurate_total_frames = get_video_total_frame_count(video_path)
+    return AccurateVideoInfo(
+        fps=int(props.fps),
+        width=int(props.width),
+        height=int(props.height),
+        approximate_total_frames=int(accurate_total_frames),
+        total_frames=int(accurate_total_frames),
+    )
+
+
+def get_video_total_frame_count(video_path: os.PathLike | str) -> int:
+    """
+    Return the best-available total frame count for `video_path` without decoding frames.
+
+    OpenCV's `CAP_PROP_FRAME_COUNT` is often wrong for VFR MP4s and some codecs/containers.
+    We prefer `ffprobe` packet counting, which matches how the web player derives its frame count.
+    """
+    # Demux-only (no decode). Usually 1 packet == 1 presentable frame for typical H.264/H.265 MP4s.
+    cmd = [
+        'ffprobe',
+        '-v',
+        'error',
+        '-select_streams',
+        'v:0',
+        '-count_packets',
+        '-show_entries',
+        'stream=nb_read_packets',
+        '-of',
+        'csv=p=0',
+        str(video_path),
+    ]
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError as e:
+        raise RuntimeError('ffprobe not found on PATH; required for accurate frame counts') from e
+
+    if res.returncode != 0:
+        msg = (res.stderr or res.stdout or '').strip()
+        raise RuntimeError(f'ffprobe failed (exit {res.returncode}) for {video_path}: {msg}')
+
+    raw = (res.stdout or '').strip()
+    # ffprobe may emit multiple lines in edge cases; take the first integer we can find.
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            n = int(line)
+        except ValueError:
+            continue
+        if n > 0:
+            return n
+
+    raise RuntimeError(f'ffprobe returned no usable packet count for {video_path}: {raw!r}')
 
 
 class VideoWriter:
