@@ -8,6 +8,7 @@ import React, { createContext, useCallback, useEffect, useMemo, useState } from 
 import {
     createUserWithEmailAndPassword,
     EmailAuthProvider,
+    GoogleAuthProvider,
     linkWithCredential,
     linkWithPopup,
     onIdTokenChanged,
@@ -15,6 +16,7 @@ import {
     sendEmailVerification,
     sendPasswordResetEmail,
     signInWithEmailAndPassword,
+    signInWithCredential,
     signInWithPopup,
     signOut,
     type User,
@@ -180,8 +182,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const current = auth.currentUser
         const isAnonymous = !!(current as any)?.isAnonymous
 
-        const result =
-            isAnonymous && current ? await linkWithPopup(current, googleProvider) : await signInWithPopup(auth, googleProvider)
+        let result: Awaited<ReturnType<typeof signInWithPopup>>
+
+        if (isAnonymous && current) {
+            try {
+                result = await linkWithPopup(current, googleProvider)
+            } catch (err: any) {
+                const code = String(err?.code || '')
+                const shouldFallbackToSignIn =
+                    code === 'auth/credential-already-in-use' || code === 'auth/email-already-in-use'
+                if (!shouldFallbackToSignIn) throw err
+
+                trackEvent('auth_login_fallback', { method: 'google', code })
+
+                const credential = GoogleAuthProvider.credentialFromError(err)
+                result = credential ? await signInWithCredential(auth, credential) : await signInWithPopup(auth, googleProvider)
+            }
+        } else {
+            result = await signInWithPopup(auth, googleProvider)
+        }
         // Always create the backend user record after (first-time) Google signup.
         // Calling this every time is fine; backend treats "already exists" as 400.
         await ensureBackendUser(result.user)
