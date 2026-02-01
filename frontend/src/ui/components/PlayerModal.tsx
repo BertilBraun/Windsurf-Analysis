@@ -180,12 +180,6 @@ export const PlayerModal: React.FC<{
                 additionalHeader={
                     <div className="flex items-center gap-2">
                         <Button
-                            onClick={toggleDrawMode}
-                            title={t('components.playerModal.actions.draw.title')}
-                            text={t('components.playerModal.actions.draw.label')}
-                            variant={drawMode ? 'brandOutline' : 'ghost'}
-                        />
-                        <Button
                             onClick={toggleOverviewStabilization}
                             title={t('components.playerModal.actions.overviewStabilization.title')}
                             text={
@@ -194,6 +188,12 @@ export const PlayerModal: React.FC<{
                                     : t('components.playerModal.actions.overviewStabilization.labelOn')
                             }
                             variant={disableOverviewStabilization ? 'ghost' : 'brandOutline'}
+                        />
+                        <Button
+                            onClick={toggleDrawMode}
+                            title={t('components.playerModal.actions.draw.title')}
+                            text={t('components.playerModal.actions.draw.label')}
+                            variant={drawMode ? 'brandOutline' : 'ghost'}
                         />
                         <div ref={moreRef} className="relative">
                             <Button
