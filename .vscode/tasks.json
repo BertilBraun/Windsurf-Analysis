@@ -115,7 +115,7 @@
             "label": "local_modal_pipeline",
             "type": "shell",
             // "command": "python video_processing/scripts/local_modal_pipeline_player.py --input-video \"C:\\Users\\berti\\Downloads\\2026_01_19 Cabezo Marco Matieck\\MVI_5333.MP4\" --skip-orientation",
-            "command": "python video_processing/scripts/local_modal_pipeline_player.py --input-video \"C:\\Projects\\Windsurf-Analysis\\tmp\\ingress\\small test\\test folder\\another sub folder\\test\\New folder\\New folder\\F_J.mp4\" --skip-orientation",
+            "command": "python video_processing/scripts/local_modal_pipeline_player.py --input-video \"C:\\Projects\\Windsurf-Analysis\\tmp\\ingress\\small test\\test folder\\another sub folder\\test\\New folder\\New folder\\F_J.mp4\" --skip-orientation --render-keypoints",
             "problemMatcher": []
         },
         {
