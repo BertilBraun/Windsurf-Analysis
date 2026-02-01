@@ -6,11 +6,12 @@
 import { processVideo } from '../../preprocess/preprocess'
 import { QUALITY_HIGH } from 'mediabunny'
 import { drawRotatedToCanvas } from './rotation'
-import { PlayerState } from './state'
 import { drawWatermark, getWatermarkAsset } from './watermark'
 import { drawDetailedCrop, getSharedOffscreenCanvas } from './rendering'
 import { DEFAULT_ZOOM_BASELINE } from './constants'
 import { assert } from '../utils/assert'
+import { TrackDetection } from '../types'
+import { getClosestDetectionAtFrame } from './trackMath'
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
@@ -114,14 +115,19 @@ export async function shareExport(params: { blob: Blob; filename: string; text?:
  */
 export async function exportTrackMp4(params: {
     file: File
-    player: PlayerState
+    frameCount: number
     dominantOrientationDeg: number
     trackId: number
+    trackDetections: TrackDetection[]
     startSec: number
     endSec: number
     onProgress?: (p01: number) => void
 }): Promise<Blob> {
-    const { file, player, dominantOrientationDeg, trackId, startSec, endSec, onProgress } = params
+    const { file, frameCount, dominantOrientationDeg, trackId, trackDetections, startSec, endSec, onProgress } = params
+
+    assert(frameCount > 0, 'Invalid frame count')
+
+    const detections = [...trackDetections].sort((a, b) => a.time_percent - b.time_percent)
 
     // Always export in a wide format (16:9). We already rotate frames using `dominantOrientationDeg`.
     const outputWidth = 1920
@@ -131,8 +137,8 @@ export async function exportTrackMp4(params: {
     const watermark = await getWatermarkAsset()
 
     const onFrame = async (current: { frame: VideoFrame; timestampSec: number; frameIndex: number }, ctx: Ctx2D) => {
-        assert(0 <= current.frameIndex && current.frameIndex < player.frameCount)
-        const detection = player.getClosestDetectionAtFrame(trackId, current.frameIndex)
+        assert(0 <= current.frameIndex && current.frameIndex < frameCount)
+        const detection = getClosestDetectionAtFrame(detections, frameCount, current.frameIndex)
 
         const rotCanvas = getSharedOffscreenCanvas()
         const rotatedFrame = drawRotatedToCanvas(current.frame, rotCanvas, dominantOrientationDeg)

@@ -5,6 +5,7 @@
 
 import { JobDetail, Track, TrackDetection } from '../types'
 import { assert } from '../utils/assert'
+import { frameIndexForPercent, getClosestDetectionAtFrame } from './trackMath'
 
 /**
  * Represents the viewing mode of the player.
@@ -133,18 +134,7 @@ export class PlayerState {
     getClosestDetectionAtFrame(trackId: number, frameIndex: number): TrackDetection {
         assert(frameIndex >= 0 && frameIndex < this.frameCount, 'Invalid frame index')
         const track = this.getTrackById(trackId)
-        const detections = track.detections
-        // Find the detection which is the closest to the frame index
-        let closest = detections[0]
-        let closestDistance = Math.abs(frameIndex - this.frameIndexForPercent(closest!.time_percent))
-        for (const detection of detections) {
-            const distance = Math.abs(frameIndex - this.frameIndexForPercent(detection.time_percent))
-            if (distance < closestDistance) {
-                closest = detection
-                closestDistance = distance
-            }
-        }
-        return closest
+        return getClosestDetectionAtFrame(track.detections, this.frameCount, frameIndex)
     }
 
     /**
@@ -188,9 +178,6 @@ export class PlayerState {
      * @returns The corresponding frame index.
      */
     frameIndexForPercent(percent: number): number {
-        assert(percent >= 0 && percent <= 1, 'Invalid percent')
-        const frameIndex = Math.round(percent * this.frameCount)
-        return Math.max(0, Math.min(this.frameCount - 1, frameIndex))
+        return frameIndexForPercent(this.frameCount, percent)
     }
-
 }

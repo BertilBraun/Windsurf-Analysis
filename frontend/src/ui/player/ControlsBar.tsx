@@ -41,12 +41,6 @@ export interface ControlsBarProps {
     onExportTrack?: () => void
     /** Whether the export button should be visible. */
     exportVisible?: boolean
-    /** Whether the export button is interactive. */
-    exportEnabled?: boolean
-    /** Indicates if an export process is currently active. */
-    isExporting?: boolean
-    /** Current export progress percentage (0-100). */
-    exportProgressPct?: number | null
 }
 
 /**
@@ -64,9 +58,6 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({
     onSetSpeed,
     onExportTrack,
     exportVisible,
-    exportEnabled,
-    isExporting,
-    exportProgressPct,
 }) => {
     const { t } = useTranslation()
     const [speedMenuOpen, setSpeedMenuOpen] = React.useState(false)
@@ -143,16 +134,10 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({
             {exportVisible && onExportTrack && (
                 <>
                     <div className="w-px h-5 bg-gray-600 mx-1" />
-                    {typeof exportProgressPct === 'number' && isExporting && (
-                        <div className="text-sm tabular-nums">
-                            {Math.max(0, Math.min(100, exportProgressPct)).toFixed(0)}%
-                        </div>
-                    )}
                     <Button
                         onClick={onExportTrack}
                         title={t('player.controlsBar.exportTitle')}
                         text={t('player.controlsBar.export')}
-                        disabled={!exportEnabled || !!isExporting}
                     />
                 </>
             )}

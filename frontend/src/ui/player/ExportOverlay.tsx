@@ -2,13 +2,11 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/Button'
 import { trackEvent } from '../utils/analytics'
-import { canShareExport, downloadExport, shareExport } from './export'
+import { canShareExport, downloadExport, GYBELOCK_HOME_URL, shareExport } from './export'
 
 export type ExportResult = {
     blob: Blob
     filename: string
-    jobId: string
-    trackId: number
 }
 
 type Props = {
@@ -48,14 +46,14 @@ export const ExportOverlay: React.FC<Props> = ({ isExporting, exportProgressPct,
         }
 
         try {
-            trackEvent('export_track_share_clicked', { job_id: result.jobId, track_id: result.trackId })
+            trackEvent('export_track_share_clicked')
             await shareExport({
                 blob: result.blob,
                 filename: result.filename,
-                text: t('player.canvas.export.shareText'),
+                text: t('player.canvas.export.shareText', { url: GYBELOCK_HOME_URL }),
                 title: 'GybeLock',
             })
-            trackEvent('export_track_share_success', { job_id: result.jobId, track_id: result.trackId })
+            trackEvent('export_track_share_success')
             onClearExportResult()
         } catch (e: any) {
             if (e?.name === 'AbortError') return
@@ -63,14 +61,14 @@ export const ExportOverlay: React.FC<Props> = ({ isExporting, exportProgressPct,
                 ? t('player.canvas.export.shareTooLarge')
                 : t('player.canvas.export.shareFailed')
             setShareError(message)
-            trackEvent('export_track_share_failed', { job_id: result.jobId, track_id: result.trackId })
+            trackEvent('export_track_share_failed')
         }
     }, [exportResult, onClearExportResult, shareSupported, t])
 
     const onDownload = React.useCallback(() => {
         const result = exportResult
         if (!result) return
-        trackEvent('export_track_download_clicked', { job_id: result.jobId, track_id: result.trackId })
+        trackEvent('export_track_download_clicked')
         downloadExport(result.blob, result.filename)
         onClearExportResult()
     }, [exportResult, onClearExportResult])
@@ -122,4 +120,3 @@ export const ExportOverlay: React.FC<Props> = ({ isExporting, exportProgressPct,
         </div>
     )
 }
-

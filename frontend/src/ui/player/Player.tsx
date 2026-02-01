@@ -16,7 +16,6 @@ import { usePlaybackSpeed } from '../hooks/usePlaybackSpeed'
 import { clamp } from '../utils/clamp'
 import { trackEvent } from '../utils/analytics'
 import { useOnce } from '../hooks/useOnce'
-import { buildExportFilename, exportTrackMp4 } from './export'
 import { useJobVideoSource } from './useJobVideoSource'
 import { drawFrame, pickTrackAtScreenPoint, screenPointToVideoNorm } from './rendering'
 import { useAnnotations } from './useAnnotations'
@@ -24,7 +23,8 @@ import { useWebCodexPlayer } from './useWebCodexPlayer'
 import { useOverviewPan } from './useOverviewPan'
 import { DEFAULT_ZOOM_BASELINE } from './constants'
 import { VideoSource } from './videoSource'
-import { ExportOverlay, ExportResult } from './ExportOverlay'
+import { useExporter } from './useExporter'
+import { assert } from '../utils/assert'
 
 const PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY = 'player.focusedClickHintDismissed.v1'
 const PLAYER_OPENED_ONCE_KEY = 'player.openedOnce.v1'
@@ -84,8 +84,6 @@ export const Player: React.FC<Props> = ({
     durationSeconds,
 }) => {
     const { t } = useTranslation()
-    const [exportError, setExportError] = React.useState<string | null>(null)
-    const [exportResult, setExportResult] = React.useState<ExportResult | null>(null)
     const [playerInitError, setPlayerInitError] = React.useState<string | null>(null)
     const containerRef = React.useRef<HTMLDivElement | null>(null)
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null)
@@ -93,8 +91,6 @@ export const Player: React.FC<Props> = ({
     const detailedZoom = useCappedValue(1, 0.5, 2.0)
     const { speed, bumpSpeed, setSpeed, rates } = usePlaybackSpeed(1.0)
     const [hoveredTrackId, setHoveredTrackId] = React.useState<number | null>(null)
-    const [isExporting, setIsExporting] = React.useState<boolean>(false)
-    const [exportProgressPct, setExportProgressPct] = React.useState<number | null>(null)
     const [showAnnotatePauseHint, setShowAnnotatePauseHint] = React.useState(false)
     const { used: focusedClickHintDismissed, ready: focusedClickHintReady, mark: dismissFocusedClickHint } =
         useOnce(PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY)
@@ -161,6 +157,31 @@ export const Player: React.FC<Props> = ({
 
     const webPlayer = useWebCodexPlayer({ playbackRate: speed })
 
+    const exporter = useExporter({
+        sourceFile,
+        frameCount: webPlayer.ready ? webPlayer.frameCount : null,
+    })
+
+    const exportVisible = !!player && player.mode === 'detailed' && player.currentTrackId != null
+
+    const onExportTrack = React.useCallback(async () => {
+        const p = player
+        if (!p || p.mode !== 'detailed' || p.currentTrackId == null) {
+            if (import.meta.env.DEV) assert(false, 'Export requested without a selected track in detailed mode')
+            return
+        }
+        const track = job.tracks.find(tr => tr.track_id === p.currentTrackId)
+        if (!track) {
+            if (import.meta.env.DEV) assert(false, `Selected track not found: ${p.currentTrackId}`)
+            return
+        }
+        await exporter.exportTrack({
+            track,
+            dominantOrientationDeg: job.dominant_orientation,
+            localRelativePath: job.local_relative_path,
+        })
+    }, [exporter, job.dominant_orientation, job.local_relative_path, job.tracks, player, t])
+
     const currentTimeSeconds = React.useMemo(() => {
         if (durationSeconds == null || !Number.isFinite(durationSeconds) || durationSeconds <= 0) return null
         return clamp(webPlayer.currentPercent * durationSeconds, 0, durationSeconds)
@@ -220,14 +241,14 @@ export const Player: React.FC<Props> = ({
 
     const annotations = useAnnotations(getDrawPoint, {
         drawMode,
-        isExporting,
+        isExporting: exporter.isExporting,
         isPlaying: webPlayer.playing,
         currentFrameIndex: webPlayer.currentFrameIndex,
     })
 
     const overviewPan = useOverviewPan(
         {
-            enabled: !drawMode && player?.mode === 'overview' && webPlayer.ready && !isExporting,
+            enabled: !drawMode && player?.mode === 'overview' && webPlayer.ready && !exporter.isExporting,
             zoom,
             offset,
             setOffset,
@@ -250,14 +271,11 @@ export const Player: React.FC<Props> = ({
 
     React.useEffect(() => {
         trackEvent('player_open', { job_id: job.id })
-        setExportError(null)
-        setExportResult(null)
+        exporter.reset()
         setPlayerInitError(null)
-        setIsExporting(false)
-        setExportProgressPct(null)
         detailedZoom.reset()
         annotations.reset()
-    }, [job.id])
+    }, [annotations.reset, detailedZoom.reset, exporter.reset, job.id])
 
     React.useEffect(() => {
         // reset detailed zoom when leaving detailed mode
@@ -311,11 +329,11 @@ export const Player: React.FC<Props> = ({
 
     React.useEffect(() => {
         if (!webPlayer.ready) return
-        if (isExporting) {
+        if (exporter.isExporting) {
             webPlayer.pause()
             return
         }
-    }, [isExporting, webPlayer.ready])
+    }, [exporter.isExporting, webPlayer.ready])
 
     const handlePlayPause = React.useCallback(() => {
         if (drawMode) {
@@ -398,7 +416,7 @@ export const Player: React.FC<Props> = ({
         const src = webPlayer.currentFrameCanvas
         if (!c || !container || !player || !src) return
         if (!webPlayer.ready) return
-        if (isExporting) return
+        if (exporter.isExporting) return
 
         const frameIndex = webPlayer.currentFrameIndex
         const visible = annotations.getVisibleAnnotations(frameIndex)
@@ -432,7 +450,7 @@ export const Player: React.FC<Props> = ({
             if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable))
                 return
             // Avoid any user interactions while export temporarily controls playback/seek.
-            if (isExporting) return
+            if (exporter.isExporting) return
             if (!player) return
             const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
             if (key === ' ') {
@@ -520,7 +538,7 @@ export const Player: React.FC<Props> = ({
         return () => window.removeEventListener('keydown', onKey)
     }, [
         player,
-        isExporting,
+        exporter.isExporting,
         handlePlayPause,
         seekToFrame,
         bumpSpeed,
@@ -546,14 +564,14 @@ export const Player: React.FC<Props> = ({
 
     // Auto-exit detailed mode if the track isn't active at the current frame.
     React.useEffect(() => {
-        if (isExporting) return
+        if (exporter.isExporting) return
         if (webPlayer.seeking || webPlayer.loading) return
         if (!player || player.mode !== 'detailed' || player.currentTrackId == null) return
         if (!player.isTrackActiveAtFrame(player.currentTrackId, webPlayer.currentFrameIndex)) {
             setPlayer(p => (p ? p.copy({ mode: 'overview', currentTrackId: null }) : p))
         }
     }, [
-        isExporting,
+        exporter.isExporting,
         webPlayer.seeking,
         webPlayer.loading,
         webPlayer.currentFrameIndex,
@@ -684,63 +702,6 @@ export const Player: React.FC<Props> = ({
         overviewPan.shouldSuppressClick,
     ])
 
-    const exportVisible = !!player && player.mode === 'detailed' && player.currentTrackId != null
-    const exportEnabled = exportVisible && !isExporting && !exportResult
-
-    const onExportTrack = React.useCallback(async () => {
-        if (isExporting) return
-        setExportError(null)
-        setExportResult(null)
-        setIsExporting(true)
-        setExportProgressPct(0)
-
-        try {
-            const file = sourceFile
-            const p = player
-            if (!file || !p) throw new Error(t('player.canvas.export.errors.notReady'))
-            if (p.mode !== 'detailed' || p.currentTrackId == null)
-                throw new Error(t('player.canvas.export.errors.selectTrack'))
-
-            const track = p.tracks.find(t => t.track_id === p.currentTrackId)
-            if (!track) throw new Error(t('player.canvas.export.errors.trackNotFound'))
-            trackEvent('export_track_start', { job_id: job.id, track_id: track.track_id })
-
-            const padSec = 0.25
-            const startSec = Math.max(0, track.start_time_seconds - padSec)
-            const endSec = track.start_time_seconds + track.duration_seconds + padSec
-            if (!(endSec > startSec + 1e-3)) throw new Error(t('player.canvas.export.errors.trackTooShort'))
-
-            const outBlob = await exportTrackMp4({
-                file,
-                player: p,
-                dominantOrientationDeg: job.dominant_orientation,
-                trackId: track.track_id,
-                startSec,
-                endSec,
-                onProgress: prog01 => setExportProgressPct(clamp(prog01 * 100, 0, 100)),
-            })
-
-            const filename = buildExportFilename({
-                sourceFileName: sourceFile.name,
-                localRelativePath: job.local_relative_path,
-                trackId: track.track_id,
-                startSec,
-                endSec,
-            })
-
-            setExportResult({ blob: outBlob, filename, jobId: job.id, trackId: track.track_id })
-            trackEvent('export_track_success', { job_id: job.id, track_id: track.track_id })
-        } catch (e: any) {
-            const fallback = t('player.canvas.export.errors.failed')
-            const message = String(e?.message || e || fallback)
-            setExportError(message)
-            trackEvent('export_track_failed', { job_id: job.id, message })
-        } finally {
-            setIsExporting(false)
-            setExportProgressPct(null)
-        }
-    }, [isExporting, job.dominant_orientation, job.id, job.local_relative_path, player, sourceFile, t])
-
     const modeIndicatorLabel = React.useMemo(() => {
         if (drawMode) return t('player.canvas.modeIndicator.draw')
         if (player?.mode === 'detailed') return t('player.canvas.modeIndicator.focused')
@@ -796,9 +757,9 @@ export const Player: React.FC<Props> = ({
                     </div>
                 )}
                 {playerInitError && <div className="absolute left-2 top-7 text-red-400 text-sm">{playerInitError}</div>}
-                {exportError && (
+                {exporter.exportError && (
                     <div className="absolute left-2 top-7 text-red-400 text-sm">
-                        {t('player.canvas.export.errorLabel', { message: exportError })}
+                        {t('player.canvas.export.errorLabel', { message: exporter.exportError })}
                     </div>
                 )}
                 {!fileMissing && !errorText && !webPlayer.error && (webPlayer.loading || !webPlayer.ready) && (
@@ -856,19 +817,11 @@ export const Player: React.FC<Props> = ({
                         }}
                         onExportTrack={onExportTrack}
                         exportVisible={exportVisible}
-                        exportEnabled={exportEnabled}
-                        isExporting={isExporting}
-                        exportProgressPct={exportProgressPct}
                     />
                 </div>
             )}
 
-            <ExportOverlay
-                isExporting={isExporting}
-                exportProgressPct={exportProgressPct}
-                exportResult={exportResult}
-                onClearExportResult={() => setExportResult(null)}
-            />
+            {exporter.overlay}
         </div>
     )
 }
