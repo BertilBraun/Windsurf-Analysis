@@ -92,10 +92,50 @@ def get_video_total_frame_count(video_path: os.PathLike | str) -> int:
     Return the best-available total frame count for `video_path` without decoding frames.
 
     OpenCV's `CAP_PROP_FRAME_COUNT` is often wrong for VFR MP4s and some codecs/containers.
-    We prefer `ffprobe` packet counting, which matches how the web player derives its frame count.
+    We prefer `ffprobe` packet inspection to match how the web player derives its frame count:
+    mediabunny enumerates encoded packets and ignores packets with negative timestamps.
     """
-    # Demux-only (no decode). Usually 1 packet == 1 presentable frame for typical H.264/H.265 MP4s.
-    cmd = [
+    # Demux-only (no decode). Count only packets with non-negative PTS (presentable packets),
+    # matching `getSortedVideoPacketMeta` which filters `pkt.timestamp < 0`.
+    cmd_packets_pts = [
+        'ffprobe',
+        '-v',
+        'error',
+        '-select_streams',
+        'v:0',
+        '-show_packets',
+        '-show_entries',
+        'packet=pts_time',
+        '-of',
+        'csv=p=0',
+        str(video_path),
+    ]
+    try:
+        res = subprocess.run(cmd_packets_pts, capture_output=True, text=True, check=False)
+    except FileNotFoundError as e:
+        raise RuntimeError('ffprobe not found on PATH; required for accurate frame counts') from e
+
+    if res.returncode != 0:
+        msg = (res.stderr or res.stdout or '').strip()
+        raise RuntimeError(f'ffprobe failed (exit {res.returncode}) for {video_path}: {msg}')
+
+    raw = (res.stdout or '').strip()
+    count = 0
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or line == 'N/A':
+            continue
+        try:
+            pts = float(line)
+        except ValueError:
+            continue
+        if pts >= 0:
+            count += 1
+    if count > 0:
+        return count
+
+    # Fallback: stream-level packet count (still demux-only), but does not exclude negative PTS packets.
+    cmd_count_packets = [
         'ffprobe',
         '-v',
         'error',
@@ -108,18 +148,11 @@ def get_video_total_frame_count(video_path: os.PathLike | str) -> int:
         'csv=p=0',
         str(video_path),
     ]
-    try:
-        res = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    except FileNotFoundError as e:
-        raise RuntimeError('ffprobe not found on PATH; required for accurate frame counts') from e
-
-    if res.returncode != 0:
-        msg = (res.stderr or res.stdout or '').strip()
-        raise RuntimeError(f'ffprobe failed (exit {res.returncode}) for {video_path}: {msg}')
-
-    raw = (res.stdout or '').strip()
-    # ffprobe may emit multiple lines in edge cases; take the first integer we can find.
-    for line in raw.splitlines():
+    res2 = subprocess.run(cmd_count_packets, capture_output=True, text=True, check=False)
+    if res2.returncode != 0:
+        msg = (res2.stderr or res2.stdout or '').strip()
+        raise RuntimeError(f'ffprobe failed (exit {res2.returncode}) for {video_path}: {msg}')
+    for line in (res2.stdout or '').splitlines():
         line = line.strip()
         if not line:
             continue
@@ -130,7 +163,7 @@ def get_video_total_frame_count(video_path: os.PathLike | str) -> int:
         if n > 0:
             return n
 
-    raise RuntimeError(f'ffprobe returned no usable packet count for {video_path}: {raw!r}')
+    raise RuntimeError(f'ffprobe returned no usable packet count for {video_path}')
 
 
 class VideoWriter:
