@@ -443,7 +443,7 @@
             "export": {
                 "errorLabel": "Export: {{message}}",
                 "shareFailed": "Condivisione non riuscita",
-                "shareText": "Guarda questo clip da GybeLock",
+                "shareText": "Creato con GybeLock - stabilizza i tuoi video di windsurf: {{url}}",
                 "shareTooLarge": "Il clip è troppo grande per essere condiviso. Prova Scarica.",
                 "shareUnsupported": "Condivisione non supportata su questo dispositivo",
                 "errors": {

@@ -444,7 +444,7 @@
             "export": {
                 "errorLabel": "Export: {{message}}",
                 "shareFailed": "Sharing failed",
-                "shareText": "Check out this clip from GybeLock",
+                "shareText": "Made with GybeLock - stabilize your windsurf videos: {{url}}",
                 "shareTooLarge": "Clip is too large to share. Try Download.",
                 "shareUnsupported": "Sharing is not supported on this device",
                 "errors": {

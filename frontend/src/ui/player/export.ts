@@ -76,6 +76,8 @@ type ShareCapableNavigator = Navigator & {
     canShare?: (data: ShareData) => boolean
 }
 
+export const GYBELOCK_HOME_URL = 'https://gybelock.de'
+
 export function canShareExport(blob: Blob, filename: string): boolean {
     if (typeof navigator === 'undefined') return false
     const nav = navigator as ShareCapableNavigator
@@ -87,13 +89,13 @@ export function canShareExport(blob: Blob, filename: string): boolean {
     return nav.canShare({ files: [file] })
 }
 
-export async function shareExport(params: { blob: Blob; filename: string; text?: string; title?: string }) {
-    const { blob, filename, text, title } = params
+export async function shareExport(params: { blob: Blob; filename: string; text?: string; title?: string; url?: string }) {
+    const { blob, filename, text, title, url = GYBELOCK_HOME_URL } = params
     const nav = navigator as ShareCapableNavigator
     if (typeof nav.share !== 'function') throw new Error('Share not supported')
     if (typeof File === 'undefined') throw new Error('Share not supported')
     const file = new File([blob], filename, { type: blob.type || 'video/mp4' })
-    await nav.share({ files: [file], text, title })
+    await nav.share({ files: [file], text, title, url })
 }
 
 /**
