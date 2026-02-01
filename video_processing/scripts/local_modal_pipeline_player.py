@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Sequence
 
+import cv2
 import numpy as np
 
 
@@ -30,10 +31,12 @@ from inference.src.tracking.detector import EmbeddingExtractor, ObjectDetector, 
 from inference.src.tracking.ilp_tracker import ILPTracker
 from inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
 from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
-from inference.src.tracking.track_processing import TrackPostProcessing, prepare_renderable_tracks
+from inference.src.tracking.track_processing import TrackPostProcessing
+from inference.src.tracking.renderable_tracks import prepare_renderable_tracks
 from inference.src.util.timing import timeit
 from inference.src.util.video_io import (
     VideoReader,
+    VideoWriter,
     get_video_properties,
     get_video_properties_with_accurate_total_frame_count,
     get_video_total_frame_count,
@@ -135,6 +138,37 @@ def _parse_args() -> argparse.Namespace:
         help='Write every Nth debug frame (only when --masked-vidstab-debug-dir is set).',
     )
 
+    p.add_argument(
+        '--render-keypoints',
+        action='store_true',
+        help='Write a debug MP4 with bbox+keypoint overlays (boom/mast_tip) for quick inspection.',
+    )
+    p.add_argument(
+        '--render-keypoints-source',
+        type=str,
+        default='raw',
+        choices=['raw', 'tracks'],
+        help='Which detections to render: raw YOLO detections or post-processed tracked detections.',
+    )
+    p.add_argument(
+        '--render-keypoints-output',
+        type=str,
+        default=None,
+        help='Optional output path for debug MP4 (default: <output_dir>/<stem>.keypoints.mp4).',
+    )
+    p.add_argument(
+        '--render-keypoints-every-n',
+        type=int,
+        default=1,
+        help='Render every Nth frame (speeds up; output FPS is scaled down accordingly).',
+    )
+    p.add_argument(
+        '--render-keypoints-min-det-conf',
+        type=float,
+        default=0.0,
+        help='Only render detections with confidence >= this threshold.',
+    )
+
     p.add_argument('--no-player', action='store_true', help='Do not launch the local Qt player after processing.')
     return p.parse_args()
 
@@ -180,6 +214,141 @@ def _crop_detections_from_video(
                     )
                 )
     return out
+
+
+def _clamp_xy(x: int, y: int, w: int, h: int) -> tuple[int, int]:
+    return (max(0, min(int(w - 1), int(x))), max(0, min(int(h - 1), int(y))))
+
+
+def _draw_keypoint_overlay(
+    frame_bgr: np.ndarray,
+    *,
+    bbox: BoundingBox | None = None,
+    det_conf: float | None = None,
+    boom: Keypoint | None = None,
+    mast_tip: Keypoint | None = None,
+    track_id: int | None = None,
+) -> None:
+    h, w = frame_bgr.shape[:2]
+
+    if bbox is not None:
+        x1 = max(0, min(w - 1, int(bbox.x1)))
+        y1 = max(0, min(h - 1, int(bbox.y1)))
+        x2 = max(0, min(w - 1, int(bbox.x2)))
+        y2 = max(0, min(h - 1, int(bbox.y2)))
+        cv2.rectangle(frame_bgr, (x1, y1), (x2, y2), (80, 200, 120), 2, cv2.LINE_AA)
+
+        label_parts: list[str] = []
+        if track_id is not None:
+            label_parts.append(f'id={int(track_id)}')
+        if det_conf is not None:
+            label_parts.append(f'conf={float(det_conf):.2f}')
+        if label_parts:
+            cv2.putText(
+                frame_bgr,
+                ' '.join(label_parts),
+                (x1, max(0, y1 - 6)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (240, 240, 240),
+                1,
+                cv2.LINE_AA,
+            )
+
+    def _draw_kp(kp: Keypoint | None, color_bgr: tuple[int, int, int], name: str) -> None:
+        if kp is None:
+            return
+        x, y = _clamp_xy(int(kp.point.x), int(kp.point.y), w, h)
+        conf = float(kp.conf)
+        visible = conf >= 0.15
+        radius = 5 if visible else 3
+        thickness = -1 if visible else 2
+        col = color_bgr if visible else (160, 160, 160)
+        cv2.circle(frame_bgr, (x, y), radius, col, thickness, cv2.LINE_AA)
+        cv2.putText(
+            frame_bgr,
+            f'{name}:{conf:.2f}',
+            (x + 6, y - 6),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            col,
+            1,
+            cv2.LINE_AA,
+        )
+
+    _draw_kp(boom, (246, 130, 59), 'boom')  # BGR
+    _draw_kp(mast_tip, (68, 68, 239), 'tip')  # BGR
+
+    if boom is not None and mast_tip is not None and (float(boom.conf) > 0.0 or float(mast_tip.conf) > 0.0):
+        x1, y1 = _clamp_xy(int(boom.point.x), int(boom.point.y), w, h)
+        x2, y2 = _clamp_xy(int(mast_tip.point.x), int(mast_tip.point.y), w, h)
+        cv2.line(frame_bgr, (x1, y1), (x2, y2), (220, 220, 220), 2, cv2.LINE_AA)
+
+
+def _render_keypoints_debug_video(
+    *,
+    video_path: Path,
+    output_path: Path,
+    limit_frames: int | None,
+    every_n: int,
+    min_det_conf: float,
+    raw_detections: Sequence[RawDetection] | None,
+    tracks: Sequence[Track] | None,
+) -> Path:
+    every_n = max(1, int(every_n))
+
+    raw_by_frame: dict[int, list[RawDetection]] = defaultdict(list)
+    if raw_detections is not None:
+        for d in raw_detections:
+            raw_by_frame[int(d.frame_idx)].append(d)
+
+    tracked_by_frame: dict[int, list[tuple[int, Detection]]] = defaultdict(list)
+    if tracks is not None:
+        for t in tracks:
+            for det in t.sorted_detections:
+                tracked_by_frame[int(det.frame_idx)].append((int(t.track_id), det))
+
+    props = get_video_properties(video_path)
+    out_fps = max(1, int(round(int(props.fps) / float(every_n))))
+
+    with VideoReader(video_path, drop_every_nth=every_n) as reader, VideoWriter(
+        output_path, width=int(props.width), height=int(props.height), fps=int(out_fps)
+    ) as writer:
+        for frame_idx, frame in reader.read_frames():
+            frame_idx = int(frame_idx)
+            if limit_frames is not None and frame_idx >= int(limit_frames):
+                break
+
+            canvas = frame.copy()
+
+            if raw_detections is not None:
+                for d in raw_by_frame.get(frame_idx, ()):
+                    if float(d.confidence) < float(min_det_conf):
+                        continue
+                    _draw_keypoint_overlay(
+                        canvas,
+                        bbox=d.bbox,
+                        det_conf=float(d.confidence),
+                        boom=d.boom,
+                        mast_tip=d.mast_tip,
+                    )
+
+            if tracks is not None:
+                for track_id, det in tracked_by_frame.get(frame_idx, ()):
+                    if float(det.confidence) < float(min_det_conf):
+                        continue
+                    _draw_keypoint_overlay(
+                        canvas,
+                        bbox=det.bbox,
+                        det_conf=float(det.confidence),
+                        boom=det.boom,
+                        mast_tip=det.mast_tip,
+                        track_id=int(track_id),
+                    )
+
+            writer.write_frame(canvas)
+
+    return output_path
 
 
 @cache_to_file('tmp/transforms')
@@ -423,6 +592,11 @@ def run_local_pipeline(
     masked_quality_level: float,
     masked_min_distance: float,
     masked_block_size: int,
+    render_keypoints: bool = False,
+    render_keypoints_source: Literal['raw', 'tracks'] = 'raw',
+    render_keypoints_output: str | None = None,
+    render_keypoints_every_n: int = 1,
+    render_keypoints_min_det_conf: float = 0.0,
 ) -> LocalRunResult:
     output_dir = output_dir / input_video.stem
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -531,6 +705,24 @@ def run_local_pipeline(
             stabilizer=stabilizer,
         )
 
+    if render_keypoints:
+        with timeit(f'output: render keypoints ({render_keypoints_source})'):
+            output_path = (
+                Path(render_keypoints_output)
+                if render_keypoints_output is not None
+                else (output_dir / f'{upright_video.stem}.keypoints.mp4')
+            )
+            _render_keypoints_debug_video(
+                video_path=upright_video,
+                output_path=output_path,
+                limit_frames=limit_frames,
+                every_n=int(render_keypoints_every_n),
+                min_det_conf=float(render_keypoints_min_det_conf),
+                raw_detections=(raw_detections if render_keypoints_source == 'raw' else None),
+                tracks=(tracks if render_keypoints_source == 'tracks' else None),
+            )
+            print(f'Keypoint debug video: {output_path}')
+
     print(f'Output directory: {output_dir}')
     print(f'Upright video: {upright_video}')
     print(f'Tracks metadata: {metadata_path}')
@@ -576,6 +768,11 @@ def main() -> int:
         masked_quality_level=float(args.masked_quality_level),
         masked_min_distance=float(args.masked_min_distance),
         masked_block_size=int(args.masked_block_size),
+        render_keypoints=bool(args.render_keypoints),
+        render_keypoints_source=str(args.render_keypoints_source),  # type: ignore[arg-type]
+        render_keypoints_output=args.render_keypoints_output,
+        render_keypoints_every_n=int(args.render_keypoints_every_n),
+        render_keypoints_min_det_conf=float(args.render_keypoints_min_det_conf),
     )
 
     if not args.no_player:
