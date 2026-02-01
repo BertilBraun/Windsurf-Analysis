@@ -10,7 +10,8 @@ from inference.src.settings import REID_MODEL_TYPE
 from inference.src.tracking.detector import EmbeddingExtractor, RawDetection
 from inference.src.tracking.ilp_tracker import ILPTracker
 from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
-from inference.src.tracking.track_processing import TrackPostProcessing, prepare_renderable_tracks
+from inference.src.tracking.track_processing import TrackPostProcessing
+from inference.src.tracking.renderable_tracks import prepare_renderable_tracks
 from inference.src.tracking.tracking import Tracker
 from inference.src.util.video_io import VideoReader, get_video_properties_with_accurate_total_frame_count
 from inference.src.util.timing import timeit
