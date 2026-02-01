@@ -442,6 +442,10 @@
             },
             "export": {
                 "errorLabel": "Export: {{message}}",
+                "shareFailed": "Error al compartir",
+                "shareText": "Mira este clip de GybeLock",
+                "shareTooLarge": "El clip es demasiado grande para compartir. Prueba Descargar.",
+                "shareUnsupported": "Compartir no es compatible en este dispositivo",
                 "errors": {
                     "failed": "Export falló",
                     "notReady": "No listo",
@@ -451,6 +455,9 @@
                 },
                 "overlay": {
                     "note": "Espera — los controles de reproducción están desactivados temporalmente.",
+                    "download": "Descargar",
+                    "readyTitle": "Clip listo",
+                    "share": "Compartir",
                     "starting": "Iniciando…",
                     "title": "Exportando track…"
                 }
@@ -458,8 +465,8 @@
             "fileNotFound": "VIDEO FILE NOT FOUND"
         },
         "controlsBar": {
-            "export": "Export",
-            "exportTitle": "Exporta el rider enfocado como clip MP4",
+            "export": "Compartir clip",
+            "exportTitle": "Genera un clip MP4 para compartir",
             "pause": "Pausa",
             "play": "Play",
             "speed": "Speed: {{value}}x",

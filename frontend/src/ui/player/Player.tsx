@@ -16,7 +16,7 @@ import { usePlaybackSpeed } from '../hooks/usePlaybackSpeed'
 import { clamp } from '../utils/clamp'
 import { trackEvent } from '../utils/analytics'
 import { useOnce } from '../hooks/useOnce'
-import { buildExportFilename, downloadExport, exportTrackMp4 } from './export'
+import { buildExportFilename, exportTrackMp4 } from './export'
 import { useJobVideoSource } from './useJobVideoSource'
 import { drawFrame, pickTrackAtScreenPoint, screenPointToVideoNorm } from './rendering'
 import { useAnnotations } from './useAnnotations'
@@ -24,6 +24,7 @@ import { useWebCodexPlayer } from './useWebCodexPlayer'
 import { useOverviewPan } from './useOverviewPan'
 import { DEFAULT_ZOOM_BASELINE } from './constants'
 import { VideoSource } from './videoSource'
+import { ExportOverlay, ExportResult } from './ExportOverlay'
 
 const PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY = 'player.focusedClickHintDismissed.v1'
 const PLAYER_OPENED_ONCE_KEY = 'player.openedOnce.v1'
@@ -84,6 +85,7 @@ export const Player: React.FC<Props> = ({
 }) => {
     const { t } = useTranslation()
     const [exportError, setExportError] = React.useState<string | null>(null)
+    const [exportResult, setExportResult] = React.useState<ExportResult | null>(null)
     const [playerInitError, setPlayerInitError] = React.useState<string | null>(null)
     const containerRef = React.useRef<HTMLDivElement | null>(null)
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null)
@@ -249,6 +251,7 @@ export const Player: React.FC<Props> = ({
     React.useEffect(() => {
         trackEvent('player_open', { job_id: job.id })
         setExportError(null)
+        setExportResult(null)
         setPlayerInitError(null)
         setIsExporting(false)
         setExportProgressPct(null)
@@ -682,11 +685,12 @@ export const Player: React.FC<Props> = ({
     ])
 
     const exportVisible = !!player && player.mode === 'detailed' && player.currentTrackId != null
-    const exportEnabled = exportVisible && !isExporting
+    const exportEnabled = exportVisible && !isExporting && !exportResult
 
     const onExportTrack = React.useCallback(async () => {
         if (isExporting) return
         setExportError(null)
+        setExportResult(null)
         setIsExporting(true)
         setExportProgressPct(0)
 
@@ -724,7 +728,7 @@ export const Player: React.FC<Props> = ({
                 endSec,
             })
 
-            downloadExport(outBlob, filename)
+            setExportResult({ blob: outBlob, filename, jobId: job.id, trackId: track.track_id })
             trackEvent('export_track_success', { job_id: job.id, track_id: track.track_id })
         } catch (e: any) {
             const fallback = t('player.canvas.export.errors.failed')
@@ -859,27 +863,12 @@ export const Player: React.FC<Props> = ({
                 </div>
             )}
 
-            {/* Blocking overlay during export (covers canvas + controls, captures all pointer interactions) */}
-            {isExporting && (
-                <div
-                    className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-                    onMouseDown={e => e.preventDefault()}
-                    onClick={e => e.preventDefault()}
-                    onWheel={e => e.preventDefault()}
-                >
-                    <div className="px-4 py-3 rounded-lg bg-black/60 border border-gray-700 text-gray-100 text-center">
-                        <div className="text-base font-semibold">{t('player.canvas.export.overlay.title')}</div>
-                        {typeof exportProgressPct === 'number' ? (
-                            <div className="mt-1 text-sm tabular-nums">
-                                {Math.max(0, Math.min(100, exportProgressPct)).toFixed(0)}%
-                            </div>
-                        ) : (
-                            <div className="mt-1 text-sm">{t('player.canvas.export.overlay.starting')}</div>
-                        )}
-                        <div className="mt-2 text-xs text-gray-300">{t('player.canvas.export.overlay.note')}</div>
-                    </div>
-                </div>
-            )}
+            <ExportOverlay
+                isExporting={isExporting}
+                exportProgressPct={exportProgressPct}
+                exportResult={exportResult}
+                onClearExportResult={() => setExportResult(null)}
+            />
         </div>
     )
 }

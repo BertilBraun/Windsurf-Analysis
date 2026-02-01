@@ -442,6 +442,10 @@
             },
             "export": {
                 "errorLabel": "Export: {{message}}",
+                "shareFailed": "Teilen fehlgeschlagen",
+                "shareText": "Schau dir diesen Clip von GybeLock an",
+                "shareTooLarge": "Clip ist zu gross zum Teilen. Bitte Download verwenden.",
+                "shareUnsupported": "Teilen wird auf diesem Geraet nicht unterstuetzt",
                 "errors": {
                     "failed": "Export fehlgeschlagen",
                     "notReady": "Nicht bereit",
@@ -451,6 +455,9 @@
                 },
                 "overlay": {
                     "note": "Bitte warten — Playback-Controls sind kurzzeitig deaktiviert.",
+                    "download": "Download",
+                    "readyTitle": "Clip bereit",
+                    "share": "Teilen",
                     "starting": "Startet…",
                     "title": "Track exportieren…"
                 }
@@ -458,8 +465,8 @@
             "fileNotFound": "VIDEO FILE NOT FOUND"
         },
         "controlsBar": {
-            "export": "Export",
-            "exportTitle": "Exportiere den fokussierten Rider als MP4-Clip",
+            "export": "Clip teilen",
+            "exportTitle": "Erzeuge einen teilbaren MP4-Clip",
             "pause": "Pause",
             "play": "Play",
             "speed": "Speed: {{value}}x",

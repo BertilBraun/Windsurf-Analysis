@@ -70,6 +70,31 @@ export function downloadExport(blob: Blob, filename: string) {
     downloadBlob(blob, filename)
 }
 
+type ShareCapableNavigator = Navigator & {
+    share?: (data: ShareData) => Promise<void>
+    canShare?: (data: ShareData) => boolean
+}
+
+export function canShareExport(blob: Blob, filename: string): boolean {
+    if (typeof navigator === 'undefined') return false
+    const nav = navigator as ShareCapableNavigator
+    if (typeof nav.share !== 'function') return false
+    if (typeof File === 'undefined') return false
+
+    const file = new File([blob], filename, { type: blob.type || 'video/mp4' })
+    if (typeof nav.canShare !== 'function') return true
+    return nav.canShare({ files: [file] })
+}
+
+export async function shareExport(params: { blob: Blob; filename: string; text?: string; title?: string }) {
+    const { blob, filename, text, title } = params
+    const nav = navigator as ShareCapableNavigator
+    if (typeof nav.share !== 'function') throw new Error('Share not supported')
+    if (typeof File === 'undefined') throw new Error('Share not supported')
+    const file = new File([blob], filename, { type: blob.type || 'video/mp4' })
+    await nav.share({ files: [file], text, title })
+}
+
 /**
  * Processes a video segment to export a specific track as an MP4.
  * Applies rotation, dynamic cropping based on track detections, and watermarking.
