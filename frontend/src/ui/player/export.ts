@@ -10,6 +10,7 @@ import { PlayerState } from './state'
 import { drawWatermark, getWatermarkAsset } from './watermark'
 import { drawDetailedCrop, getSharedOffscreenCanvas } from './rendering'
 import { DEFAULT_ZOOM_BASELINE } from './constants'
+import { assert } from '../utils/assert'
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
@@ -128,8 +129,8 @@ export async function exportTrackMp4(params: {
     const watermark = await getWatermarkAsset()
 
     const onFrame = async (current: { frame: VideoFrame; timestampSec: number; frameIndex: number }, ctx: Ctx2D) => {
-        const frameIndex = Math.max(0, Math.min(player.frameCount - 1, current.frameIndex))
-        const detection = player.getClosestDetectionAtFrame(trackId, frameIndex)
+        assert(0 <= current.frameIndex && current.frameIndex < player.frameCount)
+        const detection = player.getClosestDetectionAtFrame(trackId, current.frameIndex)
 
         const rotCanvas = getSharedOffscreenCanvas()
         const rotatedFrame = drawRotatedToCanvas(current.frame, rotCanvas, dominantOrientationDeg)
