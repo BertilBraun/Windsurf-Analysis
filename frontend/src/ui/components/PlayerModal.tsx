@@ -177,6 +177,10 @@ export const PlayerModal: React.FC<{
                 closeOnEscape={player?.mode !== 'detailed'}
                 title={title}
                 showCloseButton={false}
+                // On mobile browsers, `vh` can include the URL/search bar (causing the bottom controls to be cut off).
+                // Use `dvh` and let the modal header consume space inside a fixed-height flex container.
+                contentClassName="relative flex flex-col bg-white text-black shadow-xl overflow-hidden w-screen h-[100dvh] rounded-none sm:w-[96vw] sm:h-[92dvh] sm:rounded-2xl sm:border sm:border-slate-200"
+                headerClassName="rounded-none sm:rounded-t-2xl"
                 additionalHeader={
                     <div className="flex items-center gap-2">
                         <Button
@@ -282,7 +286,7 @@ export const PlayerModal: React.FC<{
                     </div>
                 }
             >
-                <div className="relative w-[96vw] h-[92vh] bg-white text-black rounded-md shadow-xl overflow-hidden">
+                <div className="relative flex-1 min-h-0 overflow-hidden">
                     {showInfo && (
                         <div className="absolute z-30 top-3 left-3 w-[min(320px,92vw)] rounded-xl border border-slate-200 bg-white/95 backdrop-blur shadow-sm p-3">
                             <div className="flex items-start gap-2">

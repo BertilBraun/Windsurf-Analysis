@@ -761,8 +761,8 @@ export const Player: React.FC<Props> = ({
         : ''
 
     return (
-        <div className="relative flex flex-col h-full">
-            <div className="relative flex-1 bg-black overflow-hidden">
+        <div className="relative flex flex-col h-full min-h-0">
+            <div className="relative flex-1 min-h-0 bg-black overflow-hidden">
                 <div className="absolute right-2 top-2 z-20 pointer-events-none">
                     <div className="px-2 py-1 rounded-md bg-black/60 border border-gray-700 text-gray-100 text-[11px] font-medium">
                         {modeIndicatorLabel}
@@ -833,7 +833,7 @@ export const Player: React.FC<Props> = ({
             </div>
 
             {player && (
-                <div className="px-3 py-2 bg-black/60 border-t border-gray-700">
+                <div className="px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] bg-black/60 border-t border-gray-700">
                     <div className="mb-2">
                         <Timeline
                             onSeekPercent={p => seekToFrame(player.frameIndexForPercent(p), false)}
