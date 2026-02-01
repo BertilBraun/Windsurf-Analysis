@@ -7,7 +7,7 @@ maintaining any state, making it easier to test and reason about.
 
 import logging
 from bisect import bisect_left
-from typing import Sequence, Optional
+from typing import Sequence
 import numpy as np
 
 from ..tracking.tracking import Tracker
@@ -22,17 +22,9 @@ from ..settings import (
     TRACK_RTS_PROC_STD_WEIGHT_VEL,
 )
 from ..util.video_io import VideoInfo
-from ..common_types import (
-    Detection,
-    Track,
-    BoundingBox,
-    FrameIndex,
-    Point,
-    Keypoint,
-)
+from ..common_types import Detection, Track, BoundingBox, FrameIndex, Point
 from ..motion.kalman_filter import KFState, _KalmanFilter, KF
 from ..motion.cmc import CMC
-from .renderable_tracks import prepare_renderable_tracks
 
 
 class TrackPostProcessing:
@@ -76,7 +68,12 @@ def _get_valid_tracks(tracks: list[Track], total_frames: int) -> list[Track]:
     """Get tracks that meet minimum frame percentage requirement"""
     logger = logging.getLogger(__name__)
     valid_tracks: list[Track] = []
-    min_frames = int(MIN_FRAME_PERCENTAGE / 100 * total_frames)
+    min_frames = max(
+        # either min_frame_percentage
+        int(MIN_FRAME_PERCENTAGE / 100 * total_frames),
+        # or at least 3 seconds (at 30fps)
+        30 * 3,
+    )
 
     logger.info(
         f'Track analysis (min_frames required: {min_frames} out of {total_frames} total frames, {MIN_FRAME_PERCENTAGE}%):'
@@ -254,9 +251,6 @@ def _rts_smooth_track(detections: list[Detection], cmc: CMC) -> list[Detection]:
                 neighborhood_bbox_width,
                 neighborhood_bbox_height,
             )
-            neighborhood_bbox_1 = sum(
-                (d.bbox * weight for d, weight in neighborhood if d is not None), start=BoundingBox(0, 0, 0, 0)
-            ) / sum(weight for d, weight in neighborhood if d is not None)
 
             smoothed_det = Detection(
                 bbox=neighborhood_bbox,

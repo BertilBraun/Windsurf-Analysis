@@ -17,7 +17,8 @@ from .visualization.annotation_drawer import Annotation, AnnotationDrawer
 
 from .tracking.detector import SurferDetector
 from .tracking.tracking import Tracker
-from .tracking.track_processing import TrackPostProcessing, prepare_renderable_tracks
+from .tracking.track_processing import TrackPostProcessing
+from .tracking.renderable_tracks import prepare_renderable_tracks
 from .tracking.preprocessing.preprocessor import TrackPreProcessor
 from .tracking.iterative_ilp_tracker import IterativeILPTracker
 from .tracking.ilp_tracker import ILPTracker
