@@ -350,7 +350,7 @@
                     "title": "Alternar modo anotación"
                 },
                 "report": {
-                    "label": "Report",
+                    "label": "Reportar",
                     "title": "Reportar un problema en este video"
                 },
                 "help": {
@@ -358,14 +358,20 @@
                     "title": "Mostrar consejos"
                 },
                 "shortcuts": {
-                    "label": "Shortcuts",
+                    "label": "Atajos",
                     "title": "Atajos de teclado"
                 },
                 "overviewStabilization": {
                     "labelOn": "Estabilizado",
-                    "labelOff": "Raw",
+                    "labelOff": "Original",
                     "title": "Alternar estabilización en overview"
                 }
+            },
+            "title_one": "{{fileName}} - {{count}} rider",
+            "title_other": "{{fileName}} - {{count}} riders",
+            "info": {
+                "ridersLabel": "Riders",
+                "processedLabel": "Procesado"
             },
             "titleMeta": {
                 "riders": "{{n}} riders"
@@ -384,7 +390,7 @@
                 "processingTitle": "Enviando reporte…",
                 "send": "Enviar reporte",
                 "sending": "Enviando reporte…",
-                "subtitle": "Ayúdanos a mejorar el tracking y la detección en este video.",
+                "subtitle": "Estás reportando un problema para <strong>{{target}}</strong>. Ayúdanos a mejorar el tracking y la detección en este video.",
                 "thanksBody": "Gracias por tu feedback. Lo usaremos para mejorar el analyzer.",
                 "thanksTitle": "¡Gracias por tu feedback!",
                 "tip": "Tip: si puedes, incluye un timestamp aproximado.",

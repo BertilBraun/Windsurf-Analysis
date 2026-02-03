@@ -346,11 +346,11 @@
         "playerModal": {
             "actions": {
                 "draw": {
-                    "label": "Annotate",
+                    "label": "Annotieren",
                     "title": "Annotate-Modus umschalten"
                 },
                 "report": {
-                    "label": "Report",
+                    "label": "Melden",
                     "title": "Ein Problem in diesem Video melden"
                 },
                 "help": {
@@ -358,14 +358,20 @@
                     "title": "Tipps anzeigen"
                 },
                 "shortcuts": {
-                    "label": "Shortcuts",
+                    "label": "Tastenkürzel",
                     "title": "Tastenkürzel"
                 },
                 "overviewStabilization": {
                     "labelOn": "Stabilisiert",
-                    "labelOff": "Raw",
+                    "labelOff": "Original",
                     "title": "Stabilisierung in der Overview umschalten"
                 }
+            },
+            "title_one": "{{fileName}} - {{count}} Rider",
+            "title_other": "{{fileName}} - {{count}} Rider",
+            "info": {
+                "ridersLabel": "Rider",
+                "processedLabel": "Verarbeitet"
             },
             "titleMeta": {
                 "riders": "{{n}} Rider"
@@ -384,7 +390,7 @@
                 "processingTitle": "Report wird gesendet…",
                 "send": "Report senden",
                 "sending": "Report wird gesendet…",
-                "subtitle": "Hilf uns, Tracking und Detection für dieses Video zu verbessern.",
+                "subtitle": "Melde ein Problem für <strong>{{target}}</strong>. Hilf uns, Tracking und Detection für dieses Video zu verbessern.",
                 "thanksBody": "Danke für dein Feedback. Wir nutzen es, um den Analyzer zu verbessern.",
                 "thanksTitle": "Danke für dein Feedback!",
                 "tip": "Tipp: Wenn möglich, gib eine ungefähre Zeit an.",

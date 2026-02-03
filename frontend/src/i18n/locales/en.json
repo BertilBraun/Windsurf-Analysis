@@ -368,6 +368,12 @@
                     "title": "Toggle stabilization in overview mode"
                 }
             },
+            "title_one": "{{fileName}} - {{count}} Rider",
+            "title_other": "{{fileName}} - {{count}} Riders",
+            "info": {
+                "ridersLabel": "Riders",
+                "processedLabel": "Processed"
+            },
             "titleMeta": {
                 "riders": "{{n}} riders"
             },
@@ -385,7 +391,7 @@
                 "processingTitle": "Sending report…",
                 "send": "Send report",
                 "sending": "Sending report…",
-                "subtitle": "Help us improve tracking and detection for this video.",
+                "subtitle": "Reporting an issue for <strong>{{target}}</strong>. Help us improve tracking and detection for this video.",
                 "thanksBody": "Thanks for your feedback. We will use it to improve the analyzer.",
                 "thanksTitle": "Thanks for your feedback!",
                 "tip": "Tip: include an approximate timestamp if you can.",

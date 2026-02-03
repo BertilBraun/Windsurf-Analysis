@@ -130,11 +130,6 @@ export const PlayerModal: React.FC<{
         }
     }, [durationKey, ingressDirHandle, videoSource.kind])
 
-    const title =
-        videoSource.kind === 'file'
-            ? videoSource.file.name.replace(/\.(mp4|hevc|mov|mkv)$/i, '')
-            : job.local_relative_path?.replace(/\.(mp4|hevc|mov|mkv)$/i, '') ?? job.id ?? t('common.notAvailable')
-
     const [moreOpen, setMoreOpen] = React.useState(false)
     const moreRef = React.useRef<HTMLDivElement | null>(null)
 
@@ -168,6 +163,12 @@ export const PlayerModal: React.FC<{
             document.removeEventListener('keydown', onKeyDown)
         }
     }, [])
+
+    const fileName = videoSource.kind === 'file'
+        ? videoSource.file.name
+        : job.local_relative_path
+    const fileNamePart = fileName?.replace(/\.(mp4|hevc|mov|mkv)$/i, '') ?? t('common.notAvailable')
+    const title = t('components.playerModal.title', { fileName: fileNamePart, count: riderCount })
 
     return (
         <>
@@ -292,18 +293,22 @@ export const PlayerModal: React.FC<{
                             <div className="flex items-start gap-2">
                                 <div className="flex-1 min-w-0">
                                     <div className="text-xs font-semibold text-slate-900">{t('common.info')}</div>
-                                    <div className="mt-1 text-xs text-slate-700 space-y-1">
-                                        <div className="flex items-center justify-between gap-3">
-                                            <span className="text-slate-500">Riders</span>
-                                            <span className="tabular-nums text-slate-900">{riderCount}</span>
-                                        </div>
-                                        {createdAtLabel && (
+                                        <div className="mt-1 text-xs text-slate-700 space-y-1">
                                             <div className="flex items-center justify-between gap-3">
-                                                <span className="text-slate-500">Processed</span>
-                                                <span className="text-slate-900">{createdAtLabel}</span>
+                                                <span className="text-slate-500">
+                                                    {t('components.playerModal.info.ridersLabel')}
+                                                </span>
+                                                <span className="tabular-nums text-slate-900">{riderCount}</span>
                                             </div>
-                                        )}
-                                    </div>
+                                            {createdAtLabel && (
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <span className="text-slate-500">
+                                                        {t('components.playerModal.info.processedLabel')}
+                                                    </span>
+                                                    <span className="text-slate-900">{createdAtLabel}</span>
+                                                </div>
+                                            )}
+                                        </div>
                                 </div>
                                 <button
                                     type="button"
