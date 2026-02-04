@@ -250,7 +250,7 @@ def _save_tracks_metadata(tracks: list[Track], input_path: Path, output_dir: Pat
                         interpolated=bool(det.interpolated),
                         boom=[float(det.boom.point.x), float(det.boom.point.y), float(det.boom.conf)],
                         mast_tip=[float(det.mast_tip.point.x), float(det.mast_tip.point.y), float(det.mast_tip.conf)],
-                        anchor=[int(det.anchor.x), int(det.anchor.y)],
+                        anchor=[float(det.anchor.x), float(det.anchor.y)],
                         scale=float(det.scale),
                     )
                     for det in rtrack.sorted_detections

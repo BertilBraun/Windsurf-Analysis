@@ -6,6 +6,7 @@ import os
 import pickle
 import shutil
 from collections import defaultdict
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Sequence
@@ -32,7 +33,14 @@ from inference.src.tracking.ilp_tracker import ILPTracker
 from inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
 from inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
 from inference.src.tracking.track_processing import TrackPostProcessing
-from inference.src.tracking.renderable_tracks import prepare_renderable_tracks
+from inference.src.tracking.renderable_tracks import (
+    ANCHOR_SMOOTH_NEIGHBOR_WEIGHTS,
+    ANCHOR_SMOOTH_MAX_NEIGHBOR_DISTANCE_FRAME_PERCENT,
+    ANCHOR_SMOOTH_TRANSFORM_INDEX_OFFSET,
+    FloatPoint,
+    MotionModel,
+    prepare_renderable_tracks,
+)
 from inference.src.util.timing import timeit
 from inference.src.util.video_io import (
     VideoReader,
@@ -169,8 +177,194 @@ def _parse_args() -> argparse.Namespace:
         help='Only render detections with confidence >= this threshold.',
     )
 
+    p.add_argument(
+        '--anchor-smooth-transform-offset',
+        type=int,
+        default=int(ANCHOR_SMOOTH_TRANSFORM_INDEX_OFFSET),
+        help='Index offset applied when mapping neighbor points into the current frame (try -1,0,+1).',
+    )
+    p.add_argument(
+        '--anchor-smooth-neighbor-weights-json',
+        type=str,
+        default=None,
+        help='Optional JSON dict of {frame_offset:int -> weight:float} used for anchor smoothing neighborhood.',
+    )
+
+    p.add_argument(
+        '--render-anchor-neighborhood',
+        action='store_true',
+        help='Write a debug MP4 visualizing anchor smoothing neighbors transformed into the current frame.',
+    )
+    p.add_argument(
+        '--render-anchor-neighborhood-track-id',
+        type=int,
+        default=None,
+        help='Track id to visualize (default: first track).',
+    )
+    p.add_argument(
+        '--render-anchor-neighborhood-output',
+        type=str,
+        default=None,
+        help='Optional output path for debug MP4 (default: <output_dir>/<stem>.anchor_neighbors.mp4).',
+    )
+    p.add_argument(
+        '--render-anchor-neighborhood-every-n',
+        type=int,
+        default=1,
+        help='Render every Nth frame (speeds up; output FPS is scaled down accordingly).',
+    )
+
     p.add_argument('--no-player', action='store_true', help='Do not launch the local Qt player after processing.')
     return p.parse_args()
+
+
+def _parse_neighbor_weights_json(payload: str) -> dict[int, float]:
+    try:
+        raw = json.loads(payload)
+    except Exception as e:
+        raise ValueError(f'Invalid JSON for neighbor weights: {e}') from e
+    if not isinstance(raw, dict):
+        raise ValueError('Neighbor weights JSON must be an object/dict.')
+    out: dict[int, float] = {}
+    for k, v in raw.items():
+        try:
+            off = int(k)
+        except Exception:
+            raise ValueError(f'Neighbor offset key must be int-like, got {k!r}')
+        try:
+            w = float(v)
+        except Exception:
+            raise ValueError(f'Neighbor weight must be float-like, got {v!r}')
+        out[int(off)] = float(w)
+    return out
+
+
+def _color_for_offset(offset: int) -> tuple[int, int, int]:
+    # BGR, chosen to be distinct and readable on water.
+    if offset == 0:
+        return (60, 220, 60)  # green
+    if offset < 0:
+        # Past frames: warm (red/orange)
+        return (80, 120, 255) if abs(offset) == 1 else (60, 180, 255)
+    # Future frames: cool (blue/cyan)
+    return (255, 180, 60) if abs(offset) == 1 else (255, 220, 120)
+
+
+def _draw_anchor_neighbors_overlay(
+    frame_bgr: np.ndarray,
+    *,
+    frame_idx: int,
+    track_id: int,
+    candidate_anchors_by_frame: dict[int, FloatPoint],
+    smoothed_anchors_by_frame: dict[int, FloatPoint] | None,
+    motion: MotionModel | None,
+    neighbor_weights: dict[int, float],
+    transform_index_offset: int,
+) -> None:
+    h, w = frame_bgr.shape[:2]
+    max_neighbor_dist_px: float | None
+    if ANCHOR_SMOOTH_MAX_NEIGHBOR_DISTANCE_FRAME_PERCENT is None:
+        max_neighbor_dist_px = None
+    else:
+        max_neighbor_dist_px = float(ANCHOR_SMOOTH_MAX_NEIGHBOR_DISTANCE_FRAME_PERCENT) * float(
+            np.hypot(float(w), float(h))
+        )
+    neighbor_range = 5
+
+    cur_candidate = candidate_anchors_by_frame.get(int(frame_idx))
+    if cur_candidate is None:
+        return
+
+    # Candidate anchor (input to smoothing): white outline.
+    cx, cy = _clamp_xy(int(round(cur_candidate.x)), int(round(cur_candidate.y)), w, h)
+    cv2.circle(frame_bgr, (cx, cy), 8, (255, 255, 255), 2, cv2.LINE_AA)
+
+    # Smoothed anchor (output): green fill.
+    if smoothed_anchors_by_frame is not None:
+        cur_smoothed = smoothed_anchors_by_frame.get(int(frame_idx))
+        if cur_smoothed is not None:
+            sx, sy = _clamp_xy(int(round(cur_smoothed.x)), int(round(cur_smoothed.y)), w, h)
+            cv2.circle(frame_bgr, (sx, sy), 6, _color_for_offset(0), -1, cv2.LINE_AA)
+
+    cv2.putText(
+        frame_bgr,
+        (
+            f'anchor id={int(track_id)} f={int(frame_idx)} off={int(transform_index_offset)}'
+            if max_neighbor_dist_px is None
+            else f'anchor id={int(track_id)} f={int(frame_idx)} off={int(transform_index_offset)} maxd={max_neighbor_dist_px:.0f}px'
+        ),
+        (12, 24),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (240, 240, 240),
+        2,
+        cv2.LINE_AA,
+    )
+
+    # Render neighbors in a fixed +-range for easier visual debugging (independent of which offsets are weighted).
+    # Also connect the transformed neighbor points in offset-order: -5->-4->...->0->...->+5.
+    transformed_by_off: dict[int, tuple[FloatPoint, bool]] = {}
+    for off in range(-neighbor_range, neighbor_range + 1):
+        if off == 0:
+            continue
+        n_frame = int(frame_idx + int(off))
+        n_pt = candidate_anchors_by_frame.get(n_frame)
+        if n_pt is None:
+            continue
+
+        mapped = n_pt if motion is None else motion.map_point_abs(from_frame=n_frame, to_frame=int(frame_idx), p=n_pt)
+        is_filtered = False if max_neighbor_dist_px is None else (mapped.distance_to(cur_candidate) > float(max_neighbor_dist_px))
+        transformed_by_off[int(off)] = (mapped, bool(is_filtered))
+
+    # Connect consecutive offsets when both exist.
+    for off_a, off_b in zip(range(-neighbor_range, neighbor_range), range(-neighbor_range + 1, neighbor_range + 1)):
+        if off_a == 0 or off_b == 0:
+            continue
+        a = transformed_by_off.get(int(off_a))
+        b = transformed_by_off.get(int(off_b))
+        if a is None or b is None:
+            continue
+        pa, a_filtered = a
+        pb, b_filtered = b
+        ax, ay = _clamp_xy(int(round(pa.x)), int(round(pa.y)), w, h)
+        bx, by = _clamp_xy(int(round(pb.x)), int(round(pb.y)), w, h)
+        seg_col = (0, 0, 255) if (a_filtered or b_filtered) else (200, 200, 200)
+        cv2.line(frame_bgr, (ax, ay), (bx, by), seg_col, 1, cv2.LINE_AA)
+
+    # Draw neighbor points + center connections/labels.
+    for off in range(-neighbor_range, neighbor_range + 1):
+        if off == 0:
+            continue
+        item = transformed_by_off.get(int(off))
+        if item is None:
+            continue
+        mapped, is_filtered = item
+        px, py = _clamp_xy(int(round(mapped.x)), int(round(mapped.y)), w, h)
+
+        # If this neighbor would be filtered by max-distance gating, render it red.
+        col = (0, 0, 255) if is_filtered else _color_for_offset(int(off))
+
+        # Indicate whether this offset participates in smoothing weights.
+        has_weight = float(neighbor_weights.get(int(off), 0.0)) > 0.0
+        radius = 6 if has_weight else 4
+        thickness = -1 if has_weight else 2
+
+        cv2.circle(frame_bgr, (px, py), radius, col, thickness, cv2.LINE_AA)
+        label = f'{int(off):+d}'
+        if has_weight:
+            label += f' w={float(neighbor_weights[int(off)]):g}'
+        if is_filtered:
+            label += ' filtered'
+        cv2.putText(
+            frame_bgr,
+            label,
+            (px + 6, py - 6),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            col,
+            2,
+            cv2.LINE_AA,
+        )
 
 
 def _build_bboxes_by_frame(raw_detections: Sequence[RawDetection]) -> dict[int, list[list[int]]]:
@@ -351,6 +545,143 @@ def _render_keypoints_debug_video(
     return output_path
 
 
+def _render_anchor_neighborhood_debug_video(
+    *,
+    video_path: Path,
+    output_path: Path,
+    limit_frames: int | None,
+    every_n: int,
+    candidate_renderable_tracks: Sequence[RenderableTrack],
+    smoothed_renderable_tracks: Sequence[RenderableTrack] | None,
+    raw_motion_transforms: Sequence[Transform],
+    neighbor_weights: dict[int, float],
+    transform_index_offset: int,
+    track_id: int | None,
+) -> Path:
+    every_n = max(1, int(every_n))
+    neighbor_range = 5
+    window = 2 * neighbor_range + 1
+
+    props = get_video_properties_with_accurate_total_frame_count(video_path)
+    out_fps = max(1, int(round(int(props.fps) / float(every_n))))
+
+    tracks_by_id: dict[int, RenderableTrack] = {int(t.track_id): t for t in candidate_renderable_tracks}
+    chosen_id: int
+    if track_id is not None:
+        chosen_id = int(track_id)
+    elif tracks_by_id:
+        chosen_id = sorted(tracks_by_id.keys())[0]
+    else:
+        raise ValueError('No renderable tracks available for anchor neighborhood debug.')
+
+    track = tracks_by_id.get(int(chosen_id))
+    if track is None or not track.sorted_detections:
+        raise ValueError(f'Track id {int(chosen_id)} not found or has no detections.')
+
+    start_frame = int(track.sorted_detections[0].frame_idx)
+    end_frame = int(track.sorted_detections[-1].frame_idx)
+    candidate_anchors_by_frame: dict[int, FloatPoint] = {
+        int(d.frame_idx): FloatPoint(float(d.anchor.x), float(d.anchor.y)) for d in track.sorted_detections
+    }
+    smoothed_anchors_by_frame: dict[int, FloatPoint] | None = None
+    if smoothed_renderable_tracks is not None:
+        sm_by_id: dict[int, RenderableTrack] = {int(t.track_id): t for t in smoothed_renderable_tracks}
+        sm_track = sm_by_id.get(int(chosen_id))
+        if sm_track is not None and sm_track.sorted_detections:
+            smoothed_anchors_by_frame = {
+                int(d.frame_idx): FloatPoint(float(d.anchor.x), float(d.anchor.y)) for d in sm_track.sorted_detections
+            }
+
+    motion: MotionModel | None = None
+    if raw_motion_transforms:
+        motion = MotionModel(
+            raw_motion_transforms=list(raw_motion_transforms),
+            start_frame=0,
+            frame_count=int(props.total_frames),
+            transform_index_offset=int(transform_index_offset),
+        )
+
+    with VideoReader(video_path, drop_every_nth=every_n) as reader, VideoWriter(
+        output_path, width=int(props.width), height=int(props.height), fps=int(out_fps)
+    ) as writer:
+        buf: deque[tuple[int, np.ndarray]] = deque(maxlen=window)
+        for frame_idx, frame in reader.read_frames():
+            frame_idx = int(frame_idx)
+            if limit_frames is not None and frame_idx >= int(limit_frames):
+                break
+
+            buf.append((frame_idx, frame.copy()))
+            if len(buf) < window:
+                continue
+
+            cur_i = neighbor_range
+            cur_frame_idx, cur_frame = buf[cur_i]
+
+            # Overlay neighbor frames mapped into the current frame. If transforms are correct, the overlays
+            # should align well (minimal ghosting).
+            acc = cur_frame.astype(np.float32)
+            weight = np.ones((int(props.height), int(props.width), 1), dtype=np.float32)
+            alpha = 0.35
+            if motion is not None:
+                for off in range(-neighbor_range, neighbor_range + 1):
+                    if off == 0:
+                        continue
+                    n_frame_idx, n_frame = buf[cur_i + off]
+                    c_rel, s_rel, tx_rel, ty_rel = motion.relative_rigid_params_abs(
+                        from_frame=int(n_frame_idx), to_frame=int(cur_frame_idx)
+                    )
+                    M = np.array([[c_rel, -s_rel, tx_rel], [s_rel, c_rel, ty_rel]], dtype=np.float32)
+                    warped = cv2.warpAffine(
+                        n_frame,
+                        M,
+                        (int(props.width), int(props.height)),
+                        flags=cv2.INTER_LINEAR,
+                        borderMode=cv2.BORDER_CONSTANT,
+                        borderValue=(0, 0, 0),
+                    )
+                    mask = cv2.warpAffine(
+                        np.full((int(props.height), int(props.width)), 255, dtype=np.uint8),
+                        M,
+                        (int(props.width), int(props.height)),
+                        flags=cv2.INTER_NEAREST,
+                        borderMode=cv2.BORDER_CONSTANT,
+                        borderValue=0,
+                    )
+                    wm = (mask.astype(np.float32) / 255.0)[:, :, None] * float(alpha)
+                    acc += warped.astype(np.float32) * wm
+                    weight += wm
+
+            canvas = np.clip(acc / np.maximum(weight, 1e-6), 0, 255).astype(np.uint8)
+
+            _draw_anchor_neighbors_overlay(
+                canvas,
+                frame_idx=int(cur_frame_idx),
+                track_id=int(chosen_id),
+                candidate_anchors_by_frame=candidate_anchors_by_frame,
+                smoothed_anchors_by_frame=smoothed_anchors_by_frame,
+                motion=motion,
+                neighbor_weights=neighbor_weights,
+                transform_index_offset=int(transform_index_offset),
+            )
+
+            # Helpful: indicate whether this frame is inside the track range.
+            if int(cur_frame_idx) < start_frame or int(cur_frame_idx) > end_frame:
+                cv2.putText(
+                    canvas,
+                    'outside track range',
+                    (12, 48),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (64, 64, 255),
+                    2,
+                    cv2.LINE_AA,
+                )
+
+            writer.write_frame(canvas)
+
+    return output_path
+
+
 @cache_to_file('tmp/transforms')
 def _compute_transforms(
     video_path: Path,
@@ -447,7 +778,7 @@ def _save_tracks_metadata(tracks: list[RenderableTrack], video_path: Path, outpu
                         interpolated=bool(det.interpolated),
                         boom=[float(det.boom.point.x), float(det.boom.point.y), float(det.boom.conf)],
                         mast_tip=[float(det.mast_tip.point.x), float(det.mast_tip.point.y), float(det.mast_tip.conf)],
-                        anchor=[int(det.anchor.x), int(det.anchor.y)],
+                        anchor=[float(det.anchor.x), float(det.anchor.y)],
                         scale=float(det.scale),
                     )
                     for det in track.sorted_detections
@@ -597,6 +928,12 @@ def run_local_pipeline(
     render_keypoints_output: str | None = None,
     render_keypoints_every_n: int = 1,
     render_keypoints_min_det_conf: float = 0.0,
+    anchor_smooth_transform_offset: int = int(ANCHOR_SMOOTH_TRANSFORM_INDEX_OFFSET),
+    anchor_smooth_neighbor_weights: dict[int, float] = ANCHOR_SMOOTH_NEIGHBOR_WEIGHTS,
+    render_anchor_neighborhood: bool = False,
+    render_anchor_neighborhood_track_id: int | None = None,
+    render_anchor_neighborhood_output: str | None = None,
+    render_anchor_neighborhood_every_n: int = 1,
 ) -> LocalRunResult:
     output_dir = output_dir / input_video.stem
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -685,7 +1022,14 @@ def run_local_pipeline(
 
     # 6) Write metadata for local Qt player
     with timeit('output: write metadata'):
-        renderable_tracks = prepare_renderable_tracks(tracks, video_width=props.width, video_height=props.height)
+        renderable_tracks = prepare_renderable_tracks(
+            tracks,
+            video_width=props.width,
+            video_height=props.height,
+            raw_motion_transforms=raw_motion_transforms,
+            anchor_smooth_transform_index_offset=int(anchor_smooth_transform_offset),
+            anchor_smooth_neighbor_weights=dict(anchor_smooth_neighbor_weights),
+        )
         metadata_path = _save_tracks_metadata(renderable_tracks, upright_video, output_dir)
         stabilization_transforms_path = _save_stabilization_transforms(
             transforms_by_frame,
@@ -722,6 +1066,37 @@ def run_local_pipeline(
                 tracks=(tracks if render_keypoints_source == 'tracks' else None),
             )
             print(f'Keypoint debug video: {output_path}')
+
+    if render_anchor_neighborhood:
+        with timeit('output: render anchor neighborhood'):
+            output_path = (
+                Path(render_anchor_neighborhood_output)
+                if render_anchor_neighborhood_output is not None
+                else (output_dir / f'{upright_video.stem}.anchor_neighbors.mp4')
+            )
+            # For debugging the smoothing itself, visualize the *candidate* anchors (input points)
+            # and overlay the final smoothed anchor (output point).
+            candidate_tracks = prepare_renderable_tracks(
+                tracks,
+                video_width=props.width,
+                video_height=props.height,
+                raw_motion_transforms=raw_motion_transforms,
+                anchor_smooth_transform_index_offset=int(anchor_smooth_transform_offset),
+                anchor_smooth_neighbor_weights={0: 1.0},
+            )
+            _render_anchor_neighborhood_debug_video(
+                video_path=upright_video,
+                output_path=output_path,
+                limit_frames=limit_frames,
+                every_n=int(render_anchor_neighborhood_every_n),
+                candidate_renderable_tracks=candidate_tracks,
+                smoothed_renderable_tracks=renderable_tracks,
+                raw_motion_transforms=raw_motion_transforms,
+                neighbor_weights=dict(anchor_smooth_neighbor_weights),
+                transform_index_offset=int(anchor_smooth_transform_offset),
+                track_id=render_anchor_neighborhood_track_id,
+            )
+            print(f'Anchor neighborhood debug video: {output_path}')
 
     print(f'Output directory: {output_dir}')
     print(f'Upright video: {upright_video}')
@@ -773,6 +1148,18 @@ def main() -> int:
         render_keypoints_output=args.render_keypoints_output,
         render_keypoints_every_n=int(args.render_keypoints_every_n),
         render_keypoints_min_det_conf=float(args.render_keypoints_min_det_conf),
+        anchor_smooth_transform_offset=int(args.anchor_smooth_transform_offset),
+        anchor_smooth_neighbor_weights=(
+            _parse_neighbor_weights_json(args.anchor_smooth_neighbor_weights_json)
+            if args.anchor_smooth_neighbor_weights_json
+            else dict(ANCHOR_SMOOTH_NEIGHBOR_WEIGHTS)
+        ),
+        render_anchor_neighborhood=bool(args.render_anchor_neighborhood),
+        render_anchor_neighborhood_track_id=(
+            int(args.render_anchor_neighborhood_track_id) if args.render_anchor_neighborhood_track_id is not None else None
+        ),
+        render_anchor_neighborhood_output=args.render_anchor_neighborhood_output,
+        render_anchor_neighborhood_every_n=int(args.render_anchor_neighborhood_every_n),
     )
 
     if not args.no_player:

@@ -22,7 +22,7 @@ class DetectionLite:
     boom: list[float]  # [x, y, conf]
     mast_tip: list[float]  # [x, y, conf]
     # Derived render-time fields (precomputed in Python pipeline)
-    anchor: list[int]  # [x, y]
+    anchor: list[float]  # [x, y] (pixel coords; may be subpixel)
     scale: float
 
 
