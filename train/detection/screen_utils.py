@@ -39,6 +39,55 @@ def get_screen_size() -> Optional[Tuple[int, int]]:
         return None
 
 
+def get_window_monitor_size(window_name: str) -> Optional[Tuple[int, int]]:
+    """Best-effort: return the size (w,h) of the monitor containing the OpenCV window."""
+    try:
+        x, y, w, h = cv2.getWindowImageRect(window_name)
+    except Exception:
+        return None
+
+    if w <= 0 or h <= 0:
+        return None
+
+    try:
+        import ctypes  # type: ignore
+        from ctypes import wintypes  # type: ignore
+
+        user32 = ctypes.windll.user32
+        try:
+            user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+        class POINT(ctypes.Structure):
+            _fields_ = [('x', wintypes.LONG), ('y', wintypes.LONG)]
+
+        class RECT(ctypes.Structure):
+            _fields_ = [('left', wintypes.LONG), ('top', wintypes.LONG), ('right', wintypes.LONG), ('bottom', wintypes.LONG)]
+
+        class MONITORINFO(ctypes.Structure):
+            _fields_ = [('cbSize', wintypes.DWORD), ('rcMonitor', RECT), ('rcWork', RECT), ('dwFlags', wintypes.DWORD)]
+
+        MONITOR_DEFAULTTONEAREST = 2
+        pt = POINT(int(x + w // 2), int(y + h // 2))
+        monitor = user32.MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST)
+        if not monitor:
+            return None
+
+        info = MONITORINFO()
+        info.cbSize = ctypes.sizeof(MONITORINFO)
+        if not user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+            return None
+
+        mw = int(info.rcMonitor.right - info.rcMonitor.left)
+        mh = int(info.rcMonitor.bottom - info.rcMonitor.top)
+        if mw <= 0 or mh <= 0:
+            return None
+        return (mw, mh)
+    except Exception:
+        return None
+
+
 def overlay_screen_warning(
     image: np.ndarray,
     screen_size: Optional[Tuple[int, int]],

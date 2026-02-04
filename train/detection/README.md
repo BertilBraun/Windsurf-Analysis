@@ -6,7 +6,7 @@ Tools for annotating and training YOLO-based detection and pose estimation model
 *   **negative_sample_creation.py**: Extracts background crops (minimum 640x640) and generates empty label files to reduce false positives.
 
 ### Pose & Keypoint Annotation
-*   **annotator_keypoints_fullframe.py**: Precision labeling for `boom_mast` and `mast_tip` keypoints using zoomed-in bounding box crops.
+*   **annotator_keypoints_fullframe.py**: Precision labeling for `boom_mast` and `mast_tip` keypoints using zoomed-in bounding box crops (use `--sync-index` to pick up newly added detection samples).
 *   **pseudo_label_pose.py**: Active learning helper that uses a trained model to generate pose labels, gated by IoU and confidence.
 *   **view_pose_labels.py**: Visualizer for pose projects; renders bboxes and keypoints (manual or pseudo) over full-frame images.
 
@@ -20,6 +20,7 @@ Tools for annotating and training YOLO-based detection and pose estimation model
 
 ### Common Controls
 *   **LMB Drag**: Draw new box.
+*   **Q / E**: Rotate 90° CCW / CW (annotator only).
 *   **LMB Click**: Select existing box.
 *   **Space**: Save and advance to next sample.
 *   **r**: Delete selected or last box.
