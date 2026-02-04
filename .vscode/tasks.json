@@ -129,6 +129,18 @@
             "type": "shell",
             "command": "python tools/docs_agent/worktree_run.py -- --apply --llm gemini --write-state --format-python --update-inline-docs --update-readmes",
             "problemMatcher": []
+        },
+        {
+            "label": "Annotate Keypoints",
+            "type": "shell",
+            "command": "python train/detection/annotator_keypoints_fullframe.py --src train/detection/windsurf_dataset --out train/detection/pose_projects/boom_mast_v1 --sync-index --val-ratio 0.05",
+            "problemMatcher": []
+        },
+        {
+            "label": "Annotate Keypoints",
+            "type": "shell",
+            "command": "python train/detection/annotator.py \"${input:video-dir}\" train/detection/windsurf_dataset --samples 2000",
+            "problemMatcher": []
         }
     ],
     "inputs": [

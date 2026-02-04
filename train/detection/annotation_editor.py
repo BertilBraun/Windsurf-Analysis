@@ -29,23 +29,63 @@ import numpy as np
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
-from screen_utils import get_screen_size, overlay_screen_warning
+from screen_utils import get_screen_size, get_window_monitor_size, overlay_screen_warning
 
 
 SUPPORTED_IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp'}
 
 
+def resize_to_fit_screen(
+    img: np.ndarray,
+    screen_size: Optional[Tuple[int, int]],
+    margins: Tuple[int, int] = (50, 50),
+    max_side: int = 2048,
+) -> Tuple[np.ndarray, float]:
+    """Resize up/down so the image fits within the screen (with margins)."""
+    if img is None:
+        return img, 1.0
+
+    h, w = img.shape[:2]
+    max_w = None
+    max_h = None
+    if screen_size is not None:
+        screen_w, screen_h = screen_size
+        margin_w, margin_h = margins
+        max_w = max(200, int(screen_w - margin_w))
+        max_h = max(200, int(screen_h - margin_h))
+
+    if max_w is None or max_h is None:
+        # Screen size unknown: only downscale to max_side (avoid surprise upscaling).
+        scale = min(1.0, max_side / max(h, w))
+    else:
+        scale_screen = min(max_w / max(1, w), max_h / max(1, h))
+        scale_cap = max_side / max(h, w)
+        scale = min(scale_screen, scale_cap)
+
+    scale = max(0.01, float(scale))
+    if abs(scale - 1.0) > 1e-6:
+        new_w, new_h = max(1, int(w * scale)), max(1, int(h * scale))
+        interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
+        img = cv2.resize(img, (new_w, new_h), interpolation=interp)
+    return img, scale
+
+
 @dataclass
 class BBox:
-    # Coordinates in DISPLAY space (after scaling). We'll convert on save.
+    # Coordinates in ORIGINAL image pixel space.
     x1: float
     y1: float
     x2: float
     y2: float
     cls_id: int = 0
 
-    def as_int_tuple(self) -> Tuple[int, int, int, int]:
-        return int(self.x1), int(self.y1), int(self.x2), int(self.y2)
+    def as_int_tuple(self, scale: float) -> Tuple[int, int, int, int]:
+        return (
+            int(self.x1 * scale),
+            int(self.y1 * scale),
+            int(self.x2 * scale),
+            int(self.y2 * scale),
+        )
 
     def contains(self, x: float, y: float) -> bool:
         return self.x1 <= x <= self.x2 and self.y1 <= y <= self.y2
@@ -55,23 +95,26 @@ class ImageBboxEditor:
     def __init__(self, images_dir: Path, max_side: int = 2048) -> None:
         self.images_dir = images_dir
         self.max_side = max_side
+        self.screen_size = get_screen_size()
 
         self.image_paths: List[Path] = self._collect_images(images_dir)
         if not self.image_paths:
             raise SystemExit(f'No images found in {images_dir}')
 
         self.index: int = 0
-        self.img: Optional[np.ndarray] = None  # image
+        self.orig_img: Optional[np.ndarray] = None  # original image (used for saving labels)
+        self.img: Optional[np.ndarray] = None  # display image (scaled)
+        self.scale_factor: float = 1.0
 
         self.boxes: List[BBox] = []
         self.selected_idx: Optional[int] = None
 
         # drawing state
         self.is_drawing: bool = False
-        self.start_x: int = 0
-        self.start_y: int = 0
-        self.mouse_x: int = 0
-        self.mouse_y: int = 0
+        self.start_x: float = 0.0
+        self.start_y: float = 0.0
+        self.mouse_x: float = 0.0
+        self.mouse_y: float = 0.0
 
         cv2.namedWindow('bbox-editor')
         cv2.setMouseCallback('bbox-editor', self._mouse_cb)
@@ -86,10 +129,11 @@ class ImageBboxEditor:
 
     def _load_image_and_labels(self) -> None:
         img_path = self.image_paths[self.index]
-        self.img = cv2.imread(str(img_path))
-        if self.img is None:
+        self.orig_img = cv2.imread(str(img_path))
+        if self.orig_img is None:
             raise SystemExit(f'Failed to read image: {img_path}')
 
+        self.img, self.scale_factor = resize_to_fit_screen(self.orig_img, self.screen_size, max_side=self.max_side)
         self.boxes = self._load_labels_for(img_path)
         self.selected_idx = len(self.boxes) - 1 if self.boxes else None
 
@@ -99,8 +143,8 @@ class ImageBboxEditor:
         if not label_path.exists():
             return boxes
 
-        assert self.img is not None
-        H_orig, W_orig = self.img.shape[:2]
+        assert self.orig_img is not None
+        H_orig, W_orig = self.orig_img.shape[:2]
         with open(label_path, 'r') as f:
             for line in f:
                 parts = line.strip().split()
@@ -123,8 +167,8 @@ class ImageBboxEditor:
     def _save_labels(self) -> None:
         img_path = self.image_paths[self.index]
         label_path = self._label_path_for(img_path)
-        assert self.img is not None
-        H_orig, W_orig = self.img.shape[:2]
+        assert self.orig_img is not None
+        H_orig, W_orig = self.orig_img.shape[:2]
 
         with open(label_path, 'w') as f:
             for b in self.boxes:
@@ -148,6 +192,12 @@ class ImageBboxEditor:
     # ---------- drawing / UI ----------------------------------------------
     def _draw(self) -> None:
         assert self.img is not None
+        assert self.orig_img is not None
+
+        eff_screen = get_window_monitor_size('bbox-editor') or self.screen_size
+        if eff_screen != self.screen_size:
+            self.screen_size = eff_screen
+            self.img, self.scale_factor = resize_to_fit_screen(self.orig_img, self.screen_size, max_side=self.max_side)
         canvas = self.img.copy()
         for i, b in enumerate(self.boxes):
             color = (0, 255, 0)
@@ -155,31 +205,36 @@ class ImageBboxEditor:
             if self.selected_idx is not None and i == self.selected_idx:
                 color = (0, 0, 255)
                 thickness = 3
-            x1, y1, x2, y2 = b.as_int_tuple()
+            x1, y1, x2, y2 = b.as_int_tuple(self.scale_factor)
             cv2.rectangle(canvas, (x1, y1), (x2, y2), color, thickness)
 
         # preview rectangle while drawing
         if self.is_drawing:
-            x1 = min(self.start_x, self.mouse_x)
-            y1 = min(self.start_y, self.mouse_y)
-            x2 = max(self.start_x, self.mouse_x)
-            y2 = max(self.start_y, self.mouse_y)
+            x1 = int(min(self.start_x, self.mouse_x) * self.scale_factor)
+            y1 = int(min(self.start_y, self.mouse_y) * self.scale_factor)
+            x2 = int(max(self.start_x, self.mouse_x) * self.scale_factor)
+            y2 = int(max(self.start_y, self.mouse_y) * self.scale_factor)
             cv2.rectangle(canvas, (x1, y1), (x2, y2), (255, 255, 0), 2)
 
         # Warn if the display image is larger than the screen (allow modest margins)
-        canvas = overlay_screen_warning(canvas, get_screen_size())
+        canvas = overlay_screen_warning(canvas, self.screen_size)
 
         title = f'bbox-editor [{self.index + 1}/{len(self.image_paths)}] {self.image_paths[self.index].name}'
         cv2.setWindowTitle('bbox-editor', title)
         cv2.imshow('bbox-editor', canvas)
 
     def _mouse_cb(self, event, x, y, flags, param) -> None:
-        self.mouse_x, self.mouse_y = x, y
+        if self.orig_img is None:
+            return
+        H_orig, W_orig = self.orig_img.shape[:2]
+        ox = float(max(0.0, min(W_orig - 1.0, x / max(1e-8, self.scale_factor))))
+        oy = float(max(0.0, min(H_orig - 1.0, y / max(1e-8, self.scale_factor))))
+        self.mouse_x, self.mouse_y = ox, oy
         if event == cv2.EVENT_LBUTTONDOWN:
             # Select if clicked inside any existing box (prefer last on ties)
             clicked_idx = None
             for i in reversed(range(len(self.boxes))):
-                if self.boxes[i].contains(x, y):
+                if self.boxes[i].contains(ox, oy):
                     clicked_idx = i
                     break
             if clicked_idx is not None:
@@ -188,17 +243,17 @@ class ImageBboxEditor:
             else:
                 # start drawing a new box
                 self.is_drawing = True
-                self.start_x, self.start_y = x, y
+                self.start_x, self.start_y = ox, oy
 
         elif event == cv2.EVENT_MOUSEMOVE and self.is_drawing:
             pass  # just update preview via _draw()
 
         elif event == cv2.EVENT_LBUTTONUP and self.is_drawing:
             self.is_drawing = False
-            x1 = float(min(self.start_x, x))
-            y1 = float(min(self.start_y, y))
-            x2 = float(max(self.start_x, x))
-            y2 = float(max(self.start_y, y))
+            x1 = float(min(self.start_x, ox))
+            y1 = float(min(self.start_y, oy))
+            x2 = float(max(self.start_x, ox))
+            y2 = float(max(self.start_y, oy))
             # enforce minimum size
             if x2 > x1 + 1 and y2 > y1 + 1:
                 self.boxes.append(BBox(x1, y1, x2, y2, 0))
@@ -210,8 +265,8 @@ class ImageBboxEditor:
         idx = self.selected_idx if self.selected_idx is not None else len(self.boxes) - 1
         self.selected_idx = idx
         b = self.boxes[idx]
-        assert self.img is not None
-        H, W = self.img.shape[:2]
+        assert self.orig_img is not None
+        H, W = self.orig_img.shape[:2]
 
         # step based on bbox size
         box_w = max(1.0, abs(b.x2 - b.x1))

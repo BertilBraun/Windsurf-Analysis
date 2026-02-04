@@ -3,20 +3,20 @@
 annotate.py – minimal multi-box annotator with grow/shrink toggle
 
 Mouse:
-    LMB drag : draw box
+    LMB hold + move : "paint" to grow bbox (bbox expands to include your path)
 
 Keys:
     r         : undo last box
     Space     : accept / save frame
     w/a/s/d  : move/resize selected box edge (mode: grow)
     W/A/S/D  : move/resize selected box edge (mode: shrink)
+    q / e     : rotate 90° CCW / CW (also clickable buttons)
     Esc       : quit
     ','       : previous frame
     '.'       : next frame
     'x'       : skip frame
-    'e'       : empty frame
+    'f'       : empty frame
     backspace : undo last save
-    tab       : reset box start during drawing
 """
 
 import os
@@ -26,7 +26,7 @@ import random
 import argparse
 import numpy as np
 from typing import Optional, Tuple
-from screen_utils import get_screen_size, overlay_screen_warning
+from screen_utils import get_screen_size, get_window_monitor_size, overlay_screen_warning
 
 from pathlib import Path
 
@@ -61,44 +61,222 @@ def resize_to_max(img, max_side=2048) -> Tuple[np.ndarray, float]:
     return img, scale
 
 
+def resize_to_fit_screen(
+    img: np.ndarray,
+    screen_size: Optional[Tuple[int, int]],
+    margins: Tuple[int, int] = (50, 50),
+    max_side: int = 8096,
+) -> Tuple[np.ndarray, float]:
+    """Resize up/down so the image fits within the screen (with margins)."""
+    if img is None:
+        return img, 1.0
+
+    h, w = img.shape[:2]
+    max_w = None
+    max_h = None
+    if screen_size is not None:
+        screen_w, screen_h = screen_size
+        margin_w, margin_h = margins
+        max_w = max(200, int(screen_w - margin_w))
+        max_h = max(200, int(screen_h - margin_h))
+
+    if max_w is None or max_h is None:
+        # Screen size unknown: only downscale to max_side (avoid surprise upscaling).
+        scale = min(1.0, max_side / max(h, w))
+    else:
+        # Fit within screen (no crop), but allow upscaling to fill the available space.
+        scale_screen = min(max_w / max(1, w), max_h / max(1, h))
+        scale_cap = max_side / max(h, w)
+        scale = min(scale_screen, scale_cap)
+
+    scale = max(0.01, float(scale))
+    if abs(scale - 1.0) > 1e-6:
+        new_w, new_h = max(1, int(w * scale)), max(1, int(h * scale))
+        interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
+        img = cv2.resize(img, (new_w, new_h), interpolation=interp)
+    return img, scale
+
+
 # ---------- globals ---------------------------------------------------------
 drawing = False
-ix = iy = 0
 mx, my = 0, 0
-boxes = []  # list of [x1,y1,x2,y2] floats
+boxes = []  # list of [x1,y1,x2,y2] floats in ORIGINAL image pixel coords
 img: Optional[np.ndarray] = None
 disp: Optional[np.ndarray] = None
 orig_img: Optional[np.ndarray] = None
 scale_factor: float = 1.0
 last_saved: Optional[Tuple[Path, int, int]] = None  # (vpath, frame_no, sid)
-screen_size: Optional[Tuple[int, int]] = get_screen_size()
+fallback_screen_size: Optional[Tuple[int, int]] = get_screen_size()
+rotation_k: int = 0  # number of 90° clockwise rotations applied (0..3)
+paint_box: Optional[Tuple[float, float, float, float]] = None  # in ORIGINAL coords while drawing
+
+UI_PAD = 10
+UI_BTN_W = 150
+UI_BTN_H = 34
+UI_GAP = 10
+
+
+def _ui_button_rects():
+    ccw = (UI_PAD, UI_PAD, UI_PAD + UI_BTN_W, UI_PAD + UI_BTN_H)
+    cw = (UI_PAD + UI_BTN_W + UI_GAP, UI_PAD, UI_PAD + 2 * UI_BTN_W + UI_GAP, UI_PAD + UI_BTN_H)
+    return ccw, cw
+
+
+def _pt_in_rect(x: int, y: int, rect) -> bool:
+    x1, y1, x2, y2 = rect
+    return (x1 <= x <= x2) and (y1 <= y <= y2)
+
+
+def _draw_ui(canvas: np.ndarray) -> np.ndarray:
+    """Overlay rotate buttons + current rotation on the canvas (in place)."""
+    global rotation_k
+    if canvas is None:
+        return canvas
+    H, W = canvas.shape[:2]
+    ccw, cw = _ui_button_rects()
+
+    # Only draw if it fits reasonably
+    if ccw[2] > W - 2 or cw[2] > W - 2 or ccw[3] > H - 2:
+        return canvas
+
+    def draw_btn(rect, label):
+        x1, y1, x2, y2 = rect
+        cv2.rectangle(canvas, (x1, y1), (x2, y2), (30, 30, 30), -1)
+        cv2.rectangle(canvas, (x1, y1), (x2, y2), (220, 220, 220), 1)
+        cv2.putText(
+            canvas,
+            label,
+            (x1 + 10, y2 - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (240, 240, 240),
+            2,
+            cv2.LINE_AA,
+        )
+
+    draw_btn(ccw, 'Rotate CCW (Q)')
+    draw_btn(cw, 'Rotate CW (E)')
+
+    rot = (rotation_k % 4) * 90
+    cv2.putText(
+        canvas,
+        f'Rotation: {rot} deg',
+        (UI_PAD, UI_PAD + UI_BTN_H + 24),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (0, 0, 0),
+        3,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        canvas,
+        f'Rotation: {rot} deg',
+        (UI_PAD, UI_PAD + UI_BTN_H + 24),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+    return canvas
+
+
+def _rotate_boxes_ccw(bx_list, w: int, h: int):
+    # CCW: (x, y) -> (h - 1 - y, x), new size (w' = h, h' = w)
+    out = []
+    for x1, y1, x2, y2 in bx_list:
+        corners = [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
+        pts = [(h - 1 - y, x) for (x, y) in corners]
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        out.append([float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))])
+    return out
+
+
+def _rotate_boxes_cw(bx_list, w: int, h: int):
+    # CW: (x, y) -> (y, w - 1 - x), new size (w' = h, h' = w)
+    out = []
+    for x1, y1, x2, y2 in bx_list:
+        corners = [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
+        pts = [(y, w - 1 - x) for (x, y) in corners]
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        out.append([float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))])
+    return out
+
+
+def rotate_current(delta_quarters: int):
+    """Rotate current frame + boxes by N*90 degrees (positive=CW, negative=CCW)."""
+    global img, orig_img, boxes, drawing, rotation_k, scale_factor, paint_box
+    if orig_img is None:
+        return
+
+    steps = int(delta_quarters)
+    if steps == 0:
+        return
+
+    drawing = False
+    paint_box = None
+    if steps > 0:
+        for _ in range(steps % 4):
+            h, w = orig_img.shape[:2]
+            orig_img = cv2.rotate(orig_img, cv2.ROTATE_90_CLOCKWISE)
+            boxes = _rotate_boxes_cw(boxes, w=w, h=h)
+            rotation_k = (rotation_k + 1) % 4
+    else:
+        for _ in range((-steps) % 4):
+            h, w = orig_img.shape[:2]
+            orig_img = cv2.rotate(orig_img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            boxes = _rotate_boxes_ccw(boxes, w=w, h=h)
+            rotation_k = (rotation_k - 1) % 4
+
+    img, scale_factor = resize_to_fit_screen(orig_img, get_window_monitor_size('annotate') or fallback_screen_size)
+    redraw(img, boxes)
 
 
 def mouse_cb(event, x, y, flags, param):
-    global drawing, ix, iy, boxes, disp, mx, my
+    global drawing, boxes, disp, mx, my, paint_box
     mx, my = x, y
     if event == cv2.EVENT_LBUTTONDOWN:
-        drawing, ix, iy = True, x, y
+        ccw, cw = _ui_button_rects()
+        if _pt_in_rect(x, y, ccw):
+            rotate_current(-1)
+            return
+        if _pt_in_rect(x, y, cw):
+            rotate_current(1)
+            return
+        if orig_img is None:
+            return
+        h0, w0 = orig_img.shape[:2]
+        ox = float(max(0.0, min(w0 - 1.0, x / max(1e-8, scale_factor))))
+        oy = float(max(0.0, min(h0 - 1.0, y / max(1e-8, scale_factor))))
+        drawing = True
+        paint_box = (ox, oy, ox, oy)
+        redraw(img, boxes)
     elif event == cv2.EVENT_MOUSEMOVE and drawing:
-        redraw(img, boxes + [[ix, iy, x, y]])
+        if paint_box is None or orig_img is None:
+            return
+        h0, w0 = orig_img.shape[:2]
+        ox = float(max(0.0, min(w0 - 1.0, x / max(1e-8, scale_factor))))
+        oy = float(max(0.0, min(h0 - 1.0, y / max(1e-8, scale_factor))))
+        x1, y1, x2, y2 = paint_box
+        paint_box = (min(x1, ox), min(y1, oy), max(x2, ox), max(y2, oy))
+        redraw(img, boxes)
     elif event == cv2.EVENT_LBUTTONUP:
         drawing = False
-        if img is None:
+        if paint_box is None:
             return
-        h, w = img.shape[:2]
-        x1 = float(max(0, min(ix, x)))
-        y1 = float(max(0, min(iy, y)))
-        x2 = float(min(w - 1, max(ix, x)))
-        y2 = float(min(h - 1, max(iy, y)))
+        x1, y1, x2, y2 = paint_box
+        paint_box = None
         # Prevent zero or negative area
-        if x2 > x1 and y2 > y1:
-            boxes.append([x1, y1, x2, y2])
+        if x2 > x1 + 1 and y2 > y1 + 1:
+            boxes.append([float(x1), float(y1), float(x2), float(y2)])
         redraw(img, boxes)
 
 
 def redraw(base, bx_list, highlight_last=True):
     """draw all boxes on a copy of base, highlight last box if any"""
-    global disp
+    global disp, paint_box
     if base is None:
         disp = None
         return
@@ -110,7 +288,21 @@ def redraw(base, bx_list, highlight_last=True):
         if highlight_last and i == n - 1 and not drawing:
             color = (0, 0, 255)  # red
             thickness = 3
-        cv2.rectangle(canvas, (int(bx[0]), int(bx[1])), (int(bx[2]), int(bx[3])), color, thickness)
+        x1 = int(bx[0] * scale_factor)
+        y1 = int(bx[1] * scale_factor)
+        x2 = int(bx[2] * scale_factor)
+        y2 = int(bx[3] * scale_factor)
+        cv2.rectangle(canvas, (x1, y1), (x2, y2), color, thickness)
+
+    if drawing and paint_box is not None:
+        x1, y1, x2, y2 = paint_box
+        cv2.rectangle(
+            canvas,
+            (int(x1 * scale_factor), int(y1 * scale_factor)),
+            (int(x2 * scale_factor), int(y2 * scale_factor)),
+            (255, 255, 0),
+            2,
+        )
     disp = canvas
 
 
@@ -118,9 +310,9 @@ def adjust_last(dx1=0, dy1=0, dx2=0, dy2=0):
     """Fine-tune the last box, clamped to image, by ADJUST_BB_SIZE% of bbox size."""
     if not boxes:
         return
-    if img is None:
+    if orig_img is None:
         return
-    h, w = img.shape[:2]
+    h, w = orig_img.shape[:2]
     x1, y1, x2, y2 = boxes[-1]
 
     box_w = max(1, abs(x2 - x1))
@@ -157,11 +349,10 @@ def save_sample(vpath: Path):
     h0, w0 = orig_img.shape[:2]
     with open(txt, 'w') as f:
         for x1, y1, x2, y2 in boxes:
-            # Map from resized/display coords back to original coords
-            ox1 = max(0.0, min(w0 - 1.0, x1 / max(1e-8, scale_factor)))
-            oy1 = max(0.0, min(h0 - 1.0, y1 / max(1e-8, scale_factor)))
-            ox2 = max(0.0, min(w0 - 1.0, x2 / max(1e-8, scale_factor)))
-            oy2 = max(0.0, min(h0 - 1.0, y2 / max(1e-8, scale_factor)))
+            ox1 = max(0.0, min(w0 - 1.0, float(x1)))
+            oy1 = max(0.0, min(h0 - 1.0, float(y1)))
+            ox2 = max(0.0, min(w0 - 1.0, float(x2)))
+            oy2 = max(0.0, min(h0 - 1.0, float(y2)))
 
             cx = (ox1 + ox2) / 2.0 / w0
             cy = (oy1 + oy2) / 2.0 / h0
@@ -215,17 +406,29 @@ while sample_count < args.samples:
         continue
 
     orig_img = frame
-    img, scale_factor = resize_to_max(frame)
+    img, scale_factor = resize_to_fit_screen(orig_img, get_window_monitor_size('annotate') or fallback_screen_size)
+    rotation_k = 0
+    paint_box = None
     boxes.clear()
     redraw(img, boxes)
     h, w = img.shape[:2]
+    last_eff_screen: Optional[Tuple[int, int]] = None
 
     while True:
+        eff_screen = get_window_monitor_size('annotate') or fallback_screen_size
+        if orig_img is not None and eff_screen is not None and eff_screen != last_eff_screen:
+            img, scale_factor = resize_to_fit_screen(orig_img, eff_screen)
+            redraw(img, boxes)
+            last_eff_screen = eff_screen
+
         cv2.setWindowTitle(
-            'annotate', f'annotate [{sample_count}/{args.samples}] {vpath.name} (frame {frame_no + 1}/{fcnt})'
+            'annotate',
+            f'annotate [{sample_count}/{args.samples}] {vpath.name} (frame {frame_no + 1}/{fcnt}) rot={rotation_k * 90}°',
         )
         to_show = disp if disp is not None else (img if img is not None else np.zeros((10, 10, 3), dtype=np.uint8))
-        to_show = overlay_screen_warning(to_show, screen_size)
+        to_show = to_show.copy()
+        to_show = _draw_ui(to_show)
+        to_show = overlay_screen_warning(to_show, eff_screen)
         cv2.imshow('annotate', to_show)
         key = cv2.waitKey(20)
 
@@ -237,6 +440,11 @@ while sample_count < args.samples:
             if boxes:
                 boxes.pop()
                 redraw(img, boxes)
+
+        elif key in (ord('q'), ord('Q')):
+            rotate_current(-1)
+        elif key in (ord('e'), ord('E')):
+            rotate_current(1)
 
         elif key == 32:  # Space -> accept/save
             if save_sample(vpath):
@@ -275,7 +483,11 @@ while sample_count < args.samples:
             cap.release()
             if ok:
                 orig_img = frame
-                img, scale_factor = resize_to_max(frame)
+                img, scale_factor = resize_to_fit_screen(
+                    orig_img, get_window_monitor_size('annotate') or fallback_screen_size
+                )
+                rotation_k = 0
+                paint_box = None
                 boxes.clear()
                 redraw(img, boxes)
             # Stay in this frame for annotation
@@ -291,30 +503,23 @@ while sample_count < args.samples:
             cap.release()
             if ok:
                 orig_img = frame
-                img, scale_factor = resize_to_max(frame)
+                img, scale_factor = resize_to_fit_screen(
+                    orig_img, get_window_monitor_size('annotate') or fallback_screen_size
+                )
+                rotation_k = 0
+                paint_box = None
                 boxes.clear()
                 redraw(img, boxes)
             # Stay in this frame for annotation
 
-        elif key == ord('e'):
-            # store the empty frame with no boxes and advance to the next frame
+        elif key in (ord('f'), ord('F')):
+            # store the empty frame and move to a new random sample (video/frame)
+            boxes.clear()
             save_sample(vpath)
-            frame_no = min(fcnt - 1, frame_no + 1)
-            cap = cv2.VideoCapture(str(vpath))
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
-            ok, frame = cap.read()
-            cap.release()
-            if ok:
-                orig_img = frame
-                img, scale_factor = resize_to_max(frame)
-                boxes.clear()
-                redraw(img, boxes)
-
-        # Tab: Reset box start during drawing
-        elif key == 9 and drawing:
-            ix = mx
-            iy = my
-            redraw(img, boxes + [[ix, iy, mx, my]])
+            idx = random.choices(range(len(videos)), weights)[0]
+            vpath, fcnt = videos[idx], fcounts[idx]
+            frame_no = random.randint(0, fcnt - 1)
+            break
 
         # Backspace: Undo last save, re-display that frame for re-annotation
         elif key == 8:
@@ -346,7 +551,11 @@ while sample_count < args.samples:
                 cap.release()
                 if ok:
                     orig_img = frame
-                    img, scale_factor = resize_to_max(frame)
+                    img, scale_factor = resize_to_fit_screen(
+                        orig_img, get_window_monitor_size('annotate') or fallback_screen_size
+                    )
+                    rotation_k = 0
+                    paint_box = None
                     redraw(img, boxes)
                     vpath = vpath_del
                     fcnt = fcounts[videos.index(vpath)]

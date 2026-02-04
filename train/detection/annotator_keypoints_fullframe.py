@@ -289,6 +289,14 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         '--seed', type=int, default=0, help='RNG seed for deterministic split/index (only used on first run).'
     )
+    p.add_argument(
+        '--sync-index',
+        action='store_true',
+        help=(
+            'If pose_index.yaml already exists, scan --src for new labeled detection samples and append them '
+            'to the index (preserves existing keys/splits).'
+        ),
+    )
     p.add_argument('--hit-radius', type=int, default=18, help='Click radius (px in display coords) to remove a point.')
     p.add_argument('--crop-margin', type=float, default=0.15, help='Crop margin around bbox (fraction of bbox size).')
     p.add_argument(
@@ -329,14 +337,66 @@ def _load_or_create_index(
     out_dir: Path,
     val_ratio: float,
     seed: int,
+    sync: bool,
 ) -> list[dict]:
     idx_path = _index_path(out_dir)
     if idx_path.exists():
         payload = yaml.safe_load(idx_path.read_text(encoding='utf-8')) or {}
-        items = payload.get('items', [])
-        if isinstance(items, list):
-            return [it for it in items if isinstance(it, dict)]
-        return []
+        items_raw = payload.get('items', [])
+        items: list[dict] = [it for it in items_raw if isinstance(it, dict)] if isinstance(items_raw, list) else []
+        if not bool(sync):
+            return items
+
+        # Sync: append any newly-added labeled detection samples from --src.
+        existing_src_rels = {str(it.get('src_rel', '')) for it in items if str(it.get('src_rel', ''))}
+        existing_keys = {str(it.get('key', '')) for it in items if str(it.get('key', ''))}
+
+        images = _collect_images(src_dir)
+        new_items: list[dict] = []
+        for img_path in images:
+            label_path = img_path.with_suffix('.txt')
+            bboxes = _read_bboxes(label_path)
+            if not bboxes:
+                continue
+            rel = str(img_path.relative_to(src_dir).as_posix())
+            if rel in existing_src_rels:
+                continue
+
+            base_key = _slug_from_relpath(Path(rel))
+            key = base_key
+            dup = 0
+            while key in existing_keys:
+                dup += 1
+                key = f'{base_key}__dup{dup:02d}'
+            existing_keys.add(key)
+            existing_src_rels.add(rel)
+            new_items.append({'key': key, 'src_rel': rel, 'split': 'train'})
+
+        if not new_items:
+            return items
+
+        import random
+
+        rng = random.Random(int(seed))
+        rng.shuffle(new_items)
+        try:
+            vr = float(val_ratio)
+        except Exception:
+            vr = 0.0
+        vr = max(0.0, min(1.0, vr))
+        n_val_new = int(math.floor(len(new_items) * vr))
+        for i, it in enumerate(new_items):
+            it['split'] = 'val' if i < n_val_new else 'train'
+
+        items.extend(new_items)
+
+        # Keep payload metadata stable, but update src_root if it was missing.
+        if not payload.get('src_root'):
+            payload['src_root'] = str(src_dir.resolve())
+        payload['items'] = items
+        idx_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding='utf-8')
+        print(f'Index synced: +{len(new_items)} new samples added to {idx_path}')
+        return items
 
     import random
 
@@ -398,6 +458,7 @@ def main() -> int:
         out_dir=out_dir,
         val_ratio=float(args.val_ratio),
         seed=int(args.seed),
+        sync=bool(args.sync_index),
     )
     if not items:
         raise SystemExit(f'No index items found in: {_index_path(out_dir)}')
