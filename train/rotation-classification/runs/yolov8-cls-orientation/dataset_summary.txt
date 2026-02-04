@@ -1,0 +1,2 @@
+YOLOv8 classification dataset for 0/90/180/270.
+{'total_images': 2484, 'per_split': {'train': 2352, 'val': 132, 'test': 0}, 'per_class': {0: 638, 90: 570, 180: 623, 270: 653}}
