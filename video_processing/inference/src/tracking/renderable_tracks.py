@@ -8,10 +8,12 @@ This module converts dense per-frame `Track` objects into `RenderableTrack`s by 
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import math
 from typing import Optional
 
 from ..common_types import Detection, Point, RenderableDetection, RenderableTrack, Track, interpolate
+from ..visualization.stabilize import Transform
 
 
 def _assert_dense_per_frame(detections: list[Detection], track_id: int) -> None:
@@ -26,22 +28,213 @@ def _assert_dense_per_frame(detections: list[Detection], track_id: int) -> None:
         )
 
 
-def _anchor_weighted(points: list[Point], *, max_neighbor_distance: Optional[float] = None) -> list[Point]:
-    out: list[Point] = []
+# --------------------------------------------------------------------------------------
+# Anchor smoothing knobs (single implementation)
+# --------------------------------------------------------------------------------------
+
+# Neighborhood weights for robust mean smoothing. Keys are frame offsets relative to the current frame.
+ANCHOR_SMOOTH_NEIGHBOR_WEIGHTS: dict[int, float] = {
+    -2: 0.25,
+    -1: 1.00,
+    0: 4.00,
+    1: 1.00,
+    2: 0.25,
+}
+
+# Huber threshold (pixels) for robust reweighting.
+ANCHOR_SMOOTH_ROBUST_MEAN_C_PX: float = 50.0
+
+
+@dataclass(frozen=True)
+class FloatPoint:
+    x: float
+    y: float
+
+    def distance_to(self, other: FloatPoint) -> float:
+        dx = float(self.x) - float(other.x)
+        dy = float(self.y) - float(other.y)
+        return math.hypot(dx, dy)
+
+    def interpolate(self, other: FloatPoint, alpha: float) -> FloatPoint:
+        a = float(alpha)
+        return FloatPoint(
+            x=(1.0 - a) * float(self.x) + a * float(other.x),
+            y=(1.0 - a) * float(self.y) + a * float(other.y),
+        )
+
+    def __add__(self, other: FloatPoint) -> FloatPoint:
+        return FloatPoint(x=float(self.x) + float(other.x), y=float(self.y) + float(other.y))
+
+    def __mul__(self, scalar: float) -> FloatPoint:
+        s = float(scalar)
+        return FloatPoint(x=float(self.x) * s, y=float(self.y) * s)
+
+    def __truediv__(self, scalar: float) -> FloatPoint:
+        s = float(scalar)
+        if s == 0.0:
+            return self
+        return FloatPoint(x=float(self.x) / s, y=float(self.y) / s)
+
+
+def _to_float_point(p: Point) -> FloatPoint:
+    return FloatPoint(float(p.x), float(p.y))
+
+
+def _rotation_cos_sin(angle_rad: float) -> tuple[float, float]:
+    return (math.cos(float(angle_rad)), math.sin(float(angle_rad)))
+
+
+class MotionModel:
+    """
+    Rigid 2D motion model for mapping points between frames.
+
+    Uses a per-frame raw motion delta convention:
+      Transform(dx,dy,da,frame_idx=k) maps points from frame (k-1) -> k via:
+        p_k = R(da) * p_{k-1} + [dx, dy]
+    """
+
+    def __init__(
+        self,
+        *,
+        raw_motion_transforms: list[Transform],
+        start_frame: int,
+        frame_count: int,
+    ) -> None:
+        self.start_frame = int(start_frame)
+        self.frame_count = int(frame_count)
+
+        raw_by_frame: dict[int, Transform] = {int(t.frame_idx): t for t in raw_motion_transforms}
+
+        # Cumulative transform from `start_frame` to frame (start_frame + i):
+        #   p_i = R[i] * p_0 + T[i]
+        self._c: list[float] = [1.0] * self.frame_count  # cos(theta)
+        self._s: list[float] = [0.0] * self.frame_count  # sin(theta)
+        self._tx: list[float] = [0.0] * self.frame_count
+        self._ty: list[float] = [0.0] * self.frame_count
+
+        for rel_idx in range(1, self.frame_count):
+            abs_frame = self.start_frame + rel_idx
+            # Delta (abs_frame-1 -> abs_frame) is stored at frame_idx=abs_frame.
+            t = raw_by_frame.get(int(abs_frame))
+            if t is None:
+                dx = dy = da = 0.0
+            else:
+                dx, dy, da = float(t.dx), float(t.dy), float(t.da)
+
+            c_d, s_d = _rotation_cos_sin(da)
+            c_prev, s_prev = self._c[rel_idx - 1], self._s[rel_idx - 1]
+
+            # R_new = R_delta * R_prev  (angle addition)
+            c_new = c_d * c_prev - s_d * s_prev
+            s_new = s_d * c_prev + c_d * s_prev
+
+            # T_new = R_delta * T_prev + dT
+            tx_prev, ty_prev = self._tx[rel_idx - 1], self._ty[rel_idx - 1]
+            tx_new = c_d * tx_prev - s_d * ty_prev + dx
+            ty_new = s_d * tx_prev + c_d * ty_prev + dy
+
+            self._c[rel_idx] = float(c_new)
+            self._s[rel_idx] = float(s_new)
+            self._tx[rel_idx] = float(tx_new)
+            self._ty[rel_idx] = float(ty_new)
+
+    def _relative_params(self, from_rel: int, to_rel: int) -> tuple[float, float, float, float]:
+        c_to, s_to = self._c[to_rel], self._s[to_rel]
+        c_from, s_from = self._c[from_rel], self._s[from_rel]
+
+        # R_rel = R_to * R_from^{-1} = R_to * R_from^T (rotation matrices)
+        c_rel = c_to * c_from + s_to * s_from
+        s_rel = s_to * c_from - c_to * s_from
+
+        # t_rel = t_to - R_rel * t_from
+        tx_from, ty_from = self._tx[from_rel], self._ty[from_rel]
+        tx_rf = c_rel * tx_from - s_rel * ty_from
+        ty_rf = s_rel * tx_from + c_rel * ty_from
+        tx_rel = self._tx[to_rel] - tx_rf
+        ty_rel = self._ty[to_rel] - ty_rf
+        return float(c_rel), float(s_rel), float(tx_rel), float(ty_rel)
+
+    def map_point_abs(self, from_frame: int, to_frame: int, p: FloatPoint) -> FloatPoint:
+        from_rel = int(from_frame) - self.start_frame
+        to_rel = int(to_frame) - self.start_frame
+        if from_rel == to_rel:
+            return p
+        if not (0 <= from_rel < self.frame_count and 0 <= to_rel < self.frame_count):
+            return p
+        c_rel, s_rel, tx_rel, ty_rel = self._relative_params(from_rel, to_rel)
+        x = c_rel * float(p.x) - s_rel * float(p.y) + tx_rel
+        y = s_rel * float(p.x) + c_rel * float(p.y) + ty_rel
+        return FloatPoint(x=float(x), y=float(y))
+
+
+def _anchor_robust_mean(
+    points: list[FloatPoint],
+    *,
+    frame_start: int,
+    raw_motion_transforms: list[Transform],
+) -> list[FloatPoint]:
+    if not points:
+        return []
+
+    weights = dict(ANCHOR_SMOOTH_NEIGHBOR_WEIGHTS)
+    weights.setdefault(0, 1.0)
+    robust_c_px = float(ANCHOR_SMOOTH_ROBUST_MEAN_C_PX)
+
+    motion: Optional[MotionModel] = None
+    if len(points) >= 2:
+        motion = MotionModel(
+            raw_motion_transforms=raw_motion_transforms,
+            start_frame=int(frame_start),
+            frame_count=int(len(points)),
+        )
+
+    offsets = sorted(weights.keys(), key=lambda k: abs(int(k)))
+    out: list[FloatPoint] = []
+
     for i in range(len(points)):
-        acc = Point(0, 0)
-        acc_w = 0.0
-        if i - 1 >= 0:
-            if max_neighbor_distance is None or points[i - 1].distance_to(points[i]) <= max_neighbor_distance:
-                acc += points[i - 1] * 1.0
-                acc_w += 1.0
-        acc += points[i] * 4.0
-        acc_w += 4.0
-        if i + 1 < len(points):
-            if max_neighbor_distance is None or points[i + 1].distance_to(points[i]) <= max_neighbor_distance:
-                acc += points[i + 1] * 0.5
-                acc_w += 0.5
-        out.append(acc / acc_w)
+        current_abs = int(frame_start + i)
+        current_pt = points[i]
+
+        samples: list[tuple[FloatPoint, float]] = []
+        for rel_off in offsets:
+            j = int(i + int(rel_off))
+            if j < 0 or j >= len(points):
+                continue
+            w = float(weights.get(int(rel_off), 0.0))
+            if w <= 0.0:
+                continue
+
+            neighbor = points[j]
+            if motion is not None:
+                neighbor_abs = int(frame_start + j)
+                neighbor = motion.map_point_abs(neighbor_abs, current_abs, neighbor)
+            samples.append((neighbor, w))
+
+        if not samples:
+            out.append(current_pt)
+            continue
+
+        def mean_with(scale: list[float]) -> FloatPoint:
+            acc = FloatPoint(0.0, 0.0)
+            acc_w = 0.0
+            for (p, w0), s in zip(samples, scale):
+                w = float(w0) * float(s)
+                if w <= 0.0:
+                    continue
+                acc = acc + p * w
+                acc_w += w
+            return current_pt if acc_w <= 0.0 else (acc / acc_w)
+
+        m0 = mean_with([1.0 for _ in samples])
+        if robust_c_px > 0.0:
+            scale2: list[float] = []
+            for p, _w in samples:
+                r = p.distance_to(m0)
+                scale2.append(1.0 if r <= robust_c_px else (robust_c_px / max(1e-9, float(r))))
+            out.append(mean_with(scale2))
+        else:
+            out.append(m0)
+
     return out
 
 
@@ -72,6 +265,7 @@ def calculate_anchors(
     missing_grace_frames: int,
     video_width: int,
     video_height: int,
+    raw_motion_transforms: list[Transform],
 ) -> list[Point]:
     """
     Compute per-frame anchors for a dense, per-frame list of detections.
@@ -79,58 +273,46 @@ def calculate_anchors(
     Behavior:
       - Prefer a point along the mast segment when boom is visible.
       - Short gaps (<= missing_grace_frames) between two visible boom keypoints are interpolated (anchor->anchor).
-        This interpolation is suppressed if it would move the anchor more than 5% of the frame diagonal in one step
-        (to avoid large jumps from outlier detections).
       - Longer missing spans blend to/from bbox centers over missing_grace_frames to avoid snapping.
-      - Final anchors are smoothed with a fixed weighted window [prev:1, curr:4, next:0.5].
+      - Final anchors are smoothed with a robust (Huber) neighborhood mean; when raw camera-motion transforms are
+        provided, neighbor samples are mapped into the current frame before smoothing.
     """
     assert missing_grace_frames > 0
     assert video_width > 0
     assert video_height > 0
 
-    MAX_DISTANCE_FRAME_PERCENT = 0.05
-    max_anchor_step_px = MAX_DISTANCE_FRAME_PERCENT * math.hypot(float(video_width), float(video_height))
+    frame_start = int(detections[0].frame_idx) if detections else 0
 
-    bbox_centers = [d.bbox.center for d in detections]
+    bbox_centers = [_to_float_point(d.bbox.center) for d in detections]
     boom_vis = [d.boom.is_visible for d in detections]
     mast_vis = [d.mast_tip.is_visible for d in detections]
     visible_indices = [i for i, v in enumerate(boom_vis) if v]
 
-    bbox_top_y = [int(d.bbox.y1) for d in detections]
+    bbox_top_y = [float(d.bbox.y1) for d in detections]
     boom_or_center_x = [
-        int(d.boom.point.x) if boom_vis[i] else int(bbox_centers[i].x) for i, d in enumerate(detections)
+        float(d.boom.point.x) if boom_vis[i] else float(bbox_centers[i].x) for i, d in enumerate(detections)
     ]
 
-    def proxy_mast_tip(i: int) -> Point:
-        # Proxy when the mast tip keypoint isn't visible: use bbox top edge with a reasonable X.
-        return Point(int(boom_or_center_x[i]), int(bbox_top_y[i]))
+    def proxy_mast_tip(i: int) -> FloatPoint:
+        return FloatPoint(float(boom_or_center_x[i]), float(bbox_top_y[i]))
 
-    def fill_mast_tip_points() -> list[Point]:
-        """
-        Build a dense per-frame mast-tip point series, using:
-          - visible mast tips when available,
-          - interpolation for short gaps,
-          - bbox-top proxy for long gaps, with interpolation into/out of proxy around re-appearance.
-        """
+    def fill_mast_tip_points() -> list[FloatPoint]:
         grace = int(missing_grace_frames)
         tip_vis = [bool(v) for v in mast_vis]
         visible_tip_indices = [i for i, v in enumerate(tip_vis) if v]
 
-        # Default: proxy everywhere.
-        tip: list[Point] = [proxy_mast_tip(i) for i in range(len(detections))]
+        tip: list[FloatPoint] = [proxy_mast_tip(i) for i in range(len(detections))]
         if not visible_tip_indices:
             return tip
 
-        # Place visible tips.
         for i in visible_tip_indices:
-            tip[i] = detections[i].mast_tip.point
+            tip[i] = _to_float_point(detections[i].mast_tip.point)
 
-        # Interpolate short gaps between visible tips.
         for a_i, b_i in zip(visible_tip_indices[:-1], visible_tip_indices[1:]):
             gap = b_i - a_i - 1
             if 0 < gap <= grace:
-                p0 = detections[a_i].mast_tip.point
-                p1 = detections[b_i].mast_tip.point
+                p0 = _to_float_point(detections[a_i].mast_tip.point)
+                p1 = _to_float_point(detections[b_i].mast_tip.point)
                 for k in range(1, gap + 1):
                     t = float(k) / float(gap + 1)
                     tip[a_i + k] = p0.interpolate(p1, t)
@@ -140,7 +322,7 @@ def calculate_anchors(
         if first > grace:
             start_idx = first - grace
             p0 = proxy_mast_tip(start_idx)
-            p1 = detections[first].mast_tip.point
+            p1 = _to_float_point(detections[first].mast_tip.point)
             for idx in range(start_idx, first):
                 t = float(idx - start_idx) / float(grace)
                 tip[idx] = p0.interpolate(p1, t)
@@ -150,13 +332,12 @@ def calculate_anchors(
         trailing = (len(detections) - 1) - last
         if trailing > grace:
             end_idx = last + grace
-            p0 = detections[last].mast_tip.point
+            p0 = _to_float_point(detections[last].mast_tip.point)
             p1 = proxy_mast_tip(end_idx)
             for idx in range(last + 1, end_idx + 1):
                 t = float(idx - last) / float(grace)
                 tip[idx] = p0.interpolate(p1, t)
 
-        # Internal long gaps: ease out to proxy and back in from proxy.
         for a_i, b_i in zip(visible_tip_indices[:-1], visible_tip_indices[1:]):
             gap = b_i - a_i - 1
             if gap <= grace:
@@ -165,18 +346,14 @@ def calculate_anchors(
             out_end = min(len(detections) - 1, a_i + grace)
             in_start = max(0, b_i - grace)
 
-            # Ease tip[a_i] -> proxy(out_end)
-            p0 = detections[a_i].mast_tip.point
+            p0 = _to_float_point(detections[a_i].mast_tip.point)
             p1 = proxy_mast_tip(out_end)
             for idx in range(a_i + 1, out_end + 1):
                 t = float(idx - a_i) / float(grace)
                 tip[idx] = p0.interpolate(p1, t)
 
-            # Middle: proxy (already default).
-
-            # Ease proxy(in_start) -> tip[b_i]
             p0 = proxy_mast_tip(in_start)
-            p1 = detections[b_i].mast_tip.point
+            p1 = _to_float_point(detections[b_i].mast_tip.point)
             for idx in range(in_start, b_i):
                 t = float(idx - in_start) / float(grace)
                 tip[idx] = p0.interpolate(p1, t)
@@ -185,20 +362,25 @@ def calculate_anchors(
 
     filled_mast_tip = fill_mast_tip_points()
 
-    def preferred_anchor(i: int) -> Point:
+    def preferred_anchor(i: int) -> FloatPoint:
         # With a centered crop, anchoring on the boom can cut off the mast tip (boom is close to one end of the mast).
         # Use a point along the mast segment; when the true mast tip isn't visible, `filled_mast_tip` eases into a
         # bbox-top proxy and back out, avoiding large jumps when the mast reappears.
         if boom_vis[i]:
             tip = filled_mast_tip[i]
-            boom = detections[i].boom.point
+            boom = _to_float_point(detections[i].boom.point)
             # Bias strongly towards the boom so the anchor stays close to the rider/boom while
             # still leaving headroom for the mast tip in the crop.
             return tip.interpolate(boom, 0.85)
         return bbox_centers[i]
 
     if not visible_indices:
-        return _anchor_weighted(bbox_centers, max_neighbor_distance=max_anchor_step_px)
+        smoothed = _anchor_robust_mean(
+            bbox_centers,
+            frame_start=frame_start,
+            raw_motion_transforms=raw_motion_transforms,
+        )
+        return [Point(int(p.x), int(p.y)) for p in smoothed]
 
     anchors = list(bbox_centers)
     visible_set = set(visible_indices)
@@ -211,27 +393,23 @@ def calculate_anchors(
         if 0 < gap <= missing_grace_frames:
             p0 = preferred_anchor(a_i)
             p1 = preferred_anchor(b_i)
-            current_anchor = anchors[a_i]
             for k in range(1, gap + 1):
                 t = float(k) / float(gap + 1)
                 idx = a_i + k
-                candidate = p0.interpolate(p1, t)
-                if candidate.distance_to(current_anchor) <= max_anchor_step_px:
-                    anchors[idx] = candidate
-                    short_gap_indices.add(idx)
-                current_anchor = anchors[idx]
+                anchors[idx] = p0.interpolate(p1, t)
+                short_gap_indices.add(idx)
 
-    out_point: list[Optional[Point]] = [None for _ in detections]
+    out_point: list[Optional[FloatPoint]] = [None for _ in detections]
     out_weight: list[float] = [0.0 for _ in detections]
-    in_point: list[Optional[Point]] = [None for _ in detections]
+    in_point: list[Optional[FloatPoint]] = [None for _ in detections]
     in_weight: list[float] = [0.0 for _ in detections]
 
-    def set_out(idx: int, pt: Point, w: float) -> None:
+    def set_out(idx: int, pt: FloatPoint, w: float) -> None:
         if out_point[idx] is None or w > out_weight[idx]:
             out_point[idx] = pt
             out_weight[idx] = float(w)
 
-    def set_in(idx: int, pt: Point, w: float) -> None:
+    def set_in(idx: int, pt: FloatPoint, w: float) -> None:
         if in_point[idx] is None or w > in_weight[idx]:
             in_point[idx] = pt
             in_weight[idx] = float(w)
@@ -318,7 +496,12 @@ def calculate_anchors(
         elif p_in is not None:
             anchors[idx] = p_in
 
-    return _anchor_weighted(anchors, max_neighbor_distance=max_anchor_step_px)
+    smoothed = _anchor_robust_mean(
+        anchors,
+        frame_start=frame_start,
+        raw_motion_transforms=raw_motion_transforms,
+    )
+    return [Point(int(p.x), int(p.y)) for p in smoothed]
 
 
 def calculate_scales(
@@ -355,7 +538,7 @@ def calculate_scales(
     ]
 
     def bbox_fallback_len(i: int) -> float:
-        return float(abs(int(anchors[i].y) - int(detections[i].bbox.y1)))
+        return float(abs(anchors[i].y - detections[i].bbox.y1))
 
     visible_len_indices = [i for i, v in enumerate(len_vis) if v]
     filled_len = [bbox_fallback_len(i) for i in range(len(detections))]
@@ -396,6 +579,7 @@ def prepare_renderable_tracks(
     *,
     video_width: int,
     video_height: int,
+    raw_motion_transforms: list[Transform],
     missing_grace_frames: int = 5,
     mast_smooth_radius: int = 15,
     target_mast_fill: float = 0.75,
@@ -420,6 +604,7 @@ def prepare_renderable_tracks(
             missing_grace_frames=missing_grace_frames,
             video_width=video_width,
             video_height=video_height,
+            raw_motion_transforms=raw_motion_transforms,
         )
         scales = calculate_scales(
             detections,
