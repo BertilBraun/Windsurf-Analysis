@@ -50,6 +50,8 @@ class VideoWidget(QWidget):
         self.ov_offset_x: float = 0.0
         self.ov_offset_y: float = 0.0
         self.hovered_track_id: Optional[int] = None
+        self.selected_track_id: Optional[int] = None
+        self.hint_track_id: Optional[int] = None
         self._is_panning: bool = False
         self._pan_last_x: float = 0.0
         self._pan_last_y: float = 0.0
@@ -62,6 +64,14 @@ class VideoWidget(QWidget):
 
     def set_frame(self, frame: np.ndarray) -> None:
         self.current_frame_image = _to_qimage(frame)
+        self.update()
+
+    def set_selected_track_id(self, track_id: Optional[int]) -> None:
+        self.selected_track_id = int(track_id) if track_id is not None else None
+        self.update()
+
+    def set_hint_track_id(self, track_id: Optional[int]) -> None:
+        self.hint_track_id = int(track_id) if track_id is not None else None
         self.update()
 
     def paintEvent(self, event):  # type: ignore[override]
@@ -114,7 +124,37 @@ class VideoWidget(QWidget):
             painter.drawImage(QRectF(-vid_w * 0.5, -vid_h * 0.5, vid_w, vid_h), self.current_frame_image)
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
 
-            if self.state.current_mode == 'overview' and self.hovered_track_id is not None:
+            if self.state.current_mode == 'overview' and self.hint_track_id is not None:
+                det = self._det_for_track_at_frame(self.hint_track_id, int(self.state.current_frame))
+                if det is not None:
+                    x1, y1, x2, y2 = det.bbox
+                    rx1 = float(x1) - vid_w * 0.5
+                    ry1 = float(y1) - vid_h * 0.5
+                    rw = max(1.0, float(x2) - float(x1))
+                    rh = max(1.0, float(y2) - float(y1))
+                    pen = QPen(QColor(234, 179, 8))  # amber hint for "next target"
+                    pen.setWidthF(3.0 / max(1e-6, s_base))
+                    painter.setPen(pen)
+                    painter.drawRect(QRectF(rx1, ry1, rw, rh))
+
+            if self.state.current_mode == 'overview' and self.selected_track_id is not None:
+                det = self._det_for_track_at_frame(self.selected_track_id, int(self.state.current_frame))
+                if det is not None:
+                    x1, y1, x2, y2 = det.bbox
+                    rx1 = float(x1) - vid_w * 0.5
+                    ry1 = float(y1) - vid_h * 0.5
+                    rw = max(1.0, float(x2) - float(x1))
+                    rh = max(1.0, float(y2) - float(y1))
+                    pen = QPen(QColor(147, 51, 234))  # purple highlight for "selected"
+                    pen.setWidthF(3.0 / max(1e-6, s_base))
+                    painter.setPen(pen)
+                    painter.drawRect(QRectF(rx1, ry1, rw, rh))
+
+            if (
+                self.state.current_mode == 'overview'
+                and self.hovered_track_id is not None
+                and int(self.hovered_track_id) < 0
+            ):
                 det = self._det_for_track_at_frame(self.hovered_track_id, int(self.state.current_frame))
                 if det is not None:
                     x1, y1, x2, y2 = det.bbox

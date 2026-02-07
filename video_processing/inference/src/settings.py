@@ -25,7 +25,7 @@ DETECTOR_BATCH_SIZE = 32
 
 # Tracking preprocessing settings
 MIN_TRACKING_FPS = 300  # Disabled for now
-MAX_OVERLAP_LENGTH_SECONDS = 5
+MAX_OVERLAP_LENGTH_SECONDS = 3
 
 # Track postprocessing settings
 # Minimum percentage of total frames a track must appear in (default 5%)

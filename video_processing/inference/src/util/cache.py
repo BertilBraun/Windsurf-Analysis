@@ -5,6 +5,31 @@ from functools import wraps
 from typing import Any
 
 
+class _CompatUnpickler(pickle.Unpickler):
+    """
+    Allows loading old pickle caches after project/module refactors.
+
+    Known historical module prefixes:
+      - inference.*         (old package root)
+      - server.inference.*  (old backend layout)
+    """
+
+    def find_class(self, module: str, name: str):  # type: ignore[override]
+        if module.startswith('server.inference.'):
+            suffix = module[len('server.inference.') :]
+            return super().find_class(f'video_processing.inference.{suffix}', name)
+
+        if module.startswith('inference.'):
+            suffix = module[len('inference.') :]
+            return super().find_class(f'video_processing.inference.{suffix}', name)
+
+        return super().find_class(module, name)
+
+
+def load_pickle_compat(f) -> object:
+    return _CompatUnpickler(f).load()
+
+
 def generate_hash_code(data) -> str:
     # Serialize data with pickle
     serialized_data = pickle.dumps(data)
@@ -36,7 +61,7 @@ def cache_to_file(folder_name: str, ignore_args: list[str | int] = [], additiona
 
             if os.path.exists(cache_file_name):
                 with open(cache_file_name, 'rb') as f:
-                    return pickle.load(f)
+                    return load_pickle_compat(f)
 
             result = func(*args, **kwargs)
 

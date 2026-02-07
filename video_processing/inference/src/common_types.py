@@ -157,12 +157,13 @@ class BoundingBox:
         )
 
     def clamp(self, min_x: int, min_y: int, max_x: int, max_y: int) -> BoundingBox:
-        return BoundingBox(
-            max(min_x, self.x1),
-            max(min_y, self.y1),
-            min(max_x, self.x2),
-            min(max_y, self.y2),
-        )
+        # Clamp *both* corners into the range to avoid inverted boxes when the input is out-of-bounds
+        # (e.g. x1 > max_x but x2 is clamped down to max_x).
+        x1 = min(int(max_x), max(int(min_x), int(self.x1)))
+        y1 = min(int(max_y), max(int(min_y), int(self.y1)))
+        x2 = min(int(max_x), max(int(min_x), int(self.x2)))
+        y2 = min(int(max_y), max(int(min_y), int(self.y2)))
+        return BoundingBox(x1, y1, x2, y2)
 
     def __hash__(self) -> int:
         return hash((self.x1, self.y1, self.x2, self.y2))

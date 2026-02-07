@@ -17,17 +17,74 @@ if str(project_root) not in sys.path:
 from video_processing.inference.src.util.video_io import get_video_properties, VideoInfo
 from video_processing.inference.src.tracking.detector import SurferDetector
 from video_processing.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
+from video_processing.inference.src.tracking.track_processing import TrackRTSSmoothing
 from video_processing.inference.src.common_types import Detection, Track
 from video_processing.inference.src.player.core.player_state import Metadata, VideoProperties, TrackLite, DetectionLite
 from video_processing.inference.src.settings import YOLO_MODEL_PATH
 from video_processing.inference.src.player.core.video_manager import VideoManager
 from video_processing.inference.src.player.ui.video_widget import VideoWidget
-from video_processing.inference.src.tracking.track_processing import prepare_renderable_tracks
+from video_processing.inference.src.tracking.renderable_tracks import prepare_renderable_tracks
 
-from video_processing.inference.src.visualization.stabilize import compute_stabilization_transforms_gmc
+from video_processing.inference.src.visualization.stabilize import Transform, compute_stabilization_transforms_gmc
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QScrollArea, QGridLayout, QVBoxLayout, QWidget
+
+
+def _to_qimage(frame) -> QImage:
+    if frame is None:
+        return QImage()
+    # QImage(memoryview) requires C-contiguous buffers.
+    if isinstance(frame, np.ndarray) and not frame.flags['C_CONTIGUOUS']:
+        frame = np.ascontiguousarray(frame)
+    h, w = frame.shape[:2]
+    if len(frame.shape) == 3:
+        ch = frame.shape[2]
+        bytes_per_line = ch * w
+        return QImage(frame.data, w, h, bytes_per_line, QImage.Format.Format_BGR888).copy()
+    return QImage(frame.data, w, h, w, QImage.Format.Format_Grayscale8).copy()
+
+
+class AssignedCropsWindow(QMainWindow):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setWindowTitle('Assigned Tracklet Starts')
+        self._scroll = QScrollArea(self)
+        self._scroll.setWidgetResizable(True)
+
+        self._container = QWidget(self._scroll)
+        self._grid = QGridLayout(self._container)
+        self._grid.setContentsMargins(8, 8, 8, 8)
+        self._grid.setSpacing(8)
+        self._scroll.setWidget(self._container)
+        self.setCentralWidget(self._scroll)
+
+    def set_crops(self, crops: list[tuple[QImage, str]], *, columns: int = 4) -> None:
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+
+        cols = max(1, int(columns))
+        for idx, (img, caption) in enumerate(crops):
+            cell = QWidget(self._container)
+            v = QVBoxLayout(cell)
+            v.setContentsMargins(0, 0, 0, 0)
+            v.setSpacing(2)
+
+            lbl_img = QLabel(cell)
+            lbl_img.setPixmap(QPixmap.fromImage(img))
+            v.addWidget(lbl_img)
+
+            lbl_txt = QLabel(caption, cell)
+            lbl_txt.setWordWrap(True)
+            v.addWidget(lbl_txt)
+
+            r = idx // cols
+            c = idx % cols
+            self._grid.addWidget(cell, r, c)
 
 
 """USAGE:
@@ -51,8 +108,19 @@ def _detections_to_initial_tracks(detections: list[Detection]) -> list[Track]:
     return [Track(track_id=i + 1, sorted_detections=[det]) for i, det in enumerate(detections)]
 
 
-def _build_metadata(tracks: list[Track], input_path: Path, video_props: VideoInfo) -> Metadata:
-    render_tracks = prepare_renderable_tracks(tracks, video_width=video_props.width, video_height=video_props.height)
+def _build_metadata(
+    tracks: list[Track],
+    input_path: Path,
+    video_props: VideoInfo,
+    *,
+    raw_motion_transforms: list[Transform],
+) -> Metadata:
+    render_tracks = prepare_renderable_tracks(
+        tracks,
+        video_width=video_props.width,
+        video_height=video_props.height,
+        raw_motion_transforms=raw_motion_transforms,
+    )
     return Metadata(
         input_video_path=input_path.absolute().as_posix(),
         video_properties=VideoProperties(
@@ -89,20 +157,36 @@ def _build_metadata(tracks: list[Track], input_path: Path, video_props: VideoInf
 
 
 def _save_golden_metadata(
-    tracks: list[Track], input_path: Path, output_dir: Path, video_props: VideoInfo, *, filename: str | None = None
+    tracks: list[Track],
+    input_path: Path,
+    output_dir: Path,
+    video_props: VideoInfo,
+    *,
+    raw_motion_transforms: list[Transform],
+    filename: str | None = None,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     if filename is None:
         filename = f'{input_path.stem}.golden.tracks.pkl'
     out_path = output_dir / filename
-    metadata = _build_metadata(tracks, input_path, video_props)
+    metadata = _build_metadata(tracks, input_path, video_props, raw_motion_transforms=raw_motion_transforms)
     with open(out_path, 'wb') as f:
         pickle.dump(metadata, f)
     return out_path
 
 
-def _to_tracklites(tracks: list[Track], video_props: VideoInfo) -> list[TrackLite]:
-    render_tracks = prepare_renderable_tracks(tracks, video_width=video_props.width, video_height=video_props.height)
+def _to_tracklites(
+    tracks: list[Track],
+    video_props: VideoInfo,
+    *,
+    raw_motion_transforms: list[Transform],
+) -> list[TrackLite]:
+    render_tracks = prepare_renderable_tracks(
+        tracks,
+        video_width=video_props.width,
+        video_height=video_props.height,
+        raw_motion_transforms=raw_motion_transforms,
+    )
     out: list[TrackLite] = []
     for t, rt in zip(tracks, render_tracks):
         out.append(
@@ -138,6 +222,7 @@ class TrackAnnotatorWindow(QMainWindow):
         input_video: Path,
         video_props: VideoInfo,
         preprocessed_tracks: list[Track],
+        raw_motion_transforms: list[Transform],
         output_dir: Path,
         on_finished: Optional[Callable[[], None]] = None,
     ):
@@ -155,15 +240,24 @@ class TrackAnnotatorWindow(QMainWindow):
                 height=video_props.height,
                 total_frames=video_props.approximate_total_frames,
             ),
-            loaded_tracks=_to_tracklites(preprocessed_tracks, video_props),
+            loaded_tracks=_to_tracklites(
+                preprocessed_tracks,
+                video_props,
+                raw_motion_transforms=raw_motion_transforms,
+            ),
         )
 
         self.video = VideoManager(input_video)
+        self.crop_video = VideoManager(input_video)
         self.output_dir = output_dir
         self.input_video = input_video
         self.video_props = video_props
         self.pre_tracks = preprocessed_tracks
+        self.raw_motion_transforms = raw_motion_transforms
         self.on_finished = on_finished
+
+        self._pre_tracks_by_id: dict[int, Track] = {int(t.track_id): t for t in self.pre_tracks}
+        self._start_crop_cache: dict[int, QImage] = {}
 
         # Map from original preprocessed track id -> TrackLite object (stable reference)
         self.pre_id_to_tracklite: dict[int, TrackLite] = {}
@@ -191,6 +285,10 @@ class TrackAnnotatorWindow(QMainWindow):
 
         self._update_hud()
 
+        self.crops_window = AssignedCropsWindow()
+        self.crops_window.show()
+        self._update_assigned_crops()
+
     # -------------------------- Interaction logic -------------------------- #
     def _on_seek(self, frame: int) -> None:
         self.state.current_frame = max(0, min(frame, self.video.total_frames - 1))
@@ -215,6 +313,8 @@ class TrackAnnotatorWindow(QMainWindow):
             return
         pre_id = int(-track_id)
         self.selected_pre_id = int(pre_id)
+        self.video_widget.set_selected_track_id(int(track_id))
+        self.video_widget.set_hint_track_id(None)
 
         # Check temporal overlap with existing assignments for this golden id
         if not self._can_assign_without_overlap(pre_id, self.current_golden_id):
@@ -223,6 +323,9 @@ class TrackAnnotatorWindow(QMainWindow):
         self._set_assignment(
             pre_id, self.current_golden_id, brief=f'Assigned pre {pre_id} -> golden {self.current_golden_id}'
         )
+        # After a successful assignment, jump to the next unassigned tracklet start frame and highlight it
+        # (without preselecting it).
+        self._seek_to_unassigned(+1, wrap=True, highlight=True)
 
     def _set_assignment(self, pre_id: int, golden_id: int, *, brief: str | None = None) -> None:
         prev = self.assignments.get(int(pre_id))
@@ -230,6 +333,7 @@ class TrackAnnotatorWindow(QMainWindow):
         self.assignments[int(pre_id)] = int(golden_id)
         self._apply_display_id(int(pre_id), int(golden_id))
         self._update_hud(brief=brief)
+        self._update_assigned_crops()
 
     def _discard_selected(self) -> None:
         # Prefer hovered tracklet in overview (works even before clicking).
@@ -259,6 +363,7 @@ class TrackAnnotatorWindow(QMainWindow):
             self.assignments[pre_id] = prev_golden
             self._apply_display_id(pre_id, prev_golden)
         self._update_hud(brief='Undone last assignment')
+        self._update_assigned_crops()
 
     def _update_hud(self, brief: str | None = None) -> None:
         total = len(self.pre_tracks)
@@ -273,6 +378,7 @@ class TrackAnnotatorWindow(QMainWindow):
         if key == Qt.Key.Key_Space:
             self.current_golden_id += 1
             self._update_hud(brief='Next golden id')
+            self._update_assigned_crops()
             total = len(self.pre_tracks)
             assigned = len(self.assignments)
             if assigned == total:
@@ -282,6 +388,16 @@ class TrackAnnotatorWindow(QMainWindow):
                 unassigned = self._unassigned_tracks()
                 earliest_unassigned_frame = min(unassigned, key=lambda x: x[0])[0]
                 self._on_seek(earliest_unassigned_frame)
+            return
+        if key == Qt.Key.Key_Up:
+            self.current_golden_id += 1
+            self._update_hud(brief='Golden id +1')
+            self._update_assigned_crops()
+            return
+        if key == Qt.Key.Key_Down:
+            self.current_golden_id = max(1, int(self.current_golden_id) - 1)
+            self._update_hud(brief='Golden id -1')
+            self._update_assigned_crops()
             return
         if key == Qt.Key.Key_Backspace:
             self._undo()
@@ -295,12 +411,12 @@ class TrackAnnotatorWindow(QMainWindow):
         if key == Qt.Key.Key_Left and not (
             mods & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
         ):
-            self._seek_to_unassigned(-1)
+            self._seek_to_unassigned(-1, highlight=True)
             return
         if key == Qt.Key.Key_Right and not (
             mods & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
         ):
-            self._seek_to_unassigned(+1)
+            self._seek_to_unassigned(+1, highlight=True)
             return
         if (mods & Qt.KeyboardModifier.ControlModifier) and key == Qt.Key.Key_Left:
             self._on_seek(self.state.current_frame - 1)
@@ -365,7 +481,7 @@ class TrackAnnotatorWindow(QMainWindow):
             (int(t.start_frame), int(t.track_id)) for t in self.pre_tracks if int(t.track_id) not in self.assignments
         ]
 
-    def _seek_to_unassigned(self, direction: int) -> None:
+    def _seek_to_unassigned(self, direction: int, *, wrap: bool = False, highlight: bool = False) -> None:
         unassigned = self._unassigned_tracks()
 
         if not unassigned:
@@ -377,17 +493,25 @@ class TrackAnnotatorWindow(QMainWindow):
             # Next with start > current
             candidates = [u for u in unassigned if u[0] > curr]
             if not candidates:
-                self._update_hud(brief='No next unassigned')
-                return
-            target_frame, target_pre = min(candidates, key=lambda x: x[0])
+                if not wrap:
+                    self._update_hud(brief='No next unassigned')
+                    return
+                target_frame, target_pre = min(unassigned, key=lambda x: x[0])
+            else:
+                target_frame, target_pre = min(candidates, key=lambda x: x[0])
         else:
             candidates = [u for u in unassigned if u[0] < curr]
             if not candidates:
-                self._update_hud(brief='No previous unassigned')
-                return
-            target_frame, target_pre = max(candidates, key=lambda x: x[0])
+                if not wrap:
+                    self._update_hud(brief='No previous unassigned')
+                    return
+                target_frame, target_pre = max(unassigned, key=lambda x: x[0])
+            else:
+                target_frame, target_pre = max(candidates, key=lambda x: x[0])
 
         self._on_seek(int(target_frame))
+        if highlight:
+            self.video_widget.set_hint_track_id(-int(target_pre))
         self._update_hud(brief=f'Go to unassigned pre {int(target_pre)} @ {int(target_frame)}')
 
     # ----------------------------- Finalization ----------------------------- #
@@ -411,7 +535,13 @@ class TrackAnnotatorWindow(QMainWindow):
             dets.sort(key=lambda d: d.frame_idx)
             merged.append(Track(track_id=int(gid), sorted_detections=dets))
 
-        golden_path = _save_golden_metadata(merged, self.input_video, self.output_dir, self.video_props)
+        golden_path = _save_golden_metadata(
+            merged,
+            self.input_video,
+            self.output_dir,
+            self.video_props,
+            raw_motion_transforms=self.raw_motion_transforms,
+        )
         print(f'Saved golden metadata: {golden_path}')
         print(f'Saved player metadata: {self.output_dir / f"{self.input_video.stem}.tracks.pkl"}')
         try:
@@ -419,6 +549,73 @@ class TrackAnnotatorWindow(QMainWindow):
                 self.on_finished()
         finally:
             self.close()
+
+    def closeEvent(self, event) -> None:  # type: ignore[override]
+        try:
+            self.video.release()
+        except Exception:
+            pass
+        try:
+            self.crop_video.release()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, 'crops_window') and self.crops_window is not None:
+                self.crops_window.close()
+        except Exception:
+            pass
+        super().closeEvent(event)
+
+    def _update_assigned_crops(self) -> None:
+        if not hasattr(self, 'crops_window') or self.crops_window is None:
+            return
+        gid = int(self.current_golden_id)
+        pre_ids = sorted([int(pid) for pid, g in self.assignments.items() if int(g) == gid])
+        crops: list[tuple[QImage, str]] = []
+        if not pre_ids:
+            self.crops_window.setWindowTitle(f'Assigned Tracklet Starts (golden {gid})')
+            self.crops_window.set_crops([])
+            return
+
+        for pre_id in pre_ids:
+            cached = self._start_crop_cache.get(int(pre_id))
+            if cached is not None and not cached.isNull():
+                crops.append((cached, f'pre {pre_id}'))
+                continue
+
+            t = self._pre_tracks_by_id.get(int(pre_id))
+            if t is None or not t.sorted_detections:
+                continue
+            start_det = t.sorted_detections[0]
+            frame_idx = int(start_det.frame_idx)
+            bbox = start_det.bbox
+
+            self.crop_video.seek_frame(frame_idx)
+            _, frame = self.crop_video.read_frame()
+            if frame is None:
+                continue
+
+            x1 = max(0, min(int(bbox.x1), int(self.video_props.width)))
+            y1 = max(0, min(int(bbox.y1), int(self.video_props.height)))
+            x2 = max(0, min(int(bbox.x2), int(self.video_props.width)))
+            y2 = max(0, min(int(bbox.y2), int(self.video_props.height)))
+            if x2 <= x1 or y2 <= y1:
+                continue
+
+            crop = frame[y1:y2, x1:x2]
+            if crop is None or crop.size == 0:
+                continue
+
+            target_h = 100
+            qimg = _to_qimage(crop)
+            if qimg.isNull():
+                continue
+            qimg = qimg.scaledToHeight(int(target_h), Qt.TransformationMode.SmoothTransformation)
+            self._start_crop_cache[int(pre_id)] = qimg
+            crops.append((qimg, f'pre {pre_id} @ f={frame_idx}'))
+
+        self.crops_window.setWindowTitle(f'Assigned Tracklet Starts (golden {gid})')
+        self.crops_window.set_crops(crops)
 
 
 class _BatchAnnotatorController:
@@ -448,8 +645,17 @@ class _BatchAnnotatorController:
         tracks: list[Track] = _detections_to_initial_tracks(detections)
         transforms = compute_stabilization_transforms_gmc(video.as_posix())
         tracks = TrackPreProcessor().track(tracks, video_props, transforms)
+        # Rendering helpers expect tracks to be dense per frame.
+        tracks = TrackRTSSmoothing().track(tracks, video_props, transforms)
 
-        self._win = TrackAnnotatorWindow(video, video_props, tracks, self.output_dir, on_finished=self._next)
+        self._win = TrackAnnotatorWindow(
+            video,
+            video_props,
+            tracks,
+            transforms,
+            self.output_dir,
+            on_finished=self._next,
+        )
         self._win.show()
 
     def run(self) -> None:
