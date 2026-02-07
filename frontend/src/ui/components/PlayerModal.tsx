@@ -293,22 +293,28 @@ export const PlayerModal: React.FC<{
                             <div className="flex items-start gap-2">
                                 <div className="flex-1 min-w-0">
                                     <div className="text-xs font-semibold text-slate-900">{t('common.info')}</div>
-                                        <div className="mt-1 text-xs text-slate-700 space-y-1">
+                                    <div className="mt-1 text-xs text-slate-700 space-y-1">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-slate-500">
+                                                {t('components.playerModal.info.ridersLabel')}
+                                            </span>
+                                            <span className="tabular-nums text-slate-900">{riderCount}</span>
+                                        </div>
+                                        {createdAtLabel && (
                                             <div className="flex items-center justify-between gap-3">
                                                 <span className="text-slate-500">
-                                                    {t('components.playerModal.info.ridersLabel')}
+                                                    {t('components.playerModal.info.processedLabel')}
                                                 </span>
-                                                <span className="tabular-nums text-slate-900">{riderCount}</span>
+                                                <span className="text-slate-900">{createdAtLabel}</span>
                                             </div>
-                                            {createdAtLabel && (
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <span className="text-slate-500">
-                                                        {t('components.playerModal.info.processedLabel')}
-                                                    </span>
-                                                    <span className="text-slate-900">{createdAtLabel}</span>
-                                                </div>
-                                            )}
+                                        )}
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-slate-500">
+                                                ID:
+                                            </span>
+                                            <span className="tabular-nums text-slate-900">{job.id}</span>
                                         </div>
+                                    </div>
                                 </div>
                                 <button
                                     type="button"
