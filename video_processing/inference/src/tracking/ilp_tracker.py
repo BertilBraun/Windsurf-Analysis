@@ -42,38 +42,42 @@ class ILPTracker:
         self,
         video_path: str | None = None,
         # Start-cost schedule (controls edge cap and start penalty in ILP)
-        w_start: float = 90.99671755987514,  # initial start cost (backward-compatible)
+        w_start: float = 89.33638954281993,  # initial start cost (backward-compatible)
         w_end: Optional[float] = None,  # initial end cost
         # Per-term cost weights
-        w_motion: float = 1.1294846965023562,
-        w_appearance: float = 4.507013579100691,
-        w_gap: float = 8.267302414064927,
+        w_motion: float = 1.6403354342542877,
+        w_appearance: float = 1.8734500316779836,
+        w_gap: float = 7.047946621931274,
         # Gap model
-        p_miss: float = 0.8834581055640859,  # for gap NLL
+        p_miss: float = 0.8683930681995398,  # for gap NLL
         # Motion evaluation
         max_detections_to_compare: int = 2,  # eval first K detections of B (1..3 recommended)
         use_position_only: bool = True,  # gating_distance on (cx,cy) or (cx,cy,w,h)
         # Appearance similarity
-        appearance_similarity_gamma: float = 6.836338900098075,
+        appearance_similarity_gamma: float = 9.921860126802232,
         # Graph pruning / solver settings
         max_outgoing_links: int = 10,
         # Optional: allow discarding tiny tracklets (faulty detections)
         allow_discard_short_tracklets: bool = True,
-        discard_max_detections: int = 5,
-        discard_cost_first: float = 10.0,
-        discard_cost_growth: float = 1.5,
+        discard_max_detections: int = 9,
+        discard_cost_first: float = 32.007190569738036,
+        discard_cost_growth: float = 1.6408916274559218,
     ) -> None:
         """Recommendation:
-        w_motion: 2.0
-        w_appearance: 4.0
-        w_gap: 1.0
-        p_miss: 0.97
-        w_start: 60.0
-        w_end: 60.0
-        appearance_similarity_gamma: 10.0
+        w_start: 89.33638954281993
+        w_end: (defaults to w_start)
+        w_motion: 1.6403354342542877
+        w_appearance: 1.8734500316779836
+        w_gap: 7.047946621931274
+        p_miss: 0.8683930681995398
+        appearance_similarity_gamma: 9.921860126802232
         max_detections_to_compare: 2
         use_position_only: True
-        max_outgoing_links: 15
+        max_outgoing_links: 10
+        allow_discard_short_tracklets: True
+        discard_max_detections: 9
+        discard_cost_first: 32.007190569738036
+        discard_cost_growth: 1.6408916274559218
         """
         self.video_path = video_path
         self.w_start = w_start
