@@ -181,7 +181,7 @@ def _anchor_robust_mean(
     robust_c_px = float(ANCHOR_SMOOTH_ROBUST_MEAN_C_PX)
 
     motion: Optional[MotionModel] = None
-    if len(points) >= 2:
+    if len(points) >= 2 and False:  # TODO reenable? - currently way worse when enabled
         motion = MotionModel(
             raw_motion_transforms=raw_motion_transforms,
             start_frame=int(frame_start),
