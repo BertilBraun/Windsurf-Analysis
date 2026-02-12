@@ -42,9 +42,9 @@ export const GetStartedSection: React.FC = () => {
                     {t('common.fullAnalyzerBetaFreeNote')}
                 </Text>
             </div>
-            <Text as="div" variant="muted" className="hidden sm:block sm:w-[220px] text-right">
+            {/*<Text as="div" variant="muted" className="hidden sm:block sm:w-[220px] text-right">
                 {t('common.fullAnalyzerBetaFreeNote')}
-            </Text>
+            </Text>*/}
         </section>
     )
 }

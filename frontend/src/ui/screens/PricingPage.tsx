@@ -1,6 +1,6 @@
 /**
  * @file PricingPage.tsx
- * @description Pricing information page detailing the beta phase and future pay-per-use model.
+ * @description Pricing information page detailing current free availability.
  */
 
 import React from 'react'
@@ -10,8 +10,7 @@ import { GetStartedSection } from '../components/GetStartedSection'
 import { Heading, Text, TextStack, TextStrong } from '../components/Typography'
 
 /**
- * Renders the pricing page, providing details on the current beta phase,
- * future pay-per-use billing, and project support options.
+ * Renders the pricing page with current availability details and project support options.
  */
 export const PricingPage: React.FC = () => {
     const { t } = useTranslation()
@@ -19,11 +18,8 @@ export const PricingPage: React.FC = () => {
         <div className="max-w-3xl flex flex-col gap-6">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
                 <Heading level={1}>{t('screens.pricing.title')}</Heading>
-                <Text as="div" variant="muted" className="mt-1">
-                    {t('screens.pricing.intro')}
-                </Text>
                 <Text as="div" className="mt-3">
-                    <Trans i18nKey="screens.pricing.lede" components={{ strong: <TextStrong /> }} />
+                    {t('screens.pricing.intro')}
                 </Text>
             </div>
 
@@ -38,13 +34,12 @@ export const PricingPage: React.FC = () => {
                     <ul className="list-disc pl-5 space-y-1">
                         <li>{t('screens.pricing.beta.bullets.features')}</li>
                         <li>{t('screens.pricing.beta.bullets.payment')}</li>
-                        <li>{t('screens.pricing.beta.bullets.card')}</li>
                     </ul>
                     <p>{t('screens.pricing.beta.outro')}</p>
                 </TextStack>
             </section>
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+            {/* <section className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
                 <Heading level={2}>{t('screens.pricing.after.title')}</Heading>
                 <TextStack className="mt-3">
                     <p>
@@ -57,7 +52,7 @@ export const PricingPage: React.FC = () => {
                     </ul>
                     <p>{t('screens.pricing.after.outro')}</p>
                 </TextStack>
-            </section>
+            </section>*/}
 
             <SupportProjectSection />
 
