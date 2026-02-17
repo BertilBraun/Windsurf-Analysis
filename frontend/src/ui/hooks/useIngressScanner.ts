@@ -8,7 +8,6 @@ import { AuthorizedFetch, uploadVideoFile } from '../utils/uploader'
 import { useSettings } from './useSettings'
 import { useLocalFileIndex } from './useLocalFileIndex'
 import { type FileFingerprint } from '../utils/localFileIndex'
-import { assert } from '../utils/assert'
 import type { JobSummary } from '../types'
 import { useTabLeader } from './useTabLeader'
 import {
@@ -145,14 +144,15 @@ export function useIngressScanner(
 
     const uploadOne = React.useCallback(
         async (sha256: string, file: File, relativePath: string, existingJobId?: string) => {
+            if (inProgressRef.current.has(sha256)) return
+            inProgressRef.current.add(sha256)
+
             setUploads(prev => {
-                assert(!prev.some(u => u.id === sha256), 'Upload already in progress')
+                if (prev.some(u => u.id === sha256)) return prev
                 return [...prev, { id: sha256, relativePath, progress: 0, status: 'queued', error: null }]
             })
 
             try {
-                inProgressRef.current.add(sha256)
-
                 const result = await uploadVideoFile({
                     file,
                     quality: settings.uploadQuality,
@@ -232,16 +232,19 @@ export function useIngressScanner(
                 }
 
                 const work: Promise<void>[] = []
+                const queuedOrRunningShas = new Set<string>()
 
                 const queueUpload = async (fingerprint: FileFingerprint) => {
                     if (!isStable(fingerprint)) return
                     const sha = fingerprint.sha256
+                    if (queuedOrRunningShas.has(sha) || inProgressRef.current.has(sha)) return
 
                     const currentUploadingJob = jobs.find(j => j.sha256 === sha && j.status === 'uploading')
                     const shouldContinueUpload = !!currentUploadingJob && !inProgressRef.current.has(sha)
 
                     if (!shouldContinueUpload && !shouldStartNewUpload(sha)) return
 
+                    queuedOrRunningShas.add(sha)
                     const file = await getFileForFingerprint(fingerprint)
                     work.push(uploadOne(sha, file, fingerprint.path, currentUploadingJob?.id))
                 }
