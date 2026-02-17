@@ -38,6 +38,8 @@ export type IngressUploadItem = {
     status: IngressUploadStatus
     /** Error message if the status is 'error'. */
     error?: string | null
+    /** Whether this failed upload should be retried through the global retry action. */
+    retryable?: boolean
 }
 
 const AUTO_RETRY_MS = 15000
@@ -57,6 +59,11 @@ function isTransientUploadError(err: any): boolean {
         msg.includes('503') ||
         msg.includes('504')
     )
+}
+
+function isRetryableUploadError(err: any): boolean {
+    if (typeof err?.retryable === 'boolean') return err.retryable
+    return isTransientUploadError(err)
 }
 
 /**
@@ -167,15 +174,18 @@ export function useIngressScanner(
             } catch (e: any) {
                 console.error('Upload failed for', relativePath, e)
                 const message = e?.message || String(e)
-                setLastError(message)
-                updateUpload(sha256, { status: 'error', error: message })
-                failedRef.current.add(sha256)
-                if (isTransientUploadError(e)) {
+                const retryable = isRetryableUploadError(e)
+                setLastError(retryable ? message : null)
+                updateUpload(sha256, { status: 'error', error: message, retryable })
+                if (retryable) {
+                    failedRef.current.add(sha256)
                     retryAfterRef.current.set(sha256, Date.now() + AUTO_RETRY_MS)
+                    setSuspended(true)
                 } else {
+                    failedRef.current.delete(sha256)
                     retryAfterRef.current.delete(sha256)
+                    setSuspended(failedRef.current.size > 0)
                 }
-                setSuspended(true)
             } finally {
                 inProgressRef.current.delete(sha256)
             }
@@ -283,7 +293,11 @@ export function useIngressScanner(
         retryAfterRef.current = new Map()
         setLastError(null)
         setUploads(prev =>
-            prev.map(u => (u.status === 'error' ? { ...u, status: 'queued', progress: 0, error: null } : u))
+            prev.map(u =>
+                u.status === 'error' && (u.retryable ?? true)
+                    ? { ...u, status: 'queued', progress: 0, error: null }
+                    : u
+            )
         )
         setSuspended(false) // This will trigger a new scan
     }, [isIngressLeader])

@@ -10,6 +10,7 @@ export type AuthorizedFetch = {
 
 const MAX_PARALLEL_VIDEO_UPLOADS = 4
 const MAX_FRAMES = 30 * 60 * 3 // 3 minutes at 30fps
+const VIDEO_TOO_LONG_CODE = 'video_too_long'
 
 function createLimiter(max: number) {
     const waiters: Array<() => void> = []
@@ -51,7 +52,12 @@ async function assertVideoWithinMaxFrames(file: File, maxFrames: number): Promis
         const packetStats = await videoTrack.computePacketStats(100)
         const averageFrameRate = packetStats.averagePacketRate
         const totalFrames = duration * averageFrameRate
-        if (totalFrames > maxFrames) throw new Error('Video too long')
+        if (totalFrames > maxFrames) {
+            const err: any = new Error('Video exceeds the 3 minute upload limit')
+            err.code = VIDEO_TOO_LONG_CODE
+            err.retryable = false
+            throw err
+        }
     } finally {
         try {
             input.dispose()

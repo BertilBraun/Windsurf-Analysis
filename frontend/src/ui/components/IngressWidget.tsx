@@ -495,6 +495,7 @@ const UploadItem: React.FC<{ item: IngressUploadItem }> = ({ item }) => {
                 </span>
             </div>
             <ProgressBar percent={percent} status={item.status} />
+            {isError && item.error ? <div className="text-[11px] text-red-700">{item.error}</div> : null}
         </div>
     )
 }
