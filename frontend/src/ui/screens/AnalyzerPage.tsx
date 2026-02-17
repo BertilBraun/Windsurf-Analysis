@@ -45,8 +45,8 @@ export const AnalyzerPage: React.FC<{ onGoHome: () => void; onGoPricing: () => v
     const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
     const [showSettings, setShowSettings] = React.useState<boolean>(false)
     const [showHelp, setShowHelp] = React.useState<boolean>(false)
-    const [sortKey, setSortKey] = React.useState<JobListSortKey>('date')
-    const [sortDir, setSortDir] = React.useState<JobListSortDir>('desc')
+    const [sortKey, setSortKey] = React.useState<JobListSortKey>('name')
+    const [sortDir, setSortDir] = React.useState<JobListSortDir>('asc')
     const [showFeedback, setShowFeedback] = React.useState<boolean>(false)
     const { used: feedbackPromptSeen, ready: feedbackPromptReady, mark: markFeedbackPromptSeen } =
         useOnce(FEEDBACK_PROMPT_SEEN_KEY)
