@@ -327,7 +327,8 @@
                 "slowDown": "Slow down",
                 "speedUp": "Speed up",
                 "toggleDraw": "Toggle draw mode",
-                "undoDraw": "Undo draw"
+                "undoDraw": "Undo draw",
+                "deleteFile": "Delete current file from disk"
             },
             "tip": "Tip: Use the mouse wheel to zoom in overview mode.",
             "title": "Keyboard Shortcuts"
@@ -469,7 +470,9 @@
                     "title": "Exporting track…"
                 }
             },
-            "fileNotFound": "VIDEO FILE NOT FOUND"
+            "fileNotFound": "VIDEO FILE NOT FOUND",
+            "deleteFileConfirm": "Delete this file from disk?\n{{target}}",
+            "deleteFileError": "Delete failed: {{message}}"
         },
         "controlsBar": {
             "export": "Share clip",

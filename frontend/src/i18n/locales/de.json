@@ -326,7 +326,8 @@
                 "slowDown": "Langsamer",
                 "speedUp": "Schneller",
                 "toggleDraw": "Zeichnen an/aus",
-                "undoDraw": "Zeichnung rückgängig"
+                "undoDraw": "Zeichnung rückgängig",
+                "deleteFile": "Aktuelle Datei von der Festplatte löschen"
             },
             "tip": "Tipp: Mit dem Mausrad kannst du in der Overview zoomen.",
             "title": "Tastenkürzel"
@@ -468,7 +469,9 @@
                     "title": "Track exportieren…"
                 }
             },
-            "fileNotFound": "VIDEO FILE NOT FOUND"
+            "fileNotFound": "VIDEO FILE NOT FOUND",
+            "deleteFileConfirm": "Diese Datei von der Festplatte löschen?\n{{target}}",
+            "deleteFileError": "Löschen fehlgeschlagen: {{message}}"
         },
         "controlsBar": {
             "export": "Clip teilen",

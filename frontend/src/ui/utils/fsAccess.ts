@@ -51,6 +51,22 @@ export async function ensureReadPermission(
 }
 
 /**
+ * Ensures that read/write permission is granted for the given directory handle.
+ *
+ * @param dirHandle - The directory handle to check or request permissions for.
+ * @returns The permission state: 'granted', 'denied', or 'prompt'.
+ */
+export async function ensureReadWritePermission(
+    dirHandle: FileSystemDirectoryHandle
+): Promise<'granted' | 'denied' | 'prompt'> {
+    const dh: any = dirHandle as any
+    const qp = await dh.queryPermission?.({ mode: 'readwrite' })
+    if (qp === 'granted') return qp
+    const rp = await dh.requestPermission?.({ mode: 'readwrite' })
+    return rp || 'denied'
+}
+
+/**
  * Resolves a relative path string to a File object starting from a directory handle.
  *
  * @param dirHandle - The root directory handle to start the resolution from.
@@ -77,6 +93,33 @@ export async function getFileByRelativePath(dirHandle: FileSystemDirectoryHandle
         return await getFileFromHandle(current)
     } catch (e) {
         throw new Error(`Error getting file by relative path: ${e}`)
+    }
+}
+
+/**
+ * Deletes a file by relative path from a directory handle.
+ *
+ * @param dirHandle - The root directory handle to start the resolution from.
+ * @param relativePath - The relative path to the target file.
+ * @throws Error if permission is denied or the path cannot be resolved.
+ */
+export async function deleteFileByRelativePath(
+    dirHandle: FileSystemDirectoryHandle,
+    relativePath: string
+): Promise<void> {
+    if ((await ensureReadWritePermission(dirHandle)) !== 'granted') throw new Error('Permission denied')
+
+    const normalized = normalizeRelativePath(relativePath)
+    const parts = getPathParts(normalized)
+    if (parts.length === 0) throw new Error('Invalid file path')
+    try {
+        let parent: FileSystemDirectoryHandle = dirHandle
+        for (let i = 0; i < parts.length - 1; i++) {
+            parent = await parent.getDirectoryHandle(parts[i])
+        }
+        await parent.removeEntry(parts[parts.length - 1], { recursive: false })
+    } catch (e) {
+        throw new Error(`Error deleting file by relative path: ${e}`)
     }
 }
 

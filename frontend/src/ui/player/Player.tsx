@@ -25,6 +25,7 @@ import { DEFAULT_ZOOM_BASELINE } from './constants'
 import { VideoSource } from './videoSource'
 import { useExporter } from './useExporter'
 import { assert } from '../utils/assert'
+import { deleteFileByRelativePath } from '../utils/fsAccess'
 
 const PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY = 'player.focusedClickHintDismissed.v1'
 const PLAYER_OPENED_ONCE_KEY = 'player.openedOnce.v1'
@@ -522,6 +523,28 @@ export const Player: React.FC<Props> = ({
                 e.preventDefault()
                 trackEvent('shortcut_used', { action: 'prev_video' })
                 onOpenPrevJob?.()
+            } else if (e.shiftKey && key.toLowerCase() === 'delete') {
+                if (videoSource.kind !== 'ingress' || !videoSource.dirHandle || !job.local_relative_path) return
+                if (e.repeat) return
+                e.preventDefault()
+                const targetPath = job.local_relative_path
+                const dirHandle = videoSource.dirHandle
+                const confirmed = window.confirm(t('player.canvas.deleteFileConfirm', { target: targetPath }))
+                if (!confirmed) return
+                trackEvent('shortcut_used', { action: 'delete_file_from_disk' })
+                void (async () => {
+                    try {
+                        webPlayer.pause()
+                        await deleteFileByRelativePath(dirHandle, targetPath)
+                        onClose?.()
+                    } catch (err: any) {
+                        setPlayerInitError(
+                            t('player.canvas.deleteFileError', {
+                                message: String(err?.message ?? err ?? 'unknown'),
+                            })
+                        )
+                    }
+                })()
             } else if (e.ctrlKey && key.toLowerCase() === 'z') {
                 if (!drawMode) return
                 if (webPlayer.playing) return
@@ -547,6 +570,10 @@ export const Player: React.FC<Props> = ({
         onOpenNextJob,
         onOpenPrevJob,
         onToggleDrawMode,
+        videoSource,
+        job.local_relative_path,
+        t,
+        webPlayer.pause,
         drawMode,
         annotations,
     ])

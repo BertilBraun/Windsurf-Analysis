@@ -326,7 +326,8 @@
                 "slowDown": "Más lento",
                 "speedUp": "Más rápido",
                 "toggleDraw": "Alternar modo dibujo",
-                "undoDraw": "Deshacer dibujo"
+                "undoDraw": "Deshacer dibujo",
+                "deleteFile": "Eliminar archivo actual del disco"
             },
             "tip": "Tip: Usa la rueda del mouse para hacer zoom en overview.",
             "title": "Atajos de teclado"
@@ -468,7 +469,9 @@
                     "title": "Exportando track…"
                 }
             },
-            "fileNotFound": "VIDEO FILE NOT FOUND"
+            "fileNotFound": "VIDEO FILE NOT FOUND",
+            "deleteFileConfirm": "¿Eliminar este archivo del disco?\n{{target}}",
+            "deleteFileError": "Error al eliminar: {{message}}"
         },
         "controlsBar": {
             "export": "Compartir clip",

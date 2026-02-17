@@ -326,7 +326,8 @@
                 "slowDown": "Rallenta",
                 "speedUp": "Accelera",
                 "toggleDraw": "Toggle modalità disegno",
-                "undoDraw": "Annulla disegno"
+                "undoDraw": "Annulla disegno",
+                "deleteFile": "Elimina il file corrente dal disco"
             },
             "tip": "Tip: usa la rotella del mouse per lo zoom in overview.",
             "title": "Scorciatoie da tastiera"
@@ -468,7 +469,9 @@
                     "title": "Export track…"
                 }
             },
-            "fileNotFound": "VIDEO FILE NOT FOUND"
+            "fileNotFound": "VIDEO FILE NOT FOUND",
+            "deleteFileConfirm": "Eliminare questo file dal disco?\n{{target}}",
+            "deleteFileError": "Eliminazione non riuscita: {{message}}"
         },
         "controlsBar": {
             "export": "Condividi clip",
