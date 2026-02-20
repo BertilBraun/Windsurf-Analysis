@@ -345,6 +345,7 @@ def _run_iter_ilp(args) -> Tuple[float, Dict[str, Any]]:
                 'w_gap': trial.suggest_float('w_gap', 0.0, 10.0),
                 'p_miss': trial.suggest_float('p_miss', 0.8, 1.0),
                 'appearance_similarity_gamma': trial.suggest_float('appearance_similarity_gamma', 2.0, 15.0),
+                'appearance_ema': trial.suggest_float('appearance_ema', 0.2, 1.0),
                 # Optional discard behavior (newer tracker versions)
                 'allow_discard_short_tracklets': trial.suggest_categorical(
                     'allow_discard_short_tracklets', [True, False]

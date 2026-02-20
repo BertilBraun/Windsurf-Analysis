@@ -55,6 +55,7 @@ class ILPTracker:
         use_position_only: bool = True,  # gating_distance on (cx,cy) or (cx,cy,w,h)
         # Appearance similarity
         appearance_similarity_gamma: float = 9.921860126802232,
+        appearance_ema: float = 0.6,
         # Graph pruning / solver settings
         max_outgoing_links: int = 10,
         # Optional: allow discarding tiny tracklets (faulty detections)
@@ -71,6 +72,7 @@ class ILPTracker:
         w_gap: 7.047946621931274
         p_miss: 0.8683930681995398
         appearance_similarity_gamma: 9.921860126802232
+        appearance_ema: 0.6
         max_detections_to_compare: 2
         use_position_only: True
         max_outgoing_links: 10
@@ -93,6 +95,7 @@ class ILPTracker:
         self.use_position_only = bool(use_position_only)
         # Appearance similarity
         self.appearance_similarity_gamma = appearance_similarity_gamma
+        self.appearance_ema = float(appearance_ema)
         # Graph pruning / solver settings
         self.max_outgoing_links = int(max(1, max_outgoing_links))
 
@@ -190,7 +193,7 @@ class ILPTracker:
             if math.isinf(motion_nll) or math.isnan(motion_nll):
                 continue
 
-            appearance_nll = _appearance_nll(A, B, self.appearance_similarity_gamma)
+            appearance_nll = _appearance_nll(A, B, self.appearance_similarity_gamma, self.appearance_ema)
             if math.isinf(appearance_nll) or math.isnan(appearance_nll):
                 continue
 
@@ -509,10 +512,10 @@ class ILPTracker:
 # ──────────────────────────────── cost helpers ─────────────────────────────── #
 
 
-def _appearance_nll(a: Track, b: Track, gamma: float) -> float:
+def _appearance_nll(a: Track, b: Track, gamma: float, ema: float) -> float:
     """Appearance cost from fragment prototypes (mapped from a heuristic similarity probability)."""
-    a_mean = a.mean_embedding(ema=0.6)
-    b_mean = b.mean_embedding_reverse(ema=0.6)
+    a_mean = a.mean_embedding(ema=ema)
+    b_mean = b.mean_embedding_reverse(ema=ema)
     p = a_mean.probability(b_mean, gamma)
     return NLL_from_prob(p)
 
