@@ -7,9 +7,7 @@ This document is a developer-facing overview of how this repo turns raw windsurf
 - a stabilized interactive viewing experience (overview + per-surfer “focused” crop),
 - plus the tooling used to train, tune, and evaluate the system.
 
-It’s intentionally written as a “portfolio-style” technical explanation and points directly to code in this repo.
-
-For a non-technical end-to-end overview + documentation map, see `documentation/README.md`.
+For further technical end-to-end overview + documentation map, see [`documentation/README.md`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/documentation/README.md).
 
 ---
 
@@ -19,7 +17,7 @@ There are two “modes” of running the project:
 
 1) **Local / research / iteration**
    - Pure Python pipeline + optional Qt tooling and optimization scripts.
-   - Core code lives in `video_processing/inference/src/…`
+   - Core code lives in [`video_processing/inference/src/…`](https://github.com/BertilBraun/Windsurf-Analysis/tree/master/video_processing/inference/src)
 
 2) **Production MVP (web app)**
    - **Frontend** uploads a video to Firebase Storage and then polls/streams job status.
@@ -28,10 +26,10 @@ There are two “modes” of running the project:
 
 The production control-flow is implemented in:
 
-- Backend API: [`backend/routes/jobs.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/backend/routes/jobs.py)
-- Backend internal callbacks (Modal -> Cloud Run): [`backend/routes/internal_jobs.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/backend/routes/internal_jobs.py)
-- Modal "trigger" web endpoint (Cloud Run -> Modal): [`video_processing/main_trigger.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/main_trigger.py)
-- Modal orientation + detection + tracking workers: [`video_processing/main_orientation.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/main_orientation.py), [`video_processing/main_inference.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/main_inference.py), [`video_processing/main_tracking.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/main_tracking.py)
+- Backend API: [`backend/routes/jobs.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/backend/routes/jobs.py)
+- Backend internal callbacks (Modal -> Cloud Run): [`backend/routes/internal_jobs.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/backend/routes/internal_jobs.py)
+- Modal "trigger" web endpoint (Cloud Run -> Modal): [`video_processing/main_trigger.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/main_trigger.py)
+- Modal orientation + detection + tracking workers: [`video_processing/main_orientation.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/main_orientation.py), [`video_processing/main_inference.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/main_inference.py), [`video_processing/main_tracking.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/main_tracking.py)
 
 ---
 
@@ -45,7 +43,7 @@ Windsurfing footage is frequently recorded in arbitrary device orientation. The 
 - Strategy: sample frames, one forward pass, majority vote
 - Rotation: ffmpeg transpose filters
 
-See [`video_processing/inference/src/orientation_fixer.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/orientation_fixer.py) and Modal wrapper [`video_processing/main_orientation.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/main_orientation.py).
+See [`video_processing/inference/src/orientation_fixer.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/orientation_fixer.py) and Modal wrapper [`video_processing/main_orientation.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/main_orientation.py).
 
 ### Step B — Detection (YOLO pose)
 
@@ -64,18 +62,13 @@ Each detection becomes a `RawDetection` containing:
 
 ![Example training sample (bbox + 2 keypoints).](Training-Sample.png)
 
-See [`video_processing/inference/src/tracking/detector.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/tracking/detector.py).
-
-Important implementation details:
-
-- **Frame stride control**: `skip_frames = max(1, fps // MIN_TRACKING_FPS)`; in current settings `MIN_TRACKING_FPS=300`, which effectively disables skipping for typical footage.
-- **Caching**: YOLO detections (and later ReID features) are cached to `tmp/cache/...` via `@cache_to_file(...)` ([`video_processing/inference/src/util/cache.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/util/cache.py)).
+See [`video_processing/inference/src/tracking/detector.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/tracking/detector.py).
 
 ### Step C — Camera motion estimation (stabilization)
 
-To make the “overview” view readable, the pipeline estimates per-frame camera motion while **masking out the surfers** so that moving subjects don’t dominate optical flow.
+To make the “overview” view stable, the pipeline estimates per-frame camera motion while **masking out the surfers** so that moving subjects don’t dominate optical flow.
 
-In production tracking ([`video_processing/main_tracking.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/main_tracking.py)), transforms are computed in the same pass that crops detections:
+In production tracking ([`video_processing/main_tracking.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/main_tracking.py)), transforms are computed in the same pass that crops detections:
 
 - Feature points: GFTT (goodFeaturesToTrack)
 - Tracking: Lucas–Kanade optical flow
@@ -84,8 +77,8 @@ In production tracking ([`video_processing/main_tracking.py`](https://github.com
 
 See:
 
-- Masked estimator: [`video_processing/inference/src/visualization/stabilize.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/visualization/stabilize.py) (`MaskedVidStabEstimator`)
-- Usage in Modal: `_compute_masked_vidstab_transforms_and_crop_detections()` in [`video_processing/main_tracking.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/main_tracking.py)
+- Masked estimator: [`video_processing/inference/src/visualization/stabilize.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/visualization/stabilize.py) (`MaskedVidStabEstimator`)
+- Usage in Modal: `_compute_masked_vidstab_transforms_and_crop_detections()` in [`video_processing/main_tracking.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/main_tracking.py)
 
 The frontend expects **per-frame stabilization corrections** `(dx, dy, da)` anchored at frame `k` that are applied *directly* when rendering frame `k`.
 To reduce jitter, the pipeline follows a VidStab-like smoothing rule:
@@ -94,7 +87,7 @@ To reduce jitter, the pipeline follows a VidStab-like smoothing rule:
 - smooth the trajectory with a rolling mean,
 - compute the correction as `(smoothed_trajectory - trajectory)` per frame.
 
-See `vidstab_like_correction_by_frame()` in [`video_processing/inference/src/visualization/stabilize.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/visualization/stabilize.py).
+See `vidstab_like_correction_by_frame()` in [`video_processing/inference/src/visualization/stabilize.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/visualization/stabilize.py).
 
 ### Step D — Appearance features (ReID / descriptors)
 
@@ -105,13 +98,13 @@ After detection, the pipeline computes an appearance embedding for each detectio
 - `color_hist`: classic hist baseline
 - `color_ab_stripe_hist`: a robust Lab/Hue histogram descriptor with vertical stripes and Hellinger-style normalization
 
-Selection is controlled by `REID_MODEL_TYPE` in [`video_processing/inference/src/settings.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/settings.py).
+Selection is controlled by `REID_MODEL_TYPE` in [`video_processing/inference/src/settings.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/settings.py).
 
 See:
 
-- Feature extraction orchestration: `EmbeddingExtractor` in [`video_processing/inference/src/tracking/detector.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/tracking/detector.py)
-- Color AB stripe descriptor: [`video_processing/inference/src/tracking/reid/ReIDColorABStripeHistogram.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/tracking/reid/ReIDColorABStripeHistogram.py)
-- Distance/probability helpers: [`video_processing/inference/src/util/similarity_helpers.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/util/similarity_helpers.py)
+- Feature extraction orchestration: `EmbeddingExtractor` in [`video_processing/inference/src/tracking/detector.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/tracking/detector.py)
+- Color AB stripe descriptor: [`video_processing/inference/src/tracking/reid/ReIDColorABStripeHistogram.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/tracking/reid/ReIDColorABStripeHistogram.py)
+- Distance/probability helpers: [`video_processing/inference/src/util/similarity_helpers.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/util/similarity_helpers.py)
 
 ![Embedding distance signal used for appearance matching.](Embedding.png)
 
@@ -131,7 +124,7 @@ Production uses the following tracker chain:
 - `ILPTracker()`
 - `TrackPostProcessing()`
 
-See [`video_processing/main_tracking.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/main_tracking.py).
+See [`video_processing/main_tracking.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/main_tracking.py).
 
 ---
 
@@ -152,7 +145,7 @@ Association logic uses a **two-gate policy**:
 
 It outputs longer tracklets and reduces the combinatorics for global optimization.
 
-See [`video_processing/inference/src/tracking/preprocessing/greedy_track_stitcher.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/tracking/preprocessing/greedy_track_stitcher.py).
+See [`video_processing/inference/src/tracking/preprocessing/greedy_track_stitcher.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/tracking/preprocessing/greedy_track_stitcher.py).
 
 ### 3.2 Global linking via ILP (graph assignment)
 
@@ -179,10 +172,10 @@ to minimize total cost.
 
 See:
 
-- Cost components: [`video_processing/inference/src/tracking/ilp_tracker.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/tracking/ilp_tracker.py)
-- Iterative schedule + optional splitting: [`video_processing/inference/src/tracking/iterative_ilp_tracker.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/tracking/iterative_ilp_tracker.py)
-- Solver: [`video_processing/inference/src/tracking/ILP_graph_solver.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/tracking/ILP_graph_solver.py) (PuLP + CBC)
-- Camera motion compensation applied to the Kalman model: [`video_processing/inference/src/motion/cmc.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/motion/cmc.py)
+- Cost components: [`video_processing/inference/src/tracking/ilp_tracker.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/tracking/ilp_tracker.py)
+- Iterative schedule + optional splitting: [`video_processing/inference/src/tracking/iterative_ilp_tracker.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/tracking/iterative_ilp_tracker.py)
+- Solver: [`video_processing/inference/src/tracking/ILP_graph_solver.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/tracking/ILP_graph_solver.py) (PuLP + CBC)
+- Camera motion compensation applied to the Kalman model: [`video_processing/inference/src/motion/cmc.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/motion/cmc.py)
 
 ![Candidate edge scoring heatmap.](Candidate-Heatmap.png)
 
@@ -209,7 +202,7 @@ This is what enables:
 - consistent per-frame hit-testing,
 - anchor/scale computation.
 
-See [`video_processing/inference/src/tracking/track_processing.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/tracking/track_processing.py).
+See [`video_processing/inference/src/tracking/track_processing.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/tracking/track_processing.py).
 
 ---
 
@@ -222,7 +215,7 @@ Instead of cropping around a bbox center, the frontend uses two pose-derived sig
 
 These are computed per-frame for each (dense) track and emitted as `RenderableTrack`s.
 
-See [`video_processing/inference/src/tracking/renderable_tracks.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/tracking/renderable_tracks.py).
+See [`video_processing/inference/src/tracking/renderable_tracks.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/tracking/renderable_tracks.py).
 
 This is why the detector is a **pose model**: without the mast keypoints, “focused view” stabilization is much harder (bbox-based zoom tends to pump and drift).
 
@@ -240,9 +233,9 @@ The production backend ultimately exposes a single “render contract” for the
 
 See:
 
-- Backend types: [`backend/models.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/backend/models.py)
-- Frontend types: [`frontend/src/ui/types.ts`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/frontend/src/ui/types.ts)
-- Result assembly in Modal tracking: [`video_processing/main_tracking.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/main_tracking.py)
+- Backend types: [`backend/models.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/backend/models.py)
+- Frontend types: [`frontend/src/ui/types.ts`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/frontend/src/ui/types.ts)
+- Result assembly in Modal tracking: [`video_processing/main_tracking.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/main_tracking.py)
 
 The key idea is that the frontend does not need any ML models. It only needs:
 
@@ -262,10 +255,10 @@ The frontend is a React app (Vite) with an in-browser player that:
 
 Key code:
 
-- Video decoding and seeking window/cache: [`frontend/src/ui/player/useWebCodexPlayer.ts`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/frontend/src/ui/player/useWebCodexPlayer.ts)
-- Player state (binary-search access to per-frame detections): [`frontend/src/ui/player/state.ts`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/frontend/src/ui/player/state.ts)
-- Stabilized overview transforms + crop math: [`frontend/src/ui/player/rendering.ts`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/frontend/src/ui/player/rendering.ts)
-- The interactive player component: [`frontend/src/ui/player/Player.tsx`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/frontend/src/ui/player/Player.tsx)
+- Video decoding and seeking window/cache: [`frontend/src/ui/player/useWebCodexPlayer.ts`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/frontend/src/ui/player/useWebCodexPlayer.ts)
+- Player state (binary-search access to per-frame detections): [`frontend/src/ui/player/state.ts`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/frontend/src/ui/player/state.ts)
+- Stabilized overview transforms + crop math: [`frontend/src/ui/player/rendering.ts`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/frontend/src/ui/player/rendering.ts)
+- The interactive player component: [`frontend/src/ui/player/Player.tsx`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/frontend/src/ui/player/Player.tsx)
 
 Important detail: the frontend applies stabilization transforms in the overview view, but the per-surfer focused view is stabilized primarily by the pose-derived crop (anchor + scale), not by global camera motion.
 
@@ -292,10 +285,10 @@ Flow:
 
 See:
 
-- Public routes: [`backend/routes/jobs.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/backend/routes/jobs.py)
-- Internal routes: [`backend/routes/internal_jobs.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/backend/routes/internal_jobs.py), [`backend/auth/internal_auth.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/backend/auth/internal_auth.py)
-- Result storage helper: [`backend/storage/gcs_json.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/backend/storage/gcs_json.py)
-- Modal trigger service: [`video_processing/main_trigger.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/main_trigger.py)
+- Public routes: [`backend/routes/jobs.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/backend/routes/jobs.py)
+- Internal routes: [`backend/routes/internal_jobs.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/backend/routes/internal_jobs.py), [`backend/auth/internal_auth.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/backend/auth/internal_auth.py)
+- Result storage helper: [`backend/storage/gcs_json.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/backend/storage/gcs_json.py)
+- Modal trigger service: [`video_processing/main_trigger.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/main_trigger.py)
 
 ---
 
@@ -308,11 +301,11 @@ Tracking is tuned using human-supervised “golden” association data:
 
 See:
 
-- Golden creation: [`video_processing/inference/optimization/annotate_tracklets.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/optimization/annotate_tracklets.py)
-- Scoring + utilities (including backwards-compatible pickle loading): [`video_processing/inference/optimization/optimization_util.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/optimization/optimization_util.py)
-- Tracker comparison: [`video_processing/inference/optimization/compare_trackers.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/optimization/compare_trackers.py)
-- Parameter optimization entrypoint: [`video_processing/inference/optimization/optimize_tracker.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/optimization/optimize_tracker.py)
-- Greedy tuning UI: [`video_processing/inference/optimization/tune_greedy_preprocessor.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/optimization/tune_greedy_preprocessor.py)
+- Golden creation: [`video_processing/inference/optimization/annotate_tracklets.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/optimization/annotate_tracklets.py)
+- Scoring + utilities (including backwards-compatible pickle loading): [`video_processing/inference/optimization/optimization_util.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/optimization/optimization_util.py)
+- Tracker comparison: [`video_processing/inference/optimization/compare_trackers.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/optimization/compare_trackers.py)
+- Parameter optimization entrypoint: [`video_processing/inference/optimization/optimize_tracker.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/optimization/optimize_tracker.py)
+- Greedy tuning UI: [`video_processing/inference/optimization/tune_greedy_preprocessor.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/optimization/tune_greedy_preprocessor.py)
 
 ---
 
@@ -320,7 +313,7 @@ See:
 
 ### Detection bbox training
 
-[`train/detection/train.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/train/detection/train.py):
+[`train/detection/train.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/train/detection/train.py):
 
 - converts a folder of annotated frames into Ultralytics dataset layout,
 - writes dataset YAML,
@@ -328,7 +321,7 @@ See:
 
 ### Pose training (2 keypoints)
 
-[`train/detection/train_pose.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/train/detection/train_pose.py):
+[`train/detection/train_pose.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/train/detection/train_pose.py):
 
 - builds a YOLO-pose dataset (`kpt_shape: [2,3]`) aligned with the detection images,
 - supports mixing manual and pseudo pose labels,
@@ -352,8 +345,8 @@ In practice, this produces a strong keypoint dataset with far less manual work t
 
 ### Annotation tools
 
-- Bounding box annotator: [`train/detection/annotator.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/train/detection/annotator.py)
-- Keypoint annotator (bbox + pose labels): [`train/detection/annotator_keypoints_fullframe.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/train/detection/annotator_keypoints_fullframe.py)
+- Bounding box annotator: [`train/detection/annotator.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/train/detection/annotator.py)
+- Keypoint annotator (bbox + pose labels): [`train/detection/annotator_keypoints_fullframe.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/train/detection/annotator_keypoints_fullframe.py)
 
 ---
 
@@ -361,7 +354,7 @@ In practice, this produces a strong keypoint dataset with far less manual work t
 
 For local, end-to-end debugging (without Modal/Cloud Run), use:
 
-- [`video_processing/scripts/local_modal_pipeline_player.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/scripts/local_modal_pipeline_player.py)
+- [`video_processing/scripts/local_modal_pipeline_player.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/scripts/local_modal_pipeline_player.py)
 
 It mimics the production sequence:
 
@@ -371,14 +364,14 @@ orientation -> YOLO pose -> stabilization transforms -> embeddings -> tracking -
 
 ## Appendix: important knobs & caches
 
-Core settings live in [`video_processing/inference/src/settings.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/settings.py):
+Core settings live in [`video_processing/inference/src/settings.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/settings.py):
 
 - detector thresholds & batching
 - greedy preprocessor thresholds
 - ILP / optimization weights
 - post-processing smoothing parameters
 
-Caches (written under `tmp/cache/...`) are created by [`video_processing/inference/src/util/cache.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/production/video_processing/inference/src/util/cache.py) and currently used for:
+Caches (written under `tmp/cache/...`) are created by [`video_processing/inference/src/util/cache.py`](https://github.com/BertilBraun/Windsurf-Analysis/blob/master/video_processing/inference/src/util/cache.py) and currently used for:
 
 - raw YOLO detections: [`yolo_detections_raw/`](https://github.com/BertilBraun/Windsurf-Analysis/tree/production/yolo_detections_raw)
 - appearance embeddings: [`reid_features/`](https://github.com/BertilBraun/Windsurf-Analysis/tree/production/reid_features)
