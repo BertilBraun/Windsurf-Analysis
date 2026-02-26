@@ -39,6 +39,10 @@ import torch
 import yaml
 from ultralytics import YOLO
 import cv2
+try:
+    from artifact_augment import write_image_with_artifact_variants
+except ImportError:
+    from train.detection.artifact_augment import write_image_with_artifact_variants
 
 
 def setup_logging():
@@ -54,6 +58,49 @@ def setup_logging():
 # ────────────────────────────────────────────────────────────────────────────
 # Dataset preparation
 # ────────────────────────────────────────────────────────────────────────────
+def _sanitize_bbox_label_lines(label_path: Path, width: int, height: int) -> list[str]:
+    sanitized_lines = []
+    try:
+        with open(label_path, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) != 5:
+                    continue
+                try:
+                    cls_id = int(float(parts[0]))
+                    cx, cy, bw, bh = map(float, parts[1:])
+                except ValueError:
+                    continue
+
+                abs_w = bw * width
+                abs_h = bh * height
+                center_x = cx * width
+                center_y = cy * height
+                x1 = center_x - abs_w / 2.0
+                y1 = center_y - abs_h / 2.0
+                x2 = center_x + abs_w / 2.0
+                y2 = center_y + abs_h / 2.0
+
+                x1 = max(0.0, min(x1, width - 1.0))
+                y1 = max(0.0, min(y1, height - 1.0))
+                x2 = max(x1 + 1.0, min(x2, width - 1.0))
+                y2 = max(y1 + 1.0, min(y2, height - 1.0))
+
+                box_w = x2 - x1
+                box_h = y2 - y1
+                if box_w < 5.0 or box_h < 5.0:
+                    continue
+
+                new_cx = (x1 + x2) / 2.0 / width
+                new_cy = (y1 + y2) / 2.0 / height
+                new_bw = box_w / width
+                new_bh = box_h / height
+                sanitized_lines.append(f'{cls_id} {new_cx:.6f} {new_cy:.6f} {new_bw:.6f} {new_bh:.6f}\n')
+    except FileNotFoundError:
+        return []
+    return sanitized_lines
+
+
 def prepare_dataset(src: Path, dst: Path, val_ratio: float = 0.02, seed: int = 0) -> Path:
     logger = logging.getLogger(__name__)
 
@@ -82,73 +129,42 @@ def prepare_dataset(src: Path, dst: Path, val_ratio: float = 0.02, seed: int = 0
         for file in (dst / 'labels' / split).glob('*'):
             file.unlink()
 
+    rng = random.Random(seed)
+    written_counts = {'train': 0, 'val': 0}
+
     for split, split_imgs in splits.items():
         for img_path in split_imgs:
             label_path = src / f'{img_path.stem}.txt'
 
-            # Copy image
-            out_img_path = dst / 'images' / split / img_path.name
-            shutil.copy2(img_path, out_img_path)
-
-            # Read image size
-            img = cv2.imread(str(out_img_path))
+            img = cv2.imread(str(img_path))
             if img is None:
-                logger.warning(f'Could not read image {out_img_path}, skipping label sanitation.')
-                # Fallback: copy label as-is
+                out_img_path = dst / 'images' / split / img_path.name
+                shutil.copy2(img_path, out_img_path)
+                logger.warning(f'Could not read image {img_path}, skipping label sanitation.')
                 shutil.copy2(label_path, dst / 'labels' / split / label_path.name)
+                written_counts[split] += 1
                 continue
             H, W = img.shape[:2]
+            sanitized_lines = _sanitize_bbox_label_lines(label_path, W, H)
 
-            # Sanitize labels: clamp to image bounds and discard boxes with any side < 5 px
-            sanitized_lines = []
-            try:
-                with open(label_path, 'r') as f:
-                    for line in f:
-                        parts = line.strip().split()
-                        if len(parts) != 5:
-                            continue
-                        try:
-                            cls_id = int(float(parts[0]))
-                            cx, cy, bw, bh = map(float, parts[1:])
-                        except ValueError:
-                            continue
+            if split == 'train':
+                written_imgs = write_image_with_artifact_variants(
+                    img_path,
+                    dst / 'images' / split,
+                    out_stem=img_path.stem,
+                    rng=rng,
+                    is_train=True,
+                )
+            else:
+                out_img_path = dst / 'images' / split / img_path.name
+                shutil.copy2(img_path, out_img_path)
+                written_imgs = [out_img_path]
 
-                        # Convert normalized -> absolute
-                        abs_w = bw * W
-                        abs_h = bh * H
-                        center_x = cx * W
-                        center_y = cy * H
-                        x1 = center_x - abs_w / 2.0
-                        y1 = center_y - abs_h / 2.0
-                        x2 = center_x + abs_w / 2.0
-                        y2 = center_y + abs_h / 2.0
-
-                        # Clamp to image bounds
-                        x1 = max(0.0, min(x1, W - 1.0))
-                        y1 = max(0.0, min(y1, H - 1.0))
-                        x2 = max(x1 + 1.0, min(x2, W - 1.0))
-                        y2 = max(y1 + 1.0, min(y2, H - 1.0))
-
-                        box_w = x2 - x1
-                        box_h = y2 - y1
-
-                        # Discard tiny boxes
-                        if box_w < 5.0 or box_h < 5.0:
-                            continue
-
-                        # Back to normalized YOLO
-                        new_cx = (x1 + x2) / 2.0 / W
-                        new_cy = (y1 + y2) / 2.0 / H
-                        new_bw = box_w / W
-                        new_bh = box_h / H
-
-                        sanitized_lines.append(f'{cls_id} {new_cx:.6f} {new_cy:.6f} {new_bw:.6f} {new_bh:.6f}\n')
-            except FileNotFoundError:
-                sanitized_lines = []
-
-            out_label_path = dst / 'labels' / split / label_path.name
-            with open(out_label_path, 'w') as out_f:
-                out_f.writelines(sanitized_lines)
+            for out_img_path in written_imgs:
+                out_label_path = dst / 'labels' / split / f'{out_img_path.stem}.txt'
+                with open(out_label_path, 'w') as out_f:
+                    out_f.writelines(sanitized_lines)
+            written_counts[split] += len(written_imgs)
 
     # YAML descriptor
     yaml_path = dst / 'windsurfers.yaml'
@@ -164,7 +180,8 @@ def prepare_dataset(src: Path, dst: Path, val_ratio: float = 0.02, seed: int = 0
 
     logger.info(f'✓ Dataset prepared at {dst.resolve()}')
     logger.info(f'✓ YAML written to  {yaml_path.resolve()}')
-    logger.info(f'   Train / Val:    {len(splits["train"])} / {len(splits["val"])} images')
+    logger.info(f'   Base Train / Val: {len(splits["train"])} / {len(splits["val"])} images')
+    logger.info(f'   Final Train / Val: {written_counts["train"]} / {written_counts["val"]} images')
     return yaml_path
 
 

@@ -8,6 +8,10 @@ from pathlib import Path
 import torch
 import yaml
 from ultralytics import YOLO
+try:
+    from artifact_augment import write_image_with_artifact_variants
+except ImportError:
+    from train.detection.artifact_augment import write_image_with_artifact_variants
 
 
 KP_NAMES = ["boom_mast", "mast_tip"]
@@ -134,6 +138,7 @@ def main() -> int:
     skipped = 0
     pseudo_included = 0
     manual_included = 0
+    augmented_copies = 0
 
     import random
 
@@ -176,18 +181,34 @@ def main() -> int:
             continue
 
         out_key = f"pseudo_{key}" if is_pseudo else key
-        out_img = (images_train if split == "train" else images_val) / f"{out_key}{src_img.suffix.lower()}"
-        out_lbl = (labels_train if split == "train" else labels_val) / f"{out_key}.txt"
-        shutil.copy2(src_img, out_img)
-        shutil.copy2(pose_label_path, out_lbl)
+        out_img_dir = images_train if split == "train" else images_val
+        out_lbl_dir = labels_train if split == "train" else labels_val
+        if split == "train":
+            written_imgs = write_image_with_artifact_variants(
+                src_img,
+                out_img_dir,
+                out_stem=out_key,
+                rng=rng,
+                is_train=True,
+            )
+        else:
+            out_img = out_img_dir / f"{out_key}{src_img.suffix.lower()}"
+            shutil.copy2(src_img, out_img)
+            written_imgs = [out_img]
+
+        for out_img in written_imgs:
+            out_lbl = out_lbl_dir / f"{out_img.stem}.txt"
+            shutil.copy2(pose_label_path, out_lbl)
+
+        augmented_copies += max(0, len(written_imgs) - 1)
         if is_pseudo:
             pseudo_included += 1
         else:
             manual_included += 1
         if split == "train":
-            train_count += 1
+            train_count += len(written_imgs)
         else:
-            val_count += 1
+            val_count += len(written_imgs)
 
     if train_count == 0:
         raise SystemExit("No labeled TRAIN pose samples found (labels_pose/train/*.txt).")
@@ -228,6 +249,7 @@ def main() -> int:
                 "val": val_count,
                 "manual_included": manual_included,
                 "pseudo_included": pseudo_included,
+                "augmented_copies": augmented_copies,
                 "skipped": skipped,
                 "dataset_yaml": str(data_yaml),
             },
