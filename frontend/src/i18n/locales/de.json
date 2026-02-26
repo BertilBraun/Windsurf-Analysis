@@ -501,23 +501,27 @@
         "demo": {
             "title": "Demo",
             "actions": {
-                "selectVideo": "Video auswählen",
-                "play": "Abspielen",
+                "selectVideo": "Videos auswählen",
                 "sampleVideo": "Beispielvideo verwenden"
             },
             "assurance": "Willst du es mit einem deiner Videos testen? Nutze einfach die Demo — kein Setup.",
             "hero": {
                 "title": "GybeLock ausprobieren",
-                "body": "Wähle ein MP4-Video aus, lade es hoch und sieh Live-Updates zur Verarbeitung."
+                "body": "Wähle ein oder mehrere MP4-Videos aus, lade sie hoch, verfolge Live-Updates und öffne Ergebnisse, sobald sie fertig sind."
+            },
+            "grid": {
+                "title": "Deine Demo-Videos",
+                "empty": "Wähle ein oder mehrere MP4-Videos aus, um zu starten.",
+                "processingHint": "Du kannst weitere Videos hinzufügen, während andere verarbeitet werden."
             },
             "status": {
                 "hashing": "Upload wird vorbereitet",
                 "uploading": "Wird hochgeladen",
-                "waiting": "Warte auf Video",
+                "waiting": "Warte auf Videos",
                 "processing": "Verarbeitung: {{status}}"
             },
-            "processingEta": "Die Verarbeitung dauert meistens ~1-3 Min.",
-            "leaveWarning": "Willst du die Seite wirklich verlassen? Dein Demo-Video ist nach einem Refresh weg.",
+            "processingEta": "Die Verarbeitung dauert meistens ~1-3 Min. pro Video.",
+            "leaveWarning": "Willst du die Seite wirklich verlassen? Deine Demo-Videos sind nach einem Refresh weg.",
             "skipped": "Dieses Video wurde bereits verarbeitet (Duplikat).",
             "upgrade": {
                 "title": "Willst du das für deine ganze Session?",

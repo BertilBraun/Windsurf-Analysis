@@ -500,24 +500,28 @@
     "screens": {
         "demo": {
             "actions": {
-                "play": "Riproduci",
                 "sampleVideo": "Usa video di esempio",
-                "selectVideo": "Seleziona un video"
+                "selectVideo": "Seleziona video"
             },
             "assurance": "Vuoi provarlo su uno dei tuoi video? Usa semplicemente la demo — nessun setup.",
             "failed": "Elaborazione fallita.",
             "hero": {
-                "body": "Carica un MP4 per vedere GybeLock in azione.",
+                "body": "Seleziona uno o più video MP4, caricali, segui gli aggiornamenti in tempo reale e apri i risultati quando sono pronti.",
                 "title": "Demo"
             },
-            "leaveWarning": "Sei sicuro di voler uscire? Il tuo video demo verrà perso dopo l’aggiornamento.",
-            "processingEta": "L’elaborazione richiede di solito ~1–3 min.",
+            "grid": {
+                "empty": "Seleziona uno o più video MP4 per iniziare.",
+                "processingHint": "Puoi aggiungere altri video mentre gli altri sono in elaborazione.",
+                "title": "I tuoi video demo"
+            },
+            "leaveWarning": "Sei sicuro di voler uscire? I tuoi video demo verranno persi dopo l’aggiornamento.",
+            "processingEta": "L’elaborazione richiede di solito ~1–3 min per video.",
             "skipped": "Questo video è già stato elaborato (duplicato).",
             "status": {
                 "hashing": "Preparazione upload",
                 "processing": "Elaborazione: {{status}}",
                 "uploading": "Caricamento",
-                "waiting": "In attesa del video"
+                "waiting": "In attesa dei video"
             },
             "title": "Demo",
             "upgrade": {

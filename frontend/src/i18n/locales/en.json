@@ -502,23 +502,34 @@
         "demo": {
             "title": "Demo",
             "actions": {
-                "selectVideo": "Select video",
+                "selectVideo": "Select videos",
+                "addMoreVideos": "Add more videos",
+                "clearCompleted": "Clear completed",
                 "play": "Play",
-                "sampleVideo": "Use sample video"
+                "sampleVideo": "Use sample video",
+                "remove": "Remove"
             },
             "assurance": "Want to try it on one of your videos? Just use the demo — no setup.",
             "hero": {
                 "title": "Try GybeLock",
-                "body": "Select an MP4 video to upload and watch live processing updates."
+                "body": "Select one or more MP4 videos to upload, watch live processing updates, and open results as they finish."
+            },
+            "grid": {
+                "title": "Your demo videos",
+                "empty": "Select one or more MP4 videos to start.",
+                "processingHint": "You can add more videos while others are processing.",
+                "status": {
+                    "queued": "Queued"
+                }
             },
             "status": {
                 "hashing": "Preparing upload",
                 "uploading": "Uploading",
-                "waiting": "Waiting for video",
+                "waiting": "Waiting for videos",
                 "processing": "Processing: {{status}}"
             },
-            "processingEta": "Processing usually takes ~1-3 min.",
-            "leaveWarning": "Are you sure you want to leave? Your demo video will be gone after refresh.",
+            "processingEta": "Processing usually takes ~1-3 min per video.",
+            "leaveWarning": "Are you sure you want to leave? Your demo videos will be gone after refresh.",
             "skipped": "This video was already processed (duplicate).",
             "upgrade": {
                 "title": "Want this for your whole session?",

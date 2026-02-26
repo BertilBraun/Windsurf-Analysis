@@ -11,12 +11,27 @@ import { Button } from '../components/Button'
 import JobThumbnail from '../components/JobThumbnail'
 import { LogoButton } from '../components/LogoButton'
 import { PlayerModal } from '../components/PlayerModal'
-import { Spinner } from '../components/Spinner'
 import { useJobs } from '../hooks/useJobs'
 import { computeSha256 } from '../utils/localFileIndex'
 import { uploadVideoFile } from '../utils/uploader'
 import type { JobDetail, JobSummary } from '../types'
 import { useNavigate } from 'react-router-dom'
+
+type DemoItemPhase = 'queued' | 'hashing' | 'uploading' | 'waiting' | 'error'
+
+type DemoItem = {
+    id: string
+    createdAtMs: number
+    file: File
+    sha256: string | null
+    jobId: string | null
+    progressPct: number | null
+    phase: DemoItemPhase
+    error: string | null
+    duplicateSkipped: boolean
+}
+
+const DEMO_CONCURRENT_WORKERS = 2
 
 function isTerminal(status: JobSummary['status']): boolean {
     return status === 'succeeded' || status === 'failed' || status === 'canceled'
@@ -49,21 +64,30 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
     const { jobs, refreshJobDetail, reportJob } = useJobs()
     const navigate = useNavigate()
     const fileInputRef = React.useRef<HTMLInputElement | null>(null)
+    const itemsRef = React.useRef<DemoItem[]>([])
+    const runningIdsRef = React.useRef<Set<string>>(new Set())
+    const localIdRef = React.useRef(0)
 
-    const [selectedFile, setSelectedFile] = React.useState<File | null>(null)
-    const [selectedFileSha256, setSelectedFileSha256] = React.useState<string | null>(null)
-    const [jobId, setJobId] = React.useState<string | null>(null)
-    const [progressPct, setProgressPct] = React.useState<number | null>(null)
-    const [phase, setPhase] = React.useState<'idle' | 'hashing' | 'uploading' | 'waiting'>('idle')
-    const [error, setError] = React.useState<string | null>(null)
-    const [selectedJob, setSelectedJob] = React.useState<JobDetail | null>(null)
+    const [items, setItems] = React.useState<DemoItem[]>([])
+    const [selectedPlayback, setSelectedPlayback] = React.useState<{ job: JobDetail; file: File } | null>(null)
     const [isSampleDownloading, setIsSampleDownloading] = React.useState(false)
-    const autoOpenedRef = React.useRef(false)
+    const [openingJobId, setOpeningJobId] = React.useState<string | null>(null)
 
-    const currentJob = React.useMemo(() => (jobId ? jobs.find(j => j.id === jobId) ?? null : null), [jobs, jobId])
+    React.useEffect(() => {
+        itemsRef.current = items
+    }, [items])
 
-    const busy = phase === 'hashing' || phase === 'uploading'
-    const shouldWarnOnLeave = busy || (!!jobId && (!currentJob || !isTerminal(currentJob.status)))
+    const jobsById = React.useMemo(() => new Map(jobs.map(j => [j.id, j] as const)), [jobs])
+    const jobsBySha = React.useMemo(() => new Map(jobs.map(j => [j.sha256, j] as const)), [jobs])
+
+    const hasLocalBusy = items.some(i => i.phase === 'queued' || i.phase === 'hashing' || i.phase === 'uploading')
+    const hasActiveOrUnknownJob = items.some(i => {
+        if (i.phase === 'error') return false
+        if (!i.jobId) return i.phase === 'waiting'
+        const job = jobsById.get(i.jobId)
+        return !job || !isTerminal(job.status)
+    })
+    const shouldWarnOnLeave = hasLocalBusy || hasActiveOrUnknownJob
 
     React.useEffect(() => {
         if (!shouldWarnOnLeave) return
@@ -77,105 +101,134 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
         return () => window.removeEventListener('beforeunload', onBeforeUnload)
     }, [shouldWarnOnLeave, t])
 
-    const reset = React.useCallback(() => {
-        setSelectedFile(null)
-        setSelectedFileSha256(null)
-        setJobId(null)
-        setProgressPct(null)
-        setPhase('idle')
-        setError(null)
-        setSelectedJob(null)
-        autoOpenedRef.current = false
+    const makeDemoItem = React.useCallback((file: File): DemoItem => {
+        localIdRef.current += 1
+        return {
+            id: `demo-${Date.now()}-${localIdRef.current}`,
+            createdAtMs: Date.now(),
+            file,
+            sha256: null,
+            jobId: null,
+            progressPct: null,
+            phase: 'queued',
+            error: null,
+            duplicateSkipped: false,
+        }
     }, [])
 
-    const startUpload = React.useCallback(
-        async (file: File) => {
-            reset()
-            setSelectedFile(file)
-            setError(null)
+    const patchItem = React.useCallback((id: string, patch: Partial<DemoItem>) => {
+        setItems(prev => prev.map(item => (item.id === id ? { ...item, ...patch } : item)))
+    }, [])
+
+    const enqueueFiles = React.useCallback(
+        (files: File[]) => {
+            if (files.length === 0) return
+            setItems(prev => [...files.map(makeDemoItem), ...prev])
+        },
+        [makeDemoItem]
+    )
+
+    const processItem = React.useCallback(
+        async (itemId: string) => {
+            if (runningIdsRef.current.has(itemId)) return
+            const item = itemsRef.current.find(i => i.id === itemId)
+            if (!item || item.phase !== 'queued') return
+
+            runningIdsRef.current.add(itemId)
+            patchItem(itemId, { phase: 'hashing', progressPct: null, error: null, duplicateSkipped: false })
 
             try {
-                setPhase('hashing')
-                setProgressPct(null)
-                const sha256 = await computeSha256(file)
-                setSelectedFileSha256(sha256)
+                const sha256 = await computeSha256(item.file)
+                patchItem(itemId, { sha256 })
 
-                setPhase('uploading')
                 const result = await uploadVideoFile({
-                    file,
+                    file: item.file,
                     quality: settings.uploadQuality,
                     authorizedFetch,
-                    onProgress: p => setProgressPct(Math.round(p * 100)),
-                    onStarted: () => setPhase('uploading'),
+                    onProgress: p => patchItem(itemId, { progressPct: Math.round(p * 100) }),
+                    onStarted: () => patchItem(itemId, { phase: 'uploading' }),
                     sha256,
                 })
 
                 if (result === 'skipped') {
-                    // Duplicate/already-processed: job is associated to the user, so we can resolve it
-                    // from realtime jobs by sha256 and still open the player.
-                    setPhase('waiting')
-                    setJobId(null)
-                    setProgressPct(null)
+                    patchItem(itemId, {
+                        phase: 'waiting',
+                        jobId: null,
+                        progressPct: null,
+                        duplicateSkipped: true,
+                    })
                     return
                 }
 
-                setJobId(result)
-                setPhase('waiting')
+                patchItem(itemId, {
+                    jobId: result,
+                    phase: 'waiting',
+                    progressPct: null,
+                    duplicateSkipped: false,
+                })
             } catch (e: any) {
-                setError(e?.message || String(e))
-                setPhase('idle')
+                patchItem(itemId, {
+                    phase: 'error',
+                    error: e?.message || String(e),
+                    progressPct: null,
+                })
+            } finally {
+                runningIdsRef.current.delete(itemId)
+                setItems(prev => [...prev])
             }
         },
-        [authorizedFetch, reset, settings.uploadQuality, t]
+        [authorizedFetch, patchItem, settings.uploadQuality]
     )
 
+    React.useEffect(() => {
+        const available = DEMO_CONCURRENT_WORKERS - runningIdsRef.current.size
+        if (available <= 0) return
+        const nextQueuedIds = items.filter(i => i.phase === 'queued').slice(0, available).map(i => i.id)
+        for (const id of nextQueuedIds) void processItem(id)
+    }, [items, processItem])
+
     const startSampleUpload = React.useCallback(async () => {
-        if (busy || isSampleDownloading) return
+        if (isSampleDownloading) return
         try {
             setIsSampleDownloading(true)
-            setError(null)
             const res = await fetch('/sample_video.mp4')
             if (!res.ok) throw new Error(await res.text())
             const blob = await res.blob()
             const file = new File([blob], 'GybeLock-Demo.mp4', { type: 'video/mp4' })
-            await startUpload(file)
+            enqueueFiles([file])
         } catch (e: any) {
-            setError(e?.message || String(e))
+            const file = new File([], `Sample-download-failed-${Date.now()}.mp4`, { type: 'video/mp4' })
+            setItems(prev => [
+                {
+                    ...makeDemoItem(file),
+                    phase: 'error',
+                    error: e?.message || String(e),
+                    createdAtMs: Date.now(),
+                },
+                ...prev,
+            ])
         } finally {
             setIsSampleDownloading(false)
         }
-    }, [busy, isSampleDownloading, startUpload])
+    }, [enqueueFiles, isSampleDownloading, makeDemoItem])
 
     React.useEffect(() => {
-        if (!selectedFileSha256) return
-        if (jobId) return
-        const match = jobs.find(j => j.sha256 === selectedFileSha256)
-        if (!match) return
-        setJobId(match.id)
-    }, [jobId, jobs, selectedFileSha256])
-
-    React.useEffect(() => {
-        if (!jobId) return
-        if (!selectedFile) return
-        if (!currentJob) return
-        if (currentJob.status !== 'succeeded') return
-        if (autoOpenedRef.current) return
-
-        autoOpenedRef.current = true
-        void (async () => {
-            try {
-                const detail = await refreshJobDetail(jobId)
-                setSelectedJob(detail)
-            } catch (e: any) {
-                setError(e?.message || String(e))
-            }
-        })()
-    }, [currentJob, jobId, refreshJobDetail, selectedFile])
+        setItems(prev => {
+            let changed = false
+            const next = prev.map(item => {
+                if (item.jobId || !item.sha256) return item
+                const match = jobsBySha.get(item.sha256)
+                if (!match) return item
+                changed = true
+                return { ...item, jobId: match.id }
+            })
+            return changed ? next : prev
+        })
+    }, [jobsBySha])
 
     const handlePick = React.useCallback(() => {
-        if (busy) return
         fileInputRef.current?.click()
-    }, [busy])
+    }, [])
 
     const handleGoHome = React.useCallback(() => {
         if (!shouldWarnOnLeave) {
@@ -186,16 +239,69 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
         onGoHome()
     }, [onGoHome, shouldWarnOnLeave, t])
 
-    const openPlayerForCurrentJob = React.useCallback(async () => {
-        if (!jobId) return
-        if (!currentJob || currentJob.status !== 'succeeded') return
-        const detail = await refreshJobDetail(jobId)
-        setSelectedJob(detail)
-    }, [currentJob, jobId, refreshJobDetail])
+    const openPlayerForItem = React.useCallback(
+        async (itemId: string) => {
+            const item = itemsRef.current.find(i => i.id === itemId)
+            if (!item) return
+            const job =
+                (item.jobId ? jobsById.get(item.jobId) : null) ??
+                (item.sha256 ? jobsBySha.get(item.sha256) : null) ??
+                null
+            if (!job || job.status !== 'succeeded') return
+            setOpeningJobId(job.id)
+            try {
+                const detail = await refreshJobDetail(job.id)
+                setSelectedPlayback({ job: detail, file: item.file })
+            } finally {
+                setOpeningJobId(null)
+            }
+        },
+        [jobsById, jobsBySha, refreshJobDetail]
+    )
 
     const goToAnalyzer = React.useCallback(async () => {
         navigate('/analyzer')
     }, [navigate])
+
+    const sortedItems = React.useMemo(() => {
+        const rank = (item: DemoItem): number => {
+            if (item.phase === 'error') return 2
+            if (!item.jobId) {
+                return item.phase === 'waiting' ? 0 : 0
+            }
+            const job = jobsById.get(item.jobId)
+            if (!job) return 0
+            if (job.status === 'succeeded') return 1
+            if (job.status === 'failed' || job.status === 'canceled') return 2
+            return 0
+        }
+
+        return [...items].sort((a, b) => {
+            const ra = rank(a)
+            const rb = rank(b)
+            if (ra !== rb) return ra - rb
+            return b.createdAtMs - a.createdAtMs
+        })
+    }, [items, jobsById])
+
+    const makePlaceholderJob = React.useCallback(
+        (item: DemoItem): JobSummary => ({
+            id: item.jobId ?? `local:${item.id}`,
+            status:
+                item.phase === 'error'
+                    ? 'failed'
+                    : item.phase === 'hashing'
+                        ? 'starting'
+                        : item.phase === 'waiting'
+                            ? 'starting'
+                            : 'uploading',
+            created_at: new Date(item.createdAtMs).toISOString(),
+            updated_at: new Date().toISOString(),
+            sha256: item.sha256 ?? `local:${item.id}`,
+            dominant_orientation: 0,
+        }),
+        []
+    )
 
     return (
         <div className="min-h-dvh bg-white text-slate-900">
@@ -216,20 +322,17 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
                             onClick={() => void goToAnalyzer()}
                             text={t('screens.demo.upgrade.cta')}
                         />
-                        <div className="hidden sm:block text-[10px] leading-4 text-slate-500 text-right">
-                            {t('common.fullAnalyzerBetaFreeNote')}
-                        </div>
                     </div>
                     <input
                         ref={fileInputRef}
                         type="file"
+                        multiple
                         accept="video/mp4"
                         className="hidden"
                         onChange={e => {
-                            const f = e.target.files?.[0] ?? null
+                            const picked = Array.from(e.target.files ?? [])
                             e.currentTarget.value = ''
-                            if (!f) return
-                            void startUpload(f)
+                            enqueueFiles(picked)
                         }}
                     />
                 </div>
@@ -244,63 +347,11 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
                         </div>
 
                         <div className="mt-5">
-                            {selectedFile && jobId && currentJob ? (
-                                <div>
-                                    <div
-                                        className={`${currentJob.status === 'succeeded' ? 'cursor-pointer' : 'cursor-default'
-                                            }`}
-                                        onClick={() => {
-                                            if (currentJob.status !== 'succeeded') return
-                                            void openPlayerForCurrentJob()
-                                        }}
-                                        role={currentJob.status === 'succeeded' ? 'button' : undefined}
-                                        tabIndex={currentJob.status === 'succeeded' ? 0 : -1}
-                                        onKeyDown={e => {
-                                            if (currentJob.status !== 'succeeded') return
-                                            if (e.key === 'Enter' || e.key === ' ') void openPlayerForCurrentJob()
-                                        }}
-                                    >
-                                        <JobThumbnail
-                                            job={currentJob}
-                                            videoSource={{ kind: 'file', file: selectedFile }}
-                                            playable={currentJob.status === 'succeeded'}
-                                            layout="wide"
-                                        />
-                                    </div>
-                                    {currentJob.status === 'uploading' && <div className="mt-2"><UploadProgressBar percent={progressPct ?? 0} /></div>}
-                                    <div className="mt-2 text-sm font-semibold text-slate-900 break-words">
-                                        {selectedFile.name}
-                                    </div>
-                                    {error && <div className="mt-2 text-sm text-red-700 break-words">{error}</div>}
-                                    {jobId && currentJob && currentJob.status === 'failed' && (
-                                        <div className="mt-2 text-sm text-red-700">{t('screens.demo.failed')}</div>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    <div className="flex items-center gap-3 text-sm text-slate-600">
-                                        {(phase === 'hashing' || phase === 'uploading') && <Spinner size="small" />}
-                                        {phase === 'hashing'
-                                            ? t('screens.demo.status.hashing')
-                                            : phase === 'uploading'
-                                                ? `${t('screens.demo.status.uploading')}${
-                                                      progressPct != null ? ` (${progressPct}%)` : ''
-                                                  }`
-                                                : t('screens.demo.status.waiting')}
-                                    </div>
-
-                                    {phase === 'uploading' && <UploadProgressBar percent={progressPct ?? 0} />}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="mt-5">
                             <div className="flex flex-wrap items-center gap-3">
                                 <Button
                                     variant="primary"
                                     size="md"
                                     onClick={handlePick}
-                                    disabled={busy}
                                     text={t('screens.demo.actions.selectVideo')}
                                 />
                                 <div className="text-xs text-slate-500">{t('screens.demo.processingEta')}</div>
@@ -309,13 +360,84 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => void startSampleUpload()}
-                                    disabled={busy || isSampleDownloading}
+                                    disabled={isSampleDownloading}
                                     isPending={isSampleDownloading}
                                     text={t('screens.demo.actions.sampleVideo')}
                                 />
                             </div>
-                            <div className="mt-2 text-xs text-slate-500">{t('screens.demo.assurance')}</div>
                         </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div>
+                                <div className="text-sm font-semibold text-slate-900">{t('screens.demo.grid.title')}</div>
+                                <div className="text-xs text-slate-500">
+                                    {items.length === 0
+                                        ? t('screens.demo.grid.empty')
+                                        : t('screens.demo.grid.processingHint')}
+                                </div>
+                            </div>
+                            <div className="flex-1" />
+                        </div>
+
+                        {items.length === 0 ? (
+                            <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6">
+                                <div className="text-sm text-slate-600">{t('screens.demo.grid.empty')}</div>
+                            </div>
+                        ) : (
+                            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                                {sortedItems.map(item => {
+                                    const currentJob =
+                                        (item.jobId ? jobsById.get(item.jobId) ?? null : null) ??
+                                        (item.sha256 ? jobsBySha.get(item.sha256) ?? null : null)
+                                    const thumbnailJob = currentJob ?? makePlaceholderJob(item)
+                                    const canOpen = !!currentJob && currentJob.status === 'succeeded'
+                                    const isOpening = !!currentJob && openingJobId === currentJob.id
+                                    const showError = !!item.error && !item.duplicateSkipped
+
+                                    return (
+                                        <div key={item.id} className="rounded-xl border border-slate-200 p-3">
+                                            <div
+                                                className={`relative ${canOpen ? 'cursor-pointer' : 'cursor-default'} ${isOpening ? 'opacity-70' : ''
+                                                    }`}
+                                                onClick={() => {
+                                                    if (!canOpen) return
+                                                    void openPlayerForItem(item.id)
+                                                }}
+                                                role={canOpen ? 'button' : undefined}
+                                                tabIndex={canOpen ? 0 : -1}
+                                                onKeyDown={e => {
+                                                    if (!canOpen) return
+                                                    if (e.key === 'Enter' || e.key === ' ') void openPlayerForItem(item.id)
+                                                }}
+                                            >
+                                                <JobThumbnail
+                                                    job={thumbnailJob}
+                                                    videoSource={{ kind: 'file', file: item.file }}
+                                                    playable={canOpen}
+                                                />
+                                                {isOpening && (
+                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                        <div className="rounded bg-black/60 px-2 py-1 text-xs text-white">
+                                                            {t('components.jobList.opening')}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {item.phase === 'uploading' && (
+                                                <div className="mt-2">
+                                                    <UploadProgressBar percent={item.progressPct ?? 0} />
+                                                </div>
+                                            )}
+                                            {showError && (
+                                                <div className="mt-2 text-xs text-red-700 break-words">{item.error}</div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
                     </section>
 
                     {/* Upgrade block */}
@@ -333,16 +455,15 @@ export const DemoPage: React.FC<{ onGoHome: () => void }> = ({ onGoHome }) => {
                                 onClick={() => void goToAnalyzer()}
                                 text={t('screens.demo.upgrade.cta')}
                             />
-                            <div className="mt-2 text-xs text-slate-500">{t('common.fullAnalyzerBetaFreeNote')}</div>
                         </div>
                     </section>
                 </div>
 
-                {selectedJob && selectedFile && (
+                {selectedPlayback && (
                     <PlayerModal
-                        job={selectedJob}
-                        videoSource={{ kind: 'file', file: selectedFile }}
-                        onClose={() => setSelectedJob(null)}
+                        job={selectedPlayback.job}
+                        videoSource={{ kind: 'file', file: selectedPlayback.file }}
+                        onClose={() => setSelectedPlayback(null)}
                         onReport={reportJob}
                         showDemoTutorialTips
                     />
