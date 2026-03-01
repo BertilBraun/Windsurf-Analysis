@@ -339,17 +339,13 @@ def _run_iter_ilp(args) -> Tuple[float, Dict[str, Any]]:
 
         def objective(trial: optuna.trial.Trial) -> float:
             params: Dict[str, Any] = {
-                'w_start': trial.suggest_float('w_start', 0.5, 100.0),
+                'w_start': trial.suggest_float('w_start', 0.5, 150.0),
                 'w_motion': trial.suggest_float('w_motion', 0.0, 10.0),
                 'w_appearance': trial.suggest_float('w_appearance', 0.0, 10.0),
-                'w_gap': trial.suggest_float('w_gap', 0.0, 10.0),
-                'p_miss': trial.suggest_float('p_miss', 0.8, 1.0),
+                'w_gap': trial.suggest_float('w_gap', 0.0, 15.0),
+                'p_miss': trial.suggest_float('p_miss', 0.6, 1.0),
                 'appearance_similarity_gamma': trial.suggest_float('appearance_similarity_gamma', 2.0, 15.0),
                 'appearance_ema': trial.suggest_float('appearance_ema', 0.2, 1.0),
-                # Optional discard behavior (newer tracker versions)
-                'allow_discard_short_tracklets': trial.suggest_categorical(
-                    'allow_discard_short_tracklets', [True, False]
-                ),
                 'discard_max_detections': trial.suggest_int('discard_max_detections', 1, 10),
                 'discard_cost_first': trial.suggest_float('discard_cost_first', 0.25, 50.0, log=True),
                 'discard_cost_growth': trial.suggest_float('discard_cost_growth', 1.0, 3.0),
@@ -370,7 +366,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Unified optimizer for Preprocessor, Discrete ILP, and BoT-SORT.')
     parser.add_argument('--mode', type=str, required=True, choices=['preprocessor', 'ilp', 'iter_ilp', 'botsort'])
     parser.add_argument('--golden-dir', type=str, required=True, help='Directory with *.golden.tracks.pkl files')
-    parser.add_argument('--trials', type=int, default=200, help='Number of Optuna trials')
+    parser.add_argument('--trials', type=int, default=800, help='Number of Optuna trials')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--workers', type=int, default=0, help='Parallel workers (0 = cpu_count)')
 
