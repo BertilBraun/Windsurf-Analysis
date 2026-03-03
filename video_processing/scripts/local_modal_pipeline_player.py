@@ -64,12 +64,13 @@ StabilizerName = Literal['masked_vidstab', 'gmc', 'vidstab', 'none']
 class LocalRunResult:
     output_dir: Path
     upright_video_path: Path
-    metadata_path: Path
+    metadata_path: Path | None
     stabilization_transforms_path: Path | None
     raw_motion_transforms_path: Path | None
     dominant_orientation: int
     transforms: list[Transform]
     tracks: list[Track]
+    renderable_tracks: list[RenderableTrack]
 
 
 def _parse_args() -> argparse.Namespace:
@@ -577,6 +578,8 @@ def run_local_pipeline(
     *,
     output_dir: Path,
     skip_orientation: bool,
+    overwrite_input_with_upright: bool = False,
+    write_outputs: bool = True,
     orientation_model_path: str | None,
     yolo_model_path: str | None,
     stabilizer: StabilizerName,
@@ -611,18 +614,28 @@ def run_local_pipeline(
         with timeit('orientation: detect'):
             fixer = OrientationFixer(model_path)
             dominant_orientation = int(fixer.detect_orientation(str(input_video)))
-        upright_video = output_dir / f'{input_video.stem}.upright.mp4'
-        with timeit('orientation: apply'):
+        if bool(overwrite_input_with_upright):
+            upright_video = input_video
             if dominant_orientation != 0:
-                fixer.apply_rotation(str(input_video), str(upright_video), dominant_orientation)
-            else:
-                # Keep IO cheap: try hardlink; fall back to copy.
-                if upright_video.exists():
-                    upright_video.unlink()
-                try:
-                    os.link(input_video, upright_video)
-                except OSError:
-                    shutil.copy2(input_video, upright_video)
+                temp_upright = input_video.with_name(f'{input_video.stem}.__upright_tmp__{input_video.suffix}')
+                with timeit('orientation: apply'):
+                    if temp_upright.exists():
+                        temp_upright.unlink()
+                    fixer.apply_rotation(str(input_video), str(temp_upright), dominant_orientation)
+                    temp_upright.replace(input_video)
+        else:
+            upright_video = output_dir / f'{input_video.stem}.upright.mp4'
+            with timeit('orientation: apply'):
+                if dominant_orientation != 0:
+                    fixer.apply_rotation(str(input_video), str(upright_video), dominant_orientation)
+                else:
+                    # Keep IO cheap: try hardlink; fall back to copy.
+                    if upright_video.exists():
+                        upright_video.unlink()
+                    try:
+                        os.link(input_video, upright_video)
+                    except OSError:
+                        shutil.copy2(input_video, upright_video)
 
     # 2) Detection (YOLO)
     model = str(YOLO_MODEL_PATH) if yolo_model_path is None else str(yolo_model_path)
@@ -683,32 +696,37 @@ def run_local_pipeline(
         for tracker in trackers:
             tracks = tracker.track(tracks, props, raw_motion_transforms)
 
-    # 6) Write metadata for local Qt player
-    with timeit('output: write metadata'):
-        renderable_tracks = prepare_renderable_tracks(
-            tracks,
-            video_width=props.width,
-            video_height=props.height,
-            raw_motion_transforms=raw_motion_transforms,
-        )
-        metadata_path = _save_tracks_metadata(renderable_tracks, upright_video, output_dir)
-        stabilization_transforms_path = _save_stabilization_transforms(
-            transforms_by_frame,
-            frame_count=props.total_frames,
-            output_dir=output_dir,
-            stem=upright_video.stem,
-            stabilizer=stabilizer,
-            smoothing_window=smoothing_window,
-        )
-        raw_motion_transforms_path = _save_raw_motion_transforms(
-            _dense_raw_motion_deltas_by_frame(
-                raw_motion_transforms=raw_motion_transforms, frame_count=props.total_frames
-            ),
-            frame_count=props.total_frames,
-            output_dir=output_dir,
-            stem=upright_video.stem,
-            stabilizer=stabilizer,
-        )
+    renderable_tracks = prepare_renderable_tracks(
+        tracks,
+        video_width=props.width,
+        video_height=props.height,
+        raw_motion_transforms=raw_motion_transforms,
+    )
+
+    metadata_path: Path | None = None
+    stabilization_transforms_path: Path | None = None
+    raw_motion_transforms_path: Path | None = None
+    if bool(write_outputs):
+        # 6) Write metadata for local Qt player
+        with timeit('output: write metadata'):
+            metadata_path = _save_tracks_metadata(renderable_tracks, upright_video, output_dir)
+            stabilization_transforms_path = _save_stabilization_transforms(
+                transforms_by_frame,
+                frame_count=props.total_frames,
+                output_dir=output_dir,
+                stem=upright_video.stem,
+                stabilizer=stabilizer,
+                smoothing_window=smoothing_window,
+            )
+            raw_motion_transforms_path = _save_raw_motion_transforms(
+                _dense_raw_motion_deltas_by_frame(
+                    raw_motion_transforms=raw_motion_transforms, frame_count=props.total_frames
+                ),
+                frame_count=props.total_frames,
+                output_dir=output_dir,
+                stem=upright_video.stem,
+                stabilizer=stabilizer,
+            )
 
     if render_keypoints:
         with timeit(f'output: render keypoints ({render_keypoints_source})'):
@@ -730,9 +748,12 @@ def run_local_pipeline(
 
     print(f'Output directory: {output_dir}')
     print(f'Upright video: {upright_video}')
-    print(f'Tracks metadata: {metadata_path}')
-    print(f'Stabilization transforms: {stabilization_transforms_path}')
-    print(f'Raw motion transforms: {raw_motion_transforms_path}')
+    if metadata_path is not None:
+        print(f'Tracks metadata: {metadata_path}')
+    if stabilization_transforms_path is not None:
+        print(f'Stabilization transforms: {stabilization_transforms_path}')
+    if raw_motion_transforms_path is not None:
+        print(f'Raw motion transforms: {raw_motion_transforms_path}')
     return LocalRunResult(
         output_dir=output_dir,
         upright_video_path=upright_video,
@@ -742,6 +763,7 @@ def run_local_pipeline(
         dominant_orientation=dominant_orientation,
         transforms=raw_motion_transforms,
         tracks=tracks,
+        renderable_tracks=renderable_tracks,
     )
 
 
@@ -758,6 +780,8 @@ def main() -> int:
         Path(args.input_video),
         output_dir=Path(args.output_dir),
         skip_orientation=bool(args.skip_orientation),
+        overwrite_input_with_upright=False,
+        write_outputs=True,
         orientation_model_path=args.orientation_model_path,
         yolo_model_path=args.yolo_model_path,
         stabilizer=str(args.stabilizer),  # type: ignore[arg-type]
