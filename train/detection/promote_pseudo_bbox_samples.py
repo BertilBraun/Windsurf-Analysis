@@ -16,7 +16,9 @@ def _parse_args() -> argparse.Namespace:
         description='Promote reviewed pseudo-labeled bbox samples into the main training dataset with collision-safe naming.'
     )
     p.add_argument('--src', type=Path, required=True, help='Reviewed pseudo-labeled folder (image + txt pairs).')
-    p.add_argument('--dst', type=Path, default=Path('train/detection/windsurf_dataset'), help='Destination dataset folder.')
+    p.add_argument(
+        '--dst', type=Path, default=Path('train/detection/windsurf_dataset'), help='Destination dataset folder.'
+    )
     p.add_argument('--copy', dest='copy', action='store_true', help='Copy files (default behavior, non-destructive).')
     p.add_argument('--move', dest='copy', action='store_false', help='Move files instead of copying.')
     p.set_defaults(copy=True)

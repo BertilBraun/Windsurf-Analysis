@@ -1,0 +1,400 @@
+# hard_windows_v1
+# video_path	start_frame	end_frame	peak_frame	score	notes
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	0	12	2	23.639759	track=1,boom=6.7,tip=56.8
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	29	49	39	14.370578	track=1,boom=9.2,tip=1.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	51	71	61	20.816676	track=1,boom=3.6,tip=32.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	91	111	101	20.869996	track=1,boom=13.0,tip=43.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	126	146	136	18.166267	track=1,boom=11.2,tip=12.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	148	168	158	19.336561	track=1,boom=8.0,tip=13.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	169	189	179	13.450020	track=1,boom=6.4,tip=7.3
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	202	222	212	18.422451	track=1,boom=0.0,tip=10.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	238	258	248	15.011213	track=1,boom=2.2,tip=24.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	270	290	280	12.271686	track=1,boom=2.2,tip=3.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	293	313	303	14.755651	track=1,boom=10.6,tip=12.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	315	335	325	9.986031	track=1,boom=4.0,tip=4.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	337	357	347	13.605524	track=1,boom=5.0,tip=14.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	368	388	378	8.326941	track=1,boom=8.0,tip=4.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	394	414	404	10.085794	track=1,boom=3.2,tip=13.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030748.mov	418	438	428	12.251384	track=1,boom=7.2,tip=14.8
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	51	71	61	12.215190	track=1,boom=9.5,tip=7.3
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	91	111	101	10.207025	track=1,boom=7.8,tip=12.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	124	144	134	13.773392	track=2,boom=13.6,tip=10.8
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	155	175	165	11.000069	track=1,boom=2.2,tip=3.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	178	198	188	14.713671	track=1,boom=1.0,tip=2.8
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	200	220	210	30.567164	track=2,boom=3.6,tip=5.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	231	251	241	10.632282	track=2,boom=1.4,tip=9.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	252	272	262	15.697356	track=2,boom=15.2,tip=2.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	290	310	300	11.794417	track=1,boom=9.1,tip=5.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	311	331	321	21.206792	track=1,boom=6.4,tip=15.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	350	370	360	22.139663	track=1,boom=7.1,tip=19.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	373	393	383	17.380072	track=1,boom=9.1,tip=5.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	403	423	413	17.148028	track=1,boom=18.0,tip=3.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	432	452	442	25.894241	track=1,boom=2.8,tip=4.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	463	483	473	25.663664	track=1,boom=17.5,tip=28.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	493	513	503	20.887774	track=1,boom=1.4,tip=8.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	517	537	527	25.076695	track=1,boom=9.5,tip=33.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (1)/iCloud Photos from Kasper Thrane/P1030751.mov	543	563	553	32.680246	track=1,boom=3.2,tip=26.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760205861053.MP4	118	138	128	20.478894	track=1,boom=10.0,tip=16.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760205861053.MP4	141	161	151	13.593871	track=1,boom=10.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760205861053.MP4	173	193	183	18.069460	track=1,boom=6.3,tip=14.9
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206020097.MP4	180	200	190	9.297303	track=1,boom=4.5,tip=14.9
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206020097.MP4	220	240	230	18.649869	track=1,boom=12.7,tip=27.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206020097.MP4	241	261	251	32.832265	track=1,boom=17.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206020097.MP4	267	287	277	11.046924	track=1,boom=19.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206020097.MP4	301	321	311	14.700407	track=1,boom=2.2,tip=6.3
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206020097.MP4	325	345	335	21.592232	track=1,boom=8.2,tip=8.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206020097.MP4	346	366	356	10.326145	track=1,boom=3.6,tip=9.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206020097.MP4	384	404	394	12.869860	track=1,boom=6.1,tip=11.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206149021.MP4	166	186	176	8.220507	track=1,boom=5.0,tip=5.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206149021.MP4	188	208	198	40.053641	track=1,boom=35.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206149021.MP4	209	229	219	10.072622	track=1,boom=9.0,tip=20.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206262745.MP4	189	209	199	10.255809	track=1,boom=6.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206262745.MP4	211	231	221	29.515536	track=1,boom=32.3
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/1760206262745.MP4	232	252	242	18.415774	track=2,boom=1.0,tip=15.8
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/IMG_8854.MP4	0	14	4	8.769828	track=1,boom=1.0,tip=2.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/IMG_8875.MP4	224	244	234	22.022019	track=2,tip=12.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/IMG_8875.MP4	264	284	274	10.161046	track=1,boom=2.0,tip=4.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/IMG_8875.MP4	288	308	298	9.761370	track=2,tip=3.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/IMG_8878.MP4	1728	1748	1738	9.026859	track=1,boom=14.0,tip=5.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/IMG_8880.MP4	753	773	763	10.454860	track=1,boom=40.4,tip=17.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/IMG_8880.MP4	1219	1239	1229	9.072018	track=1,boom=7.3,tip=2.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (3)/iCloud Photos from Kasper Thrane/IMG_8880.MP4	1501	1521	1511	12.972719	track=1,boom=11.0,tip=5.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8658.MP4	0	12	2	9.212676	track=2,boom=2.2,tip=6.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8658.MP4	436	456	446	8.345152	track=2,boom=5.4,tip=5.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8658.MP4	493	513	503	10.124629	track=1,boom=5.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8658.MP4	520	540	530	10.086033	track=2,boom=12.8,tip=13.9
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8658.MP4	542	562	552	30.045349	track=1,boom=14.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8658.MP4	564	584	574	16.503325	track=1,boom=10.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8658.MP4	623	643	633	17.147781	track=3,boom=31.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8658.MP4	644	664	654	9.108823	track=1,boom=18.1,tip=19.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8658.MP4	684	704	694	8.444965	track=3,boom=10.0,tip=5.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659-1.MP4	331	351	341	8.520342	track=2,boom=3.2,tip=9.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659-1.MP4	429	449	439	12.329926	track=2,boom=6.1,tip=19.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659-1.MP4	490	510	500	8.923232	track=1,boom=3.2,tip=6.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659-1.MP4	628	648	638	8.341159	track=2,boom=3.2,tip=5.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659-1.MP4	685	705	695	9.284884	track=2,boom=5.4,tip=1.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659-1.MP4	725	745	735	10.069055	track=2,boom=11.3
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	193	213	203	15.159474	track=1,boom=5.0,tip=2.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	1067	1087	1077	14.638535	track=1,boom=9.0,tip=39.3
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	1328	1348	1338	8.030914	track=3,boom=2.2,tip=7.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	1433	1453	1443	11.974631	track=3,boom=5.1,tip=13.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	1484	1504	1494	9.832070	track=1,boom=2.8,tip=6.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	1623	1643	1633	8.002223	track=1,boom=3.6,tip=5.8
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	1680	1700	1690	8.360020	track=1,boom=5.1,tip=6.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	1719	1739	1729	8.541571	track=1,boom=8.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	1740	1760	1750	64.715296	track=1,boom=69.8,tip=24.3
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	1762	1782	1772	22.126444	track=1,boom=5.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	1798	1818	1808	28.799911	track=1,boom=2.2,tip=9.9
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	1819	1839	1829	10.443607	track=1,boom=6.1,tip=22.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	1842	1862	1852	11.511802	track=1,boom=13.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8659.MP4	1876	1896	1886	11.756065	track=1,boom=9.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8660.MP4	2064	2084	2074	8.613917	track=4,boom=2.8,tip=4.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8660.MP4	2314	2334	2324	9.032787	track=3,boom=3.2,tip=13.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8660.MP4	2342	2362	2352	23.993687	track=3,boom=9.5,tip=13.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8660.MP4	2364	2384	2374	24.571376	track=3,boom=7.3,tip=13.9
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8660.MP4	2403	2423	2413	12.796314	track=4,boom=7.3,tip=10.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8660.MP4	2430	2450	2440	27.253208	track=4,tip=50.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8660.MP4	2463	2483	2473	33.942149	track=4,boom=13.5,tip=16.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8660.MP4	2510	2530	2520	13.958389	track=4,boom=8.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8660.MP4	2539	2559	2549	9.719970	track=4,boom=6.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8660.MP4	2571	2591	2581	11.348617	track=4,boom=11.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	3412	3432	3422	8.298760	track=2,boom=1.0,tip=11.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	3470	3490	3480	11.471617	track=3,boom=1.4,tip=23.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	3838	3858	3848	10.403918	track=3,boom=5.8,tip=16.3
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	3865	3885	3875	61.571828	track=3,boom=4.5,tip=3.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	4007	4027	4017	11.514723	track=3,boom=3.2,tip=11.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	4077	4097	4087	10.009103	track=3,boom=2.2,tip=4.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	4105	4125	4115	28.109632	track=3,boom=10.2,tip=15.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	4130	4150	4140	20.409230	track=3,boom=6.1,tip=1.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	4162	4182	4172	16.860651	track=4,boom=1.0,tip=22.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	4219	4239	4229	9.280367	track=4,boom=4.5,tip=5.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	4244	4264	4254	19.753843	track=4,boom=13.5,tip=17.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	4270	4290	4280	14.964748	track=4,boom=6.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	4305	4325	4315	29.091494	track=4,boom=16.0,tip=9.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	4328	4348	4338	8.814432	track=4,boom=3.6,tip=7.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	4355	4375	4365	14.758506	track=4,boom=19.6,tip=16.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8663.MP4	4419	4439	4429	9.327060	track=4,boom=5.0,tip=18.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8675.MP4	101	121	111	8.395927	track=1,boom=2.8,tip=6.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8675.MP4	887	907	897	8.935761	track=3,boom=2.2,tip=13.9
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8675.MP4	1179	1199	1189	10.195782	track=2,boom=2.2,tip=4.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8676.MP4	832	852	842	11.230604	track=3,boom=17.1,tip=8.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8676.MP4	863	883	873	8.009900	track=3,boom=11.0,tip=3.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8678.MP4	791	811	801	8.514883	track=1,boom=3.0,tip=2.8
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8678.MP4	974	994	984	11.619845	track=1,boom=3.0,tip=5.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8694.MP4	1015	1035	1025	9.348687	track=1,boom=2.0,tip=7.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8694.MP4	1152	1172	1162	14.594572	track=1,boom=25.1,tip=5.8
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8696.MP4	1190	1210	1200	18.674659	track=1,boom=1.4,tip=1.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8700.MP4	205	225	215	9.430851	track=1,boom=4.5,tip=15.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (4)/iCloud Photos from Kasper Thrane/IMG_8700.MP4	418	438	428	9.971264	track=1,boom=4.2,tip=9.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/1757096198637.MP4	170	190	180	34.337335	track=2,tip=31.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/1757096198637.MP4	200	220	210	14.211496	track=2,tip=8.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/1757096198637.MP4	240	260	250	8.157374	track=1,boom=1.4,tip=3.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/1757096198637.MP4	269	289	279	18.184007	track=2,tip=6.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/1757096198637.MP4	299	319	309	12.436839	track=1,boom=1.0,tip=4.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/1757096198637.MP4	339	359	349	21.010104	track=2,tip=24.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/1757096198637.MP4	364	384	374	12.218162	track=2,tip=7.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/1757096198637.MP4	393	413	403	15.926831	track=2,tip=6.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/1757096198637.MP4	422	442	432	11.479640	track=1,boom=3.0,tip=5.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/1757096198637.MP4	2103	2123	2113	81.746560	track=1,tip=44.8
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/1757096198637.MP4	2136	2156	2146	11.908883	track=1,boom=28.3
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	0	12	2	17.128250	track=1,boom=13.2,tip=5.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	17	37	27	11.505078	track=1,boom=18.0,tip=20.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	38	58	48	16.949868	track=1,boom=4.2,tip=7.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	66	86	76	14.022563	track=1,boom=9.1,tip=13.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	101	121	111	14.404285	track=1,boom=16.0,tip=14.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	133	153	143	14.514775	track=1,boom=3.6,tip=4.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	159	179	169	12.953537	track=1,boom=3.0,tip=10.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	188	208	198	10.496463	track=1,boom=4.5,tip=6.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	210	230	220	9.055083	track=1,boom=7.8,tip=6.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	231	251	241	13.127204	track=1,boom=9.0,tip=8.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	262	282	272	17.667672	track=1,boom=8.6,tip=9.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	286	306	296	15.225804	track=1,boom=24.1,tip=25.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	320	340	330	19.590249	track=1,boom=6.3,tip=17.9
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	353	373	363	20.182853	track=1,boom=2.2,tip=8.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	374	394	384	14.828063	track=1,boom=11.7,tip=9.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	396	416	406	23.981246	track=1,boom=25.0,tip=19.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	420	440	430	15.700540	track=1,boom=10.0,tip=2.8
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	453	473	463	10.682075	track=1,boom=12.0,tip=13.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	476	496	486	17.519994	track=1,boom=17.0,tip=24.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	497	517	507	25.740793	track=1,boom=8.0,tip=8.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	525	545	535	15.857389	track=1,boom=8.6,tip=25.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	562	582	572	24.294206	track=1,boom=15.5,tip=28.3
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	590	610	600	14.889375	track=1,boom=8.5,tip=7.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	615	635	625	18.117239	track=1,boom=1.4,tip=16.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	644	664	654	15.129552	track=1,boom=13.0,tip=7.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	669	689	679	14.384617	track=1,boom=3.6,tip=15.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	691	711	701	9.464020	track=1,boom=3.2,tip=5.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	715	735	725	10.063500	track=1,boom=4.5,tip=2.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	737	757	747	17.337049	track=1,boom=6.7,tip=8.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	758	778	768	11.094289	track=1,boom=2.2,tip=11.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	784	804	794	23.464614	track=1,boom=6.7,tip=9.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	822	842	832	20.987176	track=1,boom=26.5,tip=22.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	856	876	866	44.639224	track=1,boom=15.0,tip=34.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane (5)/iCloud Photos from Kasper Thrane/P1030679.MP4	944	964	954	35.104100	track=1,boom=8.5,tip=17.3
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/6,3 no cam.MP4	89	109	99	14.303697	track=1,boom=2.2,tip=2.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/6,3 no cam.MP4	241	261	251	9.314722	track=1,boom=23.4,tip=24.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/6,3 no cam.MP4	396	416	406	14.208519	track=1,boom=3.6,tip=13.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/6,3 no cam.MP4	457	477	467	13.148295	track=1,boom=2.2,tip=4.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/6,3 no cam.MP4	585	605	595	10.703436	track=1,boom=0.0,tip=2.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/6,3 no cam.MP4	692	712	702	8.253375	track=1,boom=1.4,tip=2.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/6,3 no cam.MP4	957	977	967	9.323742	track=1,boom=1.4,tip=2.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/6,3 no cam.MP4	1045	1065	1055	15.300847	track=1,boom=1.4,tip=5.7
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/6,3 no cam.MP4	1104	1124	1114	11.523682	track=1,boom=1.0,tip=4.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/6,3 no cam.MP4	1484	1504	1494	10.834369	track=1,boom=3.2,tip=3.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/6,3 no cam.MP4	1508	1528	1518	19.661930	track=1,boom=25.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/6,3 no cam.MP4	1536	1556	1546	35.603684	track=1,boom=8.1,tip=5.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/6,3 no cam.MP4	1559	1579	1569	68.395578	track=1,boom=26.2,tip=44.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9341.MP4	20	40	30	30.992736	track=2,boom=50.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9341.MP4	54	74	64	11.629869	track=2,boom=5.8,tip=5.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9341.MP4	137	157	147	15.486970	track=2,tip=37.9
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9341.MP4	543	563	553	15.126974	track=1,boom=2.0,tip=4.1
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9341.MP4	1340	1360	1350	8.043384	track=1,boom=1.4,tip=1.4
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9341.MP4	1957	1977	1967	9.138095	track=1,boom=4.0,tip=5.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9342.MP4	1245	1265	1255	13.486389	track=1,boom=7.1,tip=17.8
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9342.MP4	1306	1326	1316	17.007869	track=1,boom=1.0,tip=22.2
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9342.MP4	1602	1622	1612	8.983260	track=1,boom=2.0,tip=2.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9342.MP4	2431	2451	2441	10.996992	track=1,boom=29.8,tip=21.6
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9343.MP4	2471	2491	2481	10.913515	track=1,boom=1.4,tip=4.0
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9343.MP4	2494	2514	2504	22.066323	track=1,boom=61.5
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9343.MP4	2521	2541	2531	44.335808	track=1,boom=18.4,tip=16.3
+C:/Users/berti/Downloads/training videos from kasper/iCloud Photos from Kasper Thrane/iCloud Photos from Kasper Thrane/IMG_9343.MP4	2544	2564	2554	72.703739	track=1,boom=5.1,tip=15.8
+C:/Users/berti/Downloads/new_training_vids/1757096198637.MP4	170	190	180	27.853072	track=3,tip=26.4
+C:/Users/berti/Downloads/new_training_vids/1757096198637.MP4	200	220	210	14.023940	track=3,tip=8.6
+C:/Users/berti/Downloads/new_training_vids/1757096198637.MP4	269	289	279	20.266334	track=3,tip=8.6
+C:/Users/berti/Downloads/new_training_vids/1757096198637.MP4	299	319	309	12.729851	track=3,tip=4.1
+C:/Users/berti/Downloads/new_training_vids/1757096198637.MP4	332	352	342	20.571200	track=3,tip=24.8
+C:/Users/berti/Downloads/new_training_vids/1757096198637.MP4	353	373	363	14.854261	track=3,tip=7.1
+C:/Users/berti/Downloads/new_training_vids/1757096198637.MP4	393	413	403	16.620695	track=3,tip=6.1
+C:/Users/berti/Downloads/new_training_vids/1757096198637.MP4	944	964	954	12.814077	track=4,tip=11.4
+C:/Users/berti/Downloads/new_training_vids/1757096198637.MP4	1788	1808	1798	19.441845	track=5,boom=9.8,tip=9.5
+C:/Users/berti/Downloads/new_training_vids/1757096198637.MP4	2100	2120	2110	78.928608	track=1,boom=10.8,tip=53.2
+C:/Users/berti/Downloads/new_training_vids/1757096198637.MP4	2121	2141	2131	15.291456	track=1,boom=29.7
+C:/Users/berti/Downloads/new_training_vids/1760205861053.MP4	118	138	128	20.775077	track=1,boom=8.5,tip=15.3
+C:/Users/berti/Downloads/new_training_vids/1760205861053.MP4	141	161	151	15.194465	track=1,boom=10.0
+C:/Users/berti/Downloads/new_training_vids/1760205861053.MP4	173	193	183	17.412538	track=1,boom=6.3,tip=14.3
+C:/Users/berti/Downloads/new_training_vids/1760206020097.MP4	220	240	230	18.028074	track=1,boom=12.7,tip=23.3
+C:/Users/berti/Downloads/new_training_vids/1760206020097.MP4	241	261	251	26.917257	track=1,boom=17.0
+C:/Users/berti/Downloads/new_training_vids/1760206020097.MP4	277	297	287	13.132550	track=1,boom=6.0,tip=23.0
+C:/Users/berti/Downloads/new_training_vids/1760206020097.MP4	304	324	314	14.684041	track=1,boom=8.5,tip=15.0
+C:/Users/berti/Downloads/new_training_vids/1760206020097.MP4	325	345	335	21.674692	track=1,boom=8.9,tip=9.5
+C:/Users/berti/Downloads/new_training_vids/1760206020097.MP4	385	405	395	14.017591	track=1,boom=11.4,tip=7.0
+C:/Users/berti/Downloads/new_training_vids/1760206149021.MP4	187	207	197	47.262378	track=1,boom=12.5
+C:/Users/berti/Downloads/new_training_vids/1760206262745.MP4	211	231	221	26.065126	track=1,boom=16.5
+C:/Users/berti/Downloads/new_training_vids/1760206262745.MP4	232	252	242	17.699513	track=1,boom=1.0,tip=14.9
+C:/Users/berti/Downloads/new_training_vids/6,3 no cam.MP4	91	111	101	15.089644	track=1,boom=2.0,tip=5.1
+C:/Users/berti/Downloads/new_training_vids/6,3 no cam.MP4	396	416	406	14.500521	track=1,boom=3.0,tip=11.7
+C:/Users/berti/Downloads/new_training_vids/6,3 no cam.MP4	457	477	467	14.260020	track=1,boom=3.0,tip=5.0
+C:/Users/berti/Downloads/new_training_vids/6,3 no cam.MP4	1039	1059	1049	14.522401	track=1,boom=10.3,tip=7.2
+C:/Users/berti/Downloads/new_training_vids/6,3 no cam.MP4	1508	1528	1518	19.093365	track=1,boom=25.0
+C:/Users/berti/Downloads/new_training_vids/6,3 no cam.MP4	1536	1556	1546	35.361142	track=1,boom=6.3,tip=3.6
+C:/Users/berti/Downloads/new_training_vids/6,3 no cam.MP4	1559	1579	1569	70.017133	track=1,boom=26.2,tip=45.1
+C:/Users/berti/Downloads/new_training_vids/IMG_7269.MP4	15	35	25	14.326579	track=2,boom=10.2,tip=9.5
+C:/Users/berti/Downloads/new_training_vids/IMG_7269.MP4	119	139	129	13.456063	track=4,boom=7.1,tip=3.6
+C:/Users/berti/Downloads/new_training_vids/IMG_7280.MP4	160	180	170	12.310660	track=2,boom=6.7,tip=14.0
+C:/Users/berti/Downloads/new_training_vids/IMG_7280.MP4	181	201	191	22.451514	track=2,boom=21.2,tip=17.0
+C:/Users/berti/Downloads/new_training_vids/IMG_7280.MP4	206	226	216	28.664710	track=3,boom=5.7,tip=58.1
+C:/Users/berti/Downloads/new_training_vids/IMG_7280.MP4	257	277	267	14.133246	track=3,boom=3.2,tip=14.0
+C:/Users/berti/Downloads/new_training_vids/IMG_7703.MP4	245	265	255	14.723781	track=1,boom=1.0,tip=43.9
+C:/Users/berti/Downloads/new_training_vids/IMG_8658.MP4	541	561	551	29.691189	track=1,boom=17.0
+C:/Users/berti/Downloads/new_training_vids/IMG_8658.MP4	564	584	574	17.953490	track=1,boom=12.8
+C:/Users/berti/Downloads/new_training_vids/IMG_8658.MP4	623	643	633	16.803114	track=3,boom=33.2
+C:/Users/berti/Downloads/new_training_vids/IMG_8659.MP4	193	213	203	13.728929	track=1,boom=4.1,tip=0.0
+C:/Users/berti/Downloads/new_training_vids/IMG_8659.MP4	1740	1760	1750	63.973964	track=1,boom=71.1,tip=24.4
+C:/Users/berti/Downloads/new_training_vids/IMG_8659.MP4	1762	1782	1772	23.230814	track=1,boom=5.0
+C:/Users/berti/Downloads/new_training_vids/IMG_8659.MP4	1797	1817	1807	29.729134	track=1,boom=5.1,tip=12.4
+C:/Users/berti/Downloads/new_training_vids/IMG_8659.MP4	1842	1862	1852	16.814224	track=1,boom=13.0
+C:/Users/berti/Downloads/new_training_vids/IMG_8659.MP4	1874	1894	1884	12.183549	track=1,boom=6.4
+C:/Users/berti/Downloads/new_training_vids/IMG_8660.MP4	2342	2362	2352	24.427986	track=3,boom=11.2,tip=12.2
+C:/Users/berti/Downloads/new_training_vids/IMG_8660.MP4	2366	2386	2376	24.243311	track=3,boom=8.1,tip=19.0
+C:/Users/berti/Downloads/new_training_vids/IMG_8660.MP4	2410	2430	2420	13.511972	track=4,boom=17.5,tip=11.4
+C:/Users/berti/Downloads/new_training_vids/IMG_8660.MP4	2431	2451	2441	33.575983	track=4,tip=57.5
+C:/Users/berti/Downloads/new_training_vids/IMG_8660.MP4	2457	2477	2467	33.770358	track=4,boom=19.1
+C:/Users/berti/Downloads/new_training_vids/IMG_8660.MP4	2510	2530	2520	12.644887	track=4,boom=6.4
+C:/Users/berti/Downloads/new_training_vids/IMG_8675.MP4	1181	1201	1191	12.682816	track=1,boom=2.2,tip=9.5
+C:/Users/berti/Downloads/new_training_vids/IMG_8676.MP4	832	852	842	15.101865	track=3,boom=28.6,tip=5.0
+C:/Users/berti/Downloads/new_training_vids/IMG_8694.MP4	1154	1174	1164	15.947439	track=1,boom=10.0,tip=7.0
+C:/Users/berti/Downloads/new_training_vids/IMG_8696.MP4	1071	1091	1081	53.431104	track=2,boom=44.1
+C:/Users/berti/Downloads/new_training_vids/IMG_8696.MP4	1136	1156	1146	63.848186	track=2,boom=79.6,tip=248.7
+C:/Users/berti/Downloads/new_training_vids/IMG_8696.MP4	1196	1216	1206	13.560507	track=1,boom=1.0,tip=30.0
+C:/Users/berti/Downloads/new_training_vids/IMG_8875.MP4	224	244	234	19.026774	track=2,boom=5.0,tip=5.0
+C:/Users/berti/Downloads/new_training_vids/IMG_8878.MP4	1728	1748	1738	14.899962	track=1,boom=24.1,tip=5.4
+C:/Users/berti/Downloads/new_training_vids/IMG_8880.MP4	1215	1235	1225	13.430496	track=1,boom=9.9,tip=2.2
+C:/Users/berti/Downloads/new_training_vids/IMG_8880.MP4	1501	1521	1511	20.256987	track=1,boom=12.0,tip=2.0
+C:/Users/berti/Downloads/new_training_vids/IMG_9341.MP4	18	38	28	35.262973	track=1,boom=2.0,tip=2.2
+C:/Users/berti/Downloads/new_training_vids/IMG_9341.MP4	51	71	61	16.818729	track=2,boom=10.8,tip=11.4
+C:/Users/berti/Downloads/new_training_vids/IMG_9341.MP4	543	563	553	14.597739	track=1,boom=2.8,tip=2.2
+C:/Users/berti/Downloads/new_training_vids/IMG_9342.MP4	1244	1264	1254	13.665942	track=1,boom=2.8,tip=14.1
+C:/Users/berti/Downloads/new_training_vids/IMG_9342.MP4	1305	1325	1315	15.553578	track=1,boom=3.2,tip=4.2
+C:/Users/berti/Downloads/new_training_vids/IMG_9343.MP4	2471	2491	2481	14.865000	track=1,boom=3.0,tip=3.2
+C:/Users/berti/Downloads/new_training_vids/IMG_9343.MP4	2497	2517	2507	27.130162	track=1,boom=56.9
+C:/Users/berti/Downloads/new_training_vids/IMG_9343.MP4	2533	2553	2543	67.792172	track=1,tip=20.8
+C:/Users/berti/Downloads/new_training_vids/IMG_9880.MP4	228	248	238	14.749503	track=1,boom=2.8,tip=7.2
+C:/Users/berti/Downloads/new_training_vids/IMG_9881.MP4	1005	1025	1015	12.267914	track=1,boom=5.0,tip=19.0
+C:/Users/berti/Downloads/new_training_vids/IMG_9885.MP4	326	346	336	12.467281	track=1,boom=2.8,tip=1.0
+C:/Users/berti/Downloads/new_training_vids/IMG_9885.MP4	406	426	416	15.397022	track=2,boom=2.8,tip=1.0
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	0	13	3	17.269336	track=1,boom=17.5,tip=5.8
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	20	40	30	19.480927	track=1,boom=14.9,tip=16.6
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	47	67	57	14.465948	track=1,boom=4.1,tip=17.5
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	85	105	95	20.648194	track=1,boom=16.1,tip=16.0
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	116	136	126	16.344177	track=1,boom=12.5,tip=14.9
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	140	160	150	16.090878	track=1,boom=3.6,tip=10.0
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	174	194	184	14.751802	track=2,boom=3.2,tip=7.0
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	197	217	207	25.872096	track=1,boom=16.1,tip=29.0
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	236	256	246	16.129188	track=2,boom=10.0,tip=12.0
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	262	282	272	20.377036	track=1,boom=30.4,tip=16.0
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	298	318	308	16.527650	track=1,boom=7.1,tip=11.2
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	326	346	336	12.868229	track=2,boom=12.0,tip=16.3
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	352	372	362	13.842687	track=2,boom=8.1,tip=16.2
+C:/Users/berti/Downloads/new_training_vids/P1030574.MP4	373	393	383	19.066251	track=1,boom=9.5,tip=10.0
+C:/Users/berti/Downloads/new_training_vids/P1030583.MP4	184	204	194	22.894700	track=1,boom=2.2,tip=22.1
+C:/Users/berti/Downloads/new_training_vids/P1030583.MP4	208	228	218	14.225357	track=2,boom=3.2,tip=9.5
+C:/Users/berti/Downloads/new_training_vids/P1030588.MP4	53	73	63	14.770483	track=2,boom=2.8,tip=11.7
+C:/Users/berti/Downloads/new_training_vids/P1030588.MP4	83	103	93	17.267148	track=2,boom=3.2,tip=13.5
+C:/Users/berti/Downloads/new_training_vids/P1030588.MP4	112	132	122	31.309016	track=4,boom=34.5
+C:/Users/berti/Downloads/new_training_vids/P1030588.MP4	133	153	143	29.168685	track=4,boom=11.0,tip=37.7
+C:/Users/berti/Downloads/new_training_vids/P1030588.MP4	167	187	177	39.664390	track=2,boom=10.3,tip=13.0
+C:/Users/berti/Downloads/new_training_vids/P1030588.MP4	199	219	209	26.140415	track=6,boom=9.8
+C:/Users/berti/Downloads/new_training_vids/P1030588.MP4	226	246	236	24.320306	track=2,boom=4.0,tip=21.4
+C:/Users/berti/Downloads/new_training_vids/P1030588.MP4	249	269	259	18.798135	track=2,boom=19.2,tip=31.1
+C:/Users/berti/Downloads/new_training_vids/P1030588.MP4	270	290	280	45.879236	track=6,boom=3.0,tip=48.9
+C:/Users/berti/Downloads/new_training_vids/P1030588.MP4	311	331	321	38.233552	track=6,boom=13.0,tip=49.7
+C:/Users/berti/Downloads/new_training_vids/P1030588.MP4	375	395	385	26.995628	track=2,boom=5.1,tip=6.4
+C:/Users/berti/Downloads/new_training_vids/P1030588.MP4	404	424	414	42.176307	track=2,boom=4.5,tip=18.6
+C:/Users/berti/Downloads/new_training_vids/P1030592.MP4	9	29	19	18.765537	track=1,boom=23.0,tip=5.1
+C:/Users/berti/Downloads/new_training_vids/P1030592.MP4	52	72	62	16.849669	track=1,boom=4.0,tip=4.5
+C:/Users/berti/Downloads/new_training_vids/P1030592.MP4	82	102	92	23.990499	track=4,boom=96.5,tip=95.5
+C:/Users/berti/Downloads/new_training_vids/P1030592.MP4	106	126	116	18.958139	track=2,boom=24.2
+C:/Users/berti/Downloads/new_training_vids/P1030592.MP4	156	176	166	13.297694	track=1,boom=10.0,tip=4.2
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	0	15	5	15.641139	track=1,boom=4.1,tip=1.4
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	30	50	40	13.761410	track=2,boom=2.8,tip=6.4
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	89	109	99	16.458777	track=2,boom=7.8,tip=27.5
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	118	138	128	26.465621	track=3,boom=39.1,tip=39.5
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	159	179	169	35.583082	track=2,boom=7.1,tip=22.0
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	180	200	190	17.544142	track=3,boom=1.4,tip=12.0
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	206	226	216	13.214475	track=2,boom=3.2,tip=8.1
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	228	248	238	25.720331	track=4,boom=14.9,tip=69.0
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	250	270	260	14.950761	track=4,boom=10.6,tip=17.0
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	273	293	283	17.444076	track=2,boom=5.1,tip=7.1
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	298	318	308	21.278141	track=4,boom=5.1,tip=13.0
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	331	351	341	14.217524	track=4,boom=5.8,tip=25.1
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	354	374	364	19.131449	track=2,boom=15.7,tip=36.7
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	375	395	385	41.154870	track=2,boom=9.2,tip=19.1
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	396	416	406	15.958938	track=2,boom=9.4,tip=2.0
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	428	448	438	19.353493	track=2,boom=5.0,tip=17.1
+C:/Users/berti/Downloads/new_training_vids/P1030604.MP4	492	512	502	19.156906	track=4,boom=5.8
+C:/Users/berti/Downloads/new_training_vids/P1030606.MP4	0	16	6	14.924120	track=1,boom=8.6,tip=7.2
+C:/Users/berti/Downloads/new_training_vids/P1030606.MP4	53	73	63	12.272415	track=1,boom=1.4,tip=7.0
+C:/Users/berti/Downloads/new_training_vids/P1030606.MP4	82	102	92	12.955325	track=1,boom=3.6,tip=15.3
+C:/Users/berti/Downloads/new_training_vids/P1030606.MP4	188	208	198	28.582316	track=1,boom=22.4,tip=24.5
+C:/Users/berti/Downloads/new_training_vids/P1030606.MP4	216	236	226	18.455896	track=1,boom=11.7,tip=9.4
+C:/Users/berti/Downloads/new_training_vids/P1030606.MP4	245	265	255	28.274273	track=2,boom=20.2,tip=19.2
+C:/Users/berti/Downloads/new_training_vids/P1030606.MP4	266	286	276	16.919792	track=2,boom=6.1,tip=7.8
+C:/Users/berti/Downloads/new_training_vids/P1030606.MP4	289	309	299	13.515315	track=4,boom=7.1,tip=16.6
+C:/Users/berti/Downloads/new_training_vids/P1030606.MP4	316	336	326	12.332525	track=4,boom=1.0,tip=9.9
+C:/Users/berti/Downloads/new_training_vids/P1030606.MP4	349	369	359	19.624540	track=4,boom=1.4,tip=10.3
+C:/Users/berti/Downloads/new_training_vids/P1030606.MP4	388	408	398	13.139097	track=5,boom=7.1,tip=9.5
+C:/Users/berti/Downloads/new_training_vids/P1030606.MP4	467	487	477	12.386655	track=1,boom=8.9,tip=6.4
+C:/Users/berti/Downloads/new_training_vids/P1030608.MP4	0	13	3	13.824423	track=1,boom=2.0,tip=11.0
+C:/Users/berti/Downloads/new_training_vids/P1030608.MP4	23	43	33	13.123443	track=1,boom=8.1,tip=11.4
+C:/Users/berti/Downloads/new_training_vids/P1030608.MP4	45	65	55	16.370488	track=1,boom=7.0,tip=18.4
+C:/Users/berti/Downloads/new_training_vids/P1030608.MP4	71	91	81	23.814223	track=1,boom=13.6,tip=9.2
+C:/Users/berti/Downloads/new_training_vids/P1030608.MP4	92	112	102	15.149832	track=1,boom=8.6,tip=23.3
+C:/Users/berti/Downloads/new_training_vids/P1030608.MP4	192	212	202	17.486137	track=1,boom=11.4,tip=29.1
+C:/Users/berti/Downloads/new_training_vids/P1030608.MP4	445	465	455	13.241518	track=1,boom=2.2,tip=16.2
+C:/Users/berti/Downloads/new_training_vids/P1030610.MP4	5	25	15	28.612299	track=3,boom=13.0,tip=39.3
+C:/Users/berti/Downloads/new_training_vids/P1030610.MP4	37	57	47	22.800004	track=3,boom=21.2,tip=40.0
+C:/Users/berti/Downloads/new_training_vids/P1030610.MP4	64	84	74	31.375474	track=3,boom=14.9,tip=16.3
+C:/Users/berti/Downloads/new_training_vids/P1030610.MP4	87	107	97	19.235922	track=3,boom=3.0,tip=24.3
+C:/Users/berti/Downloads/new_training_vids/P1030610.MP4	108	128	118	15.623898	track=3,boom=5.1,tip=14.0
+C:/Users/berti/Downloads/new_training_vids/P1030610.MP4	129	149	139	38.096085	track=3,boom=3.2,tip=19.1
+C:/Users/berti/Downloads/new_training_vids/P1030610.MP4	158	178	168	21.300120	track=3,boom=8.2,tip=5.0
+C:/Users/berti/Downloads/new_training_vids/P1030610.MP4	193	213	203	18.413465	track=3,boom=8.1,tip=21.2
+C:/Users/berti/Downloads/new_training_vids/P1030611.MP4	0	14	4	26.144386	track=1,boom=10.4,tip=18.4
+C:/Users/berti/Downloads/new_training_vids/P1030611.MP4	22	42	32	36.603046	track=1,boom=6.3,tip=12.0
+C:/Users/berti/Downloads/new_training_vids/P1030611.MP4	44	64	54	20.832418	track=1,boom=11.2,tip=27.0
+C:/Users/berti/Downloads/new_training_vids/P1030611.MP4	74	94	84	26.793449	track=5,boom=13.4,tip=60.4
+C:/Users/berti/Downloads/new_training_vids/P1030611.MP4	95	115	105	13.276877	track=1,boom=1.4,tip=14.6
+C:/Users/berti/Downloads/new_training_vids/P1030611.MP4	610	630	620	13.145157	track=1,boom=12.1,tip=12.2
+C:/Users/berti/Downloads/new_training_vids/P1030611.MP4	631	651	641	19.308070	track=1,boom=5.4,tip=25.1
+C:/Users/berti/Downloads/new_training_vids/P1030611.MP4	655	675	665	21.516514	track=1,boom=8.5,tip=8.1
+C:/Users/berti/Downloads/new_training_vids/P1030611.MP4	700	720	710	13.228710	track=7,boom=5.7,tip=13.0
+C:/Users/berti/Downloads/new_training_vids/P1030611.MP4	721	741	731	16.151662	track=1,boom=7.3,tip=9.5
+C:/Users/berti/Downloads/new_training_vids/P1030611.MP4	877	897	887	15.703268	track=6,boom=2.0,tip=8.1
+C:/Users/berti/Downloads/new_training_vids/P1030611.MP4	992	1012	1002	13.026742	track=6,boom=27.9,tip=10.6
+C:/Users/berti/Downloads/new_training_vids/P1030618.mov	397	417	407	12.783673	track=1,boom=11.4,tip=6.3
+C:/Users/berti/Downloads/new_training_vids/P1030630.MP4	168	188	178	14.254236	track=1,boom=2.8,tip=8.0
+C:/Users/berti/Downloads/new_training_vids/P1030630.MP4	255	275	265	13.010785	track=2,boom=5.0,tip=10.3
+C:/Users/berti/Downloads/new_training_vids/P1030630.MP4	278	298	288	40.106863	track=2,boom=14.9,tip=16.6
+C:/Users/berti/Downloads/new_training_vids/P1030630.MP4	863	883	873	18.405546	track=2,boom=4.1,tip=14.6
+C:/Users/berti/Downloads/new_training_vids/P1030630.MP4	957	977	967	17.588393	track=2,boom=8.6,tip=30.0
+C:/Users/berti/Downloads/new_training_vids/P1030630.MP4	987	1007	997	14.434280	track=2,boom=3.0,tip=6.3
+C:/Users/berti/Downloads/new_training_vids/P1030640.MP4	0	12	2	40.914853	track=2,boom=18.4,tip=55.8
+C:/Users/berti/Downloads/new_training_vids/P1030640.MP4	46	66	56	20.855727	track=2,boom=10.2,tip=14.1
+C:/Users/berti/Downloads/new_training_vids/P1030640.MP4	96	116	106	13.411314	track=2,boom=8.1,tip=9.2
+C:/Users/berti/Downloads/new_training_vids/P1030640.MP4	1437	1457	1447	17.037327	track=1,boom=17.1,tip=28.0
+C:/Users/berti/Downloads/new_training_vids/P1030640.MP4	1460	1480	1470	72.064155	track=1,boom=7.6,tip=197.9
+C:/Users/berti/Downloads/new_training_vids/P1030640.MP4	1487	1507	1497	17.701129	track=3,boom=5.0,tip=20.1
+C:/Users/berti/Downloads/new_training_vids/P1030640.MP4	1560	1580	1570	14.869267	track=3,boom=12.0,tip=6.0
+C:/Users/berti/Downloads/new_training_vids/P1030640.MP4	1581	1601	1591	19.061698	track=3,boom=23.3,tip=42.4
+C:/Users/berti/Downloads/new_training_vids/P1030640.MP4	1615	1635	1625	13.159975	track=3,boom=10.0,tip=8.1
+C:/Users/berti/Downloads/new_training_vids/P1030640.MP4	1763	1783	1773	26.739040	track=3,tip=5.8
+C:/Users/berti/Downloads/new_training_vids/P1030687.MP4	226	246	236	28.771401	track=1,tip=41.6
+C:/Users/berti/Downloads/new_training_vids/P1030687.MP4	247	267	257	119.858566	track=1,tip=187.0
+C:/Users/berti/Downloads/new_training_vids/P1030687.MP4	274	294	284	84.123390	track=1,boom=64.1,tip=41.2
+C:/Users/berti/Downloads/new_training_vids/P1030687.MP4	301	321	311	59.844190	track=1,tip=35.1
+C:/Users/berti/Downloads/new_training_vids/P1030687.MP4	325	345	335	96.824919	track=1,boom=51.9,tip=50.1
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	0	14	4	30.918647	track=1,boom=13.0,tip=17.1
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	26	46	36	28.221740	track=1,boom=53.0,tip=33.6
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	47	67	57	45.569163	track=1,boom=10.0,tip=68.4
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	68	88	78	37.995071	track=1,boom=29.1,tip=58.3
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	100	120	110	40.912222	track=1,boom=31.2,tip=12.0
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	126	146	136	86.328070	track=1,boom=111.4
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	150	170	160	48.561773	track=1,boom=52.4
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	185	205	195	39.112052	track=1,boom=32.8
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	218	238	228	29.971577	track=1,boom=8.6
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	259	279	269	116.035399	track=1,boom=189.6
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	287	307	297	162.109289	track=1,boom=243.5
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	313	333	323	58.201879	track=1,boom=35.0
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	347	367	357	60.107655	track=1,boom=37.2
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	370	390	380	33.344991	track=1,boom=60.8
+C:/Users/berti/Downloads/new_training_vids/P1030699.MP4	393	413	403	65.945605	track=1,boom=70.3,tip=32.2
