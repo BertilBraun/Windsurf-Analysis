@@ -44,6 +44,14 @@ ANCHOR_SMOOTH_NEIGHBOR_WEIGHTS: dict[int, float] = {
 # Huber threshold (pixels) for robust reweighting.
 ANCHOR_SMOOTH_ROBUST_MEAN_C_PX: float = 50.0
 
+# Around this bbox size, keypoint localization becomes unreliable enough that anchoring should
+# move back towards the bbox center.
+ANCHOR_KEYPOINT_SIZE_BLEND_CENTER_PX: float = 50.0
+ANCHOR_KEYPOINT_SIZE_BLEND_RANGE_PX: float = 10.0
+
+# Bbox fallback anchor uses the horizontal center and a point lower in the box than the true center.
+ANCHOR_BBOX_FALLBACK_Y_FRACTION: float = 0.6
+
 
 @dataclass(frozen=True)
 class FloatPoint:
@@ -271,9 +279,10 @@ def calculate_anchors(
     Compute per-frame anchors for a dense, per-frame list of detections.
 
     Behavior:
-      - Prefer a point along the mast segment when boom is visible.
+      - Prefer a point above the boom when boom is visible.
+      - Blend back towards a lower bbox fallback point when detections are too small for reliable keypoints.
       - Short gaps (<= missing_grace_frames) between two visible boom keypoints are interpolated (anchor->anchor).
-      - Longer missing spans blend to/from bbox centers over missing_grace_frames to avoid snapping.
+      - Longer missing spans blend to/from the bbox fallback point over missing_grace_frames to avoid snapping.
       - Final anchors are smoothed with a robust (Huber) neighborhood mean; when raw camera-motion transforms are
         provided, neighbor samples are mapped into the current frame before smoothing.
     """
@@ -284,8 +293,14 @@ def calculate_anchors(
     frame_start = int(detections[0].frame_idx) if detections else 0
 
     bbox_centers = [_to_float_point(d.bbox.center) for d in detections]
+    bbox_fallback_anchors = [
+        FloatPoint(
+            float(d.bbox.center.x),
+            float(d.bbox.y1) + float(d.bbox.height) * float(ANCHOR_BBOX_FALLBACK_Y_FRACTION),
+        )
+        for d in detections
+    ]
     boom_vis = [d.boom.is_visible for d in detections]
-    mast_vis = [d.mast_tip.is_visible for d in detections]
     visible_indices = [i for i, v in enumerate(boom_vis) if v]
 
     bbox_top_y = [float(d.bbox.y1) for d in detections]
@@ -296,93 +311,28 @@ def calculate_anchors(
     def proxy_mast_tip(i: int) -> FloatPoint:
         return FloatPoint(float(boom_or_center_x[i]), float(bbox_top_y[i]))
 
-    def fill_mast_tip_points() -> list[FloatPoint]:
-        grace = int(missing_grace_frames)
-        tip_vis = [bool(v) for v in mast_vis]
-        visible_tip_indices = [i for i, v in enumerate(tip_vis) if v]
-
-        tip: list[FloatPoint] = [proxy_mast_tip(i) for i in range(len(detections))]
-        if not visible_tip_indices:
-            return tip
-
-        for i in visible_tip_indices:
-            tip[i] = _to_float_point(detections[i].mast_tip.point)
-
-        for a_i, b_i in zip(visible_tip_indices[:-1], visible_tip_indices[1:]):
-            gap = b_i - a_i - 1
-            if 0 < gap <= grace:
-                p0 = _to_float_point(detections[a_i].mast_tip.point)
-                p1 = _to_float_point(detections[b_i].mast_tip.point)
-                for k in range(1, gap + 1):
-                    t = float(k) / float(gap + 1)
-                    tip[a_i + k] = p0.interpolate(p1, t)
-
-        # Leading: if first visible is far away, interpolate proxy->tip over the last `grace` frames before it.
-        first = visible_tip_indices[0]
-        if first > grace:
-            start_idx = first - grace
-            p0 = proxy_mast_tip(start_idx)
-            p1 = _to_float_point(detections[first].mast_tip.point)
-            for idx in range(start_idx, first):
-                t = float(idx - start_idx) / float(grace)
-                tip[idx] = p0.interpolate(p1, t)
-
-        # Trailing: if last visible is far away from the end, interpolate tip->proxy over the next `grace` frames.
-        last = visible_tip_indices[-1]
-        trailing = (len(detections) - 1) - last
-        if trailing > grace:
-            end_idx = last + grace
-            p0 = _to_float_point(detections[last].mast_tip.point)
-            p1 = proxy_mast_tip(end_idx)
-            for idx in range(last + 1, end_idx + 1):
-                t = float(idx - last) / float(grace)
-                tip[idx] = p0.interpolate(p1, t)
-
-        for a_i, b_i in zip(visible_tip_indices[:-1], visible_tip_indices[1:]):
-            gap = b_i - a_i - 1
-            if gap <= grace:
-                continue
-
-            out_end = min(len(detections) - 1, a_i + grace)
-            in_start = max(0, b_i - grace)
-
-            p0 = _to_float_point(detections[a_i].mast_tip.point)
-            p1 = proxy_mast_tip(out_end)
-            for idx in range(a_i + 1, out_end + 1):
-                t = float(idx - a_i) / float(grace)
-                tip[idx] = p0.interpolate(p1, t)
-
-            p0 = proxy_mast_tip(in_start)
-            p1 = _to_float_point(detections[b_i].mast_tip.point)
-            for idx in range(in_start, b_i):
-                t = float(idx - in_start) / float(grace)
-                tip[idx] = p0.interpolate(p1, t)
-
-        return tip
-
-    filled_mast_tip = fill_mast_tip_points()
-
     def preferred_anchor(i: int) -> FloatPoint:
-        # With a centered crop, anchoring on the boom can cut off the mast tip (boom is close to one end of the mast).
-        # Use a point along the mast segment; when the true mast tip isn't visible, `filled_mast_tip` eases into a
-        # bbox-top proxy and back out, avoiding large jumps when the mast reappears.
+        # Keep the anchor slightly above the boom/mast intersection, but do not let mast-tip noise move the crop.
+        # The final neighborhood smoother absorbs frame-to-frame jitter.
         if boom_vis[i]:
-            tip = filled_mast_tip[i]
+            bbox_size = min(float(detections[i].bbox.width), float(detections[i].bbox.height))
             boom = _to_float_point(detections[i].boom.point)
-            # Bias strongly towards the boom so the anchor stays close to the rider/boom while
-            # still leaving headroom for the mast tip in the crop.
-            return tip.interpolate(boom, 0.85)
-        return bbox_centers[i]
+            keypoint_anchor = proxy_mast_tip(i).interpolate(boom, 0.85)
+            blend_range = max(1e-6, float(ANCHOR_KEYPOINT_SIZE_BLEND_RANGE_PX))
+            keypoint_weight = (bbox_size - float(ANCHOR_KEYPOINT_SIZE_BLEND_CENTER_PX)) / blend_range + 0.5
+            keypoint_weight = max(0.0, min(1.0, keypoint_weight))
+            return bbox_fallback_anchors[i].interpolate(keypoint_anchor, keypoint_weight)
+        return bbox_fallback_anchors[i]
 
     if not visible_indices:
         smoothed = _anchor_robust_mean(
-            bbox_centers,
+            bbox_fallback_anchors,
             frame_start=frame_start,
             raw_motion_transforms=raw_motion_transforms,
         )
         return [Point(int(p.x), int(p.y)) for p in smoothed]
 
-    anchors = list(bbox_centers)
+    anchors = list(bbox_fallback_anchors)
     visible_set = set(visible_indices)
     for i in visible_indices:
         anchors[i] = preferred_anchor(i)
@@ -414,11 +364,11 @@ def calculate_anchors(
             in_point[idx] = pt
             in_weight[idx] = float(w)
 
-    # Leading missing: if > grace, interpolate bbox(center at first-grace) -> anchor (at first)
+    # Leading missing: if > grace, interpolate bbox fallback point at first-grace -> anchor (at first)
     first = visible_indices[0]
     if first > missing_grace_frames:
         start_idx = first - missing_grace_frames
-        start_pt = bbox_centers[start_idx]
+        start_pt = bbox_fallback_anchors[start_idx]
         end_pt = preferred_anchor(first)
         for idx in range(start_idx, first):
             if idx in visible_set or idx in short_gap_indices:
@@ -426,15 +376,15 @@ def calculate_anchors(
             t = float(idx - start_idx) / float(missing_grace_frames)
             set_in(idx, start_pt.interpolate(end_pt, t), w=float(missing_grace_frames - (first - idx) + 1))
 
-    # Internal long gaps: anchor->bbox then bbox->anchor (with overlap blending if needed)
+    # Internal long gaps: anchor->bbox fallback then bbox fallback->anchor (with overlap blending if needed)
     for a_i, b_i in zip(visible_indices[:-1], visible_indices[1:]):
         gap = b_i - a_i - 1
         if gap <= missing_grace_frames:
             continue
 
-        # Out: anchor at a_i -> bbox center at a_i+grace
+        # Out: anchor at a_i -> bbox fallback point at a_i+grace
         out_target_idx = a_i + missing_grace_frames
-        out_target = bbox_centers[out_target_idx]
+        out_target = bbox_fallback_anchors[out_target_idx]
         for idx in range(a_i + 1, min(out_target_idx, b_i - 1) + 1):
             if idx in visible_set or idx in short_gap_indices:
                 continue
@@ -445,9 +395,9 @@ def calculate_anchors(
                 w=float(missing_grace_frames - (idx - a_i) + 1),
             )
 
-        # In: bbox center at b_i-grace -> anchor at b_i
+        # In: bbox fallback point at b_i-grace -> anchor at b_i
         in_start_idx = b_i - missing_grace_frames
-        in_start = bbox_centers[in_start_idx]
+        in_start = bbox_fallback_anchors[in_start_idx]
         for idx in range(max(in_start_idx, a_i + 1), b_i):
             if idx in visible_set or idx in short_gap_indices:
                 continue
@@ -460,7 +410,7 @@ def calculate_anchors(
 
     # Trailing missing:
     # - <= grace: hold last anchor
-    # - > grace: interpolate anchor -> bbox center at last+grace
+    # - > grace: interpolate anchor -> bbox fallback point at last+grace
     last = visible_indices[-1]
     trailing = (len(detections) - 1) - last
     if trailing <= missing_grace_frames:
@@ -468,7 +418,7 @@ def calculate_anchors(
             anchors[idx] = anchors[last]
     else:
         out_target_idx = last + missing_grace_frames
-        out_target = bbox_centers[out_target_idx]
+        out_target = bbox_fallback_anchors[out_target_idx]
         for idx in range(last + 1, out_target_idx + 1):
             if idx in visible_set or idx in short_gap_indices:
                 continue
@@ -478,7 +428,7 @@ def calculate_anchors(
                 preferred_anchor(last).interpolate(out_target, t),
                 w=float(missing_grace_frames - (idx - last) + 1),
             )
-        # Beyond out_target_idx stays at bbox centers (default).
+        # Beyond out_target_idx stays at the bbox fallback point (default).
 
     # Apply (possibly blended) transitions.
     for idx in range(len(detections)):
