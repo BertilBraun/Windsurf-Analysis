@@ -28,20 +28,31 @@ import numpy as np
 from typing import Optional, Tuple
 from screen_utils import get_screen_size, get_window_monitor_size, overlay_screen_warning
 
+try:
+    from hard_windows import HardWindow, load_hard_windows
+except ImportError:
+    from train.detection.hard_windows import HardWindow, load_hard_windows
+
 from pathlib import Path
 
 # ---------- CLI -------------------------------------------------------------
 ap = argparse.ArgumentParser()
 ap.add_argument('video_dir', type=Path)
 ap.add_argument('output_dir', type=Path)
-ap.add_argument('--samples', type=int, default=1000)
+ap.add_argument('--samples', type=int, default=2000)
+ap.add_argument(
+    '--windows-file',
+    type=Path,
+    default=None,
+    help='Optional hard-window file. If set, new samples use listed peak frames instead of random frame draws.',
+)
 args = ap.parse_args()
 args.output_dir.mkdir(parents=True, exist_ok=True)
 
 VID_EXT = {'.mp4', '.mov', '.avi', '.mkv'}
 ADJUST_BB_SIZE = 0.02  # 1% of current bounding box
 videos = [p for p in args.video_dir.rglob('*') if p.suffix.lower() in VID_EXT]
-if not videos:
+if not videos and args.windows_file is None:
     raise SystemExit('No videos found in', args.video_dir)
 
 fcounts = []
@@ -49,7 +60,13 @@ for v in videos:
     c = cv2.VideoCapture(str(v))
     fcounts.append(int(c.get(cv2.CAP_PROP_FRAME_COUNT)) or 1)
     c.release()
-weights = [c / sum(fcounts) for c in fcounts]
+weights = [c / sum(fcounts) for c in fcounts] if fcounts else []
+frame_count_cache = {str(v.resolve()): c for v, c in zip(videos, fcounts)}
+hard_windows: list[HardWindow] = load_hard_windows(args.windows_file) if args.windows_file is not None else []
+hard_window_idx = 0
+active_hard_window: Optional[HardWindow] = None
+if args.windows_file is not None and not hard_windows:
+    raise SystemExit('No valid hard windows found in', args.windows_file)
 
 
 def resize_to_max(img, max_side=2048) -> Tuple[np.ndarray, float]:
@@ -389,9 +406,44 @@ print(f'Starting at sample id {last_sid} (existing: {sample_count})')
 
 frame_state = {}  # To remember which frame you are on for each video, for advanced uses if needed.
 
-idx = random.choices(range(len(videos)), weights)[0]
-vpath, fcnt = videos[idx], fcounts[idx]
-frame_no = random.randint(0, fcnt - 1)
+
+def _frame_count_for(vpath: Path) -> int:
+    key = str(vpath.resolve())
+    if key in frame_count_cache:
+        return frame_count_cache[key]
+    cap = cv2.VideoCapture(str(vpath))
+    count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+    cap.release()
+    frame_count_cache[key] = count
+    return count
+
+
+def _pick_random_frame():
+    idx = random.choices(range(len(videos)), weights)[0]
+    vpath = videos[idx]
+    fcnt = fcounts[idx]
+    return vpath, fcnt, random.randint(0, fcnt - 1), None
+
+
+def _pick_next_source():
+    global hard_window_idx, active_hard_window
+    if hard_windows:
+        if hard_window_idx >= len(hard_windows):
+            return None
+        active_hard_window = hard_windows[hard_window_idx]
+        hard_window_idx += 1
+        vpath = active_hard_window.video_path
+        fcnt = _frame_count_for(vpath)
+        frame_no = min(max(int(active_hard_window.peak_frame), 0), max(0, fcnt - 1))
+        return vpath, fcnt, frame_no, active_hard_window
+    active_hard_window = None
+    return _pick_random_frame()
+
+
+initial_source = _pick_next_source()
+if initial_source is None:
+    raise SystemExit('No frames available to annotate.')
+vpath, fcnt, frame_no, active_hard_window = initial_source
 
 while sample_count < args.samples:
     cap = cv2.VideoCapture(str(vpath))
@@ -399,10 +451,11 @@ while sample_count < args.samples:
     ok, frame = cap.read()
     cap.release()
     if not ok:
-        # If frame not ok, pick another random video/frame
-        idx = random.choices(range(len(videos)), weights)[0]
-        vpath, fcnt = videos[idx], fcounts[idx]
-        frame_no = random.randint(0, fcnt - 1)
+        # If frame not ok, pick another source frame
+        next_source = _pick_next_source()
+        if next_source is None:
+            break
+        vpath, fcnt, frame_no, active_hard_window = next_source
         continue
 
     orig_img = frame
@@ -421,9 +474,15 @@ while sample_count < args.samples:
             redraw(img, boxes)
             last_eff_screen = eff_screen
 
+        window_suffix = ''
+        if active_hard_window is not None:
+            window_suffix = (
+                f' [window {hard_window_idx}/{len(hard_windows)} '
+                f'{active_hard_window.start_frame + 1}-{active_hard_window.end_frame + 1}]'
+            )
         cv2.setWindowTitle(
             'annotate',
-            f'annotate [{sample_count}/{args.samples}] {vpath.name} (frame {frame_no + 1}/{fcnt}) rot={rotation_k * 90}°',
+            f'annotate [{sample_count}/{args.samples}] {vpath.name} (frame {frame_no + 1}/{fcnt}) rot={rotation_k * 90}°{window_suffix}',
         )
         to_show = disp if disp is not None else (img if img is not None else np.zeros((10, 10, 3), dtype=np.uint8))
         to_show = to_show.copy()
@@ -448,10 +507,11 @@ while sample_count < args.samples:
 
         elif key == 32:  # Space -> accept/save
             if save_sample(vpath):
-                # Next: Pick random frame/video
-                idx = random.choices(range(len(videos)), weights)[0]
-                vpath, fcnt = videos[idx], fcounts[idx]
-                frame_no = random.randint(0, fcnt - 1)
+                next_source = _pick_next_source()
+                if next_source is None:
+                    sample_count = args.samples
+                else:
+                    vpath, fcnt, frame_no, active_hard_window = next_source
             break
 
         # Fine-tune last box
@@ -513,12 +573,14 @@ while sample_count < args.samples:
             # Stay in this frame for annotation
 
         elif key in (ord('f'), ord('F')):
-            # store the empty frame and move to a new random sample (video/frame)
+            # store the empty frame and move to a new source frame
             boxes.clear()
             save_sample(vpath)
-            idx = random.choices(range(len(videos)), weights)[0]
-            vpath, fcnt = videos[idx], fcounts[idx]
-            frame_no = random.randint(0, fcnt - 1)
+            next_source = _pick_next_source()
+            if next_source is None:
+                sample_count = args.samples
+            else:
+                vpath, fcnt, frame_no, active_hard_window = next_source
             break
 
         # Backspace: Undo last save, re-display that frame for re-annotation
@@ -558,7 +620,7 @@ while sample_count < args.samples:
                     paint_box = None
                     redraw(img, boxes)
                     vpath = vpath_del
-                    fcnt = fcounts[videos.index(vpath)]
+                    fcnt = _frame_count_for(vpath)
                     frame_no = frame_no_del
                     last_sid = max(0, sid_del)
                     sample_count -= 1
@@ -568,9 +630,11 @@ while sample_count < args.samples:
         # skipping
         elif key == ord('x'):
             # Skip this frame, do not save
-            idx = random.choices(range(len(videos)), weights)[0]
-            vpath, fcnt = videos[idx], fcounts[idx]
-            frame_no = random.randint(0, fcnt - 1)
+            next_source = _pick_next_source()
+            if next_source is None:
+                sample_count = args.samples
+            else:
+                vpath, fcnt, frame_no, active_hard_window = next_source
             break
 
 cv2.destroyAllWindows()

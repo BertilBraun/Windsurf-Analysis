@@ -1,8 +1,10 @@
 Tools for annotating and training YOLO-based detection and pose estimation models.
 
 ### Detection Annotation
-*   **annotator.py**: Extracts random frames from videos for manual bounding box labeling.
+*   **annotator.py**: Extracts random frames from videos for manual bounding box labeling, or can jump directly to mined hard windows via `--windows-file`.
 *   **annotation_editor.py**: Review and edit existing YOLO format bounding boxes on images.
+*   **mine_hard_windows.py**: Runs the full `local_modal_pipeline_player.py` pipeline per video, then mines windows where `boom` / `mast_tip` jitter strongly relative to the smoothed render anchor over short horizons.
+*   **view_hard_windows.py**: Step-through viewer for mined hard windows; shows each window frame-by-frame and waits for keypresses.
 *   **negative_sample_creation.py**: Extracts background crops (minimum 640x640) and generates empty label files to reduce false positives.
 *   **pseudo_label_bbox.py**: Generates conservative pseudo-labeled bbox samples from videos into a review folder.
 *   **promote_pseudo_bbox_samples.py**: Promotes reviewed pseudo-labeled bbox samples into `windsurf_dataset` with collision-safe naming.
@@ -21,6 +23,13 @@ Tools for annotating and training YOLO-based detection and pose estimation model
 *   **screen_utils.py**: Detects screen resolution and overlays UI warnings if images exceed display bounds.
 
 ### BBox Pseudo-Labeling Workflow
+0. Optional: mine difficult temporal windows first (high anchor-relative pose jitter) and inspect them:
+   `python train/detection/mine_hard_windows.py --videos "C:\Users\berti\Downloads\training videos from kasper" --out "train/detection/hard_windows.txt"`
+   `python train/detection/view_hard_windows.py "train/detection/hard_windows.txt"`
+   `python train/detection/pseudo_label_bbox.py --videos "C:\Users\berti\Downloads\training videos from kasper" --windows-file "train/detection/hard_windows.txt" --model "train/detection/runs/detect/train8/weights/best.pt" --out "train/detection/neg/pseudo_bbox_review"`
+   `python train/detection/annotation_editor.py "train/detection/neg/pseudo_bbox_review"`
+   `python train/detection/promote_pseudo_bbox_samples.py --src "train/detection/neg/pseudo_bbox_review" --dst "train/detection/windsurf_dataset" --copy`
+   `python train/detection/annotator.py "C:\Users\berti\Downloads\training videos from kasper" train/detection/windsurf_dataset --windows-file "train/detection/hard_windows.txt"`
 1. Generate pseudo bbox labels from new videos (review-first):
    `python train/detection/pseudo_label_bbox.py --videos "C:\Users\berti\Downloads\training videos from kasper" --model "train/detection/runs/detect/train8/weights/best.pt" --out "train/detection/neg/pseudo_bbox_review"`
 2. Review and edit pseudo labels:
@@ -33,6 +42,10 @@ Tools for annotating and training YOLO-based detection and pose estimation model
 
 Notes:
 *   Manual bbox annotation with `annotator.py` is still the fallback when pseudo labels are weak.
+*   `mine_hard_windows.py` uses the same full local pipeline as `video_processing/scripts/local_modal_pipeline_player.py`, including stabilization, tracking, post-processing, and renderable anchors.
+*   Windows are promoted when `boom` or `mast_tip` offsets relative to the smoothed render anchor show large frame-to-frame short-horizon prediction errors. This targets high-frequency keypoint jitter rather than larger smooth motion.
+*   The hard window file is a plain tab-separated text file (`video_path`, `start_frame`, `end_frame`, `peak_frame`, `score`, `notes`) so it can be inspected or edited manually.
+*   `pseudo_label_bbox.py --windows-file ...` uses the hard-window `peak_frame` entries as direct pseudo-label targets, so you can review those bbox proposals in `annotation_editor.py` before promotion.
 *   Conservative defaults are tuned for lower cleanup effort; relax `--conf`, `--min-box-side`, `--edge-margin-frac`, or increase `--max-boxes-per-image` to accept more candidates.
 
 ### Common Controls

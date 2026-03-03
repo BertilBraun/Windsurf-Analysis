@@ -11,6 +11,13 @@ import torch
 import yaml
 from ultralytics import YOLO
 
+try:
+    from hard_windows import load_hard_windows
+except ImportError:
+    from train.detection.hard_windows import load_hard_windows
+
+YOLO_MODEL_PATH = 'video_processing/inference/weights/yolo_models/windsurfing_pose/best.pt'
+
 
 VIDEO_EXTS = {'.mp4', '.mov', '.avi', '.mkv'}
 
@@ -18,13 +25,19 @@ VIDEO_EXTS = {'.mp4', '.mov', '.avi', '.mkv'}
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description=(
-            'Generate pseudo-labeled bbox samples from videos using a trained detection model. '\
+            'Generate pseudo-labeled bbox samples from videos using a trained detection model. '
             'Writes image + YOLO txt pairs to an output review folder.'
         )
     )
     p.add_argument('--videos', type=Path, required=True, help='Video root folder (recursively scanned).')
-    p.add_argument('--model', type=Path, required=True, help='Trained detection model checkpoint (best.pt).')
+    p.add_argument('--model', type=Path, default=YOLO_MODEL_PATH, help='Trained detection model checkpoint (best.pt).')
     p.add_argument('--out', type=Path, required=True, help='Output folder for pseudo-labeled samples.')
+    p.add_argument(
+        '--windows-file',
+        type=Path,
+        default=None,
+        help='Optional hard-window file. If set, pseudo-label the listed peak frames instead of random stride candidates.',
+    )
 
     p.add_argument('--max-samples', type=int, default=300, help='Maximum number of sampled frames to process.')
     p.add_argument('--sample-stride', type=int, default=45, help='Frame stride when building frame candidates.')
@@ -65,6 +78,29 @@ def _collect_frame_candidates(videos: list[Path], stride: int) -> list[tuple[Pat
             continue
         for fi in range(0, fcnt, stride):
             candidates.append((v, fi))
+    return candidates
+
+
+def _collect_window_candidates(windows_file: Path, *, videos_root: Path | None) -> list[tuple[Path, int]]:
+    windows = load_hard_windows(windows_file)
+    if not windows:
+        return []
+
+    root_resolved = videos_root.resolve() if videos_root is not None else None
+    seen: set[tuple[str, int]] = set()
+    candidates: list[tuple[Path, int]] = []
+    for window in windows:
+        video_path = Path(window.video_path).resolve()
+        if root_resolved is not None:
+            try:
+                video_path.relative_to(root_resolved)
+            except ValueError:
+                continue
+        item = (str(video_path), int(window.peak_frame))
+        if item in seen:
+            continue
+        seen.add(item)
+        candidates.append((video_path, int(window.peak_frame)))
     return candidates
 
 
@@ -133,6 +169,8 @@ def main() -> int:
         raise SystemExit(f'--videos does not exist: {videos_root}')
     if not model_path.exists():
         raise SystemExit(f'--model does not exist: {model_path}')
+    if args.windows_file is not None and not Path(args.windows_file).exists():
+        raise SystemExit(f'--windows-file does not exist: {args.windows_file}')
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -140,7 +178,10 @@ def main() -> int:
     if not videos:
         raise SystemExit(f'No videos found under: {videos_root}')
 
-    candidates = _collect_frame_candidates(videos, int(args.sample_stride))
+    if args.windows_file is not None:
+        candidates = _collect_window_candidates(Path(args.windows_file), videos_root=videos_root)
+    else:
+        candidates = _collect_frame_candidates(videos, int(args.sample_stride))
     if not candidates:
         raise SystemExit('No frame candidates generated (video decode/frame count issue).')
 
@@ -156,6 +197,7 @@ def main() -> int:
         'videos_found': len(videos),
         'candidates_total': len(candidates),
         'frames_selected': len(selected),
+        'windows_mode': bool(args.windows_file is not None),
         'frames_decoded': 0,
         'frames_written': 0,
         'labels_written': 0,
@@ -246,7 +288,7 @@ def main() -> int:
                 counts['skipped_all_filtered'] += 1
                 continue
 
-            stem = f"{_sanitize_stem(video_path.stem)}_frame_{frame_idx:06d}"
+            stem = f'{_sanitize_stem(video_path.stem)}_frame_{frame_idx:06d}'
             out_img, out_lbl, renamed = _next_output_paths(out_dir, stem, bool(args.overwrite))
 
             ok = cv2.imwrite(str(out_img), frame)
