@@ -17,6 +17,12 @@ const THUMB_TARGET_W_WIDE = 960
 const THUMB_MIME = 'image/jpeg'
 const THUMB_QUALITY = 0.7
 
+function normalizeClockwiseRotation(deg: number): 0 | 90 | 180 | 270 {
+    const rotation = ((Math.round(deg) % 360) + 360) % 360
+    if (rotation === 0 || rotation === 90 || rotation === 180 || rotation === 270) return rotation
+    return quantizeOrientation(rotation)
+}
+
 function canvasToBlob(canvas: HTMLCanvasElement, mime: string, quality: number): Promise<Blob> {
     return new Promise((resolve, reject) => {
         canvas.toBlob(
@@ -87,10 +93,13 @@ async function generateThumbnailBlobFromVideo(
         const duration = safeEnd - safeStart
 
         const timestamp = safeStart + Math.min(0.1, Math.max(0, duration))
+        const dominantRotation = quantizeOrientation(dominantOrientation)
+        // CanvasSink.rotation overrides the file's embedded rotation metadata instead of adding to it.
+        const totalRotation = normalizeClockwiseRotation(videoTrack.rotation + dominantRotation)
 
         const sink = new CanvasSink(videoTrack, {
             width: targetWidth,
-            rotation: quantizeOrientation(dominantOrientation),
+            rotation: totalRotation,
         })
 
         const wrapped = await sink.getCanvas(timestamp)
