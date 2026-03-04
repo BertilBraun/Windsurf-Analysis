@@ -55,6 +55,7 @@ export function useJobs(): UseJobsReturn {
     const activeJobIdsRef = React.useRef<Set<string>>(new Set())
     const hydratedJobIdsRef = React.useRef<Set<string>>(new Set())
     const shaToPathsRef = React.useRef<Map<string, string[]>>(new Map())
+    const prefetchedDetailIdsRef = React.useRef<Set<string>>(new Set())
 
     const publishJobsFromRef = React.useCallback(() => {
         const next = Array.from(jobsByIdRef.current.values()).sort((a, b) => {
@@ -119,6 +120,7 @@ export function useJobs(): UseJobsReturn {
         jobsByIdRef.current.clear()
         activeJobIdsRef.current.clear()
         hydratedJobIdsRef.current.clear()
+        prefetchedDetailIdsRef.current.clear()
     }, [])
 
     const recomputeInitialSyncComplete = React.useCallback(() => {
@@ -307,6 +309,19 @@ export function useJobs(): UseJobsReturn {
         [authorizedFetch, getPathsForSha]
     )
 
+    React.useEffect(() => {
+        for (const job of jobs) {
+            if (job.status !== 'succeeded') continue
+            if (prefetchedDetailIdsRef.current.has(job.id)) continue
+
+            prefetchedDetailIdsRef.current.add(job.id)
+            void refreshJobDetail(job.id).catch(err => {
+                prefetchedDetailIdsRef.current.delete(job.id)
+                console.warn('job detail prefetch failed', job.id, err)
+            })
+        }
+    }, [jobs, refreshJobDetail])
+
     const deleteJobs = React.useCallback(
         async (ids: string[]) => {
             const job_ids = Array.from(new Set(ids.filter(Boolean)))
@@ -322,6 +337,7 @@ export function useJobs(): UseJobsReturn {
 
             setJobs(prev => prev.filter(job => !job_ids.includes(job.id)))
             for (const id of job_ids) {
+                prefetchedDetailIdsRef.current.delete(id)
                 await deleteSetting(`jobDetail:${id}`)
             }
             return Number(data.deleted || 0)
