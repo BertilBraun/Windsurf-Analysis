@@ -735,6 +735,9 @@ export const Player: React.FC<Props> = ({
         return t('player.canvas.modeIndicator.overview')
     }, [drawMode, player?.mode, t])
 
+    const canOpenPrevJob = typeof onOpenPrevJob === 'function'
+    const canOpenNextJob = typeof onOpenNextJob === 'function'
+
     const showFocusedClickHint =
         focusedClickHintReady && !drawMode && player?.mode === 'overview' && !focusedClickHintDismissed
 
@@ -803,7 +806,7 @@ export const Player: React.FC<Props> = ({
                         </div>
                     </div>
                 )}
-                <div ref={containerRef} className="absolute inset-0">
+                <div ref={containerRef} className="absolute inset-0 group/nav-overlay">
                     <canvas
                         ref={canvasRef}
                         className={`absolute inset-0 block touch-none ${canvasCursorClass}`}
@@ -816,6 +819,42 @@ export const Player: React.FC<Props> = ({
                         onPointerUp={overviewPan.onPointerUp}
                         onPointerCancel={overviewPan.onPointerCancel}
                     />
+                    {canOpenPrevJob && (
+                        <button
+                            type="button"
+                            aria-label={t('components.keyboardShortcutsModal.shortcuts.prevVideo')}
+                            title={t('components.keyboardShortcutsModal.shortcuts.prevVideo')}
+                            disabled={exporter.isExporting}
+                            onClick={e => {
+                                e.stopPropagation()
+                                trackEvent('player_overlay_prev_video_clicked', { job_id: job.id })
+                                onOpenPrevJob?.()
+                            }}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 z-20 h-9 w-9 rounded-full border border-white/35 bg-black/45 text-white backdrop-blur-sm transition-opacity duration-150 opacity-0 group-hover/nav-overlay:opacity-100 focus:opacity-100 focus-visible:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                            <span aria-hidden="true" className="text-lg leading-none">
+                                ‹
+                            </span>
+                        </button>
+                    )}
+                    {canOpenNextJob && (
+                        <button
+                            type="button"
+                            aria-label={t('components.keyboardShortcutsModal.shortcuts.nextVideo')}
+                            title={t('components.keyboardShortcutsModal.shortcuts.nextVideo')}
+                            disabled={exporter.isExporting}
+                            onClick={e => {
+                                e.stopPropagation()
+                                trackEvent('player_overlay_next_video_clicked', { job_id: job.id })
+                                onOpenNextJob?.()
+                            }}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 z-20 h-9 w-9 rounded-full border border-white/35 bg-black/45 text-white backdrop-blur-sm transition-opacity duration-150 opacity-0 group-hover/nav-overlay:opacity-100 focus:opacity-100 focus-visible:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                            <span aria-hidden="true" className="text-lg leading-none">
+                                ›
+                            </span>
+                        </button>
+                    )}
                     {annotations.drawModal}
                 </div>
             </div>
