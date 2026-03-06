@@ -92,6 +92,10 @@ export const Player: React.FC<Props> = ({
     const detailedZoom = useCappedValue(1, 0.5, 2.0)
     const { speed, bumpSpeed, setSpeed, rates } = usePlaybackSpeed(1.0)
     const [hoveredTrackId, setHoveredTrackId] = React.useState<number | null>(null)
+    const [navEdgeHover, setNavEdgeHover] = React.useState<{ left: boolean; right: boolean }>({
+        left: false,
+        right: false,
+    })
     const [showAnnotatePauseHint, setShowAnnotatePauseHint] = React.useState(false)
     const { used: focusedClickHintDismissed, ready: focusedClickHintReady, mark: dismissFocusedClickHint } =
         useOnce(PLAYER_FOCUSED_CLICK_HINT_DISMISSED_KEY)
@@ -632,6 +636,19 @@ export const Player: React.FC<Props> = ({
 
     const onMouseMove = React.useCallback(
         (e: React.MouseEvent<HTMLCanvasElement>) => {
+            const navContainer = containerRef.current
+            if (navContainer) {
+                const rect = navContainer.getBoundingClientRect()
+                const x = e.clientX - rect.left
+                const nearLeftEdge = x >= 0 && x <= 100
+                const nearRightEdge = x <= rect.width && rect.width - x <= 100
+                setNavEdgeHover(prev =>
+                    prev.left === nearLeftEdge && prev.right === nearRightEdge
+                        ? prev
+                        : { left: nearLeftEdge, right: nearRightEdge }
+                )
+            }
+
             if (drawMode) return
             if (!player || player.mode !== 'overview') return
             if (overviewPan.isPanning) return
@@ -737,6 +754,8 @@ export const Player: React.FC<Props> = ({
 
     const canOpenPrevJob = typeof onOpenPrevJob === 'function'
     const canOpenNextJob = typeof onOpenNextJob === 'function'
+    const showPrevNavButton = canOpenPrevJob && navEdgeHover.left
+    const showNextNavButton = canOpenNextJob && navEdgeHover.right
 
     const showFocusedClickHint =
         focusedClickHintReady && !drawMode && player?.mode === 'overview' && !focusedClickHintDismissed
@@ -806,7 +825,13 @@ export const Player: React.FC<Props> = ({
                         </div>
                     </div>
                 )}
-                <div ref={containerRef} className="absolute inset-0 group/nav-overlay">
+                <div
+                    ref={containerRef}
+                    className="absolute inset-0"
+                    onMouseLeave={() => {
+                        setNavEdgeHover({ left: false, right: false })
+                    }}
+                >
                     <canvas
                         ref={canvasRef}
                         className={`absolute inset-0 block touch-none ${canvasCursorClass}`}
@@ -819,36 +844,36 @@ export const Player: React.FC<Props> = ({
                         onPointerUp={overviewPan.onPointerUp}
                         onPointerCancel={overviewPan.onPointerCancel}
                     />
-                    {canOpenPrevJob && (
+                    {showPrevNavButton && (
                         <button
                             type="button"
                             aria-label={t('components.keyboardShortcutsModal.shortcuts.prevVideo')}
-                            title={t('components.keyboardShortcutsModal.shortcuts.prevVideo')}
+                            title={`${t('components.keyboardShortcutsModal.shortcuts.prevVideo')} (Shift+P)`}
                             disabled={exporter.isExporting}
                             onClick={e => {
                                 e.stopPropagation()
                                 trackEvent('player_overlay_prev_video_clicked', { job_id: job.id })
                                 onOpenPrevJob?.()
                             }}
-                            className="absolute left-3 top-1/2 -translate-y-1/2 z-20 h-9 w-9 rounded-full border border-white/35 bg-black/45 text-white backdrop-blur-sm transition-opacity duration-150 opacity-0 group-hover/nav-overlay:opacity-100 focus:opacity-100 focus-visible:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="absolute left-3 top-1/2 -translate-y-1/2 z-20 h-9 w-9 rounded-full border border-white/35 bg-black/45 text-white backdrop-blur-sm disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                             <span aria-hidden="true" className="text-lg leading-none">
                                 ‹
                             </span>
                         </button>
                     )}
-                    {canOpenNextJob && (
+                    {showNextNavButton && (
                         <button
                             type="button"
                             aria-label={t('components.keyboardShortcutsModal.shortcuts.nextVideo')}
-                            title={t('components.keyboardShortcutsModal.shortcuts.nextVideo')}
+                            title={`${t('components.keyboardShortcutsModal.shortcuts.nextVideo')} (Shift+N)`}
                             disabled={exporter.isExporting}
                             onClick={e => {
                                 e.stopPropagation()
                                 trackEvent('player_overlay_next_video_clicked', { job_id: job.id })
                                 onOpenNextJob?.()
                             }}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 z-20 h-9 w-9 rounded-full border border-white/35 bg-black/45 text-white backdrop-blur-sm transition-opacity duration-150 opacity-0 group-hover/nav-overlay:opacity-100 focus:opacity-100 focus-visible:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 z-20 h-9 w-9 rounded-full border border-white/35 bg-black/45 text-white backdrop-blur-sm disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                             <span aria-hidden="true" className="text-lg leading-none">
                                 ›
