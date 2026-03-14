@@ -242,6 +242,33 @@ export function useWebCodexPlayer(params: {
         return 0
     }, [])
 
+    const getSeekStartIndex = React.useCallback(
+        (idx: number) => {
+            const n = frameCountRef.current
+            if (n <= 0) return 0
+            const behind = behindFramesRef.current
+            const startCandidate = clamp(idx - behind, 0, n - 1)
+            return prevKeyframeIndex(startCandidate)
+        },
+        [prevKeyframeIndex]
+    )
+
+    const shouldReuseForwardIterator = React.useCallback(
+        (idx: number) => {
+            if (!iterRef.current) return false
+            if (cacheRef.current.has(idx)) return true
+            if (idx < cacheStartRef.current) return false
+            if (idx <= cacheEndRef.current) return true
+
+            const sequentialDistance = idx - cacheEndRef.current
+            const restartDistance = idx - getSeekStartIndex(idx)
+            const nearbyForwardSeek = sequentialDistance <= Math.max(2, aheadFramesRef.current + 1)
+
+            return nearbyForwardSeek || sequentialDistance <= restartDistance
+        },
+        [getSeekStartIndex]
+    )
+
     const startIteratorAt = React.useCallback(async (startPts: number, opId: number) => {
         try {
             await iterRef.current?.return?.()
@@ -290,17 +317,16 @@ export function useWebCodexPlayer(params: {
         async (idx: number, opId: number) => {
             if (cacheRef.current.has(idx)) return
 
-            if (idx > cacheEndRef.current && iterRef.current) {
-                await pumpUntil(idx, opId, idx)
+            const n = frameCountRef.current
+            if (n <= 0) return
+
+            if (shouldReuseForwardIterator(idx)) {
+                await pumpUntil(clamp(idx + aheadFramesRef.current, 0, n - 1), opId, idx)
                 if (cacheRef.current.has(idx)) return
             }
 
-            const n = frameCountRef.current
-            const behind = behindFramesRef.current
             const ahead = aheadFramesRef.current
-
-            const startCandidate = clamp(idx - behind, 0, n - 1)
-            const startIdx = prevKeyframeIndex(startCandidate)
+            const startIdx = getSeekStartIndex(idx)
 
             cacheRef.current.clear()
             cacheStartRef.current = startIdx
@@ -309,7 +335,7 @@ export function useWebCodexPlayer(params: {
             await startIteratorAt(ptsRef.current[startIdx]!, opId)
             await pumpUntil(clamp(idx + ahead, 0, n - 1), opId, idx)
         },
-        [pumpUntil, prevKeyframeIndex, startIteratorAt]
+        [getSeekStartIndex, pumpUntil, shouldReuseForwardIterator, startIteratorAt]
     )
 
     const seekFrameInternal = React.useCallback(
