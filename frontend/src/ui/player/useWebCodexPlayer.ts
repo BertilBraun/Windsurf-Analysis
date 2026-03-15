@@ -158,6 +158,8 @@ export function useWebCodexPlayer(params: {
     const cacheRef = React.useRef<Map<number, WrappedCanvas>>(new Map())
     const cacheStartRef = React.useRef<number>(0)
     const cacheEndRef = React.useRef<number>(-1)
+    const prefetchPromiseRef = React.useRef<Promise<void> | null>(null)
+    const prefetchTargetRef = React.useRef<number>(-1)
 
     const resetDecodeState = React.useCallback(async () => {
         const it = iterRef.current
@@ -166,6 +168,8 @@ export function useWebCodexPlayer(params: {
             await it?.return?.()
         } catch {}
 
+        prefetchPromiseRef.current = null
+        prefetchTargetRef.current = -1
         cacheRef.current.clear()
         cacheStartRef.current = 0
         cacheEndRef.current = -1
@@ -314,18 +318,17 @@ export function useWebCodexPlayer(params: {
     )
 
     const ensureFrameInCache = React.useCallback(
-        async (idx: number, opId: number) => {
+        async (idx: number, opId: number, targetEnd = idx) => {
             if (cacheRef.current.has(idx)) return
 
             const n = frameCountRef.current
             if (n <= 0) return
 
             if (shouldReuseForwardIterator(idx)) {
-                await pumpUntil(clamp(idx + aheadFramesRef.current, 0, n - 1), opId, idx)
+                await pumpUntil(clamp(targetEnd, idx, n - 1), opId, idx)
                 if (cacheRef.current.has(idx)) return
             }
 
-            const ahead = aheadFramesRef.current
             const startIdx = getSeekStartIndex(idx)
 
             cacheRef.current.clear()
@@ -333,9 +336,42 @@ export function useWebCodexPlayer(params: {
             cacheEndRef.current = startIdx - 1
 
             await startIteratorAt(ptsRef.current[startIdx]!, opId)
-            await pumpUntil(clamp(idx + ahead, 0, n - 1), opId, idx)
+            await pumpUntil(clamp(targetEnd, idx, n - 1), opId, idx)
         },
         [getSeekStartIndex, pumpUntil, shouldReuseForwardIterator, startIteratorAt]
+    )
+
+    const schedulePrefetch = React.useCallback(
+        (centerIndex: number, opId: number) => {
+            if (opId !== opIdRef.current) return
+
+            const n = frameCountRef.current
+            if (n <= 0) return
+
+            const targetEnd = clamp(centerIndex + aheadFramesRef.current, centerIndex, n - 1)
+            if (cacheEndRef.current >= targetEnd) return
+
+            prefetchTargetRef.current = Math.max(prefetchTargetRef.current, targetEnd)
+            if (prefetchPromiseRef.current) return
+
+            prefetchPromiseRef.current = (async () => {
+                try {
+                    while (opId === opIdRef.current) {
+                        const requestedEnd = prefetchTargetRef.current
+                        if (requestedEnd <= cacheEndRef.current) break
+
+                        await pumpUntil(requestedEnd, opId, currentFrameRef.current)
+                        await sleep(0)
+                    }
+                } finally {
+                    prefetchPromiseRef.current = null
+                    if (opId === opIdRef.current && prefetchTargetRef.current > cacheEndRef.current) {
+                        schedulePrefetch(currentFrameRef.current, opId)
+                    }
+                }
+            })()
+        },
+        [pumpUntil]
     )
 
     const seekFrameInternal = React.useCallback(
@@ -352,12 +388,14 @@ export function useWebCodexPlayer(params: {
 
             evictOutsideWindow(idx)
             drawFrameInternal(idx, wc)
+            schedulePrefetch(idx, opId)
         },
-        [ensureFrameInCache, evictOutsideWindow, drawFrameInternal]
+        [ensureFrameInCache, evictOutsideWindow, drawFrameInternal, schedulePrefetch]
     )
 
     const playLoop = React.useCallback(async () => {
         const opId = opIdRef.current
+        let nextFrameDeadline = performance.now()
         while (playingRef.current && opId === opIdRef.current) {
             const nextIdx = currentFrameRef.current + 1
             if (nextIdx >= frameCountRef.current) {
@@ -377,7 +415,8 @@ export function useWebCodexPlayer(params: {
 
             const d = durRef.current[nextIdx] ?? 1 / 30
             const rate = playbackRateRef.current || 1.0
-            await sleep(Math.max(0, (d * 1000) / rate))
+            nextFrameDeadline += (d * 1000) / rate
+            await sleep(Math.max(0, nextFrameDeadline - performance.now()))
         }
     }, [seekFrameInternal])
 
