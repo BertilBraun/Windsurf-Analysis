@@ -357,7 +357,7 @@ export function useWebCodexPlayer(params: {
             const targetEnd = clamp(centerIndex + aheadFramesRef.current, centerIndex, n - 1)
             if (cacheEndRef.current >= targetEnd) return
 
-            prefetchTargetRef.current = Math.max(prefetchTargetRef.current, targetEnd)
+            prefetchTargetRef.current = targetEnd
             if (prefetchPromiseRef.current) return
 
             prefetchPromiseRef.current = (async () => {
@@ -451,6 +451,7 @@ export function useWebCodexPlayer(params: {
             const effectivePlayAfter = playAfter ?? playingRef.current
 
             const opId = ++opIdRef.current
+            prefetchTargetRef.current = -1
 
             playingRef.current = false
             setPlaying(false)
