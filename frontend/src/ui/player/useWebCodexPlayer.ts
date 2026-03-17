@@ -147,6 +147,7 @@ export function useWebCodexPlayer(params: {
     const videoTrackRef = React.useRef<any | null>(null)
     const sinkRef = React.useRef<CanvasSink | null>(null)
     const iterRef = React.useRef<AsyncGenerator<WrappedCanvas | null, void, unknown> | null>(null)
+    const iterNextIndexRef = React.useRef<number>(-1)
 
     const ptsRef = React.useRef<number[]>([])
     const durRef = React.useRef<number[]>([])
@@ -168,6 +169,7 @@ export function useWebCodexPlayer(params: {
             await it?.return?.()
         } catch {}
 
+        iterNextIndexRef.current = -1
         prefetchPromiseRef.current = null
         prefetchTargetRef.current = -1
         cacheRef.current.clear()
@@ -263,6 +265,7 @@ export function useWebCodexPlayer(params: {
             if (cacheRef.current.has(idx)) return true
             if (idx < cacheStartRef.current) return false
             if (idx <= cacheEndRef.current) return true
+            if (iterNextIndexRef.current >= 0 && idx < iterNextIndexRef.current) return false
 
             const sequentialDistance = idx - cacheEndRef.current
             const restartDistance = idx - getSeekStartIndex(idx)
@@ -273,18 +276,20 @@ export function useWebCodexPlayer(params: {
         [getSeekStartIndex]
     )
 
-    const startIteratorAt = React.useCallback(async (startPts: number, opId: number) => {
+    const startIteratorAt = React.useCallback(async (startIdx: number, opId: number) => {
         try {
             await iterRef.current?.return?.()
         } catch {}
         iterRef.current = null
+        iterNextIndexRef.current = -1
 
         const sink = sinkRef.current
         if (!sink) throw new Error('Video sink not initialized.')
         if (opId !== opIdRef.current) return
 
         // Use range iterator (never yields "null" placeholders for missing exact timestamps).
-        iterRef.current = sink.canvases(startPts)
+        iterRef.current = sink.canvases(ptsRef.current[startIdx]!)
+        iterNextIndexRef.current = startIdx
     }, [])
 
     const pumpUntil = React.useCallback(
@@ -304,12 +309,13 @@ export function useWebCodexPlayer(params: {
 
                 const wc = next.value
 
-                const idx = cacheEndRef.current + 1
+                const idx = iterNextIndexRef.current
                 if (idx < 0 || idx >= n) break
 
                 cacheRef.current.set(idx, wc)
                 cacheEndRef.current = idx
                 if (cacheStartRef.current > idx) cacheStartRef.current = idx
+                iterNextIndexRef.current = idx + 1
 
                 evictOutsideWindow(centerIndex)
             }
@@ -335,7 +341,7 @@ export function useWebCodexPlayer(params: {
             cacheStartRef.current = startIdx
             cacheEndRef.current = startIdx - 1
 
-            await startIteratorAt(ptsRef.current[startIdx]!, opId)
+            await startIteratorAt(startIdx, opId)
             await pumpUntil(clamp(targetEnd, idx, n - 1), opId, idx)
         },
         [getSeekStartIndex, pumpUntil, shouldReuseForwardIterator, startIteratorAt]
