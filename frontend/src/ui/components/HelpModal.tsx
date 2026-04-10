@@ -22,8 +22,8 @@ export const HelpModal: React.FC<{
         <Modal onClose={onClose} title={t('screens.analyzer.help.title')}>
             <div className="p-4 text-sm text-slate-700">
                 {t('screens.analyzer.help.body')}{' '}
-                <a className="text-brand-700 underline" href="mailto:contact@gybelock.de">
-                    contact@gybelock.de
+                <a className="text-brand-700 underline" href="mailto:contact@bertil-braun.de">
+                    contact@bertil-braun.de
                 </a>
             </div>
         </Modal>

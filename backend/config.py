@@ -35,6 +35,7 @@ class Settings:
         # Firebase Hosting (prod)
         'https://gybelock-00.web.app',
         'https://gybelock.de',
+        'https://gybelock.bertil-braun.de',
         # Local dev
         'http://localhost',
         'http://localhost:3000',

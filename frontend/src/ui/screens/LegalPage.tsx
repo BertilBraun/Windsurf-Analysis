@@ -13,8 +13,8 @@ import { Heading, Text, TextStack } from '../components/Typography'
 
 const OWNER_NAME = 'Bertil Braun'
 const OWNER_ADDRESS_LINES = ['Im Rübländer 19', '71034 Böblingen', 'Germany']
-const OWNER_EMAIL = 'contact@gybelock.de'
-const SERVICE_URL = 'https://gybelock.de'
+const OWNER_EMAIL = 'contact@bertil-braun.de'
+const SERVICE_URL = 'https://gybelock.bertil-braun.de'
 
 const LAST_UPDATED = '2025-12-21'
 

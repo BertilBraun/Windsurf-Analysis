@@ -77,7 +77,7 @@ type ShareCapableNavigator = Navigator & {
     canShare?: (data: ShareData) => boolean
 }
 
-export const GYBELOCK_HOME_URL = 'https://gybelock.de'
+export const GYBELOCK_HOME_URL = 'https://gybelock.bertil-braun.de'
 
 export function canShareExport(blob: Blob, filename: string): boolean {
     if (typeof navigator === 'undefined') return false

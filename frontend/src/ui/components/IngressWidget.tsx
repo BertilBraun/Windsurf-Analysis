@@ -361,8 +361,8 @@ export const IngressWidget: React.FC<Props> = ({
                         <p className="mb-1">
                             {t('components.ingressWidget.quota.body2')}
                             <br />
-                            <a className="text-brand-700 underline" href="mailto:contact@gybelock.de">
-                                contact@gybelock.de
+                            <a className="text-brand-700 underline" href="mailto:contact@bertil-braun.de">
+                                contact@bertil-braun.de
                             </a>
                         </p>
                     </div>
