@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Rectangle
+from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 
 OUTPUT_DIRECTORY = Path(__file__).resolve().parent
@@ -15,35 +14,11 @@ BACKGROUND = '#F8F9FB'
 INK = '#181F27'
 MUTED = '#5B6774'
 GRID = '#D3D9E0'
-LIGHT = '#EDF0F3'
 BLUE = '#126E82'
 BLUE_LIGHT = '#DCECEF'
 ORANGE = '#E67E22'
 ORANGE_LIGHT = '#F8E8D7'
-RED = '#C0392B'
 WHITE = '#FFFFFF'
-
-
-@dataclass(frozen=True)
-class Packet:
-    frame_index: int
-    presentation_timestamp: float
-    sequence_number: int
-    is_keyframe: bool = False
-
-
-PACKETS = (
-    Packet(0, 0.000, 0, True),
-    Packet(1, 0.033, 1),
-    Packet(2, 0.067, 2),
-    Packet(3, 0.067, 3),
-    Packet(4, 0.100, 4, True),
-    Packet(5, 0.133, 5),
-    Packet(6, 0.167, 6),
-    Packet(7, 0.200, 7),
-    Packet(8, 0.233, 8),
-    Packet(9, 0.267, 9),
-)
 
 
 def add_box(
@@ -55,20 +30,20 @@ def add_box(
     *,
     facecolor: str,
     edgecolor: str = GRID,
-    linewidth: float = 1.0,
+    linewidth: float = 1.2,
     radius: float = 0.08,
-) -> FancyBboxPatch:
-    box = FancyBboxPatch(
-        (x, y),
-        width,
-        height,
-        boxstyle=f'round,pad=0.02,rounding_size={radius}',
-        facecolor=facecolor,
-        edgecolor=edgecolor,
-        linewidth=linewidth,
+) -> None:
+    axes.add_patch(
+        FancyBboxPatch(
+            (x, y),
+            width,
+            height,
+            boxstyle=f'round,pad=0.02,rounding_size={radius}',
+            facecolor=facecolor,
+            edgecolor=edgecolor,
+            linewidth=linewidth,
+        )
     )
-    axes.add_patch(box)
-    return box
 
 
 def add_arrow(
@@ -76,9 +51,8 @@ def add_arrow(
     start: tuple[float, float],
     end: tuple[float, float],
     *,
-    color: str = MUTED,
-    linewidth: float = 1.4,
-    mutation_scale: float = 11,
+    color: str = BLUE,
+    linewidth: float = 1.7,
 ) -> None:
     axes.add_patch(
         FancyArrowPatch(
@@ -87,161 +61,123 @@ def add_arrow(
             arrowstyle='-|>',
             color=color,
             linewidth=linewidth,
-            mutation_scale=mutation_scale,
+            mutation_scale=12,
             shrinkA=0,
             shrinkB=0,
         )
     )
 
 
-def add_section_label(axes: Axes, x: float, y: float, number: str, title: str) -> None:
-    axes.text(x, y, number, color=BLUE, fontsize=8.5, fontweight='bold', va='center')
-    axes.text(x + 0.25, y, title, color=INK, fontsize=10.5, fontweight='bold', va='center')
-
-
-def draw_packet_index(axes: Axes) -> None:
-    add_section_label(axes, 0.25, 4.25, '1', 'Index packets by presentation order')
-    axes.text(
-        0.25,
-        3.96,
-        'sort key: presentation timestamp (PTS), then packet sequence',
-        color=MUTED,
-        fontsize=8,
-    )
-
-    packet_width = 0.58
-    packet_height = 0.72
-    gap = 0.05
-    start_x = 0.25
-    y = 3.02
-    for packet in PACKETS:
-        x = start_x + packet.frame_index * (packet_width + gap)
-        fill = ORANGE_LIGHT if packet.is_keyframe else WHITE
-        edge = ORANGE if packet.is_keyframe else GRID
-        axes.add_patch(Rectangle((x, y), packet_width, packet_height, facecolor=fill, edgecolor=edge, linewidth=1.2))
+def draw_frame_strip(axes: Axes) -> None:
+    axes.text(0.55, 4.37, 'Decoded video', color=INK, fontsize=10, fontweight='bold')
+    labels = ('frame i−1', 'frame i', 'frame i+1')
+    for position, label in enumerate(labels):
+        x = 0.55 + position * 1.18
+        selected = position == 1
+        add_box(
+            axes,
+            x,
+            3.28,
+            0.96,
+            0.80,
+            facecolor=BLUE_LIGHT if selected else WHITE,
+            edgecolor=BLUE if selected else GRID,
+            linewidth=1.8 if selected else 1.0,
+        )
         axes.text(
-            x + packet_width / 2,
-            y + 0.48,
-            f'F{packet.frame_index}',
-            color=INK,
-            fontsize=8,
-            fontweight='bold',
+            x + 0.48,
+            3.68,
+            label,
+            color=BLUE if selected else MUTED,
+            fontsize=8.7,
+            fontweight='bold' if selected else 'normal',
             ha='center',
+            va='center',
         )
-        axes.text(
-            x + packet_width / 2,
-            y + 0.23,
-            f'{packet.presentation_timestamp:.3f}s',
-            color=MUTED,
-            fontsize=6.5,
-            ha='center',
-        )
-        if packet.is_keyframe:
-            axes.text(x + 0.04, y + 0.60, 'K', color=ORANGE, fontsize=6.5, fontweight='bold')
-
-    duplicate_x = start_x + 2.5 * (packet_width + gap)
-    axes.annotate(
-        'equal PTS\nordered by sequence',
-        xy=(duplicate_x, y - 0.02),
-        xytext=(duplicate_x, y - 0.42),
-        color=MUTED,
-        fontsize=6.8,
-        ha='center',
-        va='top',
-        arrowprops={'arrowstyle': '-', 'color': GRID, 'linewidth': 1.0},
-    )
-    axes.text(0.25, 2.72, 'frame index = position in this ordered list', color=BLUE, fontsize=8, fontweight='bold')
+        if selected:
+            axes.text(x + 0.48, 3.43, 'pixels', color=MUTED, fontsize=7.4, ha='center')
 
 
-def draw_seek_and_cache(axes: Axes) -> None:
-    left = 0.25
-    add_section_label(axes, left, 2.15, '2', 'Seek from a valid decode boundary')
-    axes.text(left, 1.88, 'target F7  ·  requested cache window F5–F9', color=MUTED, fontsize=8)
-
-    y = 1.05
-    cell_width = 0.58
-    gap = 0.05
-    for index in range(4, 10):
-        x = left + (index - 4) * (cell_width + gap)
-        if index == 7:
-            fill, edge, text_color = BLUE, BLUE, WHITE
-        elif index == 4:
-            fill, edge, text_color = ORANGE_LIGHT, ORANGE, INK
-        else:
-            fill, edge, text_color = BLUE_LIGHT, BLUE, INK
-        axes.add_patch(Rectangle((x, y), cell_width, 0.55, facecolor=fill, edgecolor=edge, linewidth=1.1))
-        axes.text(
-            x + cell_width / 2, y + 0.29, f'F{index}', color=text_color, fontsize=8, fontweight='bold', ha='center'
-        )
-        if index == 4:
-            axes.text(x + cell_width / 2, y - 0.22, 'restart keyframe', color=ORANGE, fontsize=6.8, ha='center')
-        if index == 7:
-            axes.text(x + cell_width / 2, y - 0.22, 'display target', color=BLUE, fontsize=6.8, ha='center')
-
-    add_arrow(axes, (left + 0.2, 1.70), (left + 3.64, 1.70), color=BLUE, linewidth=1.8)
-    axes.text(left + 1.92, 1.75, 'decode forward', color=BLUE, fontsize=7.2, ha='center')
-
-    add_box(axes, 4.25, 0.80, 2.35, 1.20, facecolor=WHITE)
-    axes.text(4.42, 1.75, 'Bounded, race-safe decode', color=INK, fontsize=8.8, fontweight='bold')
-    axes.text(4.42, 1.49, 'cache: behind  ←  target  →  ahead', color=MUTED, fontsize=7.0)
-    axes.text(4.42, 1.27, 'prefetch; evict outside the window', color=MUTED, fontsize=7.0)
-    axes.text(4.42, 1.05, 'op 41 stale  →  discard', color=RED, fontsize=6.9)
-    axes.text(4.42, 0.86, 'op 42 current  →  commit', color=BLUE, fontsize=6.9, fontweight='bold')
-    add_arrow(axes, (3.95, 1.34), (4.19, 1.34), color=MUTED)
+def draw_metadata(axes: Axes) -> None:
+    add_box(axes, 0.55, 1.18, 3.32, 1.25, facecolor=WHITE)
+    axes.text(0.78, 2.13, 'Analysis metadata at frame i', color=INK, fontsize=10, fontweight='bold')
+    axes.text(0.78, 1.82, '• tracked rider and bounding box', color=MUTED, fontsize=8.5)
+    axes.text(0.78, 1.55, '• pose anchor and crop scale', color=MUTED, fontsize=8.5)
+    axes.text(0.78, 1.28, '• camera-stabilization transform', color=MUTED, fontsize=8.5)
 
 
-def draw_shared_contract(axes: Axes) -> None:
-    add_section_label(axes, 7.15, 4.25, '3', 'Use one frame identity throughout')
+def draw_contract(axes: Axes) -> None:
+    add_box(axes, 4.52, 2.12, 1.62, 1.22, facecolor=BLUE, edgecolor=BLUE, linewidth=1.5)
+    axes.text(5.33, 2.91, 'CANONICAL', color=WHITE, fontsize=8.0, fontweight='bold', ha='center')
+    axes.text(5.33, 2.55, 'FRAME i', color=WHITE, fontsize=16, fontweight='bold', ha='center')
+    axes.text(5.33, 2.29, 'one shared identity', color=WHITE, fontsize=7.5, ha='center')
 
-    add_box(axes, 7.15, 3.08, 2.02, 0.83, facecolor=BLUE_LIGHT, edgecolor=BLUE, linewidth=1.2)
-    axes.text(8.16, 3.62, 'Frame contract', color=BLUE, fontsize=9, fontweight='bold', ha='center')
-    axes.text(8.16, 3.35, 'frame index + decoded canvas', color=INK, fontsize=7.3, ha='center')
-    axes.text(8.16, 3.16, 'packet PTS + duration', color=MUTED, fontsize=6.8, ha='center')
+    add_arrow(axes, (2.71, 3.50), (4.46, 2.91))
+    add_arrow(axes, (3.88, 1.80), (4.46, 2.37))
 
-    add_arrow(axes, (8.16, 3.04), (8.16, 2.73), color=BLUE)
-    add_arrow(axes, (8.16, 2.73), (7.48, 2.39), color=BLUE)
-    add_arrow(axes, (8.16, 2.73), (8.84, 2.39), color=BLUE)
 
-    add_box(axes, 6.72, 1.97, 1.52, 0.42, facecolor=WHITE)
-    axes.text(7.48, 2.18, 'Preview', color=INK, fontsize=8.5, fontweight='bold', ha='center', va='center')
-    add_box(axes, 8.31, 1.97, 1.52, 0.42, facecolor=WHITE)
-    axes.text(9.07, 2.18, 'MP4 export', color=INK, fontsize=8.5, fontweight='bold', ha='center', va='center')
+def draw_outputs(axes: Axes) -> None:
+    add_box(axes, 6.88, 3.12, 2.58, 0.94, facecolor=WHITE, edgecolor=BLUE)
+    axes.text(8.17, 3.74, 'On-screen preview', color=INK, fontsize=10, fontweight='bold', ha='center')
+    axes.text(8.17, 3.43, 'pixels + overlay + crop at i', color=MUTED, fontsize=8.2, ha='center')
 
-    axes.text(7.48, 1.75, 'overlays at frame Fᵢ', color=MUTED, fontsize=6.8, ha='center')
-    axes.text(9.07, 1.75, 'crop at frame Fᵢ', color=MUTED, fontsize=6.8, ha='center')
+    add_box(axes, 6.88, 1.36, 2.58, 0.94, facecolor=WHITE, edgecolor=BLUE)
+    axes.text(8.17, 1.98, 'Exported frame', color=INK, fontsize=10, fontweight='bold', ha='center')
+    axes.text(8.17, 1.67, 'same frame identity, metadata and crop', color=MUTED, fontsize=8.2, ha='center')
+
+    add_arrow(axes, (6.20, 2.75), (6.82, 3.42))
+    add_arrow(axes, (6.20, 2.57), (6.82, 2.01))
     axes.text(
-        8.27,
-        1.39,
-        'same frame-index mapping  ·  same detection lookup',
+        8.17,
+        0.98,
+        'The preview and export cannot drift onto neighboring frames.',
         color=BLUE,
-        fontsize=7.2,
+        fontsize=8.7,
         fontweight='bold',
         ha='center',
     )
-    axes.text(8.27, 1.10, 'same detailed-crop geometry', color=BLUE, fontsize=7.2, fontweight='bold', ha='center')
+
+
+def draw_seek_inset(axes: Axes) -> None:
+    add_box(axes, 6.82, 4.28, 2.72, 0.64, facecolor=ORANGE_LIGHT, edgecolor=ORANGE, linewidth=1.0)
+    axes.text(6.99, 4.72, 'Random access', color=ORANGE, fontsize=7.7, fontweight='bold')
+    axes.text(8.20, 4.72, 'keyframe', color=INK, fontsize=7.7, ha='center')
+    axes.text(8.77, 4.72, '→', color=ORANGE, fontsize=9, ha='center')
+    axes.text(9.16, 4.72, 'frame i', color=INK, fontsize=7.7, ha='center')
+    axes.text(8.20, 4.45, 'decode forward to the requested index', color=MUTED, fontsize=7.0, ha='center')
 
 
 def create_figure() -> Figure:
-    figure, axes = plt.subplots(figsize=(11.5, 5.0))
+    figure, axes = plt.subplots(figsize=(11.5, 5.4))
     figure.patch.set_facecolor(BACKGROUND)
     axes.set_facecolor(BACKGROUND)
     axes.set_xlim(0, 10)
-    axes.set_ylim(0.55, 4.65)
+    axes.set_ylim(0.70, 5.22)
     axes.axis('off')
 
     axes.text(
-        0.25,
-        4.57,
-        'Frame-accurate browser playback keeps decoding and metadata synchronized',
+        0.50,
+        5.12,
+        'One frame index binds the complete rendering pipeline',
         color=INK,
-        fontsize=13,
+        fontsize=14,
         fontweight='bold',
         va='top',
     )
+    axes.text(
+        0.50,
+        4.83,
+        'The displayed image and every frame-dependent model result are selected together.',
+        color=MUTED,
+        fontsize=9,
+        va='top',
+    )
 
-    draw_packet_index(axes)
-    draw_seek_and_cache(axes)
-    draw_shared_contract(axes)
+    draw_frame_strip(axes)
+    draw_metadata(axes)
+    draw_contract(axes)
+    draw_outputs(axes)
+    draw_seek_inset(axes)
 
     figure.tight_layout(pad=0.5)
     return figure

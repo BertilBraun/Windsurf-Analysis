@@ -1,14 +1,10 @@
 \section{Experiments, Evaluation, and Failure Analysis}
 \label{sec:evaluation}
 
-The evaluation problem follows directly from the product requirement.  Conventional
-multi-object-tracking scores are useful summaries, but an average that tolerates an
-occasional identity switch is not sufficient here: one false merge can make the
-complete focused video of a rider unusable.  We therefore used quantitative
-association tests to guide development, while retaining frame-accurate visual review
-as the final check on complete trajectories.  This section distinguishes those
-established evaluation mechanisms and retained diagnostic results from comparative
-claims that would require a fresh benchmark run.
+The repository provides quantitative association tests for development, while
+complete-trajectory visual review is still required for product acceptance. This
+section distinguishes the available evaluation mechanisms from comparative claims
+that would require a fresh benchmark run.
 
 \subsection{Golden tracklet associations}
 
@@ -48,12 +44,9 @@ treated as unique singleton tracks, preventing missing data from being rewarded 
 one artificial cluster.  Discard decisions are evaluated independently as a binary
 classification problem.
 
-The distinction between precision and recall is essential for this application.  A
-high pairwise F1 value can still conceal the one identity switch that invalidates a
-long output.  Model selection should therefore treat pairwise precision as a hard or
-near-hard constraint, inspect the absolute number of false joins, and only then use
-recall to choose among sufficiently pure configurations.  The final acceptance test
-remains a complete-video audit in which every trajectory is followed through
+Pairwise precision exposes the false merges that matter most here, but even a high
+aggregate score can conceal one damaging switch. Results therefore need to include
+absolute false-join counts and be followed by a complete-video audit through
 crossings, long overlaps, occlusions, and camera pans.
 
 \subsection{Optimization as structured engineering evidence}
@@ -77,27 +70,6 @@ matter disproportionately to the product, especially a plausible but wrong merge
 The fitted settings are consequently best understood as engineering choices for this
 camera geometry, subject scale, and collection of sails---not as universal tracker
 hyperparameters.
-
-\subsection{A retained synthetic motion diagnostic}
-
-Camera compensation can be checked independently because a known perturbation can be
-injected into a video.  The project contains a generator that adds controlled
-frame-wise translation and rotation and an evaluator that subtracts the motion
-estimated on the unperturbed source before comparing the recovered perturbation with
-ground truth.  One retained 60-frame translation-only run is summarized in
-\cref{tab:synthetic-motion-recovery}.
-
-\input{figures/evaluation-synthetic-motion-table}
-
-On this diagnostic, the global-motion-compensation (GMC) implementation had lower
-translation error than the tested VidStab configuration.  The result is useful as a
-unit-scale validation that the estimator recovers known motion and does not invent
-substantial rotation.  It is intentionally not promoted to a real-world performance
-claim: the run contains only 59 transitions from one synthetic clip, injects no
-rotation, and does not reproduce a long pan with a changing background.  A reportable
-camera-motion benchmark should add multiple source scenes, rotations and scale
-changes, foreground-mask ablations, feature-poor water backgrounds, and failure rates
-for transforms that cannot be estimated.
 
 \subsection{Qualitative failure analysis}
 
@@ -138,6 +110,6 @@ a controlled comparison possible after the baselines are aligned.  A release-qua
 evaluation should freeze representative train/tuning and held-out videos; report
 pairwise precision and recall, false-merge counts, fragmentation, discard quality,
 runtime, and complete-track pass/fail rates; and stratify sequences by pan magnitude,
-overlap duration, target size, and appearance ambiguity.  The intended claim is
-improved reliability on this specific long-shot windsurfing task under a near-zero
-identity-switch objective---not general superiority over state-of-the-art MOT.
+overlap duration, target size, and appearance ambiguity.  The design targets
+reliability on this specific long-shot windsurfing task under a near-zero
+identity-switch objective; measuring the improvement requires that aligned benchmark.

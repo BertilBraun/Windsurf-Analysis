@@ -16,7 +16,7 @@ The production detector is a YOLO pose model supervised for one class and two
 domain-specific keypoints: the boom--mast junction and the mast tip.  These points
 were chosen for the rendering geometry rather than to describe the complete human
 body.  The boom--mast junction gives a repeatable reference near the rider and sail,
-while the distance from that junction to the mast tip provides a physical scale cue
+while the distance from that junction to the mast tip provides a rig-relative scale cue
 that is substantially less sensitive than an axis-aligned box height to in-plane
 rotation.
 
@@ -61,7 +61,7 @@ localization noise into unnecessary crop motion.  It remains valuable for scale.
   \caption{Pose-derived virtual-camera geometry on a representative labelled
   frame.  The detector box and its centre (orange) describe image extent.  The
   boom--mast junction and mast tip (cyan) instead provide a rider-relative anchor
-  (magenta) and a mast-length scale signal.  Production rendering smooths these
+  (magenta) and a rig-relative scale cue.  Production rendering smooths these
   signals over time and falls back to box geometry when keypoints are unavailable.}
   \label{fig:pose-anchor-geometry}
 \end{figure}

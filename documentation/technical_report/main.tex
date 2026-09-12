@@ -6,6 +6,7 @@
 \usepackage[margin=24mm]{geometry}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{array}
 \usepackage{amsmath}
 \usepackage{siunitx}
 \usepackage{xcolor}
@@ -20,6 +21,7 @@
 \definecolor{gybeblue}{HTML}{126E82}
 \definecolor{gybeorange}{HTML}{E67E22}
 \definecolor{gybered}{HTML}{C0392B}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 \hypersetup{
   colorlinks=true,
   linkcolor=gybeblue,
@@ -32,8 +34,8 @@
 
 \title{Reliable Offline Tracking for Long-Shot Windsurfing Video\\
 \large Domain-specific pose, appearance, and global association}
-\author{GybeLock / Windsurf Analysis}
-\date{\today}
+\author{Bertil Braun\\\href{mailto:contact@bertil-braun.de}{contact@bertil-braun.de}}
+\date{}
 
 \begin{document}
 \maketitle
@@ -44,18 +46,22 @@ shore-recorded windsurfing footage into identity-consistent rider tracks and sta
 focused views. The central challenge is not object count but error tolerance: a single
 identity switch can contaminate the extracted video of a rider. Large camera pans,
 small targets, prolonged co-visibility, and occlusions make generic online tracking a
-poor fit. We therefore combine a domain-specific two-keypoint pose model, sail-color
+poor fit. Tracking therefore combines conservative local stitching, sail-color
 appearance descriptors, camera-compensated motion, and offline global tracklet linking.
+Once identity is established, two rig keypoints supply a stable crop anchor and
+rig-relative scale cue for the focused view.
 \end{abstract}
 
 \input{sections/problem}
-\input{sections/pose}
 \input{sections/tracking}
+\input{sections/pose}
 \input{sections/evaluation}
 \input{sections/player}
 \input{sections/conclusion}
 
 \begin{thebibliography}{9}
+\small
+\setlength{\itemsep}{0.25em}
 \bibitem{ocsort}
 J. Cao, J. Pang, X. Weng, R. Khirodkar, and K. Kitani,
 ``Observation-Centric SORT: Rethinking SORT for Robust Multi-Object Tracking,''
@@ -68,8 +74,8 @@ N. Aharon, R. Orfaig, and B.-Z. Bobrovsky,
 
 \bibitem{webcodecs}
 W3C Media Working Group,
-``WebCodecs,'' W3C Working Draft.
-\url{https://www.w3.org/TR/webcodecs/}
+``WebCodecs,'' W3C Working Draft,
+\href{https://www.w3.org/TR/webcodecs/}{w3.org/TR/webcodecs}.
 \end{thebibliography}
 
 \end{document}

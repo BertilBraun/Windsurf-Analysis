@@ -2,9 +2,7 @@
 \label{sec:tracking}
 
 The tracker is organized around the asymmetric error cost introduced in
-\cref{sec:problem}.  It is acceptable to leave a difficult interval as two fragments;
-it is not acceptable to join fragments belonging to different surfers merely to
-increase continuity.  The production pipeline therefore separates association into
+\cref{sec:problem}.  The production pipeline therefore separates association into
 two levels:
 \begin{equation}
   \text{detections}
@@ -37,6 +35,26 @@ production embedding and tracker interfaces.  We therefore avoid a numerical
 outperformance claim until the baselines have been rerun on aligned inputs and
 representative manually verified sequences.
 
+The design record can be summarized as follows. These are observations from project
+footage, not a controlled leaderboard.
+
+\begin{table}[h]
+  \centering
+  \small
+  \begin{tabular}{L{0.23\linewidth}L{0.34\linewidth}L{0.32\linewidth}}
+    \toprule
+    Tried & Observed on this task & Chosen response \\
+    \midrule
+    OC-SORT / BoT-SORT & Causal decisions at crossings could create unacceptable identity switches & Conservative tracklets plus offline linking \\
+    OSNet / generic ViT & Tiny riders offered weak generic identity detail; sails remained visually prominent & Sail-color descriptor \\
+    Bounding-box crop control & Rig rotation changed box centre and height, causing drift and zoom pumping & Two semantic rig keypoints \\
+    Border-based foreground model & Changing backgrounds and sails touching crop edges destabilized the estimate & Fixed centre crop margin \\
+    \bottomrule
+  \end{tabular}
+  \caption{The main experiment-to-design decisions recorded by the project.}
+  \label{tab:design-decisions}
+\end{table}
+
 \subsection{Sail color as an appearance descriptor}
 
 The production appearance backend replaces generic semantic features with a compact
@@ -61,10 +79,10 @@ effect of individual blurred, partially occluded, or poorly exposed crops.
   \centering
   \includegraphics[width=\linewidth]{tracking-sail-color-similarity.png}
   \caption{Illustrative production-descriptor comparison on three consecutive
-  samples from one project sequence.  Repeated crops of each sail remain similar,
-  while the black-and-white and red sails remain distinguishable.  Values are mean
-  descriptor similarities over the displayed crops, not calibrated probabilities or
-  benchmark accuracy.  The example is intentionally small and hand-selected; it
+  samples from one project sequence.  The chart reports the mean descriptor
+  distance: repeated observations of either sail lie close together, while the two
+  sails are much farther apart.  These measured distances are neither probabilities
+  nor benchmark accuracy.  The example is intentionally small and hand-selected; it
   explains the cue used by the tracker rather than evaluating it.}
   \label{fig:tracking-sail-color}
 \end{figure}
@@ -92,7 +110,8 @@ rotation.
 Candidate transitions are gated by two probabilities: one derived from the
 position-space Mahalanobis distance of the camera-compensated prediction, and one
 derived from sail-appearance distance.  Strict matches require both cues to pass high
-thresholds and may span at most six frames.  Looser candidates are retained only
+thresholds and may span at most three frames.  Looser candidates can remain eligible
+for up to six frames, and are retained only
 when sufficiently supported by one strong cue or by both weaker cues.  Crucially, the
 preprocessor does not break ties by choosing the numerically best ambiguous option.
 A detection is appended only when it has one admissible candidate under the
@@ -120,7 +139,7 @@ Every candidate receives a weighted negative-log-likelihood cost
   \label{eq:tracking-edge-cost}
 \end{equation}
 The motion term averages $-\log p$ values obtained from the Mahalanobis distance to
-the first few detections of $T_j$.  The appearance term compares an exponentially
+the first two detections of $T_j$.  The appearance term compares an exponentially
 weighted prototype at the end of $T_i$ with a reverse-weighted prototype at the
 beginning of $T_j$ and maps the Hellinger-style distance to a match probability.  The
 gap term is
@@ -132,6 +151,11 @@ so a proposed link must accumulate stronger motion and appearance evidence as th
 number $\Delta f_{ij}$ of unobserved frames grows.  The fitted weights calibrate the
 relative influence of these three terms for the project data; they should not be
 interpreted as universal MOT constants.
+
+The three-second horizon is a deliberate safety bound, not a claim that arbitrary
+occlusions can be recovered. Prolonged co-visibility and partial overlap can last much
+longer because detections remain available; a complete missing-observation gap beyond
+the horizon remains fragmented by design.
 
 \subsection{One global decision over the recording}
 
@@ -145,11 +169,14 @@ time-ordered paths rather than competing local assignments.
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{tracking-offline-global-association.png}
-  \caption{Conceptual view of offline tracklet linking.  The conservative local pass
-  preserves ambiguity across a long overlap or occlusion.  With complete-video
-  evidence available, the optimizer selects a mutually consistent set of
-  continuations using camera-compensated motion, sail appearance, and gap duration.
-  The diagram omits start, end, and discard variables for clarity.}
+  \caption{Why complete-video evidence helps tracklet linking.  At the end of a long
+  gap, an online tracker sees four locally plausible links between two earlier
+  and two emerging tracklets.  Offline processing can first observe the stable later
+  portions of tracklets C and D.  That later appearance evidence helps distinguish
+  the candidate continuations, while camera-compensated motion scores the beginning
+  of each successor.  The global optimizer selects the crossed pairing A--D and B--C
+  jointly.  The illustration is conceptual; start, end, discard, and gap costs are
+  omitted for clarity.}
   \label{fig:tracking-offline-association}
 \end{figure}
 
@@ -176,3 +203,12 @@ The integer program selects these alternatives jointly, so two locally plausible
 continuations cannot both claim the same successor.  The current production pipeline
 uses this single-pass \texttt{ILPTracker}; the older iterative ILP implementation
 remains an experiment and is not the authoritative execution path.
+
+\subsection{From linked tracklets to renderable trajectories}
+
+The selected paths still contain sparse detections. A final post-processor removes
+tracks that are too short or too sparsely observed, then runs a camera-compensated
+forward Kalman pass and backward Rauch--Tung--Striebel smoother. It fills internal
+gaps with interpolated boxes and attributes before assigning compact output labels.
+The result is a dense, frame-indexed trajectory that the pose stage can turn into a
+stable crop signal without confusing interpolated observations with detector output.
