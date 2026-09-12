@@ -1,45 +1,31 @@
 \section{Delivering Frame-Accurate Results in the Browser}
 \label{sec:player}
 
-The tracking result is indexed by frame: detections, stabilization transforms, pose
-anchors, and user annotations must all refer to the image that is actually displayed.
-An ordinary HTML video element exposes media time rather than a stable frame identity.
-Seeking to a time may restart decoding at an earlier keyframe, and presentation
-timestamps need not provide a unique ordering by themselves.  This is sufficient for
-ordinary playback, but it is a poor contract for single-frame stepping, hit-testing a
-small detection, or checking the exact transition across an occlusion.
+Tracking results are indexed by frame, so detections, transforms, pose anchors, and
+annotations must refer to the image actually displayed. An ordinary HTML video
+element exposes media time rather than stable frame identity, which is insufficient
+for frame stepping, hit-testing, and inspection across an occlusion.
 
-For supported browser and codec combinations, the project therefore uses an explicit
-WebCodecs playback path~\cite{webcodecs}. Packet metadata is ordered by presentation
-timestamp and packet sequence number; its position in that list becomes the canonical
-zero-based frame index. Percent seeks are quantized to that index, and frame stepping
-increments or decrements it directly rather than accumulating time offsets.
+The WebCodecs path~\cite{webcodecs} discards packets with negative presentation
+timestamps (PTS), then orders the remainder by PTS and packet sequence number. Position
+in that list is the canonical zero-based frame index. Preview seeks from a preceding
+keyframe and decodes forward, reusing a bounded cache for nearby frames. A result is
+published only if it still belongs to the latest seek.
 
-Compressed video still cannot be decoded from an arbitrary inter-frame packet. On a
-cache miss, the player restarts at a preceding keyframe and advances to the target;
-nearby forward seeks reuse the decoder, and a bounded cache supports stepping without
-holding the full recording in memory. A decoded result is published only if it still
-belongs to the latest seek, preventing a slow earlier request from replacing the frame
-the user most recently selected.
-
-The same ordered-packet convention is used when an export is decoded.  Export samples
-are mapped to the corresponding packet index (with timestamp-based resynchronization
-if the iterators diverge), and that index selects the track detection used for the
-crop.  Preview rendering likewise looks up detections and stabilization by the current
-frame index, and the detailed preview and exporter share the same crop routine.  The
-result is one metadata contract from decoded image to model output to rendered crop.
-Preview and export decode independently, but share the same source-frame identity,
-metadata lookup, and crop geometry. This machinery is not a tracking contribution in
-itself; it makes the result inspectable and exportable without silently moving an
-overlay or crop to a neighboring frame.
+Export decodes independently, advances through the same packet-index convention, and
+resynchronizes to the closest PTS if necessary. The recovered index selects the rider
+track. Overview preview additionally reads the global stabilization transform, whereas
+focused preview and export share the pose-anchor crop function. Decoded images and
+output surfaces remain separate. This machinery is not a tracking contribution; it
+makes the result inspectable and exportable without silently shifting an overlay or
+crop to a neighboring frame.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{player-frame-accurate-playback.pdf}
-  \caption{The canonical frame index binds decoded pixels to the corresponding
-  tracking, pose, and stabilization metadata.  Both interactive preview and export
-  consume that same pairing, preventing overlays or crops from drifting onto a
-  neighboring frame.  Random access reaches the requested index by decoding forward
-  from a preceding keyframe.}
+  \caption{Preview and export decode independently but identify frame $i$ by the same
+  ordered-packet index. Preview seeks from a preceding keyframe; export advances its
+  own decoder and can resynchronize by timestamp. Both use the index for track lookup,
+  while only focused rendering shares the pose-anchor crop function.}
   \label{fig:player-frame-contract}
 \end{figure}

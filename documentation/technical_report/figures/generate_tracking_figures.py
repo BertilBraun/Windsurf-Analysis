@@ -18,7 +18,7 @@ class NormalizedBoundingBox:
 
 
 @dataclass(frozen=True)
-class AppearanceDistances:
+class AppearanceMatchScores:
     within_a: float
     within_b: float
     between_a_and_b: float
@@ -53,6 +53,7 @@ BLUE = (18, 110, 130)
 ORANGE = (230, 126, 34)
 RED = (192, 57, 43)
 WHITE = (255, 255, 255)
+PRODUCTION_APPEARANCE_SIMILARITY_GAMMA = 11.630051976558498
 
 
 def load_font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont:
@@ -98,7 +99,7 @@ def fit_crop(image: Image.Image, width: int, height: int) -> Image.Image:
     return canvas
 
 
-def compute_appearance_distances(crops: list[Image.Image]) -> AppearanceDistances:
+def compute_appearance_match_scores(crops: list[Image.Image]) -> AppearanceMatchScores:
     sys.path.insert(0, str(REPOSITORY_ROOT / 'video_processing'))
     from inference.src.tracking.reid.ReIDColorABStripeHistogram import (  # noqa: PLC0415
         ReIDColorABStripeHistogram,
@@ -108,21 +109,33 @@ def compute_appearance_distances(crops: list[Image.Image]) -> AppearanceDistance
     bgr_crops = [cv2.cvtColor(np.asarray(crop), cv2.COLOR_RGB2BGR) for crop in crops]
     embeddings = descriptor.get_features_for_crops(bgr_crops)
     identity_indices = ((0, 2, 4), (1, 3, 5))
-    distances = np.zeros((2, 2), dtype=np.float32)
+    match_scores = np.zeros((2, 2), dtype=np.float32)
     for row, row_indices in enumerate(identity_indices):
         for column, column_indices in enumerate(identity_indices):
             values = [
-                embeddings[first].distance(embeddings[second])
+                embeddings[first].probability(embeddings[second], PRODUCTION_APPEARANCE_SIMILARITY_GAMMA)
                 for first in row_indices
                 for second in column_indices
                 if row != column or first != second
             ]
-            distances[row, column] = float(np.mean(values))
-    return AppearanceDistances(
-        within_a=float(distances[0, 0]),
-        within_b=float(distances[1, 1]),
-        between_a_and_b=float((distances[0, 1] + distances[1, 0]) / 2.0),
+            match_scores[row, column] = float(np.mean(values))
+    return AppearanceMatchScores(
+        within_a=float(match_scores[0, 0]),
+        within_b=float(match_scores[1, 1]),
+        between_a_and_b=float((match_scores[0, 1] + match_scores[1, 0]) / 2.0),
     )
+
+
+def match_score_color(value: float) -> tuple[int, int, int]:
+    clipped = max(0.0, min(1.0, value))
+    low = np.asarray((241, 218, 207), dtype=np.float32)
+    high = np.asarray((84, 166, 151), dtype=np.float32)
+    color = np.round(low * (1.0 - clipped) + high * clipped).astype(np.uint8)
+    return int(color[0]), int(color[1]), int(color[2])
+
+
+def format_match_score(value: float) -> str:
+    return '<0.001' if value < 0.001 else f'{value:.2f}'
 
 
 def create_sail_appearance_figure() -> None:
@@ -132,14 +145,14 @@ def create_sail_appearance_figure() -> None:
         for frame, frame_boxes in zip(frames, SOURCE_BOXES, strict=True)
         for bounding_box in frame_boxes
     ]
-    distances = compute_appearance_distances(crops)
+    match_scores = compute_appearance_match_scores(crops)
 
     canvas = Image.new('RGB', (1500, 820), BACKGROUND)
     drawing = ImageDraw.Draw(canvas)
     title_font = load_font(38, bold=True)
     heading_font = load_font(25, bold=True)
     label_font = load_font(23)
-    score_font = load_font(27, bold=True)
+    score_font = load_font(29, bold=True)
     note_font = load_font(20)
 
     drawing.text((55, 34), 'Sail color remains discriminative across time', font=title_font, fill=INK)
@@ -186,49 +199,52 @@ def create_sail_appearance_figure() -> None:
                     MUTED,
                 )
 
-    plot_left = 1110
-    plot_right = 1430
-    plot_top = 285
-    maximum_distance = 0.6
-    drawing.text((910, 165), 'Mean descriptor distance', font=heading_font, fill=INK)
-    drawing.text((910, 205), '0 = identical; larger = more different', font=note_font, fill=MUTED)
-    for tick_index in range(4):
-        tick_value = tick_index * 0.2
-        tick_x = int(round(plot_left + tick_value / maximum_distance * (plot_right - plot_left)))
-        drawing.line((tick_x, plot_top - 15, tick_x, plot_top + 300), fill=GRID, width=2)
+    matrix_left = 1010
+    matrix_top = 265
+    cell_size = 165
+    drawing.text((930, 165), 'Appearance match score', font=heading_font, fill=INK)
+    drawing.text((930, 205), 'production mapping; higher = stronger match', font=note_font, fill=MUTED)
+    for index, label in enumerate(('A', 'B')):
         centered_text(
             drawing,
-            (tick_x - 35, plot_top + 305, tick_x + 35, plot_top + 345),
-            f'{tick_value:.1f}',
-            note_font,
-            MUTED,
+            (matrix_left + index * cell_size, matrix_top - 48, matrix_left + (index + 1) * cell_size, matrix_top),
+            label,
+            heading_font,
+            INK,
+        )
+        centered_text(
+            drawing,
+            (matrix_left - 55, matrix_top + index * cell_size, matrix_left, matrix_top + (index + 1) * cell_size),
+            label,
+            heading_font,
+            INK,
         )
 
-    rows = (
-        ('same sail A', distances.within_a, BLUE),
-        ('same sail B', distances.within_b, ORANGE),
-        ('different sails', distances.between_a_and_b, RED),
+    score_matrix = (
+        (match_scores.within_a, match_scores.between_a_and_b),
+        (match_scores.between_a_and_b, match_scores.within_b),
     )
-    for row_index, (label, value, color) in enumerate(rows):
-        y_position = plot_top + row_index * 105
-        drawing.text((910, y_position + 7), label, font=note_font, fill=INK)
-        bar_right = int(round(plot_left + value / maximum_distance * (plot_right - plot_left)))
-        drawing.rounded_rectangle(
-            (plot_left, y_position, max(plot_left + 7, bar_right), y_position + 46),
-            radius=9,
-            fill=color,
-        )
-        drawing.text((bar_right + 12, y_position + 7), f'{value:.3f}', font=score_font, fill=color)
+    for row in range(2):
+        for column in range(2):
+            value = score_matrix[row][column]
+            box = (
+                matrix_left + column * cell_size,
+                matrix_top + row * cell_size,
+                matrix_left + (column + 1) * cell_size,
+                matrix_top + (row + 1) * cell_size,
+            )
+            drawing.rectangle(box, fill=match_score_color(value), outline=WHITE, width=5)
+            centered_text(drawing, box, format_match_score(value), score_font, INK)
 
-    drawing.text((910, 640), 'Measured on the six crops shown', font=note_font, fill=MUTED)
-    drawing.text((910, 671), 'Distance is not a probability or accuracy.', font=note_font, fill=MUTED)
+    drawing.text((930, 625), 'Mean over pairwise comparisons shown', font=note_font, fill=MUTED)
+    drawing.text((930, 656), 'Heuristic association score, not accuracy.', font=note_font, fill=MUTED)
     drawing.text(
-        (910, 718),
+        (930, 707),
         'Lab chromaticity + circular hue',
         font=note_font,
         fill=INK,
     )
-    drawing.text((910, 749), 'saturation-weighted; 3 stripes + global', font=note_font, fill=INK)
+    drawing.text((930, 738), 'saturation-weighted; 3 stripes + global', font=note_font, fill=INK)
 
     canvas.save(OUTPUT_DIRECTORY / 'tracking-sail-color-similarity.png', optimize=True, dpi=(300, 300))
 

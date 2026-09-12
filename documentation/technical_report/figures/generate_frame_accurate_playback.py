@@ -52,7 +52,7 @@ def add_arrow(
     end: tuple[float, float],
     *,
     color: str = BLUE,
-    linewidth: float = 1.7,
+    linewidth: float = 1.6,
 ) -> None:
     axes.add_patch(
         FancyArrowPatch(
@@ -68,97 +68,158 @@ def add_arrow(
     )
 
 
-def draw_frame_strip(axes: Axes) -> None:
-    axes.text(0.55, 4.37, 'Decoded video', color=INK, fontsize=10, fontweight='bold')
-    labels = ('frame i−1', 'frame i', 'frame i+1')
-    for position, label in enumerate(labels):
-        x = 0.55 + position * 1.18
+def add_step(
+    axes: Axes,
+    x: float,
+    y: float,
+    number: str,
+    title: str,
+    detail: str,
+    *,
+    accent: str,
+) -> None:
+    axes.text(x, y, number, color=accent, fontsize=8.3, fontweight='bold', va='top')
+    axes.text(x + 0.28, y, title, color=INK, fontsize=9.0, fontweight='bold', va='top')
+    axes.text(x + 0.28, y - 0.26, detail, color=MUTED, fontsize=7.6, va='top', linespacing=1.25)
+
+
+def draw_canonical_order(axes: Axes) -> None:
+    add_box(axes, 0.52, 3.92, 8.96, 1.08, facecolor=WHITE)
+    axes.text(0.78, 4.73, 'Canonical frame identity', color=INK, fontsize=10.2, fontweight='bold')
+    axes.text(
+        0.78,
+        4.43,
+        'Discard negative PTS; sort presentable packets by PTS, then sequence number.',
+        color=MUTED,
+        fontsize=8.2,
+    )
+
+    packet_labels = ('i−1', 'i', 'i+1')
+    for position, label in enumerate(packet_labels):
+        x = 5.86 + position * 0.82
         selected = position == 1
         add_box(
             axes,
             x,
-            3.28,
-            0.96,
-            0.80,
-            facecolor=BLUE_LIGHT if selected else WHITE,
-            edgecolor=BLUE if selected else GRID,
-            linewidth=1.8 if selected else 1.0,
+            4.18,
+            0.64,
+            0.48,
+            facecolor=BLUE if selected else BLUE_LIGHT,
+            edgecolor=BLUE,
+            linewidth=1.3 if selected else 0.9,
+            radius=0.05,
         )
         axes.text(
-            x + 0.48,
-            3.68,
+            x + 0.32,
+            4.42,
             label,
-            color=BLUE if selected else MUTED,
-            fontsize=8.7,
-            fontweight='bold' if selected else 'normal',
+            color=WHITE if selected else BLUE,
+            fontsize=9.0,
+            fontweight='bold',
             ha='center',
             va='center',
         )
-        if selected:
-            axes.text(x + 0.48, 3.43, 'pixels', color=MUTED, fontsize=7.4, ha='center')
+
+    axes.text(8.48, 4.56, 'frame i', color=BLUE, fontsize=9.6, fontweight='bold', ha='center')
+    axes.text(8.48, 4.28, '= position in this order', color=MUTED, fontsize=7.5, ha='center')
+
+    add_arrow(axes, (4.96, 3.88), (2.78, 3.50))
+    add_arrow(axes, (5.04, 3.88), (7.22, 3.50))
 
 
-def draw_metadata(axes: Axes) -> None:
-    add_box(axes, 0.55, 1.18, 3.32, 1.25, facecolor=WHITE)
-    axes.text(0.78, 2.13, 'Analysis metadata at frame i', color=INK, fontsize=10, fontweight='bold')
-    axes.text(0.78, 1.82, '• tracked rider and bounding box', color=MUTED, fontsize=8.5)
-    axes.text(0.78, 1.55, '• pose anchor and crop scale', color=MUTED, fontsize=8.5)
-    axes.text(0.78, 1.28, '• camera-stabilization transform', color=MUTED, fontsize=8.5)
+def draw_preview_lane(axes: Axes) -> None:
+    add_box(axes, 0.52, 0.78, 4.26, 2.70, facecolor=WHITE, edgecolor=BLUE, linewidth=1.3)
+    axes.text(0.78, 3.18, 'Interactive preview', color=BLUE, fontsize=11.0, fontweight='bold')
+    axes.text(4.50, 3.18, 'independent decoder', color=MUTED, fontsize=7.4, ha='right')
+
+    add_step(
+        axes,
+        0.80,
+        2.80,
+        '1',
+        'Decode packet i',
+        'On a cache miss: preceding keyframe → decode forward.',
+        accent=BLUE,
+    )
+    add_step(
+        axes,
+        0.80,
+        2.12,
+        '2',
+        'Look up metadata at i',
+        'Detection for overlays/crop; stabilization[i] for overview.',
+        accent=BLUE,
+    )
+    add_step(
+        axes,
+        0.80,
+        1.44,
+        '3',
+        'Render the selected view',
+        'Overview, or a focused crop from pose anchor + scale.',
+        accent=BLUE,
+    )
 
 
-def draw_contract(axes: Axes) -> None:
-    add_box(axes, 4.52, 2.12, 1.62, 1.22, facecolor=BLUE, edgecolor=BLUE, linewidth=1.5)
-    axes.text(5.33, 2.91, 'CANONICAL', color=WHITE, fontsize=8.0, fontweight='bold', ha='center')
-    axes.text(5.33, 2.55, 'FRAME i', color=WHITE, fontsize=16, fontweight='bold', ha='center')
-    axes.text(5.33, 2.29, 'one shared identity', color=WHITE, fontsize=7.5, ha='center')
+def draw_export_lane(axes: Axes) -> None:
+    add_box(axes, 5.22, 0.78, 4.26, 2.70, facecolor=WHITE, edgecolor=ORANGE, linewidth=1.3)
+    axes.text(5.48, 3.18, 'Focused video export', color=ORANGE, fontsize=11.0, fontweight='bold')
+    axes.text(9.20, 3.18, 'independent decoder', color=MUTED, fontsize=7.4, ha='right')
 
-    add_arrow(axes, (2.71, 3.50), (4.46, 2.91))
-    add_arrow(axes, (3.88, 1.80), (4.46, 2.37))
+    add_step(
+        axes,
+        5.50,
+        2.80,
+        '1',
+        'Recover packet index i',
+        'Advance in order; use sample PTS to resynchronize if needed.',
+        accent=ORANGE,
+    )
+    add_step(
+        axes,
+        5.50,
+        2.12,
+        '2',
+        'Look up the track at i',
+        'Select the closest detection for the requested rider.',
+        accent=ORANGE,
+    )
+    add_step(
+        axes,
+        5.50,
+        1.44,
+        '3',
+        'Render the exported frame',
+        'Apply the same focused-crop function: anchor + scale.',
+        accent=ORANGE,
+    )
 
 
-def draw_outputs(axes: Axes) -> None:
-    add_box(axes, 6.88, 3.12, 2.58, 0.94, facecolor=WHITE, edgecolor=BLUE)
-    axes.text(8.17, 3.74, 'On-screen preview', color=INK, fontsize=10, fontweight='bold', ha='center')
-    axes.text(8.17, 3.43, 'pixels + overlay + crop at i', color=MUTED, fontsize=8.2, ha='center')
-
-    add_box(axes, 6.88, 1.36, 2.58, 0.94, facecolor=WHITE, edgecolor=BLUE)
-    axes.text(8.17, 1.98, 'Exported frame', color=INK, fontsize=10, fontweight='bold', ha='center')
-    axes.text(8.17, 1.67, 'same frame identity, metadata and crop', color=MUTED, fontsize=8.2, ha='center')
-
-    add_arrow(axes, (6.20, 2.75), (6.82, 3.42))
-    add_arrow(axes, (6.20, 2.57), (6.82, 2.01))
+def draw_shared_contract(axes: Axes) -> None:
+    axes.plot([2.22, 2.22, 7.76, 7.76], [0.68, 0.54, 0.54, 0.68], color=BLUE, linewidth=1.4)
     axes.text(
-        8.17,
-        0.98,
-        'The preview and export cannot drift onto neighboring frames.',
+        4.99,
+        0.28,
+        'Shared: ordered-packet index and focused-crop function  ·  Separate: decoding and output surfaces',
         color=BLUE,
-        fontsize=8.7,
+        fontsize=8.2,
         fontweight='bold',
         ha='center',
     )
 
 
-def draw_seek_inset(axes: Axes) -> None:
-    add_box(axes, 6.82, 4.28, 2.72, 0.64, facecolor=ORANGE_LIGHT, edgecolor=ORANGE, linewidth=1.0)
-    axes.text(6.99, 4.72, 'Random access', color=ORANGE, fontsize=7.7, fontweight='bold')
-    axes.text(8.20, 4.72, 'keyframe', color=INK, fontsize=7.7, ha='center')
-    axes.text(8.77, 4.72, '→', color=ORANGE, fontsize=9, ha='center')
-    axes.text(9.16, 4.72, 'frame i', color=INK, fontsize=7.7, ha='center')
-    axes.text(8.20, 4.45, 'decode forward to the requested index', color=MUTED, fontsize=7.0, ha='center')
-
-
 def create_figure() -> Figure:
-    figure, axes = plt.subplots(figsize=(11.5, 5.4))
+    figure, axes = plt.subplots(figsize=(11.5, 6.0))
     figure.patch.set_facecolor(BACKGROUND)
     axes.set_facecolor(BACKGROUND)
     axes.set_xlim(0, 10)
-    axes.set_ylim(0.70, 5.22)
+    axes.set_ylim(0.10, 5.70)
     axes.axis('off')
 
     axes.text(
         0.50,
-        5.12,
-        'One frame index binds the complete rendering pipeline',
+        5.60,
+        'One packet-order index keeps preview and export aligned',
         color=INK,
         fontsize=14,
         fontweight='bold',
@@ -166,18 +227,17 @@ def create_figure() -> Figure:
     )
     axes.text(
         0.50,
-        4.83,
-        'The displayed image and every frame-dependent model result are selected together.',
+        5.30,
+        'Both paths identify frame i the same way, then decode and render it independently.',
         color=MUTED,
         fontsize=9,
         va='top',
     )
 
-    draw_frame_strip(axes)
-    draw_metadata(axes)
-    draw_contract(axes)
-    draw_outputs(axes)
-    draw_seek_inset(axes)
+    draw_canonical_order(axes)
+    draw_preview_lane(axes)
+    draw_export_lane(axes)
+    draw_shared_contract(axes)
 
     figure.tight_layout(pad=0.5)
     return figure

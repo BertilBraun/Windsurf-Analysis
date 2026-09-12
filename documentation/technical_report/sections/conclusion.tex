@@ -3,19 +3,14 @@
 
 The main lesson is not that custom machinery should replace general-purpose tracking,
 but that a narrow output and asymmetric failure cost can justify a narrower system.
-Conservative local decisions preserve uncertainty; sail color and camera-compensated
-motion score continuations; and offline optimization chooses compatible links jointly.
-Two rig keypoints then provide a stable crop anchor and rig-relative scale cue, solving
-the separate problem of focused-view composition.
+Conservative tracklets preserve uncertainty; sail color and camera-compensated motion
+score continuations; and offline optimization chooses compatible links jointly. Two
+rig keypoints separately stabilize focused-view composition.
 
-The evidence remains specific to project footage: no input-aligned held-out benchmark
-establishes numerical superiority over OC-SORT, BoT-SORT, or learned ReID. Similar
-sails, spray, small targets, and changing or feature-poor backgrounds can weaken the
-cues. Gaps without observations beyond the three-second horizon remain fragmented by
-design, and shorter gaps can still be ambiguous. Measuring the near-zero
-identity-switch objective requires the aligned benchmark and complete-track audits.
-
-Within those limits, every component follows one contract: preserve rider identity,
-derive a stable rider-relative view, and maintain exact frame correspondence through
-preview and export. That output-oriented definition explains the deliberately modest,
-inspectable, and domain-specific replacements.
+No input-aligned held-out benchmark establishes numerical superiority over the tested
+general-purpose trackers. Similar sails, small targets, and feature-poor backgrounds
+can weaken the cues; gaps beyond the three-second horizon remain fragmented by design.
+Measuring the near-zero identity-switch objective requires aligned evaluation and
+complete-track audits. Within those limits, every component follows one contract:
+preserve identity, stabilize the rider-relative view, and maintain exact frame
+correspondence through preview and export.

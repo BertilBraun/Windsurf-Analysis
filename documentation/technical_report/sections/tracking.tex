@@ -75,15 +75,30 @@ Hellinger-style distance through the cosine similarity of the transformed vector
 Tracklet appearance prototypes are exponential moving averages, which reduce the
 effect of individual blurred, partially occluded, or poorly exposed crops.
 
+The offline linker does not treat raw cosine overlap as a match probability.  Because the
+descriptor consists of non-negative histogram features, two different sails can
+still share substantial histogram support, including residual water and background;
+the displayed example has a mean cross-sail cosine overlap of approximately 0.50.
+Production association maps the corresponding distance $d=1-\operatorname{cos}$ to
+the bounded heuristic score
+\begin{equation}
+  p_{\mathrm{appearance}}
+  = \operatorname{clip}_{[10^{-6},\,1-10^{-6}]}(1-11.630d).
+  \label{eq:tracking-appearance-score}
+\end{equation}
+This deliberately turns only very small descriptor distances into strong candidate
+evidence; it is a fitted association score, not a calibrated probability.
+
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{tracking-sail-color-similarity.png}
   \caption{Illustrative production-descriptor comparison on three consecutive
-  samples from one project sequence.  The chart reports the mean descriptor
-  distance: repeated observations of either sail lie close together, while the two
-  sails are much farther apart.  These measured distances are neither probabilities
-  nor benchmark accuracy.  The example is intentionally small and hand-selected; it
-  explains the cue used by the tracker rather than evaluating it.}
+  samples from one project sequence.  Each matrix cell averages the pairwise
+  appearance scores from \cref{eq:tracking-appearance-score} over the displayed
+  crops; diagonal cells exclude self-comparisons.  Repeated observations of either
+  sail receive strong match scores, whereas all cross-sail comparisons reach the
+  lower clip bound.  These values are neither calibrated probabilities nor benchmark
+  accuracy.  The hand-selected example explains the cue rather than evaluating it.}
   \label{fig:tracking-sail-color}
 \end{figure}
 
