@@ -1,0 +1,114 @@
+\section{Pose as a Stable Virtual Camera Signal}
+\label{sec:pose}
+
+Tracking answers \emph{which} surfer is present in each frame, but a useful focused
+view also needs to decide where to place the virtual camera and how tightly to crop.
+A detector bounding box is a poor control signal for this purpose.  A windsurf rig
+is articulated, strongly anisotropic, and continually rotates with respect to the
+camera.  Its axis-aligned box can therefore change width, height, and centre even
+when the rider has moved little and remains at approximately the same distance.
+Using the box centre and height directly makes the crop drift across the subject and
+causes visible zoom pumping.
+
+\subsection{Two semantic points instead of a generic human pose}
+
+The production detector is a YOLO pose model supervised for one class and two
+domain-specific keypoints: the boom--mast junction and the mast tip.  These points
+were chosen for the rendering geometry rather than to describe the complete human
+body.  The boom--mast junction gives a repeatable reference near the rider and sail,
+while the distance from that junction to the mast tip provides a physical scale cue
+that is substantially less sensitive than an axis-aligned box height to in-plane
+rotation.
+
+The labels build on the manually reviewed detection boxes.  A dedicated annotation
+tool presents an enlarged crop for each box, permits either keypoint to be marked as
+not visible, and writes two-keypoint YOLO pose labels.  The checked-in pose project
+contains 1,123 manually labelled training images and 56 validation images.  The
+workflow also supports conservative pseudo-labelling: a prediction is accepted only
+after matching it to an existing box and applying detection, overlap, keypoint
+confidence, and spatial plausibility gates; pseudo-labels remain separate from manual
+labels and are included in training only when requested.  Finally, a hard-window
+miner runs the complete local pipeline and ranks short intervals by keypoint jitter
+relative to the rendered anchor.  This directs subsequent review towards failures
+that are visually disruptive in the final crop, rather than towards another uniform
+sample of easy frames.
+
+\subsection{From keypoints to crop centre}
+
+For a detection with bounding box top $y_1$, height $h$, and centre
+$(c_x,c_y)$, the fallback anchor is
+\begin{equation}
+  \mathbf{a}_{\mathrm{box}} = (c_x,\; y_1 + 0.6h).
+  \label{eq:pose-box-anchor}
+\end{equation}
+Placing it below the geometric box centre is a deliberate bias towards the rider and
+board rather than the empty upper part of a tall sail box.  When the boom--mast
+junction $\mathbf{b}=(b_x,b_y)$ is visible, the implementation first constructs a
+low-noise proxy for the mast tip, $\tilde{\mathbf{t}}=(b_x,y_1)$, and places the
+semantic anchor at
+\begin{equation}
+  \mathbf{a}_{\mathrm{pose}}
+    = 0.15\tilde{\mathbf{t}} + 0.85\mathbf{b}.
+  \label{eq:pose-semantic-anchor}
+\end{equation}
+Thus the crop is anchored slightly above the boom junction.  The measured mast-tip
+coordinate is intentionally not used for position: its larger lever arm would turn
+localization noise into unnecessary crop motion.  It remains valuable for scale.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.58\linewidth]{pose-anchor-geometry.png}
+  \caption{Pose-derived virtual-camera geometry on a representative labelled
+  frame.  The detector box and its centre (orange) describe image extent.  The
+  boom--mast junction and mast tip (cyan) instead provide a rider-relative anchor
+  (magenta) and a mast-length scale signal.  Production rendering smooths these
+  signals over time and falls back to box geometry when keypoints are unavailable.}
+  \label{fig:pose-anchor-geometry}
+\end{figure}
+
+Small detections do not contain enough pixels for equally reliable keypoint
+localization.  The final unsmoothed anchor therefore blends
+$\mathbf{a}_{\mathrm{pose}}$ with $\mathbf{a}_{\mathrm{box}}$ according to the
+shorter box dimension.  The pose weight rises linearly from zero at 45 pixels to one
+at 55 pixels.  A keypoint is considered visible at confidence 0.15 or greater; below
+that threshold, the box fallback is used.
+
+Missing observations are handled as transitions, not abrupt mode switches.  Gaps of
+up to five frames between visible boom keypoints are interpolated directly between
+semantic anchors.  Across longer gaps, the anchor eases from the last semantic point
+to the per-frame box fallback and eases back when a reliable keypoint returns.
+Leading and trailing missing spans receive analogous fallback or short hold
+behaviour.  A final five-frame robust weighted mean suppresses isolated jumps while
+giving the current frame the largest weight; Huber reweighting limits the influence
+of spatial outliers.  This processing operates on the dense tracks produced by the
+tracking post-processor, so every frame in a track receives an anchor even when its
+detection was interpolated.
+
+\subsection{A scale tied to the rig}
+
+When both keypoints are visible, the scale signal is the Euclidean length
+$\ell=\lVert\mathbf{b}-\mathbf{t}\rVert_2$ of the observed boom-to-tip mast
+segment.  Short missing spans are interpolated and the last valid value is held for
+up to five frames; otherwise the vertical distance from the current anchor to the
+box top supplies a fallback.  A centred moving mean with radius 15 frames smooths
+this length signal.  The requested crop height in pixels is then
+\begin{equation}
+  C = \max\!\left(\frac{\bar{\ell}}{0.75},
+                  \frac{h}{0.9}, 1\right),
+  \qquad s = \operatorname{clip}\!\left(\frac{C}{H},10^{-6},1\right),
+  \label{eq:pose-scale}
+\end{equation}
+where $H$ is the source-video height.  The first term aims to make the semantic mast
+segment occupy 75\% of the output height; the second prevents the detected box from
+being cropped more tightly than a 90\% fill.  Taking the maximum preserves context
+when either signal calls for a wider view.
+
+The resulting normalized anchor and scale are stored with every renderable
+detection and consumed directly by the focused player.  They stabilize the
+\emph{composition} of an individual rider: which semantic point stays near the
+centre and how large the rig appears.  This is distinct from global camera-motion
+compensation.  The latter estimates frame-to-frame background transforms (while
+masking detected surfers), supports motion-based association, and supplies an
+optional stabilized overview.  It does not replace the pose-derived virtual camera;
+a globally stabilized frame can still contain a rotating rig whose bounding box
+centre and dimensions fluctuate.

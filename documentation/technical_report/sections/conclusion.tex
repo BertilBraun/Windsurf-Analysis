@@ -1,0 +1,59 @@
+\section{Lessons and Limitations}
+\label{sec:conclusion}
+
+This project is shaped less by the number of tracked objects than by the cost of a
+wrong association.  The recordings usually contain only a handful of surfers, but
+they combine small targets, long overlaps and occlusions, changing backgrounds, and
+large camera pans.  A single identity switch can make an otherwise complete focused
+video unusable.  The appropriate operating point is therefore deliberately
+conservative: an uncertain continuation should remain fragmented or be rejected
+rather than silently merge two riders.
+
+The resulting pipeline illustrates the value of matching representations to the
+task.  The sail occupies more useful pixels than the rider and often carries a
+distinctive color pattern, so a compact sail-color descriptor can provide a more
+relevant association cue than generic person appearance features.  Likewise, two
+semantic rig keypoints are sufficient to define a rider-relative crop anchor and a
+physical scale signal; a full human-pose representation is unnecessary for this
+rendering objective.  These components are modest individually, but encode the
+properties that remain observable in long-shot windsurfing footage.
+
+Camera motion is a shared concern rather than an isolated stabilization step.  The
+estimated background transform removes the dominant image motion before tracklet
+association and also supports stabilized presentation.  Pose then solves a different
+rendering problem by stabilizing the composition of the selected rider.  Treating
+tracking and rendering together avoids optimizing trajectories that cannot be
+delivered as visually stable, frame-consistent output.
+
+Offline processing changes where ambiguity must be resolved.  The local pass can
+form only high-confidence tracklets and defer uncertain crossings or gaps.  The
+global association stage can then compare feasible continuations using observations
+before and after an occlusion, while retaining start, end, fragmentation, and discard
+as explicit alternatives to a weak link.  Finally, frame-indexed decoding carries
+the resulting identity, pose, and stabilization metadata into browser preview and
+export without losing the frame correspondence on which those results depend.
+
+The present evidence remains specific to this project.  The repository does not yet
+contain a current, input-aligned benchmark against the implemented general-purpose
+trackers, so the report does not claim general or numerical superiority.  The golden
+associations and retained diagnostics cover project footage and development cases;
+they do not establish performance across other venues, cameras, weather, or fleets.
+An aligned held-out comparison and complete-track audits would be required to measure
+how often the near-zero-switch objective is met.
+
+Several ambiguities are also intrinsic to the chosen cues.  Similar sail colors,
+illumination changes, spray, and contaminated crops can weaken the appearance
+descriptor.  A long complete occlusion may admit multiple equally plausible global
+links even with future observations available.  Pose localization degrades when the
+rig occupies too few pixels, forcing the virtual camera back towards less stable box
+geometry.  Global motion estimation assumes that enough stable background texture
+remains visible after foreground masking; feature-poor water, motion blur, or newly
+revealed scenery during a pan can violate that assumption.
+
+The main lesson is consequently not that custom machinery should replace
+general-purpose tracking.  It is that a narrowly defined output and failure cost can
+justify a narrower system: conservative local decisions, domain-specific appearance
+and pose, camera-compensated motion, and non-causal global association.  For this
+application, those choices make the system's assumptions and failure modes explicit
+and align every stage with the identity-consistent focused video that the user
+ultimately inspects.

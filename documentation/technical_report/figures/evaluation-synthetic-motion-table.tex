@@ -1,0 +1,30 @@
+% Values transcribed from tmp/jittered_test.report2.json.
+% The synthetic perturbation configuration is in tmp/jittered_test.transforms.json.
+\begin{table}[H]
+  \centering
+  \caption{Recovery error on one 60-frame synthetic translation test (59
+  frame-to-frame transforms).  Independent random offsets of up to
+  $\pm 10$ px per axis were added with seed 1; source-video motion was
+  estimated separately and subtracted.  Lower is better.}
+  \label{tab:synthetic-motion-recovery}
+  \small
+  \setlength{\tabcolsep}{5pt}
+  \begin{tabular}{lrrrrrr}
+    \toprule
+    & \multicolumn{3}{c}{RMSE} & \multicolumn{3}{c}{MAE} \\
+    \cmidrule(lr){2-4}\cmidrule(lr){5-7}
+    Method & $x$ [px] & $y$ [px] & $\theta$ [mrad]
+           & $x$ [px] & $y$ [px] & $\theta$ [mrad] \\
+    \midrule
+    VidStab & 0.257 & 0.184 & 0.153 & 0.189 & 0.140 & 0.118 \\
+    GMC     & \textbf{0.083} & \textbf{0.086} & \textbf{0.044}
+            & \textbf{0.065} & \textbf{0.069} & \textbf{0.033} \\
+    \bottomrule
+  \end{tabular}
+  \vspace{2pt}
+
+  \parbox{0.94\linewidth}{\footnotesize The test injected translation only
+  ($\theta=0$); angular entries therefore measure spurious estimated rotation.
+  This diagnostic validates the implementation on one short synthetic clip and
+  is not evidence of real-video tracking accuracy or general superiority.}
+\end{table}

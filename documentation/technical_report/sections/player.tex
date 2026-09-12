@@ -1,0 +1,58 @@
+\section{Delivering Frame-Accurate Results in the Browser}
+\label{sec:player}
+
+The tracking result is indexed by frame: detections, stabilization transforms, pose
+anchors, and user annotations must all refer to the image that is actually displayed.
+An ordinary HTML video element exposes media time rather than a stable frame identity.
+Seeking to a time may restart decoding at an earlier keyframe, and presentation
+timestamps need not provide a unique ordering by themselves.  This is sufficient for
+ordinary playback, but it is a poor contract for single-frame stepping, hit-testing a
+small detection, or checking the exact transition across an occlusion.
+
+For supported browser and codec combinations, the project therefore uses an explicit
+WebCodecs playback path~\cite{webcodecs}.  During loading it enumerates packet metadata,
+removes packets with negative presentation timestamps, and sorts the remainder by
+presentation timestamp (PTS) and packet sequence number.  Each entry stores PTS,
+duration, and whether the packet is a keyframe.  Its position in this ordered list is
+the canonical zero-based frame index used by the player.  Percent seeks are first
+quantized to that index; frame stepping then increments or decrements it directly,
+rather than accumulating floating-point time offsets.
+
+Compressed video still cannot be decoded from an arbitrary inter-frame packet.  For
+a cache miss, the player chooses a small window behind the requested frame, finds the
+preceding keyframe, restarts the decode iterator there, and advances until the target
+has been produced.  Nearby forward seeks reuse the existing iterator, while backward
+or distant seeks restart when reuse would be invalid or more expensive.  Decoded
+canvases are retained only in a bounded window around the current frame, with a short
+ahead region prefetched for playback.  The cache improves interaction without making
+the complete decoded recording a memory requirement.
+
+Asynchronous decoding introduces a less visible correctness problem: a slow result
+from an old seek can otherwise overwrite a newer user request.  Every load or seek
+advances an operation identifier, and decode and prefetch work checks that identifier
+before publishing results.  A changed operation makes prior work stale.  Iterator and
+cache state are also reset when a forward-only iterator cannot serve the requested
+position, after disposal, and after returning from a hidden browser tab.  These rules
+make backward stepping and rapid scrubbing deterministic at the application level,
+without claiming identical WebCodecs availability across all browsers.
+
+The same ordered-packet convention is used when an export is decoded.  Export samples
+are mapped to the corresponding packet index (with timestamp-based resynchronization
+if the iterators diverge), and that index selects the track detection used for the
+crop.  Preview rendering likewise looks up detections and stabilization by the current
+frame index, and the detailed preview and exporter share the same crop routine.  The
+result is one metadata contract from decoded image to model output to rendered crop.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{player-frame-accurate-playback.pdf}
+  \caption{Frame-index contract for interactive playback and export.  Packet
+  metadata defines a deterministic presentation order; random access restarts at a
+  preceding keyframe and decodes into a bounded, race-safe cache.  Preview and export
+  then select model metadata using the same frame identity and crop geometry.}
+  \label{fig:player-frame-contract}
+\end{figure}
+
+This machinery is not a tracking contribution in itself; it is what makes the
+tracking result inspectable and exportable without silently moving its overlays to a
+neighboring frame.

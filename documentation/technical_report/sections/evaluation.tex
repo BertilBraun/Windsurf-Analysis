@@ -1,0 +1,143 @@
+\section{Experiments, Evaluation, and Failure Analysis}
+\label{sec:evaluation}
+
+The evaluation problem follows directly from the product requirement.  Conventional
+multi-object-tracking scores are useful summaries, but an average that tolerates an
+occasional identity switch is not sufficient here: one false merge can make the
+complete focused video of a rider unusable.  We therefore used quantitative
+association tests to guide development, while retaining frame-accurate visual review
+as the final check on complete trajectories.  This section distinguishes those
+established evaluation mechanisms and retained diagnostic results from comparative
+claims that would require a fresh benchmark run.
+
+\subsection{Golden tracklet associations}
+
+The project includes an annotation tool for constructing ``golden'' associations from
+the same detections presented to the tracker.  It first runs the conservative
+preprocessor described in \cref{sec:tracking}; an annotator then assigns every
+resulting tracklet either to a physical surfer identity or to the discard class.
+Tracklets assigned to one identity are forbidden from occupying the same frame.  The
+saved record retains the source detection coordinates and their human-assigned
+identity, so competing association methods can be scored over an identical universe
+of observations.
+
+This protocol deliberately evaluates association separately from detection.  It asks
+whether the system grouped the available observations correctly, not whether YOLO
+found every surfer in the source video.  That separation made tracker iteration much
+faster and avoided attributing a missed detection to the association algorithm.  It
+also means that an association score alone is not an end-to-end tracking score;
+detection omissions, interpolation quality, and the usefulness of the final crop must
+be reviewed separately.
+
+For $N$ retained detections, the evaluator considers all unordered pairs.  A pair is
+positive when both detections belong to the same annotated surfer.  In this view,
+
+\begin{align}
+  P_{\mathrm{pair}} &=
+    \frac{\text{correct same-identity pairs}}
+         {\text{all pairs joined by the tracker}}, \\
+  R_{\mathrm{pair}} &=
+    \frac{\text{correct same-identity pairs}}
+         {\text{all annotated same-identity pairs}}.
+\end{align}
+
+Pairwise precision exposes false merges, whereas pairwise recall exposes
+fragmentation.  Their F1 score, together with the Rand and same-pair Jaccard indices,
+was used as a compact clustering measure.  Missing predicted observations can be
+treated as unique singleton tracks, preventing missing data from being rewarded as
+one artificial cluster.  Discard decisions are evaluated independently as a binary
+classification problem.
+
+The distinction between precision and recall is essential for this application.  A
+high pairwise F1 value can still conceal the one identity switch that invalidates a
+long output.  Model selection should therefore treat pairwise precision as a hard or
+near-hard constraint, inspect the absolute number of false joins, and only then use
+recall to choose among sufficiently pure configurations.  The final acceptance test
+remains a complete-video audit in which every trajectory is followed through
+crossings, long overlaps, occlusions, and camera pans.
+
+\subsection{Optimization as structured engineering evidence}
+
+The repository records a staged optimization workflow rather than a single opaque
+parameter search.  Detector confidence and non-maximum-suppression thresholds can be
+tuned against labelled boxes under an explicit false-positive-per-image constraint.
+Kalman process and measurement noise are fitted by minimizing one-step bounding-box
+prediction error on golden trajectories after camera compensation.  Motion and
+appearance mappings are then calibrated on positive fragment pairs sampled from one
+identity and negative pairs sampled from different identities.  Finally, Optuna-based
+search evaluates preprocessor and ILP parameters using pairwise association scores;
+trial-invariant embeddings and camera transforms are cached, and videos can be
+evaluated in parallel.
+
+This sequence was valuable even where it did not produce a publication-style
+benchmark.  It separated failures due to localization, motion prediction, appearance
+separation, local stitching, and global linking.  Interactive threshold tools and the
+golden-tracklet viewer complemented the scalar objectives by exposing the cases that
+matter disproportionately to the product, especially a plausible but wrong merge.
+The fitted settings are consequently best understood as engineering choices for this
+camera geometry, subject scale, and collection of sails---not as universal tracker
+hyperparameters.
+
+\subsection{A retained synthetic motion diagnostic}
+
+Camera compensation can be checked independently because a known perturbation can be
+injected into a video.  The project contains a generator that adds controlled
+frame-wise translation and rotation and an evaluator that subtracts the motion
+estimated on the unperturbed source before comparing the recovered perturbation with
+ground truth.  One retained 60-frame translation-only run is summarized in
+\cref{tab:synthetic-motion-recovery}.
+
+\input{figures/evaluation-synthetic-motion-table}
+
+On this diagnostic, the global-motion-compensation (GMC) implementation had lower
+translation error than the tested VidStab configuration.  The result is useful as a
+unit-scale validation that the estimator recovers known motion and does not invent
+substantial rotation.  It is intentionally not promoted to a real-world performance
+claim: the run contains only 59 transitions from one synthetic clip, injects no
+rotation, and does not reproduce a long pan with a changing background.  A reportable
+camera-motion benchmark should add multiple source scenes, rotations and scale
+changes, foreground-mask ablations, feature-poor water backgrounds, and failure rates
+for transforms that cannot be estimated.
+
+\subsection{Qualitative failure analysis}
+
+The most consequential failures occur when several weak cues coincide.  During a
+long overlap, motion cannot separate two riders; if the sails also share similar
+colors or one crop is dominated by spray and background, appearance may not resolve
+the continuation either.  Rapid pans can reduce the number of background features
+shared by adjacent frames, while small or blurred detections make both the Kalman
+update and color descriptor less reliable.  Leaving the observations fragmented is
+the intended safe response in these cases.  A false association is the more serious
+failure and must be identified by inspecting the selected ILP edge and the crops on
+both sides of the gap.
+
+Other failures affect presentation rather than identity.  Missed detections create
+interpolated boxes; extended gaps eventually make those boxes physically
+untrustworthy.  Occluded or very small keypoints cause the focused view to fall back
+to bounding-box geometry, potentially reintroducing crop drift or scale pumping.
+Hard-window mining in the pose workflow ranks intervals with unstable anchors so that
+these visible defects can be reviewed and added to the labelled set.  For global
+motion, foreground masking reduces the risk that a large moving sail is mistaken for
+the background, but it cannot create reliable correspondences when the remaining
+scene is textureless or newly revealed by a pan.
+
+\subsection{Scope of the present evidence}
+
+The codebase contains implementations and comparison hooks for OC-SORT, BoT-SORT,
+greedy association, and several ILP variants, documenting that general-purpose
+alternatives were explored.  However, no current, reproducible output table compares
+those baselines with the production pipeline on a held-out set.  The comparison
+harness also predates the active color-stripe embedding and single-pass
+\texttt{ILPTracker} interfaces, and some historical golden files require compatibility
+loading after refactors.  Reporting the old runs as a current leaderboard would mix
+different inputs and implementations.
+
+The supported conclusion is therefore narrower: those experiments revealed failure
+modes that motivated a domain-specific, offline design, and the present tooling makes
+a controlled comparison possible after the baselines are aligned.  A release-quality
+evaluation should freeze representative train/tuning and held-out videos; report
+pairwise precision and recall, false-merge counts, fragmentation, discard quality,
+runtime, and complete-track pass/fail rates; and stratify sequences by pan magnitude,
+overlap duration, target size, and appearance ambiguity.  The intended claim is
+improved reliability on this specific long-shot windsurfing task under a near-zero
+identity-switch objective---not general superiority over state-of-the-art MOT.
