@@ -1,10 +1,11 @@
-\section{Experiments, Evaluation, and Failure Analysis}
+\section{Evaluation Framework and Available Evidence}
 \label{sec:evaluation}
 
-The repository provides quantitative association tests for development, while
-complete-trajectory visual review is still required for product acceptance. This
-section distinguishes the available evaluation mechanisms from comparative claims
-that would require a fresh benchmark run.
+The repository implements annotation and scoring tools for quantitative association
+evaluation, but the current snapshot does not include a complete reproducible
+benchmark dataset or results table. Complete-trajectory visual review is still
+required for product acceptance. This section therefore separates the available
+evaluation framework from claims that would require a fresh benchmark run.
 
 \subsection{Golden tracklet associations}
 
@@ -19,8 +20,8 @@ of observations.
 
 This protocol deliberately evaluates association separately from detection.  It asks
 whether the system grouped the available observations correctly, not whether YOLO
-found every surfer in the source video.  That separation made tracker iteration much
-faster and avoided attributing a missed detection to the association algorithm.  It
+found every surfer in the source video.  That separation supports faster tracker
+iteration and avoids attributing a missed detection to the association algorithm.  It
 also means that an association score alone is not an end-to-end tracking score;
 detection omissions, interpolation quality, and the usefulness of the final crop must
 be reviewed separately.
@@ -38,8 +39,8 @@ positive when both detections belong to the same annotated surfer.  In this view
 \end{align}
 
 Pairwise precision exposes false merges, whereas pairwise recall exposes
-fragmentation.  Their F1 score, together with the Rand and same-pair Jaccard indices,
-was used as a compact clustering measure.  Missing predicted observations can be
+fragmentation.  The scorer also reports their F1 score, the Rand index, and the
+same-pair Jaccard index as compact clustering measures. Missing predicted observations can be
 treated as unique singleton tracks, preventing missing data from being rewarded as
 one artificial cluster.  Discard decisions are evaluated independently as a binary
 classification problem.
@@ -51,7 +52,7 @@ crossings, long overlaps, occlusions, and camera pans.
 
 \subsection{Optimization as structured engineering evidence}
 
-The repository records a staged optimization workflow rather than a single opaque
+The repository implements a staged optimization workflow rather than a single opaque
 parameter search.  Detector confidence and non-maximum-suppression thresholds can be
 tuned against labelled boxes under an explicit false-positive-per-image constraint.
 Kalman process and measurement noise are fitted by minimizing one-step bounding-box

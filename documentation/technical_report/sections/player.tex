@@ -1,31 +1,15 @@
-\section{Delivering Frame-Accurate Results in the Browser}
+\clearpage
+\section{Frame-Accurate Delivery}
 \label{sec:player}
 
-Tracking results are indexed by frame, so detections, transforms, pose anchors, and
-annotations must refer to the image actually displayed. An ordinary HTML video
-element exposes media time rather than stable frame identity, which is insufficient
-for frame stepping, hit-testing, and inspection across an occlusion.
-
-The WebCodecs path~\cite{webcodecs} discards packets with negative presentation
-timestamps (PTS), then orders the remainder by PTS and packet sequence number. Position
-in that list is the canonical zero-based frame index. Preview seeks from a preceding
-keyframe and decodes forward, reusing a bounded cache for nearby frames. A result is
-published only if it still belongs to the latest seek.
-
-Export decodes independently, advances through the same packet-index convention, and
-resynchronizes to the closest PTS if necessary. The recovered index selects the rider
-track. Overview preview additionally reads the global stabilization transform, whereas
-focused preview and export share the pose-anchor crop function. Decoded images and
-output surfaces remain separate. This machinery is not a tracking contribution; it
-makes the result inspectable and exportable without silently shifting an overlay or
-crop to a neighboring frame.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{player-frame-accurate-playback.pdf}
-  \caption{Preview and export decode independently but identify frame $i$ by the same
-  ordered-packet index. Preview seeks from a preceding keyframe; export advances its
-  own decoder and can resynchronize by timestamp. Both use the index for track lookup,
-  while only focused rendering shares the pose-anchor crop function.}
-  \label{fig:player-frame-contract}
-\end{figure}
+Identity-consistent tracks are useful only if the browser applies each detection,
+stabilization transform, and pose crop to the frame that produced it. Because an
+ordinary HTML video element exposes media time rather than stable frame identity, the
+WebCodecs path~\cite{webcodecs} defines a canonical zero-based index by ordering
+encoded packets by presentation timestamp and packet sequence number.
+Interactive preview seeks from a preceding keyframe and decodes forward. Export
+decodes independently but maps each sample back to the same packet index,
+resynchronizing by timestamp when necessary. That index drives track lookup, while
+focused preview and export share the same crop geometry. This is not a tracking
+contribution, but it preserves the frame correspondence required for trustworthy
+inspection and export.

@@ -24,6 +24,9 @@ The labels build on the manually reviewed detection boxes.  A dedicated annotati
 tool presents an enlarged crop for each box, permits either keypoint to be marked as
 not visible, and writes two-keypoint YOLO pose labels.  The checked-in pose project
 contains 1,123 manually labelled training images and 56 validation images.  The
+current split is an image-level development split and may contain frames from the same
+source sequence on both sides; a sequence-grouped held-out set is required for a
+generalization claim.  The
 workflow also supports conservative pseudo-labelling: a prediction is accepted only
 after matching it to an existing box and applying detection, overlap, keypoint
 confidence, and spatial plausibility gates; pseudo-labels remain separate from manual

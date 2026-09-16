@@ -7,7 +7,7 @@ two levels:
 \begin{equation}
   \text{detections}
   \longrightarrow \text{high-purity local tracklets}
-  \longrightarrow \text{globally linked trajectories}.
+  \longrightarrow \text{globally optimized trajectories}.
   \label{eq:tracking-two-stage}
 \end{equation}
 The first stage resolves only short, unambiguous transitions.  The second can inspect
@@ -30,7 +30,7 @@ This experience does not imply that the custom tracker is generally superior to
 OC-SORT, BoT-SORT, or learned ReID.  The comparison is specific to shore-recorded
 windsurfing, offline processing, and a loss function dominated by even a single false
 merge.  The implemented comparison and optimization tools document that the
-alternatives were tested, but the current benchmark harness has drifted from the
+alternatives were implemented and explored, but the current benchmark harness has drifted from the
 production embedding and tracker interfaces.  We therefore avoid a numerical
 outperformance claim until the baselines have been rerun on aligned inputs and
 representative manually verified sequences.
@@ -43,7 +43,7 @@ footage, not a controlled leaderboard.
   \small
   \begin{tabular}{L{0.23\linewidth}L{0.34\linewidth}L{0.32\linewidth}}
     \toprule
-    Tried & Observed on this task & Chosen response \\
+    Explored & Observed on this task & Chosen response \\
     \midrule
     OC-SORT / BoT-SORT & Causal decisions at crossings could create unacceptable identity switches & Conservative tracklets plus offline linking \\
     OSNet / generic ViT & Tiny riders offered weak generic identity detail; sails remained visually prominent & Sail-color descriptor \\
@@ -125,13 +125,12 @@ rotation.
 Candidate transitions are gated by two probabilities: one derived from the
 position-space Mahalanobis distance of the camera-compensated prediction, and one
 derived from sail-appearance distance.  Strict matches require both cues to pass high
-thresholds and may span at most three frames.  Looser candidates can remain eligible
-for up to six frames, and are retained only
-when sufficiently supported by one strong cue or by both weaker cues.  Crucially, the
-preprocessor does not break ties by choosing the numerically best ambiguous option.
-A detection is appended only when it has one admissible candidate under the
-clean-first rule.  Multiple candidates, multiple detections proposing the same
-tracklet, or overlap with a newly created track cause a split and fresh tracklets.
+thresholds and may span at most three frames. Looser candidates can remain eligible
+for up to six frames when supported by one strong cue or both weaker cues. Under the
+clean-first rule, one strict candidate wins even if loose alternatives exist; with no
+strict candidate, exactly one loose candidate may win. Multiple strict candidates,
+multiple loose-only candidates, duplicate proposals to one tracklet, or overlap with
+a newly created track preserve the ambiguity as separate tracklets.
 This deliberate strategy trades recall for purity: uncertainty is preserved for the
 offline stage instead of being hidden inside an irreversible local decision.
 
@@ -146,17 +145,17 @@ estimated camera transform at every intervening frame.  This matters during long
 pans: without compensation, the shared movement of the entire image would dominate
 the residual motion that distinguishes one surfer from another.
 
-Every candidate receives a weighted negative-log-likelihood cost
+Every candidate receives a weighted negative-log score
 \begin{equation}
   C_{ij} = w_m C^{\mathrm{motion}}_{ij}
          + w_a C^{\mathrm{appearance}}_{ij}
          + w_g C^{\mathrm{gap}}_{ij}.
   \label{eq:tracking-edge-cost}
 \end{equation}
-The motion term averages $-\log p$ values obtained from the Mahalanobis distance to
+The motion term averages $-\log p$ scores obtained from the Mahalanobis distance to
 the first two detections of $T_j$.  The appearance term compares an exponentially
 weighted prototype at the end of $T_i$ with a reverse-weighted prototype at the
-beginning of $T_j$ and maps the Hellinger-style distance to a match probability.  The
+beginning of $T_j$ and maps the Hellinger-style distance to a heuristic match score.  The
 gap term is
 \begin{equation}
   C^{\mathrm{gap}}_{ij} = -\Delta f_{ij}\log p_{\mathrm{miss}},
@@ -172,7 +171,7 @@ occlusions can be recovered. Prolonged co-visibility and partial overlap can las
 longer because detections remain available; a complete missing-observation gap beyond
 the horizon remains fragmented by design.
 
-\subsection{One global decision over the recording}
+\subsection{Global optimization over a bounded candidate graph}
 
 The candidate graph is solved as a minimum-cost integer program.  For each tracklet
 $i$, binary variables represent starting a trajectory at $i$, ending at $i$, linking
@@ -190,7 +189,8 @@ time-ordered paths rather than competing local assignments.
   portions of tracklets C and D.  That later appearance evidence helps distinguish
   the candidate continuations, while camera-compensated motion scores the beginning
   of each successor.  The global optimizer selects the crossed pairing A--D and B--C
-  jointly.  The illustration is conceptual; start, end, discard, and gap costs are
+  jointly over the bounded candidate graph.  The illustration is conceptual; start,
+  end, discard, and gap costs are
   omitted for clarity.}
   \label{fig:tracking-offline-association}
 \end{figure}
