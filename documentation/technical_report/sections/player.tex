@@ -1,15 +1,11 @@
-\clearpage
 \section{Frame-Accurate Delivery}
 \label{sec:player}
 
-Identity-consistent tracks are useful only if the browser applies each detection,
-stabilization transform, and pose crop to the frame that produced it. Because an
-ordinary HTML video element exposes media time rather than stable frame identity, the
-WebCodecs path~\cite{webcodecs} defines a canonical zero-based index by ordering
-encoded packets by presentation timestamp and packet sequence number.
-Interactive preview seeks from a preceding keyframe and decodes forward. Export
-decodes independently but maps each sample back to the same packet index,
-resynchronizing by timestamp when necessary. That index drives track lookup, while
-focused preview and export share the same crop geometry. This is not a tracking
-contribution, but it preserves the frame correspondence required for trustworthy
-inspection and export.
+Identity-consistent tracks are useful only if the browser applies metadata to the
+frame that produced it. Ordinary HTML video exposes media time rather than stable
+frame identity, so the WebCodecs path~\cite{webcodecs} defines a canonical index by
+ordering packets by presentation timestamp and sequence number. Preview seeks from a
+preceding keyframe and decodes forward. Export decodes independently but maps each
+sample to the same index, resynchronizing by timestamp when necessary. The shared
+index and crop geometry preserve frame correspondence through preview and export;
+this is a delivery constraint rather than a tracking contribution.
