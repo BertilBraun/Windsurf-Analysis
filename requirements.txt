@@ -33,3 +33,4 @@ modal==1.3.0
 optuna
 
 scipy
+boxmot==13.0.17  # Frozen tracker implementations used by the association benchmark.
