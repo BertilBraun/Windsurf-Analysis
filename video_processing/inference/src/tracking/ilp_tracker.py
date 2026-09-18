@@ -10,7 +10,7 @@ from ..util.algebra import NLL_from_prob, lerp, probability_from_dist
 
 
 from ..util.video_io import VideoInfo
-from ..common_types import Point, Track, TrackId
+from ..common_types import BoundingBox, Embedding, Point, Track, TrackId
 from ..settings import MAX_OVERLAP_LENGTH_SECONDS
 from .ILP_graph_solver import FragmentGraph, ILPGraphSolver
 from ..motion.kalman_filter import KFState
@@ -31,7 +31,7 @@ class ILPTracker:
             - A.end_frame < B.start_frame and B.start_frame <= A.end_frame + MAX_OVERLAP_LENGTH_SECONDS * video_fps
         - Costs are based on:
             To calculate the actual cost, we use the sum of the NLL for motion, appearance and gap.
-            - Motion: KF Mahalanobis NLL + GMC (position-only) + 0.5*log|S_pos|. We apply the appropriate Camera Transforms on each frame. Transfors are defined as: Transform = NamedTuple('Transform', [('dx', float), ('dy', float), ('da', float), ('frame_idx', int)]) # dx, dy, da for each frame relative to the previous frame.
+            - Motion: KF Mahalanobis NLL over center and box size after camera-motion compensation.
             - Appearance: embedding is a LAB color histogram, we compute the mean histogram for both A and B and then use the chi-squared distance to get the appearance similarity probability by calculating platt_prob_from_dist. Lab χ² → Platt prob → NLLR
             - Gap: per-frame miss NLL
     2. Solve the ILP problem
@@ -52,10 +52,13 @@ class ILPTracker:
         p_miss: float = 0.8037118771940966,  # for gap NLL
         # Motion evaluation
         max_detections_to_compare: int = 2,  # eval first K detections of B (1..3 recommended)
-        use_position_only: bool = True,  # gating_distance on (cx,cy) or (cx,cy,w,h)
+        use_position_only: bool = False,  # gating_distance on (cx,cy) or (cx,cy,w,h)
+        maximum_motion_nll: float = 8.0,
+        maximum_area_ratio: float = 3.0,
+        maximum_aspect_ratio: float = 3.0,
         # Appearance similarity
         appearance_similarity_gamma: float = 11.630051976558498,
-        appearance_ema: float = 0.6649735642160074,
+        appearance_keep_fraction: float = 1.0,
         # Graph pruning / solver settings
         max_outgoing_links: int = 10,
         # Optional: allow discarding tiny tracklets (faulty detections)
@@ -72,9 +75,12 @@ class ILPTracker:
         w_gap: 9.992576448568917
         p_miss: 0.8037118771940966
         appearance_similarity_gamma: 11.630051976558498
-        appearance_ema: 0.6649735642160074
+        appearance_keep_fraction: 1.0
         max_detections_to_compare: 2
-        use_position_only: True
+        use_position_only: False
+        maximum_motion_nll: 8.0
+        maximum_area_ratio: 3.0
+        maximum_aspect_ratio: 3.0
         max_outgoing_links: 10
         allow_discard_short_tracklets: True
         discard_max_detections: 5
@@ -93,9 +99,20 @@ class ILPTracker:
         # Motion evaluation
         self.max_detections_to_compare = int(max(1, max_detections_to_compare))
         self.use_position_only = bool(use_position_only)
+        if maximum_motion_nll <= 0.0:
+            raise ValueError('maximum_motion_nll must be positive.')
+        if maximum_area_ratio < 1.0:
+            raise ValueError('maximum_area_ratio must be at least 1.')
+        if maximum_aspect_ratio < 1.0:
+            raise ValueError('maximum_aspect_ratio must be at least 1.')
+        self.maximum_motion_nll = float(maximum_motion_nll)
+        self.maximum_area_ratio = float(maximum_area_ratio)
+        self.maximum_aspect_ratio = float(maximum_aspect_ratio)
         # Appearance similarity
         self.appearance_similarity_gamma = appearance_similarity_gamma
-        self.appearance_ema = float(appearance_ema)
+        if not 0.0 < appearance_keep_fraction <= 1.0:
+            raise ValueError('appearance_keep_fraction must be in (0, 1].')
+        self.appearance_keep_fraction = float(appearance_keep_fraction)
         # Graph pruning / solver settings
         self.max_outgoing_links = int(max(1, max_outgoing_links))
 
@@ -184,16 +201,26 @@ class ILPTracker:
         kf_cache: Dict[TrackId, KFState] = {
             i: KFState.fit_kf_end_state(frag.sorted_detections, cmc) for i, frag in enumerate(fragments)
         }
+        appearance_prototypes: Dict[TrackId, Embedding] = {
+            i: _robust_fragment_embedding(fragment, self.appearance_keep_fraction)
+            for i, fragment in enumerate(fragments)
+        }
 
         for i, j in _possible_mergeable_candidates(fragments, max_frame_gap):
             A = fragments[i]
             B = fragments[j]
             # compute costs
             motion_nll = _motion_nll(kf_cache[i], B, cmc, self.max_detections_to_compare, self.use_position_only)
-            if math.isinf(motion_nll) or math.isnan(motion_nll):
+            if math.isinf(motion_nll) or math.isnan(motion_nll) or motion_nll > self.maximum_motion_nll:
                 continue
 
-            appearance_nll = _appearance_nll(A, B, self.appearance_similarity_gamma, self.appearance_ema)
+            area_ratio, aspect_ratio = _bbox_shape_ratios(A.end.bbox, B.start.bbox)
+            if area_ratio > self.maximum_area_ratio or aspect_ratio > self.maximum_aspect_ratio:
+                continue
+
+            appearance_nll = _appearance_nll(
+                appearance_prototypes[i], appearance_prototypes[j], self.appearance_similarity_gamma
+            )
             if math.isinf(appearance_nll) or math.isnan(appearance_nll):
                 continue
 
@@ -512,11 +539,28 @@ class ILPTracker:
 # ──────────────────────────────── cost helpers ─────────────────────────────── #
 
 
-def _appearance_nll(a: Track, b: Track, gamma: float, ema: float) -> float:
-    """Appearance cost from fragment prototypes (mapped from a heuristic similarity probability)."""
-    a_mean = a.mean_embedding(ema=ema)
-    b_mean = b.mean_embedding_reverse(ema=ema)
-    p = a_mean.probability(b_mean, gamma)
+def _robust_fragment_embedding(track: Track, keep_fraction: float) -> Embedding:
+    """Build a whole-fragment prototype after trimming appearance outliers."""
+    embeddings = [detection.embedding for detection in track.sorted_detections]
+    assert embeddings, 'Track has no detections.'
+    initial_mean = embeddings[0].mean(embeddings)
+    keep_count = max(1, math.ceil(len(embeddings) * keep_fraction))
+    central_embeddings = sorted(embeddings, key=initial_mean.distance)[:keep_count]
+    return central_embeddings[0].mean(central_embeddings)
+
+
+def _bbox_shape_ratios(a: BoundingBox, b: BoundingBox) -> tuple[float, float]:
+    """Return symmetric area and aspect-ratio changes between two boxes."""
+    area_ratio = max(a.area, b.area) / max(1, min(a.area, b.area))
+    a_aspect = a.width / max(1, a.height)
+    b_aspect = b.width / max(1, b.height)
+    aspect_ratio = max(a_aspect, b_aspect) / max(0.001, min(a_aspect, b_aspect))
+    return float(area_ratio), float(aspect_ratio)
+
+
+def _appearance_nll(a: Embedding, b: Embedding, gamma: float) -> float:
+    """Appearance cost from robust whole-fragment prototypes."""
+    p = a.probability(b, gamma)
     return NLL_from_prob(p)
 
 
@@ -538,7 +582,7 @@ def _motion_nll(A: KFState, B: Track, cmc: CMC, max_detections_to_compare: int, 
         # predict from A.end by Δ
         pred = pred.predict_to(detection.frame_idx, cmc)
 
-        # position-only mahalanobis + log|S_pos|
+        # Mahalanobis gate over position, or position and size.
         d2 = pred.gating_distance(detection.bbox.center_wh, only_position=use_position_only)
 
         p_same = probability_from_dist(d2, df=2 if use_position_only else 4)

@@ -19,6 +19,6 @@ This folder provides various implementations for Person/Object Re-Identification
 *   **ReIDColorHistogram**: A simple 3D Lab color histogram implementation. It applies a 15% center-crop margin to focus on the subject and reduce background noise.
 
 ### TODO
-*   Refine the foreground masking logic in `ReIDColorABStripeHistogram` (currently uses a fixed 10% margin fallback in the active `_compute_mask` method).
+*   Validate and tune the border-derived foreground masking in `ReIDColorABStripeHistogram` on additional recording conditions.
 *   Standardize visualization tools across different ReID methods.
 *   Implement batch processing for histogram-based methods to match deep learning performance patterns.

@@ -20,7 +20,6 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from video_processing.inference.src.tracking.ilp_tracker import ILPTracker
-from video_processing.inference.src.tracking.iterative_ilp_tracker import IterativeILPTracker
 from video_processing.inference.src.util.video_io import get_video_properties
 from video_processing.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
 from video_processing.inference.src.tracking.discrete_opt_tracker import DiscreteOptTracker
@@ -345,7 +344,7 @@ def _run_iter_ilp(args) -> Tuple[float, Dict[str, Any]]:
                 'w_gap': trial.suggest_float('w_gap', 0.0, 15.0),
                 'p_miss': trial.suggest_float('p_miss', 0.6, 1.0),
                 'appearance_similarity_gamma': trial.suggest_float('appearance_similarity_gamma', 2.0, 15.0),
-                'appearance_ema': trial.suggest_float('appearance_ema', 0.2, 1.0),
+                'appearance_keep_fraction': trial.suggest_float('appearance_keep_fraction', 0.3, 1.0),
                 'discard_max_detections': trial.suggest_int('discard_max_detections', 1, 10),
                 'discard_cost_first': trial.suggest_float('discard_cost_first', 0.25, 50.0, log=True),
                 'discard_cost_growth': trial.suggest_float('discard_cost_growth', 1.0, 3.0),
