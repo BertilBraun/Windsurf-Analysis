@@ -8,13 +8,13 @@ protects tracklet purity, sail-specific appearance and four-dimensional motion s
 longer continuations, a global integer program uses complete-video context, and two
 rig landmarks control the final virtual camera.
 
-On 21 manually reconstructed development videos, the association subsystem improves
-pairwise F1 and greatly reduces fragmentation relative to the evaluated OC-SORT and
-BoT-SORT configurations.  The staged revision also shows why implementation details
-matter: activating the intended foreground mask, aggregating appearance over whole
-fragments, retaining box-size evidence, and vetoing implausible links collectively
-reduce contaminated tracks from 20 to nine.  The remaining crossing errors and the
-in-sample protocol preclude a claim of perfect or general-purpose tracking.  The
-contribution is instead a reproducible account of how domain structure, offline
-inference, and an explicit failure cost can make an otherwise ordinary detection
-model useful in a demanding video-analysis system.
+On 21 manually reconstructed development videos, production reduces fragmentation
+from 845 to 42 relative to OC-SORT while retaining the same absolute number of
+contaminated tracks.  The staged revision shows why implementation details matter:
+activating the intended foreground mask, aggregating appearance over whole fragments,
+retaining box-size evidence, and vetoing implausible links reduce contaminated tracks
+from 20 to nine.  Because the benchmark is in-sample and its boxes were smoothed
+within gold trajectories, these figures are engineering diagnostics rather than a
+general tracker ranking.  The contribution is a documented account of how domain
+structure, offline inference, and an explicit failure cost can make an otherwise
+ordinary detection model useful in a demanding video-analysis system.

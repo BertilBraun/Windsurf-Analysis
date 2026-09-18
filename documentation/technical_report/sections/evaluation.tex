@@ -9,12 +9,12 @@ association from detector recall: the results answer whether the available
 observations were grouped correctly, not whether YOLO found every surfer.
 
 The saved observations were selected during manual trajectory reconstruction and
-their boxes were Rauch--Tung--Striebel smoothed afterwards.  The benchmark is
-therefore conditional on gold-derived observations rather than an end-to-end MOT
-test.  It is also an in-sample development-set evaluation: algorithm design was
-informed by these videos, and the provenance of the original ILP parameter tuning is
-not fully recorded.  We report the results as engineering evidence and failure
-analysis, not as a held-out leaderboard.
+their boxes were Rauch--Tung--Striebel smoothed within gold identity trajectories.
+This is stronger leakage than merely conditioning on useful boxes: the motion cue
+receives geometry derived from the target identity partition.  The same videos also
+informed system design, and the provenance of the original ILP parameter tuning is
+not fully recorded.  The benchmark is therefore an in-sample engineering diagnostic
+and failure analysis, not a clean end-to-end or held-out tracker comparison.
 
 \subsection{Metrics}
 
@@ -33,12 +33,14 @@ A pair is positive when both observations have the same annotated identity:
 False merges reduce precision and fragmentation reduces recall.  Missing outputs are
 treated as singleton predictions rather than being silently omitted.  Micro scores
 pool all pairs and consequently weight long identities quadratically; macro scores
-average per-video values.  We additionally report contaminated predicted tracks,
-which contain more than one gold identity; fragmentation excess, the number of
-predicted pieces beyond one per gold identity; and exact videos, whose complete
-partition matches the annotation up to track-label permutation.  These absolute
-counts matter because a high aggregate F1 can conceal one application-breaking
-identity switch.
+average per-video values.  Coverage is the fraction of retained observations emitted
+by a method.  A contaminated predicted track contains more than one gold identity;
+``contaminated observations'' counts every observation in such a track and therefore
+does not distinguish a brief intrusion from a wholly wrong trajectory.  If $k_g$ is
+the number of predicted pieces containing observations of gold identity $g$, then
+fragmentation excess is $\sum_g\max(k_g-1,0)$, including pieces shared through a
+contaminated prediction.  An exact video has full coverage and a partition identical
+to gold up to track-label permutation.
 
 \subsection{Fixed-observation comparison}
 
@@ -47,35 +49,40 @@ BoT-SORT.  OC-SORT receives the fixed detections directly.  BoT-SORT uses its EC
 camera compensation but no pedestrian-specific ReID network.  The production method
 reruns conservative preprocessing, masked video stabilization, and offline ILP
 association.  Its sail descriptor uses border-derived foreground masking and a
-whole-fragment appearance prototype; motion gating evaluates centre, width, and
+whole-fragment appearance prototype; motion gating evaluates center, width, and
 height; and implausible motion, area, or aspect-ratio transitions are excluded before
 optimization.
 
 \begin{table*}[t]
   \centering
-  \small
+  \footnotesize
   \caption{Fixed-observation identity-association results on 21 development videos.
-  ``Contam.'' counts predicted tracks containing more than one gold identity.}
+  ``Contam.'' is contaminated tracks over emitted tracks; ``C. obs.'' counts all
+  observations contained in those tracks.}
   \label{tab:association-benchmark}
-  \begin{tabular}{lrrrrrrr}
+  \begin{tabular}{lrrrrrrrr}
     \toprule
-    Method & Coverage & Pair P & Pair R & Pair F1 & Macro F1 & Contam. & Frag. excess \\
+    Method & Coverage & Pair P & Pair R & Pair F1 & Macro F1 & Contam. & C. obs. & Frag. excess \\
     \midrule
-    OC-SORT & 0.981 & \textbf{0.985} & 0.662 & 0.792 & 0.857 & 9/165 & 845 \\
-    BoT-SORT, no ReID & 0.996 & 0.920 & 0.752 & 0.828 & 0.858 & 16/142 & 244 \\
-    Production offline ILP & \textbf{0.999} & 0.957 & \textbf{0.918} & \textbf{0.937} & \textbf{0.970} & 9/95 & \textbf{42} \\
+    OC-SORT & 0.981 & \textbf{0.985} & 0.662 & 0.792 & 0.857 & 9/165 & 6,184 & 845 \\
+    BoT-SORT, no ReID & 0.996 & 0.920 & 0.752 & 0.828 & 0.858 & 16/142 & 14,459 & 244 \\
+    Production offline ILP & \textbf{0.999} & 0.957 & \textbf{0.918} & \textbf{0.937} & \textbf{0.970} & 9/95 & 9,982 & \textbf{42} \\
     \bottomrule
   \end{tabular}
 \end{table*}
 
-The production system gives the strongest overall association score and reduces
-fragmentation by a factor of approximately six relative to BoT-SORT and by a factor
-of twenty relative to OC-SORT.  Eleven of 21 videos are exact, compared with
-four for BoT-SORT and one for OC-SORT.  OC-SORT attains the highest pairwise precision
-by remaining highly conservative, but its 845 excess fragments do not provide the
-continuous identity track required by the application.  The production result is a
-more useful operating point for this dataset, but its nine contaminated tracks mean
-that it still does not satisfy the nominal zero-false-merge requirement.
+Production reduces fragmentation from 845 to 42 relative to OC-SORT while retaining
+the same absolute number of contaminated tracks.  This continuity gain comes with
+lower pair precision, a larger contaminated-output fraction (9/95 versus 9/165), and
+more observations contained in contaminated tracks (9,982 versus 6,184).  Eleven of
+21 videos are exact, compared with four for BoT-SORT and one for OC-SORT.  The result
+is the most useful evaluated operating point for this application, but not a uniform
+improvement and not the nominal zero-false-merge target.
+
+A 10,000-sample bootstrap that resamples complete videos gives 95\% intervals for
+micro pair F1 of [0.723, 0.867] for OC-SORT, [0.759, 0.910] for BoT-SORT, and
+[0.853, 0.995] for production.  The broad, overlapping intervals reinforce the
+development-set interpretation rather than a general ranking claim.
 
 Runtime is included only as an operational diagnostic.  On the evaluation machine,
 OC-SORT took 9.0 seconds, BoT-SORT 497.7 seconds, and the production association path
@@ -102,30 +109,30 @@ appearance aggregation, and four-dimensional motion evaluation raise micro F1 fr
 aspect-ratio discontinuities raises precision further and halves contaminated tracks,
 without increasing fragmentation.
 
-\begin{table}[t]
+\begin{table*}[t]
   \centering
-  \scriptsize
+  \footnotesize
   \caption{Staged production-pipeline revision on the same development set.}
   \label{tab:safeguard-ablation}
-  \begin{tabular}{@{}lrrrrr@{}}
+  \begin{tabular}{lrrrrr}
     \toprule
-    Stage & P & R & F1 & Cont. & Frag. \\
+    Configuration & Pair P & Pair R & Pair F1 & Contaminated tracks & Fragmentation excess \\
     \midrule
-    Original & 0.907 & 0.880 & 0.893 & 20 & 48 \\
-    + mask, mean, 4D & 0.939 & 0.917 & 0.928 & 17 & 44 \\
-    + conservative vetoes & \textbf{0.957} & \textbf{0.918} & \textbf{0.937} & \textbf{9} & \textbf{42} \\
+    Original reconstruction & 0.907 & 0.880 & 0.893 & 20 & 48 \\
+    + foreground mask, fragment mean, 4D motion & 0.939 & 0.917 & 0.928 & 17 & 44 \\
+    + conservative link vetoes & \textbf{0.957} & \textbf{0.918} & \textbf{0.937} & \textbf{9} & \textbf{42} \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
 The vetoes are not a second tracker layered on top of the Kalman filter.  The Kalman
-state already contains centre, width, and height; the earlier ILP call discarded the
+state already contains center, width, and height; the earlier ILP call discarded the
 size dimensions.  The revised system uses the full four-dimensional Mahalanobis
 evidence and additionally refuses links whose absolute evidence is implausible.  This
 second step is necessary because the ILP's start and end penalties can otherwise make
 even a very poor link cheaper than splitting two central fragments.
 
-A manual audit found nine wrong selected fragment joins.  Unlike the removed
+A manual audit found nine wrong selected fragment joins across six videos.  Unlike the removed
 geometric failures, they concentrate at crossings, visually near-identical sails,
 and crops containing both competitors.  Their implications and the unsuccessful
 global-margin abstention experiment are discussed in \Cref{sec:discussion}.

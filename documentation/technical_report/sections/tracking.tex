@@ -10,7 +10,7 @@ Windsurfing sails are large, saturated, and often visually distinctive even when
 rider occupies only a few pixels.  For each detection crop we build a descriptor from
 a joint histogram of the chromatic Lab channels $(a,b)$, a circular hue histogram,
 and a lower-weight luminance histogram.  Saturation weighting emphasizes colored sail
-panels over grey water, spray, and haze.  Three vertical bands preserve coarse color
+panels over gray water, spray, and haze.  Three vertical bands preserve coarse color
 layout, and a fourth block represents the complete crop.  Each block is L1-normalized
 and square-root mapped before the concatenated vector is L2-normalized, yielding a
 bounded Hellinger-style distance.
@@ -19,7 +19,7 @@ The descriptor first removes likely background using a border-derived Lab model.
 smoothness gate identifies water-like pixels, and only background components connected
 to the crop border are removed.  Morphological cleanup and a minimum-mask fallback
 avoid empty descriptors.  This foreground mask is important: an earlier inactive code
-path used a fixed centre rectangle, allowing water and overlapping sails to dilute
+path used a fixed center rectangle, allowing water and overlapping sails to dilute
 the intended cue.
 
 \begin{figure}[t]
@@ -32,16 +32,27 @@ the intended cue.
   \label{fig:tracking-sail-color}
 \end{figure}
 
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.82\textwidth]{tracking-offline-global-association.png}
+  \caption{Complete-video evidence supports global tracklet association.  Later
+  stable observations distinguish locally ambiguous successors; the optimizer then
+  chooses a compatible pairing jointly.  Start, end, discard, and gap costs are
+  omitted from the conceptual diagram.}
+  \label{fig:tracking-offline-association}
+\end{figure*}
+
 For a tracklet, all observation embeddings are averaged into a whole-fragment
 prototype.  This replaced endpoint-biased exponential averages, which emphasized the
 last crop of the earlier fragment and first crop of the later fragment---exactly the
 frames most often contaminated during a crossing.  Given descriptor distance $d$, the
 current heuristic match score is
 \begin{equation}
- p_a=\operatorname{clip}_{[10^{-6},1-10^{-6}]}(1-11.630d).
+ s_a=\operatorname{clip}_{[10^{-6},1-10^{-6}]}(1-11.630d).
  \label{eq:appearance}
 \end{equation}
-It is a tuned association score, not a calibrated posterior probability.
+It is a tuned similarity score, not a calibrated posterior probability; the graph
+uses $C^{\mathrm{appearance}}=-\log s_a$.
 
 \subsection{Conservative local tracklets}
 
@@ -78,9 +89,10 @@ Every candidate receives
  \end{aligned}
  \label{eq:edge-cost}
 \end{equation}
-Motion is the mean negative log score from the first two observations of $T_j$;
-appearance uses the whole-fragment prototypes; and the gap term increases with the
-number of missing frames.
+For each of the first two observations of $T_j$, the predicted Kalman state gives
+squared Mahalanobis distance $d^2$ over $(c_x,c_y,w,h)$.  Motion cost is the mean
+$-\log\Pr(\chi^2_4\geq d^2)$; appearance uses the whole-fragment prototypes; and the
+gap term increases with the number of missing frames.
 
 The graph now applies absolute plausibility vetoes before optimization.  Edges are
 removed when motion NLL exceeds 8, or when endpoint box area or aspect ratio changes
@@ -89,16 +101,6 @@ ratios supplement it with an interpretable discontinuity bound.  These rules imp
 abstention at the evidence boundary.  They are necessary because a central fragment's
 start and end penalties can otherwise make even poor finite evidence cheaper than
 leaving two trajectories separate.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{tracking-offline-global-association.png}
-  \caption{Complete-video evidence supports global tracklet association.  Later
-  stable observations distinguish locally ambiguous successors; the optimizer then
-  chooses a compatible pairing jointly.  Start, end, discard, and gap costs are
-  omitted from the conceptual diagram.}
-  \label{fig:tracking-offline-association}
-\end{figure}
 
 \subsection{Global path optimization}
 

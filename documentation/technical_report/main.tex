@@ -10,6 +10,7 @@
 \usepackage{amsmath}
 \usepackage{siunitx}
 \usepackage{xcolor}
+\usepackage{xurl}
 \usepackage{hyperref}
 \usepackage{cleveref}
 \usepackage{caption}
@@ -37,11 +38,15 @@
 \graphicspath{{figures/}{../}{../../frontend/public/}}
 
 \title{\vspace{-8mm}\textbf{Identity-Consistent Analysis of Long-Shot Windsurfing Video}\\
-\large An Offline System for Tracking and Rider-Relative Stabilization}
-\author{Bertil Braun\\\href{mailto:contact@bertil-braun.de}{contact@bertil-braun.de}}
+\large A Domain-Specific Offline Tracking System}
+\author{Bertil Braun\\
+\href{mailto:contact@bertil-braun.de}{contact@bertil-braun.de}\quad
+\href{https://github.com/BertilBraun/Windsurf-Analysis}{github.com/BertilBraun/Windsurf-Analysis}}
 \date{}
 
 \begin{document}
+\twocolumn[
+\begin{@twocolumnfalse}
 \maketitle
 \vspace{-5mm}
 
@@ -56,14 +61,19 @@ uses two rig keypoints to drive a stable virtual camera.  The tracking stage is
 evaluated on 21 manually reconstructed development videos containing 41,004 retained
 observations.  On this fixed-observation protocol, the production system achieves
 0.957 pairwise precision, 0.918 recall, and 0.937 F1, compared with 0.792 F1 for
-OC-SORT and 0.828 for BoT-SORT.  It reduces fragmentation excess to 42, from 845 and
-244 respectively, while retaining nine contaminated tracks.  Ablations and a visual
-audit show that conservative geometric vetoes remove many catastrophic false links;
-the remaining failures concentrate at crossings and visually near-duplicate sails.
-The result is an applied computer-vision system report: tracking receives comparative
-quantitative evaluation, while pose-based stabilization is documented as the
-downstream system output and evaluated qualitatively.
+OC-SORT and 0.828 for BoT-SORT.  Relative to OC-SORT, it reduces fragmentation excess
+from 845 to 42 while retaining the same absolute number of contaminated tracks
+(nine); 9 of 95 production outputs are contaminated.  The remaining false links
+concentrate at crossings and visually near-duplicate sails.  Because the observations
+were selected and smoothed using gold identities, these results are in-sample
+engineering diagnostics rather than a clean end-to-end MOT comparison.
 \end{abstract}
+\vspace{0.5em}
+\noindent\textbf{Keywords:} multi-object tracking; offline data association; camera
+motion compensation; sports video; windsurfing; pose-guided framing
+\vspace{1em}
+\end{@twocolumnfalse}
+]
 
 \input{sections/introduction}
 \input{sections/problem}
@@ -75,13 +85,9 @@ downstream system output and evaluated qualitatively.
 \input{sections/discussion}
 \input{sections/conclusion}
 
-\appendix
-\input{sections/appendix}
-
-\balance
 \begin{thebibliography}{99}
-\scriptsize
-\setlength{\itemsep}{-0.5em}
+\footnotesize
+\setlength{\itemsep}{-0.2em}
 
 \bibitem{sort}
 A. Bewley, Z. Ge, L. Ott, F. Ramos, and B. Upcroft,
@@ -120,5 +126,10 @@ R. E. Kalman, ``A New Approach to Linear Filtering and Prediction Problems,''
 H. E. Rauch, F. Tung, and C. T. Striebel,
 ``Maximum Likelihood Estimates of Linear Dynamic Systems,'' \emph{AIAA Journal}, 1965.
 \end{thebibliography}
+
+\clearpage
+\appendix
+\balance
+\input{sections/appendix}
 
 \end{document}

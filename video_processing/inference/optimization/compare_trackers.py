@@ -231,6 +231,7 @@ def _write_checkpoint(checkpoint_path: Path, results: list[VideoResult]) -> None
 
 def _write_markdown(output_path: Path, report: BenchmarkReport) -> None:
     production = next(result for result in report.aggregate if result.tracker == BenchmarkTracker.PRODUCTION)
+    oc_sort = next(result for result in report.aggregate if result.tracker == BenchmarkTracker.OC_SORT)
     contaminated_production_videos = sum(
         result.tracker == BenchmarkTracker.PRODUCTION and result.contaminated_track_count > 0
         for result in report.per_video
@@ -248,8 +249,8 @@ def _write_markdown(output_path: Path, report: BenchmarkReport) -> None:
         '',
         '## Aggregate results',
         '',
-        '| Tracker | Coverage | Pair precision (micro) | Pair recall (micro) | Pair F1 (micro / macro) | Contaminated tracks | Fragmentation excess | Exact videos | Runtime |',
-        '|---|---:|---:|---:|---:|---:|---:|---:|---:|',
+        '| Tracker | Coverage | Pair precision (micro) | Pair recall (micro) | Pair F1 (micro / macro) | Contaminated tracks | Contaminated observations | Fragmentation excess | Exact videos | Runtime |',
+        '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|',
     ]
     for result in report.aggregate:
         lines.append(
@@ -257,7 +258,8 @@ def _write_markdown(output_path: Path, report: BenchmarkReport) -> None:
             f'{result.pairwise_recall_micro:.3f} | {result.pairwise_f1_micro:.3f} / '
             f'{result.pairwise_f1_macro:.3f} | {result.contaminated_track_count}/{result.emitted_track_count} '
             f'({result.contaminated_track_rate:.1%}) | '
-            f'{result.fragmentation_excess} | {result.exact_video_count}/{result.video_count} | '
+            f'{result.contaminated_observation_count} | {result.fragmentation_excess} | '
+            f'{result.exact_video_count}/{result.video_count} | '
             f'{result.runtime_seconds:.1f} s |'
         )
     lines.extend(
@@ -268,24 +270,33 @@ def _write_markdown(output_path: Path, report: BenchmarkReport) -> None:
             '- Pairwise precision/recall/F1 compare whether every pair of kept observations is assigned to the same identity. Missing outputs become unique singleton predictions.',
             '- Micro pair metrics pool pair counts and therefore weight long identities quadratically. Macro metrics average the per-video scores.',
             '- A contaminated predicted track contains observations from more than one gold identity. This is the catastrophic false-merge error for the application.',
-            '- Fragmentation excess is the sum, over gold identities, of the number of predicted pieces beyond one.',
+            '- Contaminated observations counts every observation in a contaminated track; it does not distinguish a brief intrusion from a wholly wrong trajectory.',
+            '- Fragmentation excess is the sum, over gold identities, of the number of predicted pieces beyond one, including pieces shared through a contaminated prediction.',
             '- An exact video has full kept-observation coverage and a partition identical to gold, up to permutation of track labels.',
             '- Rejection metrics treat an omitted observation as rejected and gold identity 0 as the manually marked discard class. Tracker numeric label 0 has no special meaning.',
             '',
             '## Findings',
             '',
-            '- The production pipeline has the strongest overall association F1, much less fragmentation, and the most exact videos.',
+            (
+                f'- Production reduces fragmentation from {oc_sort.fragmentation_excess} to '
+                f'{production.fragmentation_excess} relative to OC-SORT while retaining the same absolute '
+                f'number of contaminated tracks. Its contaminated-output fraction is higher: '
+                f'{production.contaminated_track_count}/{production.emitted_track_count} versus '
+                f'{oc_sort.contaminated_track_count}/{oc_sort.emitted_track_count}.'
+            ),
             f'- It does not satisfy the application’s nominal zero-false-merge requirement on this reconstruction: {production.contaminated_track_count} of {production.emitted_track_count} emitted tracks are identity-contaminated, spanning {contaminated_production_videos} videos.',
             '- OC-SORT is conservative: it has the best pairwise precision but fragments the 88 gold identities into hundreds of pieces.',
             '- BoT-SORT reduces fragmentation relative to OC-SORT but still trails the production pipeline on recall, F1, and exact-video rate.',
             '- These results document the intended offline-association trade-off—far fewer splits at the cost of more false merges—but do not support a claim of uniformly superior or near-perfect tracking.',
             '',
-            '## Reproduction',
+            '## Artifact status',
             '',
-            'From the repository root, install `requirements.txt` and run:',
+            'The annotated videos and gold reconstruction files are not distributed. The committed JSON and CSV are therefore an auditable result snapshot rather than an independently rerunnable artifact.',
+            '',
+            'With the private annotated data available locally, run:',
             '',
             '```powershell',
-            'python -m video_processing.inference.optimization.compare_trackers --no-resume',
+            "python -m video_processing.inference.optimization.compare_trackers --golden-dir '<annotated-data-directory>' --no-resume",
             '```',
             '',
             f'The pinned BoxMOT distribution is {report.boxmot_declared_version}; its package-level version string reports {report.boxmot_reported_version}. A checkpoint is written under `tmp/` after every completed video-method pair.',
@@ -302,7 +313,7 @@ def _write_markdown(output_path: Path, report: BenchmarkReport) -> None:
             '',
             '- This is not a detector benchmark and does not support MOTA or HOTA claims. Every method receives the same saved observations.',
             '- The manually curated files are the development set. The production tracker configuration is frozen for this run, but the provenance of its numerical tuning is uncertain.',
-            '- The saved non-interpolated boxes were emitted after gold-track reconstruction and RTS smoothing. The benchmark therefore measures association conditional on preselected, gold-derived smoothed observations.',
+            '- The saved non-interpolated boxes were emitted after gold-track reconstruction and RTS smoothing within gold identities. This leaks target-partition information into the association motion cue.',
             '- The historical preprocessor fragments are not preserved. The production pipeline starts from singleton saved observations and reruns preprocessing before ILP association.',
             '- BoT-SORT is run without ReID because its standard appearance model is pedestrian-specific. It retains its own ECC camera-motion compensation.',
             '- Runtime is wall-clock method execution on this machine. OC-SORT needs no video decode; BoT-SORT includes video decode and ECC GMC; production includes masked stabilization and association but excludes initial crop embedding extraction. Runtime values are therefore operational diagnostics, not a speed ranking.',
@@ -383,7 +394,7 @@ def main() -> None:
         boxmot_declared_version=installed_boxmot_version,
         boxmot_reported_version=str(boxmot.__version__),
         development_set_warning='In-sample/development-set comparison. Algorithm design may have been informed by these videos, and the provenance of ILP parameter tuning is uncertain.',
-        observation_provenance_warning='Saved source observations were preselected and their boxes were RTS-smoothed after manual identity reconstruction; results are conditional association scores, not end-to-end MOT scores.',
+        observation_provenance_warning='Saved source observations were preselected and their boxes were RTS-smoothed within gold identity trajectories. This leaks cross-frame identity information into the motion cue. Results are in-sample engineering diagnostics, not a clean comparative tracker benchmark or end-to-end MOT score.',
         tracker_configurations=_tracker_configurations(),
         per_video=results,
         aggregate=aggregates,

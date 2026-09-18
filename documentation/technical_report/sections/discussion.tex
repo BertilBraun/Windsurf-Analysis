@@ -3,19 +3,12 @@
 
 \subsection{What the comparison establishes}
 
-The benchmark supports a narrow systems claim.  On the fixed observations in this
-development set, the offline pipeline occupies a substantially better
-continuity--contamination operating point than the evaluated OC-SORT and BoT-SORT
-configurations.  This is useful because the final product requires long identity
-paths rather than a large collection of locally plausible fragments.  It is not a
-claim of general MOT superiority: the observation set is domain-specific, the
-evaluation is in-sample, and detector recall is outside the protocol.
-
-The results also make the asymmetric objective concrete.  OC-SORT has the highest
-pair precision, yet its 845 excess fragments make it operationally unsuitable.  The
-production system reduces that count to 42, but the remaining nine contaminated
-tracks are still serious errors.  Aggregate F1 is therefore a diagnostic rather
-than an acceptance criterion; final trajectories remain subject to review.
+The benchmark quantifies the intended trade-off.  OC-SORT has the highest pair
+precision and nine contaminated outputs, but 845 excess fragments make its result
+operationally unsuitable.  Production also has nine contaminated outputs---a larger
+fraction of its 95 outputs---while reducing fragmentation to 42.  Aggregate F1 is
+therefore a diagnostic rather than an acceptance criterion; the product still
+requires complete-trajectory review.
 
 \subsection{Residual failure mode}
 
@@ -39,11 +32,11 @@ that extension unimplemented rather than tuning a development-set-specific margi
 
 The manually reconstructed videos are the development set, not a held-out test set.
 The current tracker was frozen for the reported comparison, but the provenance of
-the older numerical ILP tuning is incomplete.  Moreover, saved observations were
-selected during manual reconstruction and their boxes were smoothed using the gold
-trajectories.  The study consequently evaluates association conditional on a useful
-set of boxes; it does not measure end-to-end detector performance and should not be
-read as a MOTA or HOTA result.
+the older numerical ILP tuning is incomplete.  More importantly, saved observations
+were selected during manual reconstruction and their boxes were smoothed within gold
+trajectories.  This leaks cross-frame identity information into the motion signal.
+The study consequently does not provide a clean comparative tracker benchmark,
+measure end-to-end detector performance, or support MOTA or HOTA claims.
 
 The baseline configurations are also intentionally pragmatic.  BoT-SORT retains ECC
 camera compensation but omits its pedestrian ReID model, whose learned representation

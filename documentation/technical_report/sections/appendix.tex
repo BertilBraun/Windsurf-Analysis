@@ -3,8 +3,7 @@
 
 \subsection{Evaluation reconstruction}
 
-The benchmark uses the 21 manually reconstructed development videos checked into the
-project's evaluation manifest.  It contains 41,079 non-interpolated saved
+The benchmark uses 21 manually reconstructed development videos.  It contains 41,079 non-interpolated saved
 observations: 41,004 assigned to 88 retained identities and 75 assigned to the
 discard class.  Saved boxes were RTS-smoothed after manual identity reconstruction.
 For the production method, the historical intermediate tracklets were unavailable;
@@ -12,15 +11,14 @@ the evaluator therefore starts from singleton saved observations, reruns the cur
 preprocessor, and then runs the current ILP tracker.  A missing method output is
 scored as a unique singleton rather than omitted from the pair metrics.
 
-The comparison is reproduced from the repository root with:
-\begin{flushleft}
-\footnotesize\ttfamily
-python -m video\_processing.inference.\\
-optimization.compare\_trackers --no-resume
-\end{flushleft}
-Machine-readable aggregate and per-video results are stored under
-\texttt{documentation/tracker\_evaluation/}.  The BoxMOT distribution used for the
-run is 13.0.17; its package-level version string reports 13.0.16.
+The evaluated implementation and result files correspond to
+\href{https://github.com/BertilBraun/Windsurf-Analysis/tree/a76c2bd774f739e40e1f15a80574ca99bb34d236}{commit \texttt{a76c2bd}}.
+Aggregate JSON, per-video CSV, and protocol notes are stored under
+\href{https://github.com/BertilBraun/Windsurf-Analysis/tree/a76c2bd774f739e40e1f15a80574ca99bb34d236/documentation/tracker_evaluation}{\texttt{documentation/tracker\_evaluation/}}.
+The annotated videos and gold reconstruction files are not distributed, so these
+files form an auditable result snapshot rather than an independently rerunnable
+artifact.  BoxMOT distribution 13.0.17 was used; its package-level version string
+reports 13.0.16.
 
 \subsection{Production configuration}
 
@@ -37,6 +35,13 @@ detections may be discarded, with first-detection cost 36.4497 and growth factor
 1.6423.  These values are reported for reconstruction, not as independently
 validated universal hyperparameters.
 
+For normalized fragment-end center $(x,y)$ and border margin $m=0.1$, define
+$f=\min(1,\max(f_x,f_y))$, where
+$f_x=\max(0,m-x,x-(1-m))/m$ and likewise for $f_y$.  Start and end costs are
+$w(1-f/2)$: full cost in the central 80\% of the image and half cost at the border.
+Sensitivity to the three-second horizon and the motion, area, and aspect-ratio veto
+thresholds was not measured.
+
 \subsection{Baseline configuration}
 
 OC-SORT uses the frozen BoxMOT defaults recorded by the evaluator: confidence
@@ -46,3 +51,20 @@ $Q_s=0.0001$.  BoT-SORT uses ECC global-motion compensation with ReID disabled;
 its high, low, and new-track thresholds are 0.5, 0.1, and 0.6, its buffer is 30,
 its match threshold is 0.8, and score fusion is disabled.  All methods receive the
 same fixed observations.
+
+\subsection{Detector checkpoint}
+
+The supporting detector is YOLO11m-pose initialized from
+\texttt{yolo11m-pose.pt} and trained for 700 epochs at $640\times640$ input
+resolution with deterministic seed 0.  The released checkpoint is
+\path{video_processing/inference/weights/yolo_models/windsurfing_pose/best.pt},
+SHA-256 \texttt{4c475caeba9ede3c...ac093ca9369}.  The image-level development split
+contains 1,123 training and 56 validation images.
+
+\subsection{Audited wrong links}
+
+The final link audit found nine wrong selected links in six videos: one each in
+\texttt{Bertil1}, \texttt{input7}, and \texttt{MVI\_5332}; two each in
+\texttt{MVI\_5346}, \texttt{MVI\_5348}, and
+\texttt{ride mit den booooyyyys}.  This count concerns selected fragment edges and
+is distinct from the number of contaminated output tracks or observations.

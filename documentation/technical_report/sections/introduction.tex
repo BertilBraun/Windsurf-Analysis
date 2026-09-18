@@ -14,7 +14,7 @@ online trackers are designed for causal decisions and balanced benchmark metrics
 this project instead has the complete recording available and assigns a much larger
 cost to false merging than to fragmentation.
 
-We describe the resulting end-to-end computer-vision system.  A manually trained
+We describe the resulting end-to-end computer-vision system.  A custom-trained
 detector supplies surfer boxes and two rig landmarks.  Masked global-motion estimation
 separates camera pan from target motion.  Conservative online association creates
 high-purity tracklets, after which an offline integer program links compatible
@@ -34,8 +34,3 @@ The contributions are:
   \item a fixed-observation evaluation on 21 manually reconstructed videos, including
   OC-SORT and BoT-SORT comparisons, staged ablations, and a link-level failure audit.
 \end{itemize}
-
-The document is best read as an applied systems paper and technical report.  The
-tracking subsystem has quantitative comparative evidence.  Detection supplies the
-observation boundary, and pose stabilization demonstrates the downstream system
-contract, but neither is presented as a general benchmark contribution.
