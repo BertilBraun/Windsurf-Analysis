@@ -1,9 +1,9 @@
-\documentclass[11pt,a4paper]{article}
+\documentclass[10pt,twocolumn,a4paper]{article}
 
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage{microtype}
-\usepackage[margin=24mm]{geometry}
+\usepackage[a4paper,top=18mm,bottom=20mm,left=17mm,right=17mm,columnsep=6mm]{geometry}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{array}
@@ -14,7 +14,8 @@
 \usepackage{cleveref}
 \usepackage{caption}
 \usepackage{subcaption}
-\usepackage{float}
+\usepackage{enumitem}
+\usepackage{balance}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,fit,calc}
 
@@ -22,60 +23,102 @@
 \definecolor{gybeorange}{HTML}{E67E22}
 \definecolor{gybered}{HTML}{C0392B}
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\setlist{nosep,leftmargin=*}
+\captionsetup{font=small,labelfont=bf}
 \hypersetup{
   colorlinks=true,
   linkcolor=gybeblue,
   urlcolor=gybeblue,
   citecolor=gybeblue,
-  pdftitle={Reliable Offline Tracking for Long-Shot Windsurfing Video}
+  pdftitle={Identity-Consistent Analysis of Long-Shot Windsurfing Video},
+  pdfauthor={Bertil Braun}
 }
 
 \graphicspath{{figures/}{../}{../../frontend/public/}}
 
-\title{Reliable Offline Tracking for Long-Shot Windsurfing Video\\
-\large Domain-specific pose, appearance, and global association}
+\title{\vspace{-8mm}\textbf{Identity-Consistent Analysis of Long-Shot Windsurfing Video}\\
+\large An Offline System for Tracking and Rider-Relative Stabilization}
 \author{Bertil Braun\\\href{mailto:contact@bertil-braun.de}{contact@bertil-braun.de}}
 \date{}
 
 \begin{document}
 \maketitle
+\vspace{-5mm}
 
 \begin{abstract}
-This report describes the engineering decisions behind a system that turns long-shot,
-shore-recorded windsurfing footage into identity-consistent rider tracks and stable
-focused views. The central challenge is not object count but error tolerance: a single
-identity switch can contaminate the extracted video of a rider. Large camera pans,
-small targets, prolonged co-visibility, and occlusions make generic online tracking a
-poor fit. Tracking therefore combines conservative local stitching, sail-color
-appearance descriptors, camera-compensated motion, and offline global tracklet linking.
-Once identity is established, two rig keypoints supply a stable crop anchor and
-rig-relative scale cue for the focused view.
+Long-shot windsurfing video combines small targets, large camera pans, prolonged
+overlaps, and rapidly changing backgrounds.  The desired output is not a generic MOT
+trace but a separate, stable rider-relative video for each surfer; one false identity
+merge can invalidate an otherwise useful result.  We present an offline analysis
+system that detects surfers, forms conservative local tracklets, links them globally
+with camera-compensated motion and a foreground-masked sail-color descriptor, and
+uses two rig keypoints to drive a stable virtual camera.  The tracking stage is
+evaluated on 21 manually reconstructed development videos containing 41,004 retained
+observations.  On this fixed-observation protocol, the production system achieves
+0.957 pairwise precision, 0.918 recall, and 0.937 F1, compared with 0.792 F1 for
+OC-SORT and 0.828 for BoT-SORT.  It reduces fragmentation excess to 42, from 845 and
+244 respectively, while retaining nine contaminated tracks.  Ablations and a visual
+audit show that conservative geometric vetoes remove many catastrophic false links;
+the remaining failures concentrate at crossings and visually near-duplicate sails.
+The result is an applied computer-vision system report: tracking receives comparative
+quantitative evaluation, while pose-based stabilization is documented as the
+downstream system output and evaluated qualitatively.
 \end{abstract}
 
+\input{sections/introduction}
 \input{sections/problem}
+\input{sections/related_work}
+\input{sections/system_overview}
 \input{sections/tracking}
 \input{sections/pose}
 \input{sections/evaluation}
-\input{sections/player}
+\input{sections/discussion}
 \input{sections/conclusion}
 
-\begin{thebibliography}{9}
-\footnotesize
-\setlength{\itemsep}{-0.35em}
+\appendix
+\input{sections/appendix}
+
+\balance
+\begin{thebibliography}{99}
+\scriptsize
+\setlength{\itemsep}{-0.5em}
+
+\bibitem{sort}
+A. Bewley, Z. Ge, L. Ott, F. Ramos, and B. Upcroft,
+``Simple Online and Realtime Tracking,'' \emph{ICIP}, 2016.
+\bibitem{deepsort}
+N. Wojke, A. Bewley, and D. Paulus,
+``Simple Online and Realtime Tracking with a Deep Association Metric,'' \emph{ICIP}, 2017.
+\bibitem{bytetrack}
+Y. Zhang et al., ``ByteTrack: Multi-Object Tracking by Associating Every Detection Box,''
+\emph{ECCV}, 2022.
 \bibitem{ocsort}
 J. Cao, J. Pang, X. Weng, R. Khirodkar, and K. Kitani,
 ``Observation-Centric SORT: Rethinking SORT for Robust Multi-Object Tracking,''
 \emph{CVPR}, 2023.
-
 \bibitem{botsort}
 N. Aharon, R. Orfaig, and B.-Z. Bobrovsky,
 ``BoT-SORT: Robust Associations Multi-Pedestrian Tracking,''
 \emph{arXiv:2206.14651}, 2022.
-
-\bibitem{webcodecs}
-W3C Media Working Group,
-``WebCodecs,'' W3C Working Draft,
-\href{https://www.w3.org/TR/webcodecs/}{w3.org/TR/webcodecs}.
+\bibitem{deepocsort}
+G. Maggiolino, A. Ahmad, J. Cao, and K. Kitani,
+``Deep OC-SORT: Multi-Pedestrian Tracking by Adaptive Re-Identification,''
+\emph{ICIP}, 2023.
+\bibitem{networkflow}
+L. Zhang, Y. Li, and R. Nevatia,
+``Global Data Association for Multi-Object Tracking Using Network Flows,'' \emph{CVPR}, 2008.
+\bibitem{globalobjective}
+S. Li, Y. Kong, and H. Rezatofighi,
+``Learning of Global Objective for Network Flow in Multi-Object Tracking,'' \emph{CVPR}, 2022.
+\bibitem{hotametric}
+J. Luiten et al., ``HOTA: A Higher Order Metric for Evaluating Multi-Object Tracking,''
+\emph{IJCV}, 2021.
+\bibitem{kalman}
+R. E. Kalman, ``A New Approach to Linear Filtering and Prediction Problems,''
+\emph{Journal of Basic Engineering}, 1960.
+\bibitem{rts}
+H. E. Rauch, F. Tung, and C. T. Striebel,
+``Maximum Likelihood Estimates of Linear Dynamic Systems,'' \emph{AIAA Journal}, 1965.
 \end{thebibliography}
 
 \end{document}

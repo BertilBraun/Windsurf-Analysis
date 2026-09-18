@@ -1,76 +1,47 @@
-\section{Problem Definition and Operating Regime}
+\section{Problem Regime and Requirements}
 \label{sec:problem}
 
-\subsection{The useful output is an identity-consistent video}
+The input is a complete windsurfing recording captured from shore.  A scene usually
+contains only a handful of surfers, but each target can be small and several sails may
+remain close or overlap for seconds.  The camera follows the action with pans of about
+\SI{90}{\degree} in demanding examples, sometimes more.  Consequently almost every
+background feature moves in image coordinates, and newly revealed portions of the
+scene may share no features with earlier frames.
 
-The input is long-shot windsurfing footage recorded from shore.  A typical scene
-contains only a handful of surfers, so detection density is modest compared with
-crowded pedestrian tracking.  The difficulty lies elsewhere: the subjects are small,
-several sails can remain close or overlap for extended periods, and a rider may be
-partly or fully occluded before reappearing.  Meanwhile, the operator follows the
-action with large pans---about \SI{90}{\degree} in demanding examples, and sometimes
-more.  Almost every background feature then moves in image coordinates, while the
-visible background itself changes over the course of the shot.
-
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
-  \includegraphics[width=\linewidth]{problem-camera-pan-scale-candidates.png}
-  \caption{Representative frames from one project sequence at 6, 36, and
-  \SI{84}{\second}.  The cyan annotation follows the same red-and-white sail as
-  the camera moves from shoreline to open water; its image height changes from
-  approximately $0.52H$ to $0.13H$.  At \SI{84}{\second}, three other surfers
-  (orange) are visible alongside it as plausible association candidates.  The
-  composite illustrates changing background, scale variation, and identity
-  ambiguity within one shot.}
+  \includegraphics[width=0.96\textwidth]{problem-camera-pan-scale-candidates.png}
+  \caption{Operating regime in one recording at 6, 36, and \SI{84}{\second}.  Cyan
+  follows the same red-and-white sail while the background and camera direction
+  change; the target height drops from approximately $0.52H$ to $0.13H$.  Orange
+  marks plausible competing surfers.  The example combines scale change, camera
+  motion, and identity ambiguity within one continuous shot.}
   \label{fig:problem-operating-regime}
-\end{figure}
+\end{figure*}
 
-The desired result is not merely a plausible bounding box in most frames.  It is a
-separate, continuous trajectory for each physical surfer, suitable for extracting a
-focused rider video.  If a track changes identity once, the resulting video jumps to
-another rider and can no longer serve its purpose.  Identity consistency is therefore
-the primary objective; smooth localization and high detection recall matter only
-after that constraint is met.
+The desired result is one continuous, dense trajectory per physical surfer from which
+a focused video can be rendered.  This gives three requirements.
 
-We consequently treat association errors asymmetrically.  A missed link produces two
-fragments that can be inspected or joined later.  A false link contaminates an
-otherwise valid trajectory and may invalidate the complete extracted sequence.  In
-ambiguous cases, fragmentation or abstention is preferable to an unjustified merge.
-This is a design requirement---effectively zero tolerance for identity switches---not
-a claim that the present system achieves perfect tracking on arbitrary footage.
+\paragraph{Identity is the primary invariant.}
+A track that switches rider once is not partly correct from the user's perspective:
+the extracted sequence is contaminated.  Localization smoothness and recall matter
+only after identity is preserved.
 
-\subsection{Why ordinary online tracking is a poor fit}
+\paragraph{Association errors are asymmetric.}
+A missed link creates fragments that remain inspectable.  A false link combines two
+identities and is difficult to detect downstream.  The system should therefore
+abstain when evidence is insufficient.  ``Near-zero false merges'' is the design
+target, not a claim that the implementation achieves perfect tracking.
 
-General-purpose multi-object trackers commonly process frames causally: they predict
-each active track into the next frame, assign the current detections, and carry that
-decision forward.  This is attractive for real-time operation, but it commits at the
-moment evidence is weakest.  During a crossing or occlusion, two continuations can be
-equally plausible from past motion alone; evidence that appears several seconds later
-cannot undo an early identity switch reliably.
+\paragraph{The complete recording is available.}
+There is no real-time constraint.  Causal processing is useful for forming local
+tracklets, but ambiguous choices need not be finalized before later evidence arrives.
+This motivates a two-stage design: conservative local association followed by global
+offline linking.
 
-Raw image-space motion is also a misleading cue in this regime.  During a pan, a
-stationary background point and every surfer receive a large common displacement.
-The residual motion of an individual surfer may be much smaller than this camera
-component.  Association therefore depends on estimating global camera motion and
-applying it to the motion model before comparing a prediction with a detection.  The
-production pipeline makes this coupling explicit: it estimates masked frame-to-frame
-transforms while excluding detected surfers, then passes those transforms to both the
-greedy tracklet builder and the global linker
-(\texttt{video\_processing/main\_tracking.py}).
-
-There is no real-time requirement for the final analysis: the complete recording is
-available before a focused video is generated.  The system uses that freedom in two
-stages.  A conservative causal pass accepts only clear local matches and leaves
-ambiguous observations as separate tracklets.  An offline integer programming pass
-then evaluates feasible links between those tracklets jointly, using evidence on both
-sides of a gap.  Its graph includes the option to begin or end a trajectory instead of
-forcing a link, and can discard very short suspected false-positive fragments
-in the production tracking implementation.  Thus future evidence informs
-association without weakening the conservative local decisions that protect track
-purity.
-
-The problem is therefore narrower than general multi-object tracking, but its loss
-function is harsher: few objects, difficult camera motion, long periods of ambiguity,
-and an output that is useful only while identity remains intact.  The remainder of
-this report explains how pose, sail-specific appearance, camera compensation, and
-offline global association were chosen around that operating regime.
+Large camera motion makes raw image displacement a poor association cue.  The common
+background motion must first be estimated and applied to the state prediction.  Long
+gaps remain intrinsically ambiguous: a later fragment may be a reappearance or a
+different surfer entering after the earlier track ended.  Appearance is therefore
+required alongside motion, but the representation should describe the visible sail
+rather than a generic pedestrian.

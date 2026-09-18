@@ -1,0 +1,41 @@
+\section{Introduction}
+
+Shore-recorded windsurfing video is visually rich but difficult to repurpose into a
+focused view of one athlete.  The camera follows the action with large pans, riders
+occupy few pixels, rigs overlap for extended periods, and an athlete may disappear
+behind another sail before returning against a different background.  A useful system
+must do more than draw plausible boxes: it must preserve one physical identity long
+enough to produce a stable rider-relative video.
+
+This requirement changes the engineering objective.  A missed association leaves two
+fragments that can be reviewed or joined later.  A false association silently inserts
+another surfer into the output and can invalidate the complete sequence.  Standard
+online trackers are designed for causal decisions and balanced benchmark metrics;
+this project instead has the complete recording available and assigns a much larger
+cost to false merging than to fragmentation.
+
+We describe the resulting end-to-end computer-vision system.  A manually trained
+detector supplies surfer boxes and two rig landmarks.  Masked global-motion estimation
+separates camera pan from target motion.  Conservative online association creates
+high-purity tracklets, after which an offline integer program links compatible
+tracklets using motion, temporal gap, and a sail-specific color representation.
+Finally, the rig landmarks define a temporally smoothed anchor and scale for a stable
+virtual camera.
+
+The contributions are:
+\begin{itemize}
+  \item an explicit formulation of long-shot windsurfing analysis around asymmetric
+  identity failure cost and complete-video processing;
+  \item a domain-specific association pipeline combining foreground-masked sail
+  appearance, camera-compensated four-dimensional motion, conservative tracklets,
+  geometric vetoes, and global path optimization;
+  \item a two-landmark rider-relative stabilization signal designed around windsurf
+  rig geometry rather than generic human pose; and
+  \item a fixed-observation evaluation on 21 manually reconstructed videos, including
+  OC-SORT and BoT-SORT comparisons, staged ablations, and a link-level failure audit.
+\end{itemize}
+
+The document is best read as an applied systems paper and technical report.  The
+tracking subsystem has quantitative comparative evidence.  Detection supplies the
+observation boundary, and pose stabilization demonstrates the downstream system
+contract, but neither is presented as a general benchmark contribution.

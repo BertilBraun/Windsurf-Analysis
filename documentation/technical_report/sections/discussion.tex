@@ -1,0 +1,61 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{What the comparison establishes}
+
+The benchmark supports a narrow systems claim.  On the fixed observations in this
+development set, the offline pipeline occupies a substantially better
+continuity--contamination operating point than the evaluated OC-SORT and BoT-SORT
+configurations.  This is useful because the final product requires long identity
+paths rather than a large collection of locally plausible fragments.  It is not a
+claim of general MOT superiority: the observation set is domain-specific, the
+evaluation is in-sample, and detector recall is outside the protocol.
+
+The results also make the asymmetric objective concrete.  OC-SORT has the highest
+pair precision, yet its 845 excess fragments make it operationally unsuitable.  The
+production system reduces that count to 42, but the remaining nine contaminated
+tracks are still serious errors.  Aggregate F1 is therefore a diagnostic rather
+than an acceptance criterion; final trajectories remain subject to review.
+
+\subsection{Residual failure mode}
+
+The original failure audit separated two kinds of false link.  Geometrically
+implausible joins resulted from bypassed foreground masking, endpoint-biased
+appearance aggregation, and position-only use of a size-aware motion model.  The
+revised evidence and conservative vetoes remove many of these cases.  The remaining
+wrong joins cluster at crossings, visually near-identical sails, and crops containing
+both competitors.  In those cases, time, position, scale, and color can all support
+the wrong continuation.
+
+This residual mode is not well addressed by another global scalar threshold.  An
+abstention experiment removed each chosen edge in turn and compared the alternative
+objective.  The resulting margin did not separate wrong from correct links: useful
+thresholds rejected substantially more correct associations than errors.  A credible
+next step would instead model the interaction explicitly---for example, by detecting
+paired crossings and comparing pre- and post-overlap appearance jointly.  We leave
+that extension unimplemented rather than tuning a development-set-specific margin.
+
+\subsection{Scope and limitations}
+
+The manually reconstructed videos are the development set, not a held-out test set.
+The current tracker was frozen for the reported comparison, but the provenance of
+the older numerical ILP tuning is incomplete.  Moreover, saved observations were
+selected during manual reconstruction and their boxes were smoothed using the gold
+trajectories.  The study consequently evaluates association conditional on a useful
+set of boxes; it does not measure end-to-end detector performance and should not be
+read as a MOTA or HOTA result.
+
+The baseline configurations are also intentionally pragmatic.  BoT-SORT retains ECC
+camera compensation but omits its pedestrian ReID model, whose learned representation
+does not match windsurf sails.  A dedicated learned embedding might improve that
+baseline, but training one would duplicate the domain adaptation that the compact
+color descriptor is meant to avoid.  The pose model is documented as part of the
+system and its geometry is visible in the produced crops, but it has no independent
+cross-video quantitative benchmark.  Its image-level validation split may contain
+nearby frames from the same source video.
+
+Finally, the three-second candidate horizon encodes a practical trade-off.  It limits
+false long-range joins and keeps the graph tractable, but a genuine disappearance
+longer than that remains split.  The system therefore approaches its application
+through conservative automation plus review, not through a guarantee of perfect
+identity recovery.

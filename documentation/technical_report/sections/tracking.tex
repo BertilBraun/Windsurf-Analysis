@@ -1,229 +1,124 @@
-\section{Domain-Specific Offline Multi-Object Tracking}
+\section{Offline Identity Association}
 \label{sec:tracking}
 
-The tracker is organized around the asymmetric error cost introduced in
-\cref{sec:problem}.  The production pipeline therefore separates association into
-two levels:
-\begin{equation}
-  \text{detections}
-  \longrightarrow \text{high-purity local tracklets}
-  \longrightarrow \text{globally optimized trajectories}.
-  \label{eq:tracking-two-stage}
-\end{equation}
-The first stage resolves only short, unambiguous transitions.  The second can inspect
-all tracklets in the recording before deciding which gaps to bridge.
+The tracker converts detections into high-purity local fragments and then into
+globally consistent paths.  The same camera-motion estimates support both stages.
 
-\subsection{Why general-purpose components were not sufficient}
+\subsection{Foreground-masked sail appearance}
 
-The project investigated OC-SORT~\cite{ocsort} and BoT-SORT~\cite{botsort}, including
-variants with camera-motion compensation and appearance features.  It also implemented appearance backends based
-on OSNet person re-identification and a general Vision Transformer.  These are useful
-reference designs, but their usual operating assumptions do not match this narrow
-application particularly well.  A causal tracker must commit while two sails overlap
-or cross; subsequent frames may reveal the correct continuation, but arrive too late
-to prevent the original identity switch.  Moreover, a person-ReID network devotes its
-capacity to cues such as clothing and body appearance.  In long-shot windsurfing
-footage, the person occupies very few pixels, whereas the sail is large, deliberately
-colorful, and often visually distinctive.
+Windsurfing sails are large, saturated, and often visually distinctive even when the
+rider occupies only a few pixels.  For each detection crop we build a descriptor from
+a joint histogram of the chromatic Lab channels $(a,b)$, a circular hue histogram,
+and a lower-weight luminance histogram.  Saturation weighting emphasizes colored sail
+panels over grey water, spray, and haze.  Three vertical bands preserve coarse color
+layout, and a fourth block represents the complete crop.  Each block is L1-normalized
+and square-root mapped before the concatenated vector is L2-normalized, yielding a
+bounded Hellinger-style distance.
 
-This experience does not imply that the custom tracker is generally superior to
-OC-SORT, BoT-SORT, or learned ReID.  The comparison is specific to shore-recorded
-windsurfing, offline processing, and a loss function dominated by even a single false
-merge.  The implemented comparison and optimization tools document that the
-alternatives were implemented and explored, but the current benchmark harness has drifted from the
-production embedding and tracker interfaces.  We therefore avoid a numerical
-outperformance claim until the baselines have been rerun on aligned inputs and
-representative manually verified sequences.
-
-The design record can be summarized as follows. These are observations from project
-footage, not a controlled leaderboard.
-
-\begin{table}[h]
-  \centering
-  \small
-  \begin{tabular}{L{0.23\linewidth}L{0.34\linewidth}L{0.32\linewidth}}
-    \toprule
-    Explored & Observed on this task & Chosen response \\
-    \midrule
-    OC-SORT / BoT-SORT & Causal decisions at crossings could create unacceptable identity switches & Conservative tracklets plus offline linking \\
-    OSNet / generic ViT & Tiny riders offered weak generic identity detail; sails remained visually prominent & Sail-color descriptor \\
-    Bounding-box crop control & Rig rotation changed box centre and height, causing drift and zoom pumping & Two semantic rig keypoints \\
-    Border-based foreground model & Changing backgrounds and sails touching crop edges destabilized the estimate & Fixed centre crop margin \\
-    \bottomrule
-  \end{tabular}
-  \caption{The main experiment-to-design decisions recorded by the project.}
-  \label{tab:design-decisions}
-\end{table}
-
-\subsection{Sail color as an appearance descriptor}
-
-The production appearance backend replaces generic semantic features with a compact
-descriptor tailored to the most stable visible property in this domain: sail color.
-For every detection crop it computes a joint histogram of the chromatic Lab channels
-$(a,b)$, a circular hue histogram, and a lower-weight luminance histogram.  Pixel
-contributions are weighted by $S^\gamma$, where $S$ is HSV saturation, so strongly
-colored sail panels contribute more than grey water, spray, or haze.  Hue votes are
-linearly shared between adjacent circular bins, avoiding a discontinuity at the hue
-wraparound.
-
-Color alone would discard useful coarse layout.  The crop is consequently divided
-into three bands along its vertical axis, with a fourth block covering the complete
-crop.  The Lab, hue, and luminance histograms are concatenated for each block.  Every
-histogram first receives an L1 normalization and square-root mapping; the concatenated
-vector is then L2-normalized.  The resulting representation supports a bounded
-Hellinger-style distance through the cosine similarity of the transformed vectors.
-Tracklet appearance prototypes are exponential moving averages, which reduce the
-effect of individual blurred, partially occluded, or poorly exposed crops.
-
-The offline linker does not treat raw cosine overlap as a match probability.  Because the
-descriptor consists of non-negative histogram features, two different sails can
-still share substantial histogram support, including residual water and background;
-the displayed example has a mean cross-sail cosine overlap of approximately 0.50.
-Production association maps the corresponding distance $d=1-\operatorname{cos}$ to
-the bounded heuristic score
-\begin{equation}
-  p_{\mathrm{appearance}}
-  = \operatorname{clip}_{[10^{-6},\,1-10^{-6}]}(1-11.630d).
-  \label{eq:tracking-appearance-score}
-\end{equation}
-This deliberately turns only very small descriptor distances into strong candidate
-evidence; it is a fitted association score, not a calibrated probability.
+The descriptor first removes likely background using a border-derived Lab model.  A
+smoothness gate identifies water-like pixels, and only background components connected
+to the crop border are removed.  Morphological cleanup and a minimum-mask fallback
+avoid empty descriptors.  This foreground mask is important: an earlier inactive code
+path used a fixed centre rectangle, allowing water and overlapping sails to dilute
+the intended cue.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{tracking-sail-color-similarity.png}
-  \caption{Illustrative production-descriptor comparison on three consecutive
-  samples from one project sequence.  Each matrix cell averages the pairwise
-  appearance scores from \cref{eq:tracking-appearance-score} over the displayed
-  crops; diagonal cells exclude self-comparisons.  Repeated observations of either
-  sail receive strong match scores, whereas all cross-sail comparisons reach the
-  lower clip bound.  These values are neither calibrated probabilities nor benchmark
-  accuracy.  The hand-selected example explains the cue rather than evaluating it.}
+  \caption{Production descriptor on consecutive crops of two sails.  Repeated
+  observations receive high match scores, while the cross-sail entries reach the
+  lower clip bound.  The hand-selected example explains the cue; it is not an
+  accuracy result.}
   \label{fig:tracking-sail-color}
 \end{figure}
 
-The descriptor also records a useful negative result.  An earlier implementation
-estimated foreground from the color statistics of the crop border, using a robust Lab
-background model, a smoothness gate, and connected components.  In the active path
-this is bypassed by a simple mask that removes the outer 10\% of the crop.  The fixed
-centre margin is less ambitious, but removes the descriptor's dependence on a
-background model as the scene changes from beach to water or a sail touches the
-bounding-box edge.  This is an example of domain adaptation through simplification:
-the descriptor need not segment the complete rig if its central, saturated color
-distribution is already sufficiently discriminative.
-
-\subsection{Conservative formation of local tracklets}
-
-Each detection initially forms a one-observation track.  A greedy preprocessor then
-processes frames in temporal order and maintains, for every active tracklet, a
-constant-velocity Kalman state and an exponentially averaged appearance descriptor.
-Before scoring a detection, the Kalman state is advanced through the measured
-frame-to-frame camera transforms.  Thus the expected box centre follows both the
-surfer's estimated velocity and the image displacement induced by camera pan and
-rotation.
-
-Candidate transitions are gated by two probabilities: one derived from the
-position-space Mahalanobis distance of the camera-compensated prediction, and one
-derived from sail-appearance distance.  Strict matches require both cues to pass high
-thresholds and may span at most three frames. Looser candidates can remain eligible
-for up to six frames when supported by one strong cue or both weaker cues. Under the
-clean-first rule, one strict candidate wins even if loose alternatives exist; with no
-strict candidate, exactly one loose candidate may win. Multiple strict candidates,
-multiple loose-only candidates, duplicate proposals to one tracklet, or overlap with
-a newly created track preserve the ambiguity as separate tracklets.
-This deliberate strategy trades recall for purity: uncertainty is preserved for the
-offline stage instead of being hidden inside an irreversible local decision.
-
-\subsection{Camera-compensated candidate costs}
-
-Let $T_i$ and $T_j$ be non-overlapping tracklets with $T_i$ ending before $T_j$
-begins.  The offline tracker creates a directed candidate edge $i\rightarrow j$ only
-when the temporal gap is non-negative and no longer than the configured horizon,
-currently three seconds.  A Kalman filter is fitted once to all detections of $T_i$.
-Its end state is then advanced to the first observations of $T_j$, applying the
-estimated camera transform at every intervening frame.  This matters during long
-pans: without compensation, the shared movement of the entire image would dominate
-the residual motion that distinguishes one surfer from another.
-
-Every candidate receives a weighted negative-log score
+For a tracklet, all observation embeddings are averaged into a whole-fragment
+prototype.  This replaced endpoint-biased exponential averages, which emphasized the
+last crop of the earlier fragment and first crop of the later fragment---exactly the
+frames most often contaminated during a crossing.  Given descriptor distance $d$, the
+current heuristic match score is
 \begin{equation}
-  C_{ij} = w_m C^{\mathrm{motion}}_{ij}
-         + w_a C^{\mathrm{appearance}}_{ij}
-         + w_g C^{\mathrm{gap}}_{ij}.
-  \label{eq:tracking-edge-cost}
+ p_a=\operatorname{clip}_{[10^{-6},1-10^{-6}]}(1-11.630d).
+ \label{eq:appearance}
 \end{equation}
-The motion term averages $-\log p$ scores obtained from the Mahalanobis distance to
-the first two detections of $T_j$.  The appearance term compares an exponentially
-weighted prototype at the end of $T_i$ with a reverse-weighted prototype at the
-beginning of $T_j$ and maps the Hellinger-style distance to a heuristic match score.  The
-gap term is
+It is a tuned association score, not a calibrated posterior probability.
+
+\subsection{Conservative local tracklets}
+
+Each detection initially forms a singleton.  A greedy preprocessor advances a
+constant-velocity Kalman state~\cite{kalman} through the estimated frame-to-frame
+camera transforms and compares the prediction with current detections.  Strict links
+require both motion and appearance evidence; looser links are accepted only when they
+are unique.  Duplicate proposals, competing successors, or multiple plausible
+candidates remain separate.  The local stage therefore sacrifices completeness to
+preserve fragment purity.
+
+This behavior is deliberate.  In the evaluation reconstruction, 598 of 601
+preprocessor fragments are pure with respect to retained gold identities.  The
+dominant catastrophic error is introduced later when two pure fragments are linked
+incorrectly, which makes the offline edge decision the appropriate place for
+additional safeguards.
+
+\subsection{Candidate graph}
+
+For non-overlapping fragments $T_i$ and $T_j$, a directed candidate $i\rightarrow j$
+is created only when the gap is at most three seconds.  A Kalman state fitted to all
+detections of $T_i$ is propagated to the first observations of $T_j$, applying global
+camera transforms at every intervening frame.  Unlike the earlier production call,
+the gate uses the complete measurement $(c_x,c_y,w,h)$ rather than discarding width
+and height.
+
+Every candidate receives
 \begin{equation}
-  C^{\mathrm{gap}}_{ij} = -\Delta f_{ij}\log p_{\mathrm{miss}},
-  \label{eq:tracking-gap-cost}
+ \begin{aligned}
+ C_{ij}={}&w_m C^{\mathrm{motion}}_{ij}
+       +w_a C^{\mathrm{appearance}}_{ij}\\
+       &+w_g C^{\mathrm{gap}}_{ij},\\
+ C^{\mathrm{gap}}_{ij}={}&-\Delta f_{ij}\log p_{\mathrm{miss}}.
+ \end{aligned}
+ \label{eq:edge-cost}
 \end{equation}
-so a proposed link must accumulate stronger motion and appearance evidence as the
-number $\Delta f_{ij}$ of unobserved frames grows.  The fitted weights calibrate the
-relative influence of these three terms for the project data; they should not be
-interpreted as universal MOT constants.
+Motion is the mean negative log score from the first two observations of $T_j$;
+appearance uses the whole-fragment prototypes; and the gap term increases with the
+number of missing frames.
 
-The three-second horizon is a deliberate safety bound, not a claim that arbitrary
-occlusions can be recovered. Prolonged co-visibility and partial overlap can last much
-longer because detections remain available; a complete missing-observation gap beyond
-the horizon remains fragmented by design.
-
-\subsection{Global optimization over a bounded candidate graph}
-
-The candidate graph is solved as a minimum-cost integer program.  For each tracklet
-$i$, binary variables represent starting a trajectory at $i$, ending at $i$, linking
-$i$ to a candidate successor, or---for eligible short fragments---discarding $i$.
-The constraints require exactly one incoming choice and exactly one outgoing choice
-for every retained tracklet.  The selected edges therefore form disjoint,
-time-ordered paths rather than competing local assignments.
+The graph now applies absolute plausibility vetoes before optimization.  Edges are
+removed when motion NLL exceeds 8, or when endpoint box area or aspect ratio changes
+by more than a factor of three.  The Kalman filter already models size; the explicit
+ratios supplement it with an interpretable discontinuity bound.  These rules implement
+abstention at the evidence boundary.  They are necessary because a central fragment's
+start and end penalties can otherwise make even poor finite evidence cheaper than
+leaving two trajectories separate.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{tracking-offline-global-association.png}
-  \caption{Why complete-video evidence helps tracklet linking.  At the end of a long
-  gap, an online tracker sees four locally plausible links between two earlier
-  and two emerging tracklets.  Offline processing can first observe the stable later
-  portions of tracklets C and D.  That later appearance evidence helps distinguish
-  the candidate continuations, while camera-compensated motion scores the beginning
-  of each successor.  The global optimizer selects the crossed pairing A--D and B--C
-  jointly over the bounded candidate graph.  The illustration is conceptual; start,
-  end, discard, and gap costs are
-  omitted for clarity.}
+  \caption{Complete-video evidence supports global tracklet association.  Later
+  stable observations distinguish locally ambiguous successors; the optimizer then
+  chooses a compatible pairing jointly.  Start, end, discard, and gap costs are
+  omitted from the conceptual diagram.}
   \label{fig:tracking-offline-association}
 \end{figure}
 
-Starting and ending are explicit alternatives to linking.  Their costs are reduced
-when a tracklet begins or ends within the outer 10\% of the image, because a surfer
-entering or leaving the field of view is more plausible there than in the centre.
-An edge is removed before optimization whenever linking $i$ to $j$ is no cheaper than
-ending $i$ and starting $j$ independently.  The graph is further limited to the best
-few outgoing candidates per node.  These operations reduce solver work while
-preserving the intended decision boundary: a weak link should become a fragmentation,
-not an identity switch.
+\subsection{Global path optimization}
 
-Very short detector artifacts pose a separate problem.  For fragments up to a
-configured number of detections, the optimizer exposes a discard option whose cost grows
-exponentially with fragment length.  A one-frame false positive can therefore be
-removed without forcing it to become a trajectory or attach to a real surfer, while
-discarding a sustained observation rapidly becomes unattractive and is eventually
-disallowed.
+Binary variables represent starting or ending a path at each fragment, selecting a
+candidate edge, or discarding an eligible short fragment.  Each retained fragment has
+exactly one incoming choice and one outgoing choice, so selected links form disjoint,
+time-ordered paths.  Start and end costs are reduced near image borders, where a
+surfer entering or leaving the field of view is more plausible.  An edge that costs
+more than ending $T_i$ and starting $T_j$ independently is dominated and removed; the
+remaining outgoing degree is bounded before solving the integer program.
 
-The advantage of this formulation is non-causal rather than mystical ``future
-knowledge.''  A difficult edge is judged using a stable tracklet before the gap, a
-stable tracklet after it, and the other feasible links throughout the recording.
-The integer program selects these alternatives jointly, so two locally plausible
-continuations cannot both claim the same successor.  The current production pipeline
-uses this single-pass \texttt{ILPTracker}; the older iterative ILP implementation
-remains an experiment and is not the authoritative execution path.
+The method is offline in a precise sense: it compares stable fragments on both sides
+of a gap and chooses all compatible continuations jointly.  It does not infer through
+arbitrarily long absence.  Gaps beyond the horizon remain fragmented, and ambiguous
+evidence should do the same.
 
-\subsection{From linked tracklets to renderable trajectories}
+\subsection{Dense trajectories}
 
-The selected paths still contain sparse detections. A final post-processor removes
-tracks that are too short or too sparsely observed, then runs a camera-compensated
-forward Kalman pass and backward Rauch--Tung--Striebel smoother. It fills internal
-gaps with interpolated boxes and attributes before assigning compact output labels.
-The result is a dense, frame-indexed trajectory that the pose stage can turn into a
-stable crop signal without confusing interpolated observations with detector output.
+Linked detections remain sparse.  The post-processor removes tracks that are too short
+or sparsely observed, performs a forward camera-compensated Kalman pass and backward
+Rauch--Tung--Striebel smoothing~\cite{rts}, and interpolates internal gaps.  The dense
+trajectory records whether each observation was detected or synthesized, then feeds
+the rider-relative stabilization stage.

@@ -83,7 +83,7 @@ OC-SORT took 9.0 seconds, BoT-SORT 497.7 seconds, and the production association
 BoT-SORT includes decode and ECC, and production includes masked stabilization but
 excludes the initial crop-embedding extraction.
 
-\subsection{Safeguard ablation and failure analysis}
+\subsection{Safeguard ablation}
 
 The initial production reconstruction exposed a concentrated false-link problem.
 Preprocessor fragments were almost always identity-pure, but the ILP sometimes joined
@@ -104,16 +104,16 @@ without increasing fragmentation.
 
 \begin{table}[t]
   \centering
-  \small
+  \scriptsize
   \caption{Staged production-pipeline revision on the same development set.}
   \label{tab:safeguard-ablation}
-  \begin{tabular}{lrrrrr}
+  \begin{tabular}{@{}lrrrrr@{}}
     \toprule
-    Configuration & Pair P & Pair R & Pair F1 & Contam. & Frag. \\
+    Stage & P & R & F1 & Cont. & Frag. \\
     \midrule
-    Original reconstruction & 0.907 & 0.880 & 0.893 & 20 & 48 \\
-    Mask + whole-fragment appearance + 4D motion & 0.939 & 0.917 & 0.928 & 17 & 44 \\
-    + conservative link vetoes & \textbf{0.957} & \textbf{0.918} & \textbf{0.937} & \textbf{9} & \textbf{42} \\
+    Original & 0.907 & 0.880 & 0.893 & 20 & 48 \\
+    + mask, mean, 4D & 0.939 & 0.917 & 0.928 & 17 & 44 \\
+    + conservative vetoes & \textbf{0.957} & \textbf{0.918} & \textbf{0.937} & \textbf{9} & \textbf{42} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -125,28 +125,7 @@ evidence and additionally refuses links whose absolute evidence is implausible. 
 second step is necessary because the ILP's start and end penalties can otherwise make
 even a very poor link cheaper than splitting two central fragments.
 
-A manual audit of the remaining selected links found nine wrong fragment joins.  The
-residual cases are qualitatively different from the removed geometric failures.  They
-mostly involve crossings, nearly identical sails, or a fragment whose crop contains
-both competitors; their position, scale, and often color evidence are genuinely
-plausible.  We tested abstention based only on the objective gap to the best solution
-with one selected edge removed.  That margin did not separate errors: at useful
-thresholds it rejected substantially more correct links than wrong ones.  We therefore
-do not add a development-set-tuned global margin rule.  Resolving the remaining cases
-would require an overlap-aware appearance model or explicit paired-crossing logic,
-rather than another scalar threshold.
-
-\subsection{Interpretation and limitations}
-
-The comparison supports the report's central engineering claim: an offline,
-domain-specific association model gives a substantially better continuity/contamination
-trade-off for these long-shot windsurfing videos than the evaluated general-purpose
-trackers.  It does not support a claim of state-of-the-art MOT performance or perfect
-tracking.  The benchmark omits detector errors, uses development data, and includes
-gold-derived smoothed boxes.  BoT-SORT is also evaluated without its pedestrian ReID
-model because that embedding is mismatched to sails.
-
-The machine-readable per-video results, exact tracker configurations, and reproduction
-command are released with the repository.  Product acceptance still requires
-complete-trajectory review: the reported pair metrics summarize millions of pairs,
-whereas one remaining identity switch can invalidate the final crop for a user.
+A manual audit found nine wrong selected fragment joins.  Unlike the removed
+geometric failures, they concentrate at crossings, visually near-identical sails,
+and crops containing both competitors.  Their implications and the unsuccessful
+global-margin abstention experiment are discussed in \Cref{sec:discussion}.

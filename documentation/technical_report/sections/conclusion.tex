@@ -1,17 +1,20 @@
-\section{Lessons and Limitations}
+\section{Conclusion}
 \label{sec:conclusion}
 
-The main lesson is not that custom machinery should replace general-purpose tracking,
-but that a narrow output and asymmetric failure cost can justify a narrower system.
-Conservative tracklets preserve uncertainty; sail color and camera-compensated motion
-score continuations; and offline optimization chooses compatible links jointly. Two
-rig keypoints separately stabilize focused-view composition.
+We presented an offline system that turns long-shot windsurfing video into stable,
+rider-relative trajectories.  Its design follows the structure of the problem:
+masked camera-motion estimation handles large pans, conservative local association
+protects tracklet purity, sail-specific appearance and four-dimensional motion score
+longer continuations, a global integer program uses complete-video context, and two
+rig landmarks control the final virtual camera.
 
-No input-aligned held-out benchmark shows that this system is numerically superior to
-the general-purpose trackers explored here. Similar sails, small targets, and
-feature-poor backgrounds can weaken the cues; gaps beyond the three-second horizon
-remain fragmented by design.
-Measuring the near-zero identity-switch objective requires aligned evaluation and
-complete-track audits. Within those limits, every component follows one contract:
-preserve identity, stabilize the rider-relative view, and maintain exact frame
-correspondence through preview and export.
+On 21 manually reconstructed development videos, the association subsystem improves
+pairwise F1 and greatly reduces fragmentation relative to the evaluated OC-SORT and
+BoT-SORT configurations.  The staged revision also shows why implementation details
+matter: activating the intended foreground mask, aggregating appearance over whole
+fragments, retaining box-size evidence, and vetoing implausible links collectively
+reduce contaminated tracks from 20 to nine.  The remaining crossing errors and the
+in-sample protocol preclude a claim of perfect or general-purpose tracking.  The
+contribution is instead a reproducible account of how domain structure, offline
+inference, and an explicit failure cost can make an otherwise ordinary detection
+model useful in a demanding video-analysis system.

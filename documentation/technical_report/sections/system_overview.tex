@@ -1,0 +1,34 @@
+\section{System Overview}
+\label{sec:system}
+
+The pipeline separates perception, identity, and presentation geometry:
+\begin{equation}
+\begin{aligned}
+\text{video} &\rightarrow \text{boxes + landmarks}\\
+&\rightarrow \text{local tracklets}\\
+&\rightarrow \text{offline identity paths}\\
+&\rightarrow \text{stable rider views}.
+\end{aligned}
+\label{eq:system-pipeline}
+\end{equation}
+
+The detector is a one-class YOLO pose model trained from manually reviewed boxes and
+two windsurf-specific landmarks: the boom--mast junction and mast tip.  Every box is
+also converted into a compact color descriptor.  Independently, background features
+are estimated between adjacent frames while masking detected surfers; the resulting
+camera transforms are passed to both tracking stages.
+
+The first association stage is causal but deliberately conservative.  It accepts
+only locally unambiguous matches and exposes uncertainty as separate tracklets.  The
+second stage sees the complete recording, creates a bounded graph of feasible
+tracklet continuations, and solves for disjoint paths.  Post-processing smooths linked
+boxes and interpolates internal gaps, but retains the distinction between observed
+and synthesized detections.  The pose stage then converts every dense identity track
+into a frame-indexed virtual-camera signal.
+
+The components have explicit contracts.  Detection proposes observations; local
+association should prioritize fragment purity; global association should prefer a
+split over implausible identity evidence; and stabilization must never change track
+identity.  This modularity is important because only the association contract is
+evaluated against alternative trackers, while the final view also depends on
+detector and landmark quality.

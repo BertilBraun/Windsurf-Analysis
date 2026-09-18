@@ -1,0 +1,48 @@
+\section{Reconstruction Details}
+\label{sec:appendix}
+
+\subsection{Evaluation reconstruction}
+
+The benchmark uses the 21 manually reconstructed development videos checked into the
+project's evaluation manifest.  It contains 41,079 non-interpolated saved
+observations: 41,004 assigned to 88 retained identities and 75 assigned to the
+discard class.  Saved boxes were RTS-smoothed after manual identity reconstruction.
+For the production method, the historical intermediate tracklets were unavailable;
+the evaluator therefore starts from singleton saved observations, reruns the current
+preprocessor, and then runs the current ILP tracker.  A missing method output is
+scored as a unique singleton rather than omitted from the pair metrics.
+
+The comparison is reproduced from the repository root with:
+\begin{flushleft}
+\footnotesize\ttfamily
+python -m video\_processing.inference.\\
+optimization.compare\_trackers --no-resume
+\end{flushleft}
+Machine-readable aggregate and per-video results are stored under
+\texttt{documentation/tracker\_evaluation/}.  The BoxMOT distribution used for the
+run is 13.0.17; its package-level version string reports 13.0.16.
+
+\subsection{Production configuration}
+
+The reported production run uses a maximum candidate gap of three seconds and at
+most ten outgoing candidate links per fragment.  The ILP start and end costs are both
+96.0993.  Motion, appearance, and gap costs have weights 3.4694, 2.2492, and 9.9926;
+the per-frame miss probability is 0.8037 and the appearance calibration parameter is
+11.6301.  Motion compares the first two detections of a successor using the complete
+$(c_x,c_y,w,h)$ measurement.  Candidate links are rejected above motion NLL 8 or
+above an area or aspect-ratio change factor of 3.
+
+The appearance prototype retains the full fragment.  Tracklets with at most nine
+detections may be discarded, with first-detection cost 36.4497 and growth factor
+1.6423.  These values are reported for reconstruction, not as independently
+validated universal hyperparameters.
+
+\subsection{Baseline configuration}
+
+OC-SORT uses the frozen BoxMOT defaults recorded by the evaluator: confidence
+thresholds 0.1 and 0.2, maximum age 30, minimum hits 3, IoU threshold 0.3,
+$\Delta t=3$, inertia 0.2, BYTE association disabled, $Q_{xy}=0.01$, and
+$Q_s=0.0001$.  BoT-SORT uses ECC global-motion compensation with ReID disabled;
+its high, low, and new-track thresholds are 0.5, 0.1, and 0.6, its buffer is 30,
+its match threshold is 0.8, and score fusion is disabled.  All methods receive the
+same fixed observations.

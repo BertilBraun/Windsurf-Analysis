@@ -1,0 +1,41 @@
+\section{Related Work}
+
+\paragraph{Online tracking by detection.}
+SORT combines a Kalman filter with frame-wise assignment and established a strong,
+minimal online baseline~\cite{sort}.  Deep SORT adds a learned pedestrian appearance
+metric to survive longer occlusions~\cite{deepsort}, while ByteTrack improves
+continuity by associating low-confidence detections rather than discarding them
+immediately~\cite{bytetrack}.  OC-SORT revisits motion estimation after occlusion and
+uses observations to correct accumulated prediction error~\cite{ocsort}.  BoT-SORT
+combines motion, camera compensation, and optional appearance features in a stronger
+pedestrian tracker~\cite{botsort}; Deep OC-SORT further adapts the contribution of
+appearance under feature degradation~\cite{deepocsort}.  These systems motivate our
+motion and appearance cues, but remain fundamentally causal at association time.
+
+\paragraph{Offline and global association.}
+Batch tracking has long been formulated as network flow or related graph
+optimization~\cite{networkflow}.  More recent work learns objectives for multi-frame
+flow association rather than training only local pair costs~\cite{globalobjective}.
+Our integer program belongs to this family but targets a small, bounded graph of
+already conservative tracklets.  It is intentionally simple: start, end, discard,
+and link choices are optimized jointly, while the domain-specific work lies in
+constructing reliable fragments and costs.
+
+\paragraph{Motion, appearance, and evaluation.}
+Kalman filtering~\cite{kalman} and Rauch--Tung--Striebel smoothing~\cite{rts} provide
+the temporal state machinery used before and after association.  Learned ReID is
+effective when its training semantics match the target class, but pedestrian
+embeddings allocate capacity to body and clothing cues that occupy very few pixels in
+our footage.  We instead exploit the sail: a large, saturated, deliberately
+distinctive surface.  Standard MOT metrics such as HOTA explicitly balance detection,
+association, and localization~\cite{hotametric}.  Because our saved observations are
+fixed and the product loss is dominated by identity contamination, we report
+pair-clustering precision and recall together with absolute contaminated-track and
+fragmentation counts rather than claiming an end-to-end MOT score.
+
+\paragraph{Pose-guided framing.}
+The stabilization stage is related to pose-guided cropping, but its goal is not human
+pose recovery or action recognition.  A windsurf rig is a large articulated object
+whose axis-aligned detector box changes strongly with rotation.  Two semantic rig
+points are sufficient to construct a rider-relative anchor and scale, making the pose
+representation deliberately task-specific.
