@@ -1,33 +1,25 @@
-\section{Evaluation Framework and Available Evidence}
+\section{Evaluation}
 \label{sec:evaluation}
 
-The repository implements annotation and scoring tools for quantitative association
-evaluation, but the current snapshot does not include a complete reproducible
-benchmark dataset or results table. Complete-trajectory visual review is still
-required for product acceptance. This section therefore separates the available
-evaluation framework from claims that would require a fresh benchmark run.
+We evaluate identity association on 21 manually curated development videos.  The
+benchmark fixes the universe of 41,079 saved, non-interpolated detections and gives
+every method the same bounding boxes.  Of these, 41,004 belong to retained surfer
+identities and 75 are annotated for rejection.  This deliberately isolates
+association from detector recall: the results answer whether the available
+observations were grouped correctly, not whether YOLO found every surfer.
 
-\subsection{Golden tracklet associations}
+The saved observations were selected during manual trajectory reconstruction and
+their boxes were Rauch--Tung--Striebel smoothed afterwards.  The benchmark is
+therefore conditional on gold-derived observations rather than an end-to-end MOT
+test.  It is also an in-sample development-set evaluation: algorithm design was
+informed by these videos, and the provenance of the original ILP parameter tuning is
+not fully recorded.  We report the results as engineering evidence and failure
+analysis, not as a held-out leaderboard.
 
-The project includes an annotation tool for constructing ``golden'' associations from
-the same detections presented to the tracker.  It first runs the conservative
-preprocessor described in \cref{sec:tracking}; an annotator then assigns every
-resulting tracklet either to a physical surfer identity or to the discard class.
-Tracklets assigned to one identity are forbidden from occupying the same frame.  The
-saved record retains the source detection coordinates and their human-assigned
-identity, so competing association methods can be scored over an identical universe
-of observations.
+\subsection{Metrics}
 
-This protocol deliberately evaluates association separately from detection.  It asks
-whether the system grouped the available observations correctly, not whether YOLO
-found every surfer in the source video.  That separation supports faster tracker
-iteration and avoids attributing a missed detection to the association algorithm.  It
-also means that an association score alone is not an end-to-end tracking score;
-detection omissions, interpolation quality, and the usefulness of the final crop must
-be reviewed separately.
-
-For $N$ retained detections, the evaluator considers all unordered pairs.  A pair is
-positive when both detections belong to the same annotated surfer.  In this view,
+For retained detections, pairwise precision and recall compare every unordered pair.
+A pair is positive when both observations have the same annotated identity:
 
 \begin{align}
   P_{\mathrm{pair}} &=
@@ -38,79 +30,123 @@ positive when both detections belong to the same annotated surfer.  In this view
          {\text{all annotated same-identity pairs}}.
 \end{align}
 
-Pairwise precision exposes false merges, whereas pairwise recall exposes
-fragmentation.  The scorer also reports their F1 score, the Rand index, and the
-same-pair Jaccard index as compact clustering measures. Missing predicted observations can be
-treated as unique singleton tracks, preventing missing data from being rewarded as
-one artificial cluster.  Discard decisions are evaluated independently as a binary
-classification problem.
+False merges reduce precision and fragmentation reduces recall.  Missing outputs are
+treated as singleton predictions rather than being silently omitted.  Micro scores
+pool all pairs and consequently weight long identities quadratically; macro scores
+average per-video values.  We additionally report contaminated predicted tracks,
+which contain more than one gold identity; fragmentation excess, the number of
+predicted pieces beyond one per gold identity; and exact videos, whose complete
+partition matches the annotation up to track-label permutation.  These absolute
+counts matter because a high aggregate F1 can conceal one application-breaking
+identity switch.
 
-Pairwise precision exposes the false merges that matter most here, but even a high
-aggregate score can conceal one damaging switch. Results therefore need to include
-absolute false-join counts and be followed by a complete-video audit through
-crossings, long overlaps, occlusions, and camera pans.
+\subsection{Fixed-observation comparison}
 
-\subsection{Optimization as structured engineering evidence}
+\Cref{tab:association-benchmark} compares the production pipeline with OC-SORT and
+BoT-SORT.  OC-SORT receives the fixed detections directly.  BoT-SORT uses its ECC
+camera compensation but no pedestrian-specific ReID network.  The production method
+reruns conservative preprocessing, masked video stabilization, and offline ILP
+association.  Its sail descriptor uses border-derived foreground masking and a
+whole-fragment appearance prototype; motion gating evaluates centre, width, and
+height; and implausible motion, area, or aspect-ratio transitions are excluded before
+optimization.
 
-The repository implements a staged optimization workflow rather than a single opaque
-parameter search.  Detector confidence and non-maximum-suppression thresholds can be
-tuned against labelled boxes under an explicit false-positive-per-image constraint.
-Kalman process and measurement noise are fitted by minimizing one-step bounding-box
-prediction error on golden trajectories after camera compensation.  Motion and
-appearance mappings are then calibrated on positive fragment pairs sampled from one
-identity and negative pairs sampled from different identities.  Finally, Optuna-based
-search evaluates preprocessor and ILP parameters using pairwise association scores;
-trial-invariant embeddings and camera transforms are cached, and videos can be
-evaluated in parallel.
+\begin{table*}[t]
+  \centering
+  \small
+  \caption{Fixed-observation identity-association results on 21 development videos.
+  ``Contam.'' counts predicted tracks containing more than one gold identity.}
+  \label{tab:association-benchmark}
+  \begin{tabular}{lrrrrrrr}
+    \toprule
+    Method & Coverage & Pair P & Pair R & Pair F1 & Macro F1 & Contam. & Frag. excess \\
+    \midrule
+    OC-SORT & 0.981 & \textbf{0.985} & 0.662 & 0.792 & 0.857 & 9/165 & 845 \\
+    BoT-SORT, no ReID & 0.996 & 0.920 & 0.752 & 0.828 & 0.858 & 16/142 & 244 \\
+    Production offline ILP & \textbf{0.999} & 0.957 & \textbf{0.918} & \textbf{0.937} & \textbf{0.970} & 9/95 & \textbf{42} \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
 
-This sequence was valuable even where it did not produce a publication-style
-benchmark.  It separated failures due to localization, motion prediction, appearance
-separation, local stitching, and global linking.  Interactive threshold tools and the
-golden-tracklet viewer complemented the scalar objectives by exposing the cases that
-matter disproportionately to the product, especially a plausible but wrong merge.
-The fitted settings are consequently best understood as engineering choices for this
-camera geometry, subject scale, and collection of sails---not as universal tracker
-hyperparameters.
+The production system gives the strongest overall association score and reduces
+fragmentation by a factor of approximately six relative to BoT-SORT and by a factor
+of twenty relative to OC-SORT.  Eleven of 21 videos are exact, compared with
+four for BoT-SORT and one for OC-SORT.  OC-SORT attains the highest pairwise precision
+by remaining highly conservative, but its 845 excess fragments do not provide the
+continuous identity track required by the application.  The production result is a
+more useful operating point for this dataset, but its nine contaminated tracks mean
+that it still does not satisfy the nominal zero-false-merge requirement.
 
-\subsection{Qualitative failure analysis}
+Runtime is included only as an operational diagnostic.  On the evaluation machine,
+OC-SORT took 9.0 seconds, BoT-SORT 497.7 seconds, and the production association path
+402.3 seconds.  The workloads are not identical: OC-SORT needs no video decode,
+BoT-SORT includes decode and ECC, and production includes masked stabilization but
+excludes the initial crop-embedding extraction.
 
-The most consequential failures occur when several weak cues coincide.  During a
-long overlap, motion cannot separate two riders; if the sails also share similar
-colors or one crop is dominated by spray and background, appearance may not resolve
-the continuation either.  Rapid pans can reduce the number of background features
-shared by adjacent frames, while small or blurred detections make both the Kalman
-update and color descriptor less reliable.  Leaving the observations fragmented is
-the intended safe response in these cases.  A false association is the more serious
-failure and must be identified by inspecting the selected ILP edge and the crops on
-both sides of the gap.
+\subsection{Safeguard ablation and failure analysis}
 
-Other failures affect presentation rather than identity.  Missed detections create
-interpolated boxes; extended gaps eventually make those boxes physically
-untrustworthy.  Occluded or very small keypoints cause the focused view to fall back
-to bounding-box geometry, potentially reintroducing crop drift or scale pumping.
-Hard-window mining in the pose workflow ranks intervals with unstable anchors so that
-these visible defects can be reviewed and added to the labelled set.  For global
-motion, foreground masking reduces the risk that a large moving sail is mistaken for
-the background, but it cannot create reliable correspondences when the remaining
-scene is textureless or newly revealed by a pan.
+The initial production reconstruction exposed a concentrated false-link problem.
+Preprocessor fragments were almost always identity-pure, but the ILP sometimes joined
+two pure fragments from different surfers.  Many of the unexpected short-gap errors
+occurred at crossings, where the endpoint crops contained both sails.  The previous
+appearance model emphasized precisely those boundary frames, the color descriptor's
+intended foreground mask was bypassed by an early return, and the ILP requested a
+position-only projection from a Kalman model that already represented width and
+height.
 
-\subsection{Scope of the present evidence}
+\Cref{tab:safeguard-ablation} records two staged revisions.  Because several changes
+are bundled in the first stage, this is a system ablation rather than a claim that any
+single component produced the full difference.  Foreground masking, whole-fragment
+appearance aggregation, and four-dimensional motion evaluation raise micro F1 from
+0.893 to 0.928.  Adding conservative vetoes for motion NLL and threefold area or
+aspect-ratio discontinuities raises precision further and halves contaminated tracks,
+without increasing fragmentation.
 
-The codebase contains implementations and comparison hooks for OC-SORT, BoT-SORT,
-greedy association, and several ILP variants, documenting that general-purpose
-alternatives were explored.  However, no current, reproducible output table compares
-those baselines with the production pipeline on a held-out set.  The comparison
-harness also predates the active color-stripe embedding and single-pass
-\texttt{ILPTracker} interfaces, and some historical golden files require compatibility
-loading after refactors.  Reporting the old runs as a current leaderboard would mix
-different inputs and implementations.
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Staged production-pipeline revision on the same development set.}
+  \label{tab:safeguard-ablation}
+  \begin{tabular}{lrrrrr}
+    \toprule
+    Configuration & Pair P & Pair R & Pair F1 & Contam. & Frag. \\
+    \midrule
+    Original reconstruction & 0.907 & 0.880 & 0.893 & 20 & 48 \\
+    Mask + whole-fragment appearance + 4D motion & 0.939 & 0.917 & 0.928 & 17 & 44 \\
+    + conservative link vetoes & \textbf{0.957} & \textbf{0.918} & \textbf{0.937} & \textbf{9} & \textbf{42} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
-The supported conclusion is therefore narrower: those experiments revealed failure
-modes that motivated a domain-specific, offline design, and the present tooling makes
-a controlled comparison possible after the baselines are aligned.  A release-quality
-evaluation should freeze representative train/tuning and held-out videos; report
-pairwise precision and recall, false-merge counts, fragmentation, discard quality,
-runtime, and complete-track pass/fail rates; and stratify sequences by pan magnitude,
-overlap duration, target size, and appearance ambiguity.  The design targets
-reliability on this specific long-shot windsurfing task under a near-zero
-identity-switch objective; measuring the improvement requires that aligned benchmark.
+The vetoes are not a second tracker layered on top of the Kalman filter.  The Kalman
+state already contains centre, width, and height; the earlier ILP call discarded the
+size dimensions.  The revised system uses the full four-dimensional Mahalanobis
+evidence and additionally refuses links whose absolute evidence is implausible.  This
+second step is necessary because the ILP's start and end penalties can otherwise make
+even a very poor link cheaper than splitting two central fragments.
+
+A manual audit of the remaining selected links found nine wrong fragment joins.  The
+residual cases are qualitatively different from the removed geometric failures.  They
+mostly involve crossings, nearly identical sails, or a fragment whose crop contains
+both competitors; their position, scale, and often color evidence are genuinely
+plausible.  We tested abstention based only on the objective gap to the best solution
+with one selected edge removed.  That margin did not separate errors: at useful
+thresholds it rejected substantially more correct links than wrong ones.  We therefore
+do not add a development-set-tuned global margin rule.  Resolving the remaining cases
+would require an overlap-aware appearance model or explicit paired-crossing logic,
+rather than another scalar threshold.
+
+\subsection{Interpretation and limitations}
+
+The comparison supports the report's central engineering claim: an offline,
+domain-specific association model gives a substantially better continuity/contamination
+trade-off for these long-shot windsurfing videos than the evaluated general-purpose
+trackers.  It does not support a claim of state-of-the-art MOT performance or perfect
+tracking.  The benchmark omits detector errors, uses development data, and includes
+gold-derived smoothed boxes.  BoT-SORT is also evaluated without its pedestrian ReID
+model because that embedding is mismatched to sails.
+
+The machine-readable per-video results, exact tracker configurations, and reproduction
+command are released with the repository.  Product acceptance still requires
+complete-trajectory review: the reported pair metrics summarize millions of pairs,
+whereas one remaining identity switch can invalidate the final crop for a user.

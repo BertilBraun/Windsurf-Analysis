@@ -14,7 +14,7 @@ Identity association on the fixed universe of non-interpolated saved observation
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | `boxmot_oc_sort` | 0.981 | 0.985 | 0.662 | 0.792 / 0.857 | 9/165 (5.5%) | 845 | 1/21 | 9.0 s |
 | `boxmot_bot_sort_gmc_no_reid` | 0.996 | 0.920 | 0.752 | 0.828 / 0.858 | 16/142 (11.3%) | 244 | 4/21 | 497.7 s |
-| `production_preprocessor_ilp` | 0.999 | 0.907 | 0.880 | 0.893 / 0.954 | 20/86 (23.3%) | 48 | 12/21 | 401.2 s |
+| `production_preprocessor_ilp` | 0.999 | 0.957 | 0.918 | 0.937 / 0.970 | 9/95 (9.5%) | 42 | 11/21 | 402.3 s |
 
 ## Metric definitions
 
@@ -28,7 +28,7 @@ Identity association on the fixed universe of non-interpolated saved observation
 ## Findings
 
 - The production pipeline has the strongest overall association F1, much less fragmentation, and the most exact videos.
-- It does not satisfy the application’s nominal zero-false-merge requirement on this reconstruction: 20 of 86 emitted tracks are identity-contaminated, spanning seven videos.
+- It does not satisfy the application’s nominal zero-false-merge requirement on this reconstruction: 9 of 95 emitted tracks are identity-contaminated, spanning 7 videos.
 - OC-SORT is conservative: it has the best pairwise precision but fragments the 88 gold identities into hundreds of pieces.
 - BoT-SORT reduces fragmentation relative to OC-SORT but still trails the production pipeline on recall, F1, and exact-video rate.
 - These results document the intended offline-association trade-off—far fewer splits at the cost of more false merges—but do not support a claim of uniformly superior or near-perfect tracking.
@@ -47,7 +47,7 @@ The pinned BoxMOT distribution is 13.0.17; its package-level version string repo
 
 - **boxmot_oc_sort:** BoxMOT OC-SORT defaults frozen explicitly: min_conf=0.1, det_thresh=0.2, max_age=30, min_hits=3, IoU threshold=0.3, delta_t=3, inertia=0.2, BYTE disabled, Q_xy=0.01, Q_s=0.0001.
 - **boxmot_bot_sort_gmc_no_reid:** BoxMOT BoT-SORT with ECC GMC and ReID disabled; thresholds 0.5/0.1/0.6, buffer=30, match=0.8, fuse-score disabled.
-- **production_preprocessor_ilp:** Current TrackPreProcessor followed by current ILPTracker defaults; masked VidStab transforms with 20 px observation masks; no refitting.
+- **production_preprocessor_ilp:** Current TrackPreProcessor followed by current ILPTracker defaults; border-derived foreground masking, whole-fragment appearance prototypes, four-dimensional Kalman motion gating, conservative motion/area/aspect link vetoes, and masked VidStab transforms with 20 px observation masks; no parameter refitting.
 
 ## Limitations
 

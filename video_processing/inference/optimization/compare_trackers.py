@@ -230,6 +230,11 @@ def _write_checkpoint(checkpoint_path: Path, results: list[VideoResult]) -> None
 
 
 def _write_markdown(output_path: Path, report: BenchmarkReport) -> None:
+    production = next(result for result in report.aggregate if result.tracker == BenchmarkTracker.PRODUCTION)
+    contaminated_production_videos = sum(
+        result.tracker == BenchmarkTracker.PRODUCTION and result.contaminated_track_count > 0
+        for result in report.per_video
+    )
     lines = [
         '# Fixed-observation association benchmark',
         '',
@@ -270,7 +275,7 @@ def _write_markdown(output_path: Path, report: BenchmarkReport) -> None:
             '## Findings',
             '',
             '- The production pipeline has the strongest overall association F1, much less fragmentation, and the most exact videos.',
-            '- It does not satisfy the application’s nominal zero-false-merge requirement on this reconstruction: 20 of 86 emitted tracks are identity-contaminated, spanning seven videos.',
+            f'- It does not satisfy the application’s nominal zero-false-merge requirement on this reconstruction: {production.contaminated_track_count} of {production.emitted_track_count} emitted tracks are identity-contaminated, spanning {contaminated_production_videos} videos.',
             '- OC-SORT is conservative: it has the best pairwise precision but fragments the 88 gold identities into hundreds of pieces.',
             '- BoT-SORT reduces fragmentation relative to OC-SORT but still trails the production pipeline on recall, F1, and exact-video rate.',
             '- These results document the intended offline-association trade-off—far fewer splits at the cost of more false merges—but do not support a claim of uniformly superior or near-perfect tracking.',
@@ -312,7 +317,7 @@ def _tracker_configurations() -> dict[str, str]:
     return {
         BenchmarkTracker.OC_SORT.value: 'BoxMOT OC-SORT defaults frozen explicitly: min_conf=0.1, det_thresh=0.2, max_age=30, min_hits=3, IoU threshold=0.3, delta_t=3, inertia=0.2, BYTE disabled, Q_xy=0.01, Q_s=0.0001.',
         BenchmarkTracker.BOT_SORT.value: 'BoxMOT BoT-SORT with ECC GMC and ReID disabled; thresholds 0.5/0.1/0.6, buffer=30, match=0.8, fuse-score disabled.',
-        BenchmarkTracker.PRODUCTION.value: 'Current TrackPreProcessor followed by current ILPTracker defaults; masked VidStab transforms with 20 px observation masks; no refitting.',
+        BenchmarkTracker.PRODUCTION.value: 'Current TrackPreProcessor followed by current ILPTracker defaults; border-derived foreground masking, whole-fragment appearance prototypes, four-dimensional Kalman motion gating, conservative motion/area/aspect link vetoes, and masked VidStab transforms with 20 px observation masks; no parameter refitting.',
     }
 
 
