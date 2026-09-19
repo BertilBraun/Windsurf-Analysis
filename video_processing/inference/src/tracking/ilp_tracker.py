@@ -83,7 +83,7 @@ class ILPTracker:
         maximum_aspect_ratio: 3.0
         max_outgoing_links: 10
         allow_discard_short_tracklets: True
-        discard_max_detections: 5
+        discard_max_detections: 9
         discard_cost_first: 36.44970784158251
         discard_cost_growth: 1.6422713913216471
         """
@@ -570,7 +570,8 @@ def _motion_nll(A: KFState, B: Track, cmc: CMC, max_detections_to_compare: int, 
       - use cached KF end state for A
       - predict by Δ to each of first K detections of B
       - inverse-GMC the observation into A.end frame
-      - 0.5*d2 + 0.5*log|S_pos|, averaged across used dets
+      - convert squared Mahalanobis distance through the chi-square survival function
+      - average negative log probabilities across used detections
     Returns: (motion_nll)
     """
     nll_values: List[float] = []

@@ -51,8 +51,8 @@ isolated jumps while preserving response to actual motion.
 
 When both landmarks are visible, scale begins with
 $\ell=\lVert\mathbf b-\mathbf t\rVert_2$.  Short gaps are interpolated or held;
-otherwise the anchor-to-box-top distance supplies a fallback.  A centered temporal
-mean produces $\bar\ell$, and the requested crop height is
+otherwise the anchor-to-box-top distance supplies a fallback.  A centered 31-frame
+mean (radius 15) produces $\bar\ell$, and the requested crop height is
 \begin{equation}
  C=\max\!\left(\frac{\bar\ell}{0.75},\frac{h}{0.9},1\right),
  \qquad s=\operatorname{clip}\!\left(\frac{C}{H},10^{-6},1\right),

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 from time import perf_counter
 
@@ -16,6 +15,7 @@ from video_processing.inference.optimization.association_benchmark_data import (
     observation_key,
     singleton_tracks,
 )
+from video_processing.inference.optimization.association_benchmark_types import BenchmarkTracker
 from video_processing.inference.optimization.optimization_util import AssignmentKey
 from video_processing.inference.src.common_types import Track
 from video_processing.inference.src.player.core.player_state import DetectionLite
@@ -23,12 +23,6 @@ from video_processing.inference.src.tracking.ilp_tracker import ILPTracker
 from video_processing.inference.src.tracking.preprocessing.preprocessor import TrackPreProcessor
 from video_processing.inference.src.util.video_io import VideoReader, get_video_properties
 from video_processing.inference.src.visualization.stabilize import compute_stabilization_transforms_masked_vidstab
-
-
-class BenchmarkTracker(str, Enum):
-    OC_SORT = 'boxmot_oc_sort'
-    BOT_SORT = 'boxmot_bot_sort_gmc_no_reid'
-    PRODUCTION = 'production_preprocessor_ilp'
 
 
 @dataclass(frozen=True)

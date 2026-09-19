@@ -16,9 +16,10 @@ and square-root mapped before the concatenated vector is L2-normalized, yielding
 bounded Hellinger-style distance.
 
 The descriptor first removes likely background using a border-derived Lab model.  A
-smoothness gate identifies water-like pixels, and only background components connected
-to the crop border are removed.  Morphological cleanup and a minimum-mask fallback
-avoid empty descriptors.  This foreground mask is important: an earlier inactive code
+gradient gate identifies low-texture pixels consistent with that model, and only
+candidate background components connected to the crop border are removed.  After
+morphological cleanup, only the largest remaining foreground component is retained;
+a minimum-mask fallback avoids empty descriptors.  This foreground mask is important: an earlier inactive code
 path used a fixed center rectangle, allowing water and overlapping sails to dilute
 the intended cue.
 
@@ -52,7 +53,8 @@ current heuristic match score is
  \label{eq:appearance}
 \end{equation}
 It is a tuned similarity score, not a calibrated posterior probability; the graph
-uses $C^{\mathrm{appearance}}=-\log s_a$.
+uses $C^{\mathrm{appearance}}=-\log s_a$.  The coefficient 11.630 is the frozen value
+from historical development-set tuning, whose detailed search trace is unavailable.
 
 \subsection{Conservative local tracklets}
 

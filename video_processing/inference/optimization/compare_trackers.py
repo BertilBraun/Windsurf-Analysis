@@ -17,8 +17,8 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from video_processing.inference.optimization.association_benchmark_data import load_golden_sequences
+from video_processing.inference.optimization.association_benchmark_types import BenchmarkTracker
 from video_processing.inference.optimization.association_benchmark_trackers import (
-    BenchmarkTracker,
     TrackerPrediction,
     run_tracker,
 )
@@ -292,6 +292,14 @@ def _write_markdown(output_path: Path, report: BenchmarkReport) -> None:
             '## Artifact status',
             '',
             'The annotated videos and gold reconstruction files are not distributed. The committed JSON and CSV are therefore an auditable result snapshot rather than an independently rerunnable artifact.',
+            '',
+            'Generate the report confidence intervals from `per_video.csv` with:',
+            '',
+            '```powershell',
+            'python -m video_processing.inference.optimization.bootstrap_tracker_evaluation',
+            '```',
+            '',
+            'The bootstrap resamples complete videos 10,000 times, recomputes micro pair F1 after pooling TP, FP, and FN, and reports the 2.5th and 97.5th percentiles. It uses NumPy PCG64 with seed `20260918`; exact generated values are stored in `bootstrap_intervals.json`.',
             '',
             'With the private annotated data available locally, run:',
             '',

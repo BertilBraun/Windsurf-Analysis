@@ -38,6 +38,14 @@ Identity association on the fixed universe of non-interpolated saved observation
 
 The evaluated implementation and checked-in result files correspond to commit `a76c2bd774f739e40e1f15a80574ca99bb34d236`. The annotated videos and gold reconstruction files are not distributed, so the committed JSON and CSV are an auditable result snapshot rather than an independently rerunnable artifact.
 
+The confidence intervals in the report are generated from `per_video.csv` by:
+
+```powershell
+python -m video_processing.inference.optimization.bootstrap_tracker_evaluation
+```
+
+The script resamples complete videos 10,000 times, recomputes micro pair F1 after pooling TP, FP, and FN, and reports the 2.5th and 97.5th percentiles. It uses NumPy's PCG64 generator with seed `20260918`; exact generated values are stored in `bootstrap_intervals.json`.
+
 With the private annotated data available locally, the evaluator is invoked as:
 
 ```powershell

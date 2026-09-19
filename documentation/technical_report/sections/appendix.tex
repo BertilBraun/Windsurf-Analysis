@@ -11,14 +11,20 @@ the evaluator therefore starts from singleton saved observations, reruns the cur
 preprocessor, and then runs the current ILP tracker.  A missing method output is
 scored as a unique singleton rather than omitted from the pair metrics.
 
-The evaluated implementation and result files correspond to
-\href{https://github.com/BertilBraun/Windsurf-Analysis/tree/a76c2bd774f739e40e1f15a80574ca99bb34d236}{commit \texttt{a76c2bd}}.
-Aggregate JSON, per-video CSV, and protocol notes are stored under
-\href{https://github.com/BertilBraun/Windsurf-Analysis/tree/a76c2bd774f739e40e1f15a80574ca99bb34d236/documentation/tracker_evaluation}{\texttt{documentation/tracker\_evaluation/}}.
+Predictions were generated with implementation commit
+\texttt{a76c2bd774f739e40e1f15a80574ca99bb34d236}.  The final repository snapshot,
+aggregate JSON, per-video CSV, protocol notes, and bootstrap script are published as
+the project and evaluation artifacts~\cite{projectresources}.
 The annotated videos and gold reconstruction files are not distributed, so these
 files form an auditable result snapshot rather than an independently rerunnable
 artifact.  BoxMOT distribution 13.0.17 was used; its package-level version string
 reports 13.0.16.
+
+Runtime is retained only as an operational diagnostic.  On the evaluation machine,
+OC-SORT took 9.0 seconds, BoT-SORT 497.7 seconds, and the production association path
+402.3 seconds.  These are not comparable speed measurements: OC-SORT needs no video
+decode, BoT-SORT includes decode and ECC, and production includes masked stabilization
+but excludes initial crop-embedding extraction.
 
 \subsection{Production configuration}
 
@@ -58,7 +64,9 @@ The supporting detector is YOLO11m-pose initialized from
 \texttt{yolo11m-pose.pt} and trained for 700 epochs at $640\times640$ input
 resolution with deterministic seed 0.  The released checkpoint is
 \path{video_processing/inference/weights/yolo_models/windsurfing_pose/best.pt},
-SHA-256 \texttt{4c475caeba9ede3c...ac093ca9369}.  The image-level development split
+with SHA-256
+\nolinkurl{4c475caeba9ede3cfc56277161284a4a703be9ff46ae8735a788aac093ca9369}.
+The image-level development split
 contains 1,123 training and 56 validation images.
 
 \subsection{Audited wrong links}
@@ -67,4 +75,8 @@ The final link audit found nine wrong selected links in six videos: one each in
 \texttt{Bertil1}, \texttt{input7}, and \texttt{MVI\_5332}; two each in
 \texttt{MVI\_5346}, \texttt{MVI\_5348}, and
 \texttt{ride mit den booooyyyys}.  This count concerns selected fragment edges and
-is distinct from the number of contaminated output tracks or observations.
+is distinct from the number of contaminated output tracks or observations.  In
+particular, the nine contaminated outputs span seven videos: the edge audit counts
+only wrong links between pure fragments.  The seventh sequence, \texttt{input6},
+instead contains one impure local fragment with a 225-to-1 identity mixture and is
+therefore excluded from that classification.

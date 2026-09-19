@@ -1,0 +1,25 @@
+{
+  "resampling_unit": "complete video",
+  "statistic": "micro pair F1 after pooling TP, FP, and FN over sampled videos",
+  "sample_count": 10000,
+  "rng": "NumPy PCG64",
+  "seed": 20260918,
+  "interval": "2.5th and 97.5th percentiles",
+  "confidence_intervals": [
+    {
+      "tracker": "boxmot_oc_sort",
+      "lower": 0.7209258060834557,
+      "upper": 0.8643639832874197
+    },
+    {
+      "tracker": "boxmot_bot_sort_gmc_no_reid",
+      "lower": 0.7589060632674967,
+      "upper": 0.9093930184791804
+    },
+    {
+      "tracker": "production_preprocessor_ilp",
+      "lower": 0.852495734601547,
+      "upper": 0.9948442817741893
+    }
+  ]
+}

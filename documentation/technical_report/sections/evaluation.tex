@@ -64,9 +64,9 @@ optimization.
     \toprule
     Method & Coverage & Pair P & Pair R & Pair F1 & Macro F1 & Contam. & C. obs. & Frag. excess \\
     \midrule
-    OC-SORT & 0.981 & \textbf{0.985} & 0.662 & 0.792 & 0.857 & 9/165 & 6,184 & 845 \\
-    BoT-SORT, no ReID & 0.996 & 0.920 & 0.752 & 0.828 & 0.858 & 16/142 & 14,459 & 244 \\
-    Production offline ILP & \textbf{0.999} & 0.957 & \textbf{0.918} & \textbf{0.937} & \textbf{0.970} & 9/95 & 9,982 & \textbf{42} \\
+    OC-SORT & 0.981 & \textbf{0.985} & 0.662 & 0.792 & 0.857 & 9/165 (5.5\%) & 6,184 & 845 \\
+    BoT-SORT, no ReID & 0.996 & 0.920 & 0.752 & 0.828 & 0.858 & 16/142 (11.3\%) & 14,459 & 244 \\
+    Production offline ILP & \textbf{0.999} & 0.957 & \textbf{0.918} & \textbf{0.937} & \textbf{0.970} & 9/95 (9.5\%) & 9,982 & \textbf{42} \\
     \bottomrule
   \end{tabular}
 \end{table*}
@@ -76,19 +76,15 @@ the same absolute number of contaminated tracks.  This continuity gain comes wit
 lower pair precision, a larger contaminated-output fraction (9/95 versus 9/165), and
 more observations contained in contaminated tracks (9,982 versus 6,184).  Eleven of
 21 videos are exact, compared with four for BoT-SORT and one for OC-SORT.  The result
-is the most useful evaluated operating point for this application, but not a uniform
+is the selected operating point for this application, but not a uniform
 improvement and not the nominal zero-false-merge target.
 
 A 10,000-sample bootstrap that resamples complete videos gives 95\% intervals for
-micro pair F1 of [0.723, 0.867] for OC-SORT, [0.759, 0.910] for BoT-SORT, and
-[0.853, 0.995] for production.  The broad, overlapping intervals reinforce the
-development-set interpretation rather than a general ranking claim.
-
-Runtime is included only as an operational diagnostic.  On the evaluation machine,
-OC-SORT took 9.0 seconds, BoT-SORT 497.7 seconds, and the production association path
-402.3 seconds.  The workloads are not identical: OC-SORT needs no video decode,
-BoT-SORT includes decode and ECC, and production includes masked stabilization but
-excludes the initial crop-embedding extraction.
+micro pair F1 of [0.721, 0.864] for OC-SORT, [0.759, 0.909] for BoT-SORT, and
+[0.852, 0.995] for production.  The broad, overlapping intervals reinforce the
+development-set interpretation rather than a general ranking claim.  The checked-in
+bootstrap script records video-level resampling, pooled-count recomputation, percentile
+intervals, NumPy's PCG64 generator, and seed 20260918~\cite{projectresources}.
 
 \subsection{Safeguard ablation}
 
@@ -132,7 +128,11 @@ evidence and additionally refuses links whose absolute evidence is implausible. 
 second step is necessary because the ILP's start and end penalties can otherwise make
 even a very poor link cheaper than splitting two central fragments.
 
-A manual audit found nine wrong selected fragment joins across six videos.  Unlike the removed
+A manual audit found nine wrong selected fragment joins across six videos.  This audit
+counts only joins between two individually pure preprocessor fragments.  Contaminated
+production outputs span seven videos because \texttt{input6} instead contains an
+already impure local fragment (225 observations from one identity and one from
+another), so its adjacent joins are excluded from the pure-to-pure edge count.  Unlike the removed
 geometric failures, they concentrate at crossings, visually near-identical sails,
 and crops containing both competitors.  Their implications and the unsuccessful
 global-margin abstention experiment are discussed in \Cref{sec:discussion}.

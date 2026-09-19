@@ -319,8 +319,6 @@ class Track:
             embedding = embedding.interpolate(detection.embedding, ema)  # type: ignore
         return embedding
 
-        return Embedding.mean([d.embedding for d in self.sorted_detections])
-
     def mean_embedding_reverse(self, ema: float = 0.9) -> Embedding:
         assert self.sorted_detections, 'Track has no detections.'
         embedding: Embedding = self.sorted_detections[-1].embedding
