@@ -4,6 +4,15 @@
 The tracker converts detections into high-purity local fragments and then into
 globally consistent paths.  The same camera-motion estimates support both stages.
 
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{tracking-sail-color-similarity.png}
+  \caption{Production color descriptor on consecutive crops of two sails.  Repeated
+  observations score highly, while cross-sail matches reach the lower bound.  The
+  hand-selected example explains the cue rather than measuring it.}
+  \label{fig:tracking-sail-color}
+\end{figure}
+
 \subsection{Foreground-masked sail appearance}
 
 Windsurfing sails are large, saturated, and often visually distinctive even when the

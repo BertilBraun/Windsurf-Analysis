@@ -18,6 +18,15 @@ images and 56 validation images.  The split is image-level and can contain frame
 the same source sequence on both sides, so it does not establish cross-sequence
 generalization.
 
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.92\linewidth]{pose-anchor-geometry.png}
+  \caption{Pose-derived virtual-camera geometry.  The detector box and center
+  (orange) describe image extent.  Boom junction and mast tip (cyan) provide a
+  rider-relative anchor (magenta) and scale cue.}
+  \label{fig:pose-anchor-geometry}
+\end{figure}
+
 For box top $y_1$, height $h$, and center $(c_x,c_y)$, the fallback anchor is
 \begin{equation}
  \mathbf a_{\mathrm{box}}=(c_x,y_1+0.6h).
