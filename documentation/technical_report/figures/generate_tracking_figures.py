@@ -147,7 +147,7 @@ def create_sail_appearance_figure() -> None:
     ]
     match_scores = compute_appearance_match_scores(crops)
 
-    canvas = Image.new('RGB', (1250, 760), WHITE)
+    canvas = Image.new('RGB', (1167, 721), WHITE)
     drawing = ImageDraw.Draw(canvas)
     title_font = load_font(36, bold=True)
     heading_font = load_font(27, bold=True)
@@ -155,9 +155,9 @@ def create_sail_appearance_figure() -> None:
     score_font = load_font(33, bold=True)
     note_font = load_font(21)
 
-    drawing.text((42, 28), 'Sail color remains discriminative across time', font=title_font, fill=INK)
+    drawing.text((35, 24), 'Sail color remains discriminative across time', font=title_font, fill=INK)
     drawing.text(
-        (42, 78),
+        (35, 74),
         'Three detections per rider from consecutive samples of the same sequence',
         font=note_font,
         fill=MUTED,
@@ -165,13 +165,13 @@ def create_sail_appearance_figure() -> None:
 
     crop_width = 174
     crop_height = 232
-    x_positions = (146, 344, 542)
-    y_positions = (142, 426)
+    x_positions = (139, 337, 535)
+    y_positions = (138, 422)
     identity_names = ('Track A', 'Track B')
     identity_colors = (BLUE, ORANGE)
     for identity_index in range(2):
         drawing.text(
-            (38, y_positions[identity_index] + 92),
+            (31, y_positions[identity_index] + 92),
             identity_names[identity_index],
             font=heading_font,
             fill=identity_colors[identity_index],
@@ -193,17 +193,17 @@ def create_sail_appearance_figure() -> None:
             if identity_index == 0:
                 centered_text(
                     drawing,
-                    (x_position, 109, x_position + crop_width, 139),
+                    (x_position, 105, x_position + crop_width, 135),
                     f't{time_index + 1}',
                     label_font,
                     MUTED,
                 )
 
-    matrix_left = 894
-    matrix_top = 236
+    matrix_left = 819
+    matrix_top = 241
     cell_size = 164
-    drawing.text((816, 138), 'Appearance match score', font=heading_font, fill=INK)
-    drawing.text((816, 177), 'higher means a stronger match', font=note_font, fill=MUTED)
+    drawing.text((809, 134), 'Appearance match score', font=heading_font, fill=INK)
+    drawing.text((809, 173), 'higher means a stronger match', font=note_font, fill=MUTED)
     for index, label in enumerate(('A', 'B')):
         centered_text(
             drawing,
@@ -236,14 +236,14 @@ def create_sail_appearance_figure() -> None:
             drawing.rectangle(box, fill=match_score_color(value), outline=WHITE, width=5)
             centered_text(drawing, box, format_match_score(value), score_font, INK)
 
-    drawing.text((816, 590), 'Mean pairwise heuristic score', font=note_font, fill=MUTED)
+    drawing.text((809, 586), 'Mean pairwise heuristic score', font=note_font, fill=MUTED)
     drawing.text(
-        (816, 627),
+        (809, 623),
         f'Lab + hue descriptor; γₐ = {PRODUCTION_APPEARANCE_SIMILARITY_GAMMA:.2f}',
         font=note_font,
         fill=INK,
     )
-    drawing.text((816, 662), 'three stripes + global block', font=note_font, fill=INK)
+    drawing.text((809, 658), 'three stripes + global block', font=note_font, fill=INK)
 
     canvas.save(OUTPUT_DIRECTORY / 'tracking-sail-color-similarity.png', optimize=True, dpi=(300, 300))
 
