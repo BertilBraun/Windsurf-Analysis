@@ -15,7 +15,8 @@ The pipeline separates perception, identity, and presentation geometry:
 The detector is a custom-trained one-class YOLO11m-pose model.  It was initialized
 from public pretrained weights and trained for 700 epochs at 640-pixel input
 resolution on manually reviewed boxes and two windsurf-specific pose keypoints: the
-boom--mast junction and mast tip.  Every box is also converted into a compact color descriptor.  Independently, background features
+boom--mast junction and mast tip.  Each box is also converted into a compact sail-color
+descriptor after border-connected background suppression.  Independently, background features
 are estimated between adjacent frames while masking detected surfers; the resulting
 camera transforms are passed to both tracking stages.
 

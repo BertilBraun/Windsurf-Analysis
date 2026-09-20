@@ -13,32 +13,27 @@ class NormalizedPoint:
 
 
 @dataclass(frozen=True)
-class NormalizedBoundingBox:
-    center: NormalizedPoint
-    width: float
-    height: float
+class PoseAnnotation:
+    bounding_box_center: NormalizedPoint
+    bounding_box_width: float
+    bounding_box_height: float
+    boom_mast: NormalizedPoint
+    mast_tip: NormalizedPoint
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-SOURCE_IMAGE = REPOSITORY_ROOT / 'train' / 'detection' / 'windsurf_dataset' / 'P1030704_frame_000765.jpg'
+DATASET_DIRECTORY = REPOSITORY_ROOT / 'train' / 'detection' / 'datasets' / 'windsurfer_pose'
+SOURCE_STEM = 'edge_cases_MVI_2411_sample_0087'
+SOURCE_IMAGE = DATASET_DIRECTORY / 'images' / 'train' / f'{SOURCE_STEM}.jpg'
+SOURCE_LABEL = DATASET_DIRECTORY / 'labels' / 'train' / f'{SOURCE_STEM}.txt'
 OUTPUT_IMAGE = Path(__file__).with_name('pose-anchor-geometry.png')
 
-BOUNDING_BOX = NormalizedBoundingBox(
-    center=NormalizedPoint(x=0.473629, y=0.407902),
-    width=0.191827,
-    height=0.794255,
-)
-BOOM_MAST = NormalizedPoint(x=0.471199, y=0.561913)
-MAST_TIP = NormalizedPoint(x=0.562497, y=0.010648)
-
-# The production anchor lies 85% of the way from a proxy mast-tip position
-# at the box top toward the boom/mast junction.
+# The production anchor interpolates vertically from the box top toward the boom--mast junction.
 ANCHOR_INTERPOLATION = 0.85
-CROP_LEFT = 1100
-CROP_TOP = 0
-CROP_RIGHT = 2530
-CROP_BOTTOM = 1900
-OUTPUT_WIDTH = 1200
+HORIZONTAL_CROP_MARGIN = 0.07
+VERTICAL_CROP_MARGIN = 0.05
+OUTPUT_WIDTH = 1400
+HEADER_HEIGHT = 110
 
 
 def load_font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont:
@@ -46,40 +41,19 @@ def load_font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(str(Path('C:/Windows/Fonts') / filename), size=size)
 
 
-def to_source_pixels(point: NormalizedPoint, width: int, height: int) -> tuple[float, float]:
-    return point.x * width, point.y * height
-
-
-def to_output_pixels(
-    point: tuple[float, float],
-    scale: float,
-    header_height: int,
-) -> tuple[int, int]:
-    x = int(round((point[0] - CROP_LEFT) * scale))
-    y = int(round((point[1] - CROP_TOP) * scale + header_height))
-    return x, y
-
-
-def draw_marker(
-    drawing: ImageDraw.ImageDraw,
-    point: tuple[int, int],
-    color: tuple[int, int, int, int],
-    radius: int,
-) -> None:
-    x, y = point
-    drawing.ellipse((x - radius, y - radius, x + radius, y + radius), fill=color, outline='white', width=3)
-
-
-def draw_cross(
-    drawing: ImageDraw.ImageDraw,
-    point: tuple[int, int],
-    color: tuple[int, int, int, int],
-    radius: int,
-) -> None:
-    x, y = point
-    drawing.line((x - radius, y, x + radius, y), fill=color, width=7)
-    drawing.line((x, y - radius, x, y + radius), fill=color, width=7)
-    drawing.ellipse((x - 3, y - 3, x + 3, y + 3), fill='white')
+def load_pose_annotation(label_path: Path) -> PoseAnnotation:
+    values = [float(value) for value in label_path.read_text(encoding='utf-8').split()]
+    if len(values) != 11:
+        raise ValueError(f'Expected one YOLO pose row with 11 values in {label_path}')
+    if values[7] <= 0 or values[10] <= 0:
+        raise ValueError(f'Both pose keypoints must be visible in {label_path}')
+    return PoseAnnotation(
+        bounding_box_center=NormalizedPoint(values[1], values[2]),
+        bounding_box_width=values[3],
+        bounding_box_height=values[4],
+        boom_mast=NormalizedPoint(values[5], values[6]),
+        mast_tip=NormalizedPoint(values[8], values[9]),
+    )
 
 
 def draw_label(
@@ -89,118 +63,158 @@ def draw_label(
     font: ImageFont.FreeTypeFont,
     color: tuple[int, int, int, int],
 ) -> None:
-    x, y = position
-    left, top, right, bottom = drawing.textbbox((x, y), text, font=font)
-    padding_x = 12
-    padding_y = 7
+    left, top, right, bottom = drawing.textbbox(position, text, font=font)
     drawing.rounded_rectangle(
-        (left - padding_x, top - padding_y, right + padding_x, bottom + padding_y),
+        (left - 12, top - 7, right + 12, bottom + 7),
         radius=8,
         fill=(12, 18, 24, 215),
     )
-    drawing.text((x, y), text, font=font, fill=color)
+    drawing.text(position, text, font=font, fill=color)
+
+
+def draw_cross(
+    drawing: ImageDraw.ImageDraw,
+    point: tuple[int, int],
+    color: tuple[int, int, int, int],
+) -> None:
+    x, y = point
+    drawing.line((x - 18, y, x + 18, y), fill=color, width=7)
+    drawing.line((x, y - 18, x, y + 18), fill=color, width=7)
+    drawing.ellipse((x - 3, y - 3, x + 3, y + 3), fill='white')
+
+
+def draw_marker(
+    drawing: ImageDraw.ImageDraw,
+    point: tuple[int, int],
+    color: tuple[int, int, int, int],
+) -> None:
+    x, y = point
+    drawing.ellipse(
+        (x - 12, y - 12, x + 12, y + 12),
+        fill=color,
+        outline='white',
+        width=3,
+    )
 
 
 def create_figure() -> None:
-    source = Image.open(SOURCE_IMAGE).convert('RGB')
+    annotation = load_pose_annotation(SOURCE_LABEL)
+    with Image.open(SOURCE_IMAGE) as loaded:
+        source = loaded.convert('RGB')
     source_width, source_height = source.size
 
-    crop = source.crop((CROP_LEFT, CROP_TOP, CROP_RIGHT, CROP_BOTTOM))
+    box_left = annotation.bounding_box_center.x - annotation.bounding_box_width / 2.0
+    box_right = annotation.bounding_box_center.x + annotation.bounding_box_width / 2.0
+    box_top = annotation.bounding_box_center.y - annotation.bounding_box_height / 2.0
+    box_bottom = annotation.bounding_box_center.y + annotation.bounding_box_height / 2.0
+    crop_left = max(0.0, box_left - HORIZONTAL_CROP_MARGIN)
+    crop_right = min(1.0, box_right + HORIZONTAL_CROP_MARGIN)
+    crop_top = max(0.0, box_top - VERTICAL_CROP_MARGIN)
+    crop_bottom = min(1.0, box_bottom + VERTICAL_CROP_MARGIN)
+    crop_pixels = (
+        round(crop_left * source_width),
+        round(crop_top * source_height),
+        round(crop_right * source_width),
+        round(crop_bottom * source_height),
+    )
+    crop = source.crop(crop_pixels)
     scale = OUTPUT_WIDTH / crop.width
-    image_height = int(round(crop.height * scale))
-    header_height = 100
-    canvas = Image.new('RGB', (OUTPUT_WIDTH, image_height + header_height), color=(246, 247, 249))
-    canvas.paste(crop.resize((OUTPUT_WIDTH, image_height), Image.Resampling.LANCZOS), (0, header_height))
-
-    overlay = Image.new('RGBA', canvas.size, color=(0, 0, 0, 0))
-    drawing = ImageDraw.Draw(overlay)
-    title_font = load_font(35, bold=True)
-    label_font = load_font(25, bold=True)
-    small_font = load_font(22)
-
-    drawing.text(
-        (34, 26),
-        'Bounding-box geometry versus semantic pose geometry',
-        font=title_font,
-        fill=(22, 28, 35, 255),
+    image_height = round(crop.height * scale)
+    canvas = Image.new('RGB', (OUTPUT_WIDTH, image_height + HEADER_HEIGHT), 'white')
+    canvas.paste(
+        crop.resize((OUTPUT_WIDTH, image_height), Image.Resampling.LANCZOS),
+        (0, HEADER_HEIGHT),
     )
 
-    center_source = to_source_pixels(BOUNDING_BOX.center, source_width, source_height)
-    half_width = BOUNDING_BOX.width * source_width / 2.0
-    half_height = BOUNDING_BOX.height * source_height / 2.0
-    box_top_source = center_source[1] - half_height
-    bbox_top_left = to_output_pixels((center_source[0] - half_width, box_top_source), scale, header_height)
-    bbox_bottom_right = to_output_pixels(
-        (center_source[0] + half_width, center_source[1] + half_height),
-        scale,
-        header_height,
-    )
+    def to_output(point: NormalizedPoint) -> tuple[int, int]:
+        source_x = point.x * source_width
+        source_y = point.y * source_height
+        return (
+            round((source_x - crop_pixels[0]) * scale),
+            round((source_y - crop_pixels[1]) * scale + HEADER_HEIGHT),
+        )
 
-    boom_source = to_source_pixels(BOOM_MAST, source_width, source_height)
-    mast_tip_source = to_source_pixels(MAST_TIP, source_width, source_height)
-    anchor_source = (
-        boom_source[0],
-        (1.0 - ANCHOR_INTERPOLATION) * box_top_source + ANCHOR_INTERPOLATION * boom_source[1],
+    bounding_box_center = to_output(annotation.bounding_box_center)
+    bounding_box_top_left = to_output(NormalizedPoint(box_left, box_top))
+    bounding_box_bottom_right = to_output(NormalizedPoint(box_right, box_bottom))
+    boom_mast = to_output(annotation.boom_mast)
+    mast_tip = to_output(annotation.mast_tip)
+    semantic_anchor = to_output(
+        NormalizedPoint(
+            annotation.boom_mast.x,
+            (1.0 - ANCHOR_INTERPOLATION) * box_top + ANCHOR_INTERPOLATION * annotation.boom_mast.y,
+        )
     )
-
-    bbox_center = to_output_pixels(center_source, scale, header_height)
-    boom = to_output_pixels(boom_source, scale, header_height)
-    mast_tip = to_output_pixels(mast_tip_source, scale, header_height)
-    anchor = to_output_pixels(anchor_source, scale, header_height)
 
     orange = (242, 153, 74, 255)
     cyan = (78, 205, 220, 255)
     magenta = (235, 92, 155, 255)
+    overlay = Image.new('RGBA', canvas.size, (0, 0, 0, 0))
+    drawing = ImageDraw.Draw(overlay)
+    title_font = load_font(40, bold=True)
+    label_font = load_font(29, bold=True)
 
-    drawing.rectangle((*bbox_top_left, *bbox_bottom_right), outline=orange, width=7)
-    drawing.line((*mast_tip, *boom), fill=cyan, width=8)
-    drawing.line((*bbox_center, *anchor), fill=(232, 235, 239, 230), width=4)
-    draw_cross(drawing, bbox_center, orange, radius=18)
-    draw_marker(drawing, mast_tip, cyan, radius=12)
-    draw_marker(drawing, boom, cyan, radius=12)
-    draw_cross(drawing, anchor, magenta, radius=18)
-
+    drawing.text(
+        (38, 30),
+        'Bounding-box and pose-guided framing geometry',
+        font=title_font,
+        fill=(22, 28, 35, 255),
+    )
+    drawing.rectangle(
+        (*bounding_box_top_left, *bounding_box_bottom_right),
+        outline=orange,
+        width=8,
+    )
+    drawing.line((*mast_tip, *boom_mast), fill=cyan, width=9)
+    drawing.line(
+        (*bounding_box_center, *semantic_anchor),
+        fill=(232, 235, 239, 230),
+        width=4,
+    )
+    draw_cross(drawing, bounding_box_center, orange)
+    draw_marker(drawing, mast_tip, cyan)
+    draw_marker(drawing, boom_mast, cyan)
+    draw_cross(drawing, semantic_anchor, magenta)
     draw_label(
         drawing,
-        (bbox_top_left[0] + 18, bbox_top_left[1] + 16),
+        (bounding_box_top_left[0] + 18, bounding_box_top_left[1] + 16),
         'detector box',
         label_font,
         orange,
     )
-    draw_label(
-        drawing,
-        (bbox_center[0] - 250, bbox_center[1] - 30),
-        'box center',
-        label_font,
-        orange,
+    box_center_text = 'box center'
+    box_left, box_top_text, _, box_bottom = drawing.textbbox((0, 0), box_center_text, font=label_font)
+    box_center_label = (
+        bounding_box_center[0] + 36 - box_left,
+        round(bounding_box_center[1] - (box_top_text + box_bottom) / 2),
     )
+    draw_label(drawing, box_center_label, box_center_text, label_font, orange)
     draw_label(
         drawing,
-        (mast_tip[0] - 220, mast_tip[1] + 24),
+        (mast_tip[0] + 30, mast_tip[1] - 20),
         'mast tip',
         label_font,
         cyan,
     )
     draw_label(
         drawing,
-        (boom[0] - 315, boom[1] + 8),
-        'boom--mast junction',
+        (boom_mast[0] + 35, boom_mast[1] - 12),
+        'boom-mast junction',
         label_font,
         cyan,
     )
+    semantic_anchor_text = 'semantic anchor'
+    _, semantic_top, semantic_right, semantic_bottom = drawing.textbbox((0, 0), semantic_anchor_text, font=label_font)
+    semantic_anchor_label = (
+        semantic_anchor[0] - 36 - semantic_right,
+        round(semantic_anchor[1] - (semantic_top + semantic_bottom) / 2),
+    )
     draw_label(
         drawing,
-        (anchor[0] + 35, anchor[1] - 25),
-        'semantic anchor',
+        semantic_anchor_label,
+        semantic_anchor_text,
         label_font,
         magenta,
-    )
-    draw_label(
-        drawing,
-        (mast_tip[0] + 25, (mast_tip[1] + boom[1]) // 2),
-        'mast-length scale signal',
-        small_font,
-        cyan,
     )
 
     composed = Image.alpha_composite(canvas.convert('RGBA'), overlay).convert('RGB')

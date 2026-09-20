@@ -147,31 +147,31 @@ def create_sail_appearance_figure() -> None:
     ]
     match_scores = compute_appearance_match_scores(crops)
 
-    canvas = Image.new('RGB', (1500, 820), BACKGROUND)
+    canvas = Image.new('RGB', (1250, 760), WHITE)
     drawing = ImageDraw.Draw(canvas)
-    title_font = load_font(38, bold=True)
-    heading_font = load_font(25, bold=True)
-    label_font = load_font(23)
-    score_font = load_font(29, bold=True)
-    note_font = load_font(20)
+    title_font = load_font(36, bold=True)
+    heading_font = load_font(27, bold=True)
+    label_font = load_font(24)
+    score_font = load_font(33, bold=True)
+    note_font = load_font(21)
 
-    drawing.text((55, 34), 'Sail color remains discriminative across time', font=title_font, fill=INK)
+    drawing.text((42, 28), 'Sail color remains discriminative across time', font=title_font, fill=INK)
     drawing.text(
-        (55, 88),
-        'Three detections per rider from consecutive samples of the same project sequence',
+        (42, 78),
+        'Three detections per rider from consecutive samples of the same sequence',
         font=note_font,
         fill=MUTED,
     )
 
-    crop_width = 190
-    crop_height = 255
-    x_positions = (180, 400, 620)
-    y_positions = (165, 475)
+    crop_width = 174
+    crop_height = 232
+    x_positions = (146, 344, 542)
+    y_positions = (142, 426)
     identity_names = ('Track A', 'Track B')
     identity_colors = (BLUE, ORANGE)
     for identity_index in range(2):
         drawing.text(
-            (55, y_positions[identity_index] + 102),
+            (38, y_positions[identity_index] + 92),
             identity_names[identity_index],
             font=heading_font,
             fill=identity_colors[identity_index],
@@ -193,17 +193,17 @@ def create_sail_appearance_figure() -> None:
             if identity_index == 0:
                 centered_text(
                     drawing,
-                    (x_position, 130, x_position + crop_width, 160),
+                    (x_position, 109, x_position + crop_width, 139),
                     f't{time_index + 1}',
                     label_font,
                     MUTED,
                 )
 
-    matrix_left = 1010
-    matrix_top = 265
-    cell_size = 165
-    drawing.text((930, 165), 'Appearance match score', font=heading_font, fill=INK)
-    drawing.text((930, 205), 'production mapping; higher = stronger match', font=note_font, fill=MUTED)
+    matrix_left = 894
+    matrix_top = 236
+    cell_size = 164
+    drawing.text((816, 138), 'Appearance match score', font=heading_font, fill=INK)
+    drawing.text((816, 177), 'higher means a stronger match', font=note_font, fill=MUTED)
     for index, label in enumerate(('A', 'B')):
         centered_text(
             drawing,
@@ -214,7 +214,7 @@ def create_sail_appearance_figure() -> None:
         )
         centered_text(
             drawing,
-            (matrix_left - 55, matrix_top + index * cell_size, matrix_left, matrix_top + (index + 1) * cell_size),
+            (matrix_left - 54, matrix_top + index * cell_size, matrix_left, matrix_top + (index + 1) * cell_size),
             label,
             heading_font,
             INK,
@@ -236,15 +236,14 @@ def create_sail_appearance_figure() -> None:
             drawing.rectangle(box, fill=match_score_color(value), outline=WHITE, width=5)
             centered_text(drawing, box, format_match_score(value), score_font, INK)
 
-    drawing.text((930, 625), 'Mean over pairwise comparisons shown', font=note_font, fill=MUTED)
-    drawing.text((930, 656), 'Heuristic association score, not accuracy.', font=note_font, fill=MUTED)
+    drawing.text((816, 590), 'Mean pairwise heuristic score', font=note_font, fill=MUTED)
     drawing.text(
-        (930, 707),
-        'Lab chromaticity + circular hue',
+        (816, 627),
+        f'Lab + hue descriptor; γₐ = {PRODUCTION_APPEARANCE_SIMILARITY_GAMMA:.2f}',
         font=note_font,
         fill=INK,
     )
-    drawing.text((930, 738), 'saturation-weighted; 3 stripes + global', font=note_font, fill=INK)
+    drawing.text((816, 662), 'three stripes + global block', font=note_font, fill=INK)
 
     canvas.save(OUTPUT_DIRECTORY / 'tracking-sail-color-similarity.png', optimize=True, dpi=(300, 300))
 
@@ -256,14 +255,19 @@ def arrow(
     color: tuple[int, int, int],
     width: int,
 ) -> None:
-    drawing.line((*start, *end), fill=color, width=width)
     direction = np.asarray(end, dtype=np.float32) - np.asarray(start, dtype=np.float32)
     direction /= np.linalg.norm(direction)
     perpendicular = np.asarray((-direction[1], direction[0]), dtype=np.float32)
     tip = np.asarray(end, dtype=np.float32)
     base = tip - direction * 18
+    shaft_end = base + direction * 2
+    drawing.line(
+        (*start, int(round(shaft_end[0])), int(round(shaft_end[1]))),
+        fill=color,
+        width=width,
+    )
     points = [tip, base + perpendicular * 8, base - perpendicular * 8]
-    drawing.polygon([(int(point[0]), int(point[1])) for point in points], fill=color)
+    drawing.polygon([(int(round(point[0])), int(round(point[1]))) for point in points], fill=color)
 
 
 def dashed_line(
@@ -304,86 +308,107 @@ def draw_tracklet(
 
 
 def create_offline_association_figure() -> None:
-    canvas = Image.new('RGB', (1500, 930), BACKGROUND)
+    canvas = Image.new('RGB', (1500, 940), WHITE)
     drawing = ImageDraw.Draw(canvas)
     title_font = load_font(38, bold=True)
     heading_font = load_font(25, bold=True)
     small_font = load_font(19)
     label_font = load_font(21, bold=True)
 
-    drawing.text((55, 34), 'Offline global association resolves ambiguous gaps', font=title_font, fill=INK)
+    drawing.text((55, 30), 'Offline global association resolves ambiguous gaps', font=title_font, fill=INK)
     drawing.text(
-        (55, 88),
-        'At the gap, both pairings fit. Later observations make one pairing globally consistent.',
+        (55, 82),
+        'A causal tracker must choose before later fragments arrive; offline linking can use them.',
         font=small_font,
         fill=MUTED,
     )
 
     candidate = (151, 158, 166)
-    pale_panel = (238, 241, 244)
+    pale_future = (242, 244, 247)
     gap_fill = (225, 229, 234)
-    drawing.rounded_rectangle((55, 135, 1445, 440), radius=18, fill=WHITE, outline=GRID, width=2)
-    drawing.text((85, 156), '1  At the gap: a causal decision is ambiguous', font=heading_font, fill=INK)
-    drawing.text(
-        (85, 197), 'Only past evidence and two short emerging tracklets are visible.', font=small_font, fill=MUTED
-    )
-    drawing.rounded_rectangle((545, 235, 710, 405), radius=12, fill=gap_fill)
-    centered_text(drawing, (545, 245, 710, 280), 'association gap', small_font, MUTED)
-    drawing.rectangle((1040, 225, 1410, 415), fill=pale_panel)
-    drawing.line((1040, 220, 1040, 420), fill=MUTED, width=3)
-    drawing.text((1013, 425), 'now', font=small_font, fill=MUTED)
-    centered_text(drawing, (1070, 290, 1380, 350), 'future not yet observed', heading_font, MUTED)
+    evidence_fill = (232, 240, 242)
 
-    top_a = (150, 260, 500, 310)
-    top_b = (150, 350, 500, 400)
-    top_c = (755, 260, 965, 310)
-    top_d = (755, 350, 965, 400)
+    drawing.rounded_rectangle((55, 125, 1445, 445), radius=18, fill=WHITE, outline=GRID, width=2)
+    drawing.text((85, 146), '1  Online view: the continuation is ambiguous', font=heading_font, fill=INK)
+    drawing.text(
+        (85, 187),
+        'At the current decision point, the successor fragments and everything after them remain unobserved.',
+        font=small_font,
+        fill=MUTED,
+    )
+
+    now_x = 700
+    drawing.rectangle((now_x, 225, 1410, 413), fill=pale_future)
+    drawing.line((now_x, 214, now_x, 422), fill=MUTED, width=3)
+    drawing.text((now_x - 23, 425), 'now', font=small_font, fill=MUTED)
+    centered_text(drawing, (now_x + 20, 221, 1390, 260), 'Future not yet observed', heading_font, MUTED)
+
+    top_a = (125, 275, 445, 325)
+    top_b = (125, 352, 445, 402)
+    top_c = (760, 275, 950, 325)
+    top_d = (760, 352, 950, 402)
+    top_e = (1115, 275, 1350, 325)
+    top_f = (1115, 352, 1350, 402)
+    drawing.rounded_rectangle((500, 266, 645, 411), radius=12, fill=gap_fill)
+    for start_y in (300, 377):
+        for end_y in (300, 377):
+            dashed_line(drawing, (445, start_y), (760, end_y), candidate, 4)
     draw_tracklet(drawing, top_a, 'Tracklet A', BLUE, label_font)
     draw_tracklet(drawing, top_b, 'Tracklet B', ORANGE, label_font)
     draw_tracklet(drawing, top_c, 'Tracklet C', candidate, label_font)
     draw_tracklet(drawing, top_d, 'Tracklet D', candidate, label_font)
-    for start_y in (285, 375):
-        for end_y in (285, 375):
-            dashed_line(drawing, (500, start_y), (755, end_y), candidate, 4)
-    centered_text(drawing, (520, 405, 980, 438), 'all four links remain plausible', small_font, MUTED)
+    draw_tracklet(drawing, top_e, 'later fragment E', candidate, label_font)
+    draw_tracklet(drawing, top_f, 'later fragment F', candidate, label_font)
+    drawing.rounded_rectangle((515, 306, 630, 366), radius=8, fill=gap_fill)
+    centered_text(drawing, (515, 306, 630, 366), 'association\ngap', small_font, MUTED)
 
-    drawing.rounded_rectangle((55, 475, 1445, 845), radius=18, fill=WHITE, outline=GRID, width=2)
-    drawing.text((85, 496), '2  Offline: later evidence selects one consistent pairing', font=heading_font, fill=INK)
+    drawing.rounded_rectangle((55, 480, 1445, 850), radius=18, fill=WHITE, outline=GRID, width=2)
+    drawing.text((85, 501), '2  Offline view: later fragments reveal the consistent paths', font=heading_font, fill=INK)
     drawing.text(
-        (85, 537),
-        'The optimizer evaluates complete tracklets on both sides of the same gap.',
+        (85, 542),
+        'Complete tracklets on both sides of the gap provide evidence unavailable to online association.',
         font=small_font,
         fill=MUTED,
     )
-    drawing.rounded_rectangle((545, 585, 710, 790), radius=12, fill=gap_fill)
-    centered_text(drawing, (545, 595, 710, 630), 'association gap', small_font, MUTED)
 
-    bottom_a = (150, 615, 500, 665)
-    bottom_b = (150, 720, 500, 770)
-    bottom_c = (755, 615, 1040, 665)
-    bottom_d = (755, 720, 1040, 770)
+    bottom_a = (125, 630, 445, 680)
+    bottom_b = (125, 707, 445, 757)
+    bottom_c = (760, 630, 950, 680)
+    bottom_d = (760, 707, 950, 757)
+    bottom_e = (1115, 630, 1350, 680)
+    bottom_f = (1115, 707, 1350, 757)
+
+    drawing.rounded_rectangle((500, 621, 645, 766), radius=12, fill=gap_fill)
+    dashed_line(drawing, (445, 655), (760, 655), candidate, 3)
+    dashed_line(drawing, (445, 732), (760, 732), candidate, 3)
     draw_tracklet(drawing, bottom_a, 'Tracklet A', BLUE, label_font)
     draw_tracklet(drawing, bottom_b, 'Tracklet B', ORANGE, label_font)
     draw_tracklet(drawing, bottom_c, 'Tracklet C', ORANGE, label_font)
     draw_tracklet(drawing, bottom_d, 'Tracklet D', BLUE, label_font)
+    draw_tracklet(drawing, bottom_e, 'later fragment E', ORANGE, label_font)
+    draw_tracklet(drawing, bottom_f, 'later fragment F', BLUE, label_font)
+    arrow(drawing, (445, 655), (750, 732), BLUE, 8)
+    arrow(drawing, (445, 732), (750, 655), ORANGE, 8)
+    arrow(drawing, (950, 655), (1105, 655), ORANGE, 8)
+    arrow(drawing, (950, 732), (1105, 732), BLUE, 8)
+    drawing.rounded_rectangle((515, 663, 630, 724), radius=8, fill=gap_fill)
+    centered_text(drawing, (515, 663, 630, 724), 'association\ngap', small_font, MUTED)
 
-    dashed_line(drawing, (500, 640), (755, 640), candidate, 3)
-    dashed_line(drawing, (500, 745), (755, 745), candidate, 3)
-    arrow(drawing, (500, 640), (755, 745), BLUE, 8)
-    arrow(drawing, (500, 745), (755, 640), ORANGE, 8)
+    drawing.rounded_rectangle((680, 570, 1380, 608), radius=12, fill=evidence_fill)
+    centered_text(
+        drawing,
+        (680, 570, 1380, 608),
+        'E supports B→C; F supports A→D',
+        label_font,
+        INK,
+    )
 
-    drawing.rounded_rectangle((1080, 590, 1410, 795), radius=14, fill=pale_panel, outline=GRID, width=2)
-    drawing.text((1110, 610), 'Later evidence', font=heading_font, fill=INK)
-    drawing.text((1110, 656), 'C matches B', font=label_font, fill=ORANGE)
-    drawing.text((1110, 694), 'D matches A', font=label_font, fill=BLUE)
-    drawing.text((1110, 744), 'stable sail appearance', font=small_font, fill=MUTED)
-
-    drawing.line((85, 885, 155, 885), fill=BLUE, width=8)
-    drawing.text((175, 872), 'selected global link', font=small_font, fill=INK)
-    dashed_line(drawing, (425, 885), (495, 885), candidate, 3)
-    drawing.text((515, 872), 'rejected candidate', font=small_font, fill=INK)
-    arrow(drawing, (1150, 885), (1400, 885), MUTED, 3)
-    drawing.text((1025, 872), 'full video timeline', font=small_font, fill=MUTED)
+    drawing.line((85, 891, 155, 891), fill=BLUE, width=8)
+    drawing.text((175, 878), 'selected global link', font=small_font, fill=INK)
+    dashed_line(drawing, (425, 891), (495, 891), candidate, 3)
+    drawing.text((515, 878), 'rejected candidate', font=small_font, fill=INK)
+    drawing.text((1000, 878), 'full video timeline', font=small_font, fill=MUTED)
+    arrow(drawing, (1200, 891), (1400, 891), MUTED, 3)
 
     canvas.save(OUTPUT_DIRECTORY / 'tracking-offline-global-association.png', optimize=True, dpi=(300, 300))
 
