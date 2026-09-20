@@ -4,11 +4,11 @@
 We presented an offline system that turns long-shot windsurfing video into stable,
 rider-relative trajectories.  Conservative local tracklets, camera-compensated
 four-dimensional motion, sail-specific color, global path optimization, and two rig
-landmarks implement a common design: preserve identity under ambiguity and use
-complete-video context before committing to longer associations.
+pose keypoints implement a common design: preserve identity under ambiguity and use
+future fragment evidence before committing to longer associations.
 
 On the conditional development-set protocol, production reduces fragmentation from
-845 to 42 relative to OC-SORT while retaining nine contaminated tracks.  The staged
-safeguards reduce contaminated tracks from 20 to nine.  This is not a general tracker
+845 to 42 relative to OC-SORT while retaining nine identity-mixed tracks.  The staged
+safeguards reduce identity-mixed tracks from 20 to nine.  This is not a general tracker
 ranking; it shows how domain structure, offline inference, and an asymmetric failure
 cost can turn custom pose detections into useful rider-relative views.

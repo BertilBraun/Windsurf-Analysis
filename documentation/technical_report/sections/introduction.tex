@@ -10,27 +10,30 @@ enough to produce a stable rider-relative video.
 This requirement changes the engineering objective.  A missed association leaves two
 fragments that can be reviewed or joined later.  A false association silently inserts
 another surfer into the output and can invalidate the complete sequence.  Standard
-online trackers are designed for causal decisions and balanced benchmark metrics;
-this project instead has the complete recording available and assigns a much larger
-cost to false merging than to fragmentation.
+online trackers are designed for causal decisions and are typically evaluated with
+metrics that balance detection and association errors.  Here both failure modes
+matter but not equally: a false merge can corrupt a complete rider video, whereas
+excessive fragmentation can leave even pure tracks unusable.  The full recording is
+available, so the system favors conservative local decisions and recovers continuity
+later through global association.
 
 We describe the resulting end-to-end computer-vision system.  A custom-trained
-detector supplies surfer boxes and two rig landmarks.  Masked global-motion estimation
+pose detector supplies surfer boxes and two rig keypoints.  Masked global-motion estimation
 separates camera pan from target motion.  Conservative online association creates
 high-purity tracklets, after which an offline integer program links compatible
 tracklets using motion, temporal gap, and a sail-specific color representation.
-Finally, the rig landmarks define a temporally smoothed anchor and scale for a stable
+Finally, the pose keypoints define a temporally smoothed anchor and scale for a stable
 virtual camera.  Source code, technical documentation, and an output demonstration
-are released with the project~\cite{projectresources}.
+are publicly available for inspection~\cite{projectresources}.
 
 The contributions are:
 \begin{itemize}
   \item an explicit formulation of long-shot windsurfing analysis around asymmetric
-  identity failure cost and complete-video processing;
+  costs for identity merges and fragmentation, with complete-video processing;
   \item a domain-specific association pipeline combining foreground-masked sail
   appearance, camera-compensated four-dimensional motion, conservative tracklets,
   geometric vetoes, and global path optimization;
-  \item a two-landmark rider-relative stabilization signal designed around windsurf
+  \item a two-keypoint rider-relative stabilization signal designed around windsurf
   rig geometry rather than generic human pose; and
   \item a fixed-observation evaluation on 21 manually reconstructed videos, including
   OC-SORT and BoT-SORT comparisons, staged ablations, and a link-level failure audit.

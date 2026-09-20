@@ -77,14 +77,15 @@ lower pair precision, a larger contaminated-output fraction (9/95 versus 9/165),
 more observations contained in contaminated tracks (9,982 versus 6,184).  Eleven of
 21 videos are exact, compared with four for BoT-SORT and one for OC-SORT.  The result
 is the selected operating point for this application, but not a uniform
-improvement and not the nominal zero-false-merge target.
+improvement and not the nominal zero-false-merge target.  OC-SORT's lower mixed-track
+rate comes with 165 outputs for 88 identities, 845 excess fragments, and 1.9\% of
+retained observations left unassigned.
 
 A 10,000-sample bootstrap that resamples complete videos gives 95\% intervals for
 micro pair F1 of [0.721, 0.864] for OC-SORT, [0.759, 0.909] for BoT-SORT, and
 [0.852, 0.995] for production.  The broad, overlapping intervals reinforce the
-development-set interpretation rather than a general ranking claim.  The checked-in
-bootstrap script records video-level resampling, pooled-count recomputation, percentile
-intervals, NumPy's PCG64 generator, and seed 20260918~\cite{projectresources}.
+development-set interpretation rather than a general ranking claim.  The resampling
+procedure and seed are recorded with the evaluation artifacts~\cite{projectresources}.
 
 \subsection{Safeguard ablation}
 
@@ -130,7 +131,7 @@ even a very poor link cheaper than splitting two central fragments.
 
 A manual audit found nine wrong selected fragment joins across six videos.  This audit
 counts only joins between two individually pure preprocessor fragments.  Contaminated
-production outputs span seven videos because \texttt{input6} instead contains an
+production outputs span seven videos because evaluation sequence 15 instead contains an
 already impure local fragment (225 observations from one identity and one from
 another), so its adjacent joins are excluded from the pure-to-pure edge count.  Unlike the removed
 geometric failures, they concentrate at crossings, visually near-identical sails,

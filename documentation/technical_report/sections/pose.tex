@@ -7,9 +7,9 @@ is a poor control signal because a tall, rotating rig changes box center and hei
 even when the athlete moves little.  Direct box-based cropping therefore produces
 lateral drift and visible zoom pumping.
 
-\subsection{Two task-specific landmarks}
+\subsection{Two task-specific pose keypoints}
 
-The pose model predicts the boom--mast junction and mast tip.  These points were
+The pose model predicts the boom--mast junction and mast tip.  These keypoints were
 chosen for rendering geometry rather than as a reduced human skeleton.  The boom
 junction provides a repeatable reference near the rider; the boom-to-tip distance
 provides a rig-relative scale cue that is less sensitive to in-plane rotation than box
@@ -17,15 +17,6 @@ height.  The checked-in development dataset contains 1,123 manually labeled trai
 images and 56 validation images.  The split is image-level and can contain frames from
 the same source sequence on both sides, so it does not establish cross-sequence
 generalization.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=0.92\linewidth]{pose-anchor-geometry.png}
-  \caption{Pose-derived virtual-camera geometry.  The detector box and center
-  (orange) describe image extent.  Boom junction and mast tip (cyan) provide a
-  rider-relative anchor (magenta) and scale cue.}
-  \label{fig:pose-anchor-geometry}
-\end{figure}
 
 For box top $y_1$, height $h$, and center $(c_x,c_y)$, the fallback anchor is
 \begin{equation}
@@ -40,7 +31,7 @@ $\tilde{\mathbf t}=(b_x,y_1)$ gives
 The measured mast tip is intentionally excluded from position: its long lever arm
 amplifies localization noise.  It remains useful for scale.
 
-Small crops do not support equally reliable landmarks.  The unsmoothed anchor blends
+Small crops do not support equally reliable keypoints.  The unsmoothed anchor blends
 pose and box geometry according to the shorter box dimension, with pose weight rising
 from zero at 45 pixels to one at 55 pixels.  Missing boom observations are interpolated
 for short gaps; longer gaps ease toward the per-frame box fallback and back to pose
@@ -49,16 +40,16 @@ isolated jumps while preserving response to actual motion.
 
 \subsection{Rig-relative scale}
 
-When both landmarks are visible, scale begins with
+When both keypoints are visible, scale begins with
 $\ell=\lVert\mathbf b-\mathbf t\rVert_2$.  Short gaps are interpolated or held;
 otherwise the anchor-to-box-top distance supplies a fallback.  A centered 31-frame
 mean (radius 15) produces $\bar\ell$, and the requested crop height is
 \begin{equation}
  C=\max\!\left(\frac{\bar\ell}{0.75},\frac{h}{0.9},1\right),
- \qquad s=\operatorname{clip}\!\left(\frac{C}{H},10^{-6},1\right),
+ \qquad S_m=\operatorname{clip}_{(0,1]}\!\left(\frac{C}{H}\right),
  \label{eq:pose-scale}
 \end{equation}
-where $H$ is source height.  The mast segment is targeted to 75\% of the output, while
+where $H$ is source height and $S_m$ is the mast-relative crop scale.  The mast segment is targeted to 75\% of the output, while
 the box term prevents excessively tight crops.  The resulting anchor and scale are
 stored per frame with the identity track.  Global background stabilization remains a
 separate signal: it improves motion estimation and optional overview rendering, but

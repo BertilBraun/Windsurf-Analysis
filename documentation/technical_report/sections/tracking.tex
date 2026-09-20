@@ -15,6 +15,9 @@ layout, and a fourth block represents the complete crop.  Each block is L1-norma
 and square-root mapped before the concatenated vector is L2-normalized, yielding a
 bounded Hellinger-style distance.
 
+\Cref{fig:tracking-sail-color} illustrates the descriptor response on two visually
+distinct sails.
+
 The descriptor first removes likely background using a border-derived Lab model.  A
 gradient gate identifies low-texture pixels consistent with that model, and only
 candidate background components connected to the crop border are removed.  After
@@ -23,20 +26,10 @@ a minimum-mask fallback avoids empty descriptors.  This foreground mask is impor
 path used a fixed center rectangle, allowing water and overlapping sails to dilute
 the intended cue.
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{tracking-sail-color-similarity.png}
-  \caption{Production descriptor on consecutive crops of two sails.  Repeated
-  observations receive high match scores, while the cross-sail entries reach the
-  lower clip bound.  The hand-selected example explains the cue; it is not an
-  accuracy result.}
-  \label{fig:tracking-sail-color}
-\end{figure}
-
 \begin{figure*}[t]
   \centering
   \includegraphics[width=0.82\textwidth]{tracking-offline-global-association.png}
-  \caption{Complete-video evidence supports global tracklet association.  Later
+  \caption{Future fragment evidence supports global tracklet association.  Later
   stable observations distinguish locally ambiguous successors; the optimizer then
   chooses a compatible pairing jointly.  Start, end, discard, and gap costs are
   omitted from the conceptual diagram.}
@@ -46,15 +39,17 @@ the intended cue.
 For a tracklet, all observation embeddings are averaged into a whole-fragment
 prototype.  This replaced endpoint-biased exponential averages, which emphasized the
 last crop of the earlier fragment and first crop of the later fragment---exactly the
-frames most often contaminated during a crossing.  Given descriptor distance $d$, the
+frames most likely to contain both sails during a crossing.  Given descriptor distance $d$, the
 current heuristic match score is
 \begin{equation}
- s_a=\operatorname{clip}_{[10^{-6},1-10^{-6}]}(1-11.630d).
+ S_a=\operatorname{clip}_{(0,1]}(1-\gamma_a d),
+ \qquad \gamma_a=11.63.
  \label{eq:appearance}
 \end{equation}
 It is a tuned similarity score, not a calibrated posterior probability; the graph
-uses $C^{\mathrm{appearance}}=-\log s_a$.  The coefficient 11.630 is the frozen value
-from historical development-set tuning, whose detailed search trace is unavailable.
+uses $C^{\mathrm{appearance}}=-\log S_a$.  The coefficient $\gamma_a$ was tuned on the
+development set.  The implementation uses small numerical margins at the interval
+boundaries to keep the logarithm well defined.
 
 \subsection{Conservative local tracklets}
 

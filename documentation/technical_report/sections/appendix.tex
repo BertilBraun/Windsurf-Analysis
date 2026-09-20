@@ -31,7 +31,7 @@ but excludes initial crop-embedding extraction.
 The reported production run uses a maximum candidate gap of three seconds and at
 most ten outgoing candidate links per fragment.  The ILP start and end costs are both
 96.0993.  Motion, appearance, and gap costs have weights 3.4694, 2.2492, and 9.9926;
-the per-frame miss probability is 0.8037 and the appearance calibration parameter is
+the per-frame miss probability is 0.8037 and the appearance coefficient $\gamma_a$ is
 11.6301.  Motion compares the first two detections of a successor using the complete
 $(c_x,c_y,w,h)$ measurement.  Candidate links are rejected above motion NLL 8 or
 above an area or aspect-ratio change factor of 3.
@@ -72,11 +72,10 @@ contains 1,123 training and 56 validation images.
 \subsection{Audited wrong links}
 
 The final link audit found nine wrong selected links in six videos: one each in
-\texttt{Bertil1}, \texttt{input7}, and \texttt{MVI\_5332}; two each in
-\texttt{MVI\_5346}, \texttt{MVI\_5348}, and
-\texttt{ride mit den booooyyyys}.  This count concerns selected fragment edges and
+evaluation sequences 12, 16, and 18, and two each in sequences 19--21.  These neutral
+indices follow the sequence order in the checked-in per-video result file.  This count concerns selected fragment edges and
 is distinct from the number of contaminated output tracks or observations.  In
 particular, the nine contaminated outputs span seven videos: the edge audit counts
-only wrong links between pure fragments.  The seventh sequence, \texttt{input6},
+only wrong links between pure fragments.  The seventh sequence, evaluation sequence 15,
 instead contains one impure local fragment with a 225-to-1 identity mixture and is
 therefore excluded from that classification.

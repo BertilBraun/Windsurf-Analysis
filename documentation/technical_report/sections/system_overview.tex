@@ -4,7 +4,7 @@
 The pipeline separates perception, identity, and presentation geometry:
 \begin{equation}
 \begin{aligned}
-\text{video} &\rightarrow \text{boxes + landmarks}\\
+\text{video} &\rightarrow \text{boxes + pose keypoints}\\
 &\rightarrow \text{local tracklets}\\
 &\rightarrow \text{offline identity paths}\\
 &\rightarrow \text{stable rider views}.
@@ -14,10 +14,36 @@ The pipeline separates perception, identity, and presentation geometry:
 
 The detector is a custom-trained one-class YOLO11m-pose model.  It was initialized
 from public pretrained weights and trained for 700 epochs at 640-pixel input
-resolution on manually reviewed boxes and two windsurf-specific landmarks: the
+resolution on manually reviewed boxes and two windsurf-specific pose keypoints: the
 boom--mast junction and mast tip.  Every box is also converted into a compact color descriptor.  Independently, background features
 are estimated between adjacent frames while masking detected surfers; the resulting
 camera transforms are passed to both tracking stages.
+
+\begin{figure*}[t]
+  \centering
+  \begin{subfigure}[t]{0.38\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{pose-anchor-geometry.png}
+    \caption{Pose-derived framing geometry.  The detector box and center (orange),
+    boom--mast junction and mast tip (cyan), and rider-relative anchor (magenta).}
+    \label{fig:pose-anchor-geometry}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{tracking-sail-color-similarity.png}
+    \caption{Production color descriptor on consecutive crops of two sails.
+    Repeated observations score highly, while cross-sail matches reach the lower
+    bound.  This hand-selected example explains the cue rather than measuring it.}
+    \label{fig:tracking-sail-color}
+  \end{subfigure}
+  \caption{Task-specific visual signals used by the system: rig pose for framing and
+  sail appearance for identity association.}
+  \label{fig:domain-signals}
+\end{figure*}
+
+\Cref{fig:pose-anchor-geometry} introduces the task-specific pose keypoints and the
+framing signals derived from them.  Their temporal treatment is described in
+\Cref{sec:pose}.
 
 The first association stage is causal but deliberately conservative.  It accepts
 only locally unambiguous matches and exposes uncertainty as separate tracklets.  The
@@ -32,4 +58,4 @@ association should prioritize fragment purity; global association should prefer 
 split over implausible identity evidence; and stabilization must never change track
 identity.  This modularity is important because only the association contract is
 evaluated against alternative trackers, while the final view also depends on
-detector and landmark quality.
+detector and pose-keypoint quality.
