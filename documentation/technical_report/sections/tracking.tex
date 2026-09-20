@@ -54,14 +54,16 @@ last crop of the earlier fragment and first crop of the later fragment---exactly
 frames most likely to contain both sails during a crossing.  Given descriptor distance $d$, the
 current heuristic match score is
 \begin{equation}
- S_a=\operatorname{clip}_{(0,1]}(1-\gamma_a d),
- \qquad \gamma_a=11.63.
+ \begin{aligned}
+ \epsilon&=10^{-6},\\
+ S_a&=\operatorname{clip}_{[\epsilon,\,1-\epsilon]}(1-\gamma_a d),
+ &\gamma_a&=11.63.
+ \end{aligned}
  \label{eq:appearance}
 \end{equation}
 It is a tuned similarity score, not a calibrated posterior probability; the graph
 uses $C^{\mathrm{appearance}}=-\log S_a$.  The coefficient $\gamma_a$ was tuned on the
-development set.  The implementation uses small numerical margins at the interval
-boundaries to keep the logarithm well defined.
+development set.  The numerical margin $\epsilon$ keeps the logarithm well defined.
 
 \subsection{Conservative local tracklets}
 
@@ -100,11 +102,12 @@ Every candidate receives
 \end{equation}
 For each of the first two observations of $T_j$, the predicted Kalman state gives
 squared Mahalanobis distance $d^2$ over $(c_x,c_y,w,h)$.  Motion cost is the mean
-$-\log\Pr(\chi^2_4\geq d^2)$; appearance uses the whole-fragment prototypes; and the
-gap term increases with the number of missing frames.
+negative log chi-square survival score, $-\log\Pr(\chi^2_4\geq d^2)$; appearance uses
+the whole-fragment prototypes; and the gap term increases with the number of missing
+frames.
 
 The graph now applies absolute plausibility vetoes before optimization.  Edges are
-removed when motion NLL exceeds 8, or when endpoint box area or aspect ratio changes
+removed when motion cost exceeds 8, or when endpoint box area or aspect ratio changes
 by more than a factor of three.  The Kalman filter already models size; the explicit
 ratios supplement it with an interpretable discontinuity bound.  These rules implement
 abstention at the evidence boundary.  They are necessary because a central fragment's

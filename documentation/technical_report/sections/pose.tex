@@ -19,7 +19,12 @@ the same source sequence on both sides, so it does not establish cross-sequence
 generalization.
 
 \Cref{fig:pose-anchor-geometry} summarizes the detector geometry, the two predicted
-keypoints, and the derived anchor and scale signals used by the virtual camera.
+keypoints, and the derived anchor and scale signals used by the virtual camera.  The
+figure makes the distinction visible: the box center follows the axis-aligned extent
+of the complete rig, whereas the pose-derived anchor remains tied to the boom--mast
+region near the rider.  As the sail rotates, the box center can move even when the
+rider moves little; using the pose-derived point therefore reduces this geometric
+source of lateral drift before temporal smoothing.
 
 \begin{figure}[t]
   \centering
@@ -58,7 +63,7 @@ otherwise the anchor-to-box-top distance supplies a fallback.  A centered 31-fra
 mean (radius 15) produces $\bar\ell$, and the requested crop height is
 \begin{equation}
  C=\max\!\left(\frac{\bar\ell}{0.75},\frac{h}{0.9},1\right),
- \qquad S_m=\operatorname{clip}_{(0,1]}\!\left(\frac{C}{H}\right),
+ \qquad S_m=\operatorname{clip}_{[\epsilon,\,1]}\!\left(\frac{C}{H}\right),
  \label{eq:pose-scale}
 \end{equation}
 where $H$ is source height and $S_m$ is the mast-relative crop scale.  The mast segment is targeted to 75\% of the output, while
