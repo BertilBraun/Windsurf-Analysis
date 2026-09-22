@@ -13,6 +13,11 @@ It contains both:
 
 ![Demo](documentation/processed.gif)
 
+## Technical report
+
+[Identity-Consistent Analysis of Long-Shot Windsurfing Video: A Domain-Specific Offline Tracking System](https://arxiv.org/abs/2609.24492)
+documents the system design, offline identity-association method, pose-guided stabilization, and evaluation.
+
 ## Start here
 
 - `documentation/README.md` — what the app does, what’s implemented, and where each doc lives.
